@@ -7,6 +7,7 @@ import {
   Autocomplete,
   TextField,
   useTheme,
+  useMediaQuery,
   Chip,
   Fab,
   Dialog,
@@ -46,6 +47,7 @@ interface ChartData {
 
 export const Statistics = () => {
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
   const [exerciseNames, setExerciseNames] = useState<string[]>([]);
   const [chartData, setChartData] = useState<ChartData[]>([]);
@@ -55,6 +57,7 @@ export const Statistics = () => {
   const [weight, setWeight] = useState('');
   const [sets, setSets] = useState('');
   const [reps, setReps] = useState('');
+  const [notes, setNotes] = useState('');
   const [allExercises, setAllExercises] = useState<Exercise[]>([]);
   const [exerciseSuggestions, setExerciseSuggestions] = useState<string[]>([]);
   const [openDialog, setOpenDialog] = useState(false);
@@ -138,6 +141,7 @@ export const Statistics = () => {
       date: new Date().toISOString(),
       sets: sets ? parseInt(sets) : undefined,
       reps: reps ? parseInt(reps) : undefined,
+      notes: notes.trim() || undefined,
     };
 
     addExercise(exercise);
@@ -146,6 +150,7 @@ export const Statistics = () => {
     setWeight('');
     setSets('');
     setReps('');
+    setNotes('');
     setOpenDialog(false);
     
     // Wacht even om te zorgen dat localStorage is ge-updatet
@@ -180,7 +185,7 @@ export const Statistics = () => {
       setSelectedExercise(null);
       setTimeout(() => setSelectedExercise(current), 0);
     }
-  }, [exerciseName, weight, sets, reps, selectedExercise, exerciseImages]);
+  }, [exerciseName, weight, sets, reps, notes, selectedExercise, exerciseImages]);
 
   const handleEditExercise = (exercise: Exercise) => {
     setEditingExercise(exercise);
@@ -188,6 +193,7 @@ export const Statistics = () => {
     setWeight(exercise.weight.toString());
     setSets(exercise.sets?.toString() || '');
     setReps(exercise.reps?.toString() || '');
+    setNotes(exercise.notes || '');
     setOpenEditDialog(true);
   };
 
@@ -202,6 +208,7 @@ export const Statistics = () => {
       weight: parseFloat(weight),
       sets: sets ? parseInt(sets) : undefined,
       reps: reps ? parseInt(reps) : undefined,
+      notes: notes.trim() || undefined,
     });
 
     updateExercise(editingExercise.id, {
@@ -209,6 +216,7 @@ export const Statistics = () => {
       weight: parseFloat(weight),
       sets: sets ? parseInt(sets) : undefined,
       reps: reps ? parseInt(reps) : undefined,
+      notes: notes.trim() || undefined,
     });
 
     setOpenEditDialog(false);
@@ -217,6 +225,7 @@ export const Statistics = () => {
     setWeight('');
     setSets('');
     setReps('');
+    setNotes('');
     
     // Wacht even om te zorgen dat localStorage is ge-updatet
     await new Promise(resolve => setTimeout(resolve, 50));
@@ -237,7 +246,7 @@ export const Statistics = () => {
       setSelectedExercise(null);
       setTimeout(() => setSelectedExercise(current), 0);
     }
-  }, [editingExercise, exerciseName, weight, sets, reps, selectedExercise]);
+  }, [editingExercise, exerciseName, weight, sets, reps, notes, selectedExercise]);
 
   const handleCloseEditDialog = useCallback(() => {
     setOpenEditDialog(false);
@@ -246,6 +255,7 @@ export const Statistics = () => {
     setWeight('');
     setSets('');
     setReps('');
+    setNotes('');
   }, []);
 
   const handleDeleteExercise = (exerciseId: string) => {
@@ -312,47 +322,78 @@ export const Statistics = () => {
     setWeight('');
     setSets('');
     setReps('');
+    setNotes('');
   }, []);
 
   // Update disabled state and add event listeners for Material Web Components buttons
   useEffect(() => {
     if (!openDialog) return;
 
-    const cancelButton = cancelButtonRef.current;
-    const addButton = addButtonRef.current;
+    // Use requestAnimationFrame om te zorgen dat de DOM elementen er zijn
+    requestAnimationFrame(() => {
+      const cancelButton = cancelButtonRef.current;
+      const addButton = addButtonRef.current;
 
-    // Update disabled state
-    if (addButton) {
-      const isDisabled = !exerciseName.trim() || !weight.trim();
-      addButton.disabled = isDisabled;
-    }
+      // Update disabled state
+      if (addButton) {
+        const isDisabled = !exerciseName.trim() || !weight.trim();
+        addButton.disabled = isDisabled;
+        
+        // Update disabled state bij elke verandering
+        const updateDisabled = () => {
+          const isDisabled = !exerciseName.trim() || !weight.trim();
+          addButton.disabled = isDisabled;
+        };
+        
+        // Update disabled state periodiek
+        const intervalId = setInterval(updateDisabled, 100);
+        (addButton as any)._intervalId = intervalId;
+      }
 
-    if (cancelButton) {
-      const cancelClickHandler = () => {
-        handleCloseDialog();
-      };
-      cancelButton.addEventListener('click', cancelClickHandler);
-      (cancelButton as any)._clickHandler = cancelClickHandler;
-    }
-    if (addButton) {
-      const addClickHandler = async () => {
-        if (!addButton?.disabled) {
-          await handleAddExercise();
-        }
-      };
-      addButton.addEventListener('click', addClickHandler);
-      (addButton as any)._clickHandler = addClickHandler;
-    }
+      if (cancelButton) {
+        const cancelClickHandler = (e: Event) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('Cancel clicked');
+          handleCloseDialog();
+        };
+        cancelButton.addEventListener('click', cancelClickHandler);
+        (cancelButton as any)._clickHandler = cancelClickHandler;
+      }
+      if (addButton) {
+        const addClickHandler = async (e: Event) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('Add clicked');
+          if (!addButton?.disabled) {
+            await handleAddExercise();
+          }
+        };
+        addButton.addEventListener('click', addClickHandler);
+        (addButton as any)._clickHandler = addClickHandler;
+      }
+    });
 
     return () => {
-      if (cancelButton && (cancelButton as any)._clickHandler) {
-        cancelButton.removeEventListener('click', (cancelButton as any)._clickHandler);
-        delete (cancelButton as any)._clickHandler;
-      }
-      if (addButton && (addButton as any)._clickHandler) {
-        addButton.removeEventListener('click', (addButton as any)._clickHandler);
-        delete (addButton as any)._clickHandler;
-      }
+      requestAnimationFrame(() => {
+        const cancelButton = cancelButtonRef.current;
+        const addButton = addButtonRef.current;
+        
+        if (cancelButton && (cancelButton as any)._clickHandler) {
+          cancelButton.removeEventListener('click', (cancelButton as any)._clickHandler);
+          delete (cancelButton as any)._clickHandler;
+        }
+        if (addButton) {
+          if ((addButton as any)._clickHandler) {
+            addButton.removeEventListener('click', (addButton as any)._clickHandler);
+            delete (addButton as any)._clickHandler;
+          }
+          if ((addButton as any)._intervalId) {
+            clearInterval((addButton as any)._intervalId);
+            delete (addButton as any)._intervalId;
+          }
+        }
+      });
     };
   }, [openDialog, exerciseName, weight, handleCloseDialog, handleAddExercise]);
 
@@ -584,6 +625,7 @@ export const Statistics = () => {
     const movementTypeCounts: Record<string, number> = {};
     let pushCount = 0;
     let pullCount = 0;
+    const unmatchedExercises: string[] = [];
     
     exercises.forEach(exercise => {
       const metadata = findExerciseMetadata(exercise.name);
@@ -604,7 +646,19 @@ export const Statistics = () => {
         // Tel push/pull
         if (metadata.movementType === 'Push') pushCount++;
         if (metadata.movementType === 'Pull') pullCount++;
+      } else {
+        unmatchedExercises.push(exercise.name);
       }
+    });
+    
+    // Debug logging
+    console.log('Push/Pull Ratio Debug:', {
+      totalExercises: exercises.length,
+      matchedExercises: exercises.length - unmatchedExercises.length,
+      unmatchedExercises,
+      pushCount,
+      pullCount,
+      movementTypeCounts,
     });
     
     // Sorteer spiergroepen op frequentie
@@ -632,6 +686,8 @@ export const Statistics = () => {
       topSecondaryMuscles,
       movementTypeCounts,
       pushPullRatio,
+      pushCount,
+      pullCount,
       totalExercises: exercises.length,
       exercisesWithMetadata: exercises.filter(ex => findExerciseMetadata(ex.name) !== null).length,
     };
@@ -664,9 +720,22 @@ export const Statistics = () => {
         onClose={handleCloseDialog}
         maxWidth="sm"
         fullWidth
+        fullScreen={isMobile}
+        sx={{
+          '& .MuiDialog-container': {
+            alignItems: { xs: 'flex-start', sm: 'center' },
+            paddingTop: { xs: '0', sm: '48px' },
+          },
+          '& .MuiDialog-paper': {
+            margin: { xs: '0', sm: '32px auto' },
+            maxHeight: { xs: '100vh', sm: '90vh' },
+            borderRadius: { xs: '0', sm: 1 },
+            height: { xs: '100vh', sm: 'auto' },
+          }
+        }}
       >
         <DialogTitle>Nieuwe Oefening</DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ overflowY: 'auto', maxHeight: { xs: 'calc(100vh - 180px)', sm: 'none' }, pb: 2 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <Autocomplete
               freeSolo
@@ -734,6 +803,16 @@ export const Statistics = () => {
                 inputProps={{ min: 1 }}
               />
             </Box>
+
+            <TextField
+              label="Notitie (optioneel)"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Bijv. last van mn schouder, ging goed, was te zwaar..."
+              multiline
+              rows={2}
+              fullWidth
+            />
           </Box>
         </DialogContent>
         <DialogActions>
@@ -758,9 +837,22 @@ export const Statistics = () => {
         onClose={handleCloseEditDialog}
         maxWidth="sm"
         fullWidth
+        fullScreen={isMobile}
+        sx={{
+          '& .MuiDialog-container': {
+            alignItems: { xs: 'flex-start', sm: 'center' },
+            paddingTop: { xs: '0', sm: '48px' },
+          },
+          '& .MuiDialog-paper': {
+            margin: { xs: '0', sm: '32px auto' },
+            maxHeight: { xs: '100vh', sm: '90vh' },
+            borderRadius: { xs: '0', sm: 1 },
+            height: { xs: '100vh', sm: 'auto' },
+          }
+        }}
       >
         <DialogTitle>Oefening Bewerken</DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ overflowY: 'auto', maxHeight: { xs: 'calc(100vh - 180px)', sm: 'none' }, pb: 2 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <Autocomplete
               freeSolo
@@ -824,6 +916,16 @@ export const Statistics = () => {
                 inputProps={{ min: 1 }}
               />
             </Box>
+
+            <TextField
+              label="Notitie (optioneel)"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Bijv. last van mn schouder, ging goed, was te zwaar..."
+              multiline
+              rows={2}
+              fullWidth
+            />
           </Box>
         </DialogContent>
         <DialogActions>
@@ -907,7 +1009,10 @@ export const Statistics = () => {
               </Typography>
               
               <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-                <Card sx={{ flex: 1, minWidth: 200 }}>
+                <Card sx={{ 
+                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
+                  minWidth: { xs: 'auto', sm: 200 } 
+                }}>
                   <CardContent>
                     <Typography variant="body2" color="text.secondary">
                       Totaal Oefeningen
@@ -921,7 +1026,10 @@ export const Statistics = () => {
                   </CardContent>
                 </Card>
 
-                <Card sx={{ flex: 1, minWidth: 200 }}>
+                <Card sx={{ 
+                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
+                  minWidth: { xs: 'auto', sm: 200 } 
+                }}>
                   <CardContent>
                     <Typography variant="body2" color="text.secondary">
                       Gemiddeld Gewicht
@@ -935,7 +1043,10 @@ export const Statistics = () => {
                   </CardContent>
                 </Card>
 
-                <Card sx={{ flex: 1, minWidth: 200 }}>
+                <Card sx={{ 
+                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
+                  minWidth: { xs: 'auto', sm: 200 } 
+                }}>
                   <CardContent>
                     <Typography variant="body2" color="text.secondary">
                       Max Gewicht
@@ -948,7 +1059,10 @@ export const Statistics = () => {
 
                 {overallStats.hasVolumeData && (
                   <>
-                    <Card sx={{ flex: 1, minWidth: 200 }}>
+                    <Card sx={{ 
+                      flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
+                      minWidth: { xs: 'auto', sm: 200 } 
+                    }}>
                       <CardContent>
                         <Typography variant="body2" color="text.secondary">
                           Totaal Volume
@@ -962,7 +1076,10 @@ export const Statistics = () => {
                       </CardContent>
                     </Card>
 
-                    <Card sx={{ flex: 1, minWidth: 200 }}>
+                    <Card sx={{ 
+                      flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
+                      minWidth: { xs: 'auto', sm: 200 } 
+                    }}>
                       <CardContent>
                         <Typography variant="body2" color="text.secondary">
                           Gemiddeld Volume
@@ -976,7 +1093,10 @@ export const Statistics = () => {
                       </CardContent>
                     </Card>
 
-                    <Card sx={{ flex: 1, minWidth: 200 }}>
+                    <Card sx={{ 
+                      flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
+                      minWidth: { xs: 'auto', sm: 200 } 
+                    }}>
                       <CardContent>
                         <Typography variant="body2" color="text.secondary">
                           Max Volume
@@ -989,7 +1109,10 @@ export const Statistics = () => {
                   </>
                 )}
 
-                <Card sx={{ flex: 1, minWidth: 200 }}>
+                <Card sx={{ 
+                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
+                  minWidth: { xs: 'auto', sm: 200 } 
+                }}>
                   <CardContent>
                     <Typography variant="body2" color="text.secondary">
                       Totaal Workouts
@@ -1003,7 +1126,10 @@ export const Statistics = () => {
                   </CardContent>
                 </Card>
 
-                <Card sx={{ flex: 1, minWidth: 200 }}>
+                <Card sx={{ 
+                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
+                  minWidth: { xs: 'auto', sm: 200 } 
+                }}>
                   <CardContent>
                     <Typography variant="body2" color="text.secondary">
                       Workouts per Dag
@@ -1046,7 +1172,10 @@ export const Statistics = () => {
           {selectedExercise && stats && (
             <>
               <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-                <Card sx={{ flex: 1, minWidth: 200 }}>
+                <Card sx={{ 
+                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
+                  minWidth: { xs: 'auto', sm: 200 } 
+                }}>
                   <CardContent>
                     <Typography variant="body2" color="text.secondary">
                       Huidig Gewicht
@@ -1057,7 +1186,10 @@ export const Statistics = () => {
                   </CardContent>
                 </Card>
 
-                <Card sx={{ flex: 1, minWidth: 200 }}>
+                <Card sx={{ 
+                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
+                  minWidth: { xs: 'auto', sm: 200 } 
+                }}>
                   <CardContent>
                     <Typography variant="body2" color="text.secondary">
                       Max Gewicht
@@ -1068,7 +1200,10 @@ export const Statistics = () => {
                   </CardContent>
                 </Card>
 
-                <Card sx={{ flex: 1, minWidth: 200 }}>
+                <Card sx={{ 
+                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
+                  minWidth: { xs: 'auto', sm: 200 } 
+                }}>
                   <CardContent>
                     <Typography variant="body2" color="text.secondary">
                       Progressie
@@ -1086,7 +1221,10 @@ export const Statistics = () => {
                   </CardContent>
                 </Card>
 
-                <Card sx={{ flex: 1, minWidth: 200 }}>
+                <Card sx={{ 
+                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
+                  minWidth: { xs: 'auto', sm: 200 } 
+                }}>
                   <CardContent>
                     <Typography variant="body2" color="text.secondary">
                       Totaal Workouts
@@ -1099,7 +1237,10 @@ export const Statistics = () => {
 
                 {stats.hasVolumeData && stats.latestVolume && (
                   <>
-                    <Card sx={{ flex: 1, minWidth: 200 }}>
+                    <Card sx={{ 
+                      flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
+                      minWidth: { xs: 'auto', sm: 200 } 
+                    }}>
                       <CardContent>
                         <Typography variant="body2" color="text.secondary">
                           Huidig Volume
@@ -1113,7 +1254,10 @@ export const Statistics = () => {
                       </CardContent>
                     </Card>
 
-                    <Card sx={{ flex: 1, minWidth: 200 }}>
+                    <Card sx={{ 
+                      flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
+                      minWidth: { xs: 'auto', sm: 200 } 
+                    }}>
                       <CardContent>
                         <Typography variant="body2" color="text.secondary">
                           Max Volume
@@ -1125,7 +1269,10 @@ export const Statistics = () => {
                     </Card>
 
                     {stats.volumeImprovement !== undefined && (
-                      <Card sx={{ flex: 1, minWidth: 200 }}>
+                      <Card sx={{ 
+                        flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
+                        minWidth: { xs: 'auto', sm: 200 } 
+                      }}>
                         <CardContent>
                           <Typography variant="body2" color="text.secondary">
                             Volume Progressie
@@ -1275,7 +1422,7 @@ export const Statistics = () => {
                     </Box>
                   )}
 
-                  {insights.pushPullRatio && (
+                  {insights.pushPullRatio && (insights.pushPullRatio.push > 0 || insights.pushPullRatio.pull > 0) && (
                     <Box sx={{ mt: 3 }}>
                       <Typography variant="body2" color="text.secondary" gutterBottom>
                         Push/Pull Ratio:
@@ -1297,8 +1444,9 @@ export const Statistics = () => {
                             <Box
                               sx={{
                                 height: '100%',
-                                width: `${insights.pushPullRatio.push}%`,
+                                width: `${Math.max(insights.pushPullRatio.push, 1)}%`,
                                 backgroundColor: theme.palette.primary.main,
+                                minWidth: insights.pushPullRatio.push > 0 ? '4px' : 0,
                               }}
                             />
                           </Box>
@@ -1319,13 +1467,19 @@ export const Statistics = () => {
                             <Box
                               sx={{
                                 height: '100%',
-                                width: `${insights.pushPullRatio.pull}%`,
+                                width: `${Math.max(insights.pushPullRatio.pull, 1)}%`,
                                 backgroundColor: theme.palette.secondary.main,
+                                minWidth: insights.pushPullRatio.pull > 0 ? '4px' : 0,
                               }}
                             />
                           </Box>
                         </Box>
                       </Box>
+                      {insights.pushCount === 0 && insights.pullCount === 0 && (
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                          Geen Push of Pull oefeningen gedetecteerd. Voeg oefeningen toe met movementType 'Push' of 'Pull'.
+                        </Typography>
+                      )}
                     </Box>
                   )}
 
@@ -1446,6 +1600,13 @@ export const Statistics = () => {
                             />
                           )}
                         </Box>
+                        {exercise.notes && (
+                          <Box sx={{ mt: 1.5, p: 1.5, backgroundColor: 'rgba(0, 0, 0, 0.03)', borderRadius: 1 }}>
+                            <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                              {exercise.notes}
+                            </Typography>
+                          </Box>
+                        )}
                         {metadata && (
                           <Box sx={{ mt: 2 }}>
                             {metadata.movementType && (

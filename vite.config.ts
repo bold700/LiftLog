@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['va-logo.svg'],
+      includeAssets: ['app-icon.svg', 'va-logo.svg'],
       manifest: {
         name: 'LiftLog - Fitness Progressie Tracker',
         short_name: 'LiftLog',
@@ -19,8 +19,20 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
-            src: '/va-logo.svg',
-            sizes: 'any',
+            src: '/app-icon.svg',
+            sizes: '512x512',
+            type: 'image/svg+xml',
+            purpose: 'any maskable'
+          },
+          {
+            src: '/app-icon.svg',
+            sizes: '192x192',
+            type: 'image/svg+xml',
+            purpose: 'any maskable'
+          },
+          {
+            src: '/app-icon.svg',
+            sizes: '180x180',
             type: 'image/svg+xml',
             purpose: 'any maskable'
           }

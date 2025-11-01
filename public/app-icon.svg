@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <style>
+      .logo-path {
+        fill: #000000;
+      }
+    </style>
+  </defs>
+  <!-- Background met beige kleur -->
+  <rect width="512" height="512" fill="#F2E4D3"/>
+  
+  <!-- Centered VA logo 
+       Original logo: 1260.31 x 837.16 (aspect ratio ~1.5)
+       Om het logo mooi te centreren in 512x512:
+       - Logo breedte schaal: ~380px (met padding)
+       - Logo hoogte schaal: ~253px (proportioneel)
+       - Scale factor: 380/1260.31 ≈ 0.301
+       - Center: (256, 256)
+       - Logo center in origineel: (630.155, 418.58)
+  -->
+  <g transform="translate(256, 256)">
+    <g transform="scale(0.301) translate(-630.155, -418.58)">
+      <path class="logo-path" d="M1260.31,837.16,887,0H746L445.75,673.28,145.49,0H0L373,836.4l-.34.76H518.84l-.34-.76,85.21-195,423.83,4,87.27,191.81ZM665.08,507.72l151.41-339.5,151.4,339.5Z"/>
+    </g>
+  </g>
+</svg>
