@@ -815,8 +815,8 @@ export const Statistics = () => {
               }}
               placeholder="Bijv. last van mn schouder, ging goed, was te zwaar..."
               multiline
-              rows={3}
-              minRows={3}
+              minRows={1}
+              maxRows={6}
               fullWidth
               sx={{
                 '& .MuiInputBase-root': {
@@ -824,20 +824,18 @@ export const Statistics = () => {
                 },
                 '& .MuiOutlinedInput-root': {
                   '& textarea': {
-                    paddingBottom: '14px !important',
                     lineHeight: '1.5',
+                    paddingBottom: '14px !important',
                   },
-                  '& .MuiInputBase-input': {
-                    resize: 'vertical',
-                  },
-                  // Zorg dat de outline niet te ver naar beneden reikt wanneer leeg
+                  // Zorg dat de outline alleen zo hoog is als de content
+                  minHeight: 'auto',
                   '& .MuiOutlinedInput-notchedOutline': {
-                    bottom: 'auto',
+                    height: 'auto',
                   }
                 },
-                // Wanneer het veld leeg is (alleen placeholder), beperk de hoogte
-                '& textarea:placeholder-shown': {
-                  minHeight: '1.5em !important',
+                // Forceer minimale hoogte alleen voor placeholder
+                '& textarea::placeholder': {
+                  lineHeight: '1.5',
                 }
               }}
             />
@@ -975,8 +973,8 @@ export const Statistics = () => {
               }}
               placeholder="Bijv. last van mn schouder, ging goed, was te zwaar..."
               multiline
-              rows={3}
-              minRows={3}
+              minRows={1}
+              maxRows={6}
               fullWidth
               sx={{
                 '& .MuiInputBase-root': {
@@ -984,20 +982,18 @@ export const Statistics = () => {
                 },
                 '& .MuiOutlinedInput-root': {
                   '& textarea': {
-                    paddingBottom: '14px !important',
                     lineHeight: '1.5',
+                    paddingBottom: '14px !important',
                   },
-                  '& .MuiInputBase-input': {
-                    resize: 'vertical',
-                  },
-                  // Zorg dat de outline niet te ver naar beneden reikt wanneer leeg
+                  // Zorg dat de outline alleen zo hoog is als de content
+                  minHeight: 'auto',
                   '& .MuiOutlinedInput-notchedOutline': {
-                    bottom: 'auto',
+                    height: 'auto',
                   }
                 },
-                // Wanneer het veld leeg is (alleen placeholder), beperk de hoogte
-                '& textarea:placeholder-shown': {
-                  minHeight: '1.5em !important',
+                // Forceer minimale hoogte alleen voor placeholder
+                '& textarea::placeholder': {
+                  lineHeight: '1.5',
                 }
               }}
             />
