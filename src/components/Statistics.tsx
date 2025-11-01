@@ -27,7 +27,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   ComposedChart,
   PieChart,
@@ -1190,6 +1189,7 @@ export const Statistics = () => {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis 
                             dataKey="date" 
+                            label={{ value: 'Datum', position: 'insideBottom', offset: -5 }}
                             tick={{ fontSize: 12 }}
                           />
                           <YAxis 
@@ -1197,7 +1197,6 @@ export const Statistics = () => {
                             tick={{ fontSize: 12 }}
                           />
                           <Tooltip />
-                          <Legend />
                           <Line
                             type="monotone"
                             dataKey="gewicht"
