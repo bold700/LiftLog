@@ -821,6 +821,23 @@ export const Statistics = () => {
               sx={{
                 '& .MuiInputBase-root': {
                   alignItems: 'flex-start',
+                },
+                '& .MuiOutlinedInput-root': {
+                  '& textarea': {
+                    paddingBottom: '14px !important',
+                    lineHeight: '1.5',
+                  },
+                  '& .MuiInputBase-input': {
+                    resize: 'vertical',
+                  },
+                  // Zorg dat de outline niet te ver naar beneden reikt wanneer leeg
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    bottom: 'auto',
+                  }
+                },
+                // Wanneer het veld leeg is (alleen placeholder), beperk de hoogte
+                '& textarea:placeholder-shown': {
+                  minHeight: '1.5em !important',
                 }
               }}
             />
@@ -964,6 +981,23 @@ export const Statistics = () => {
               sx={{
                 '& .MuiInputBase-root': {
                   alignItems: 'flex-start',
+                },
+                '& .MuiOutlinedInput-root': {
+                  '& textarea': {
+                    paddingBottom: '14px !important',
+                    lineHeight: '1.5',
+                  },
+                  '& .MuiInputBase-input': {
+                    resize: 'vertical',
+                  },
+                  // Zorg dat de outline niet te ver naar beneden reikt wanneer leeg
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    bottom: 'auto',
+                  }
+                },
+                // Wanneer het veld leeg is (alleen placeholder), beperk de hoogte
+                '& textarea:placeholder-shown': {
+                  minHeight: '1.5em !important',
                 }
               }}
             />
