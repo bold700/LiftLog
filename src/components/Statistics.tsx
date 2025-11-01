@@ -780,7 +780,7 @@ export const Statistics = () => {
                 onChange={(e) => setWeight(e.target.value)}
                 onKeyPress={handleKeyPress}
                 sx={{ flex: 1 }}
-                inputProps={{ min: 0, step: 0.5 }}
+                inputProps={{ min: 0, step: 0.5, inputMode: 'decimal' }}
               />
               
               <TextField
@@ -790,7 +790,7 @@ export const Statistics = () => {
                 onChange={(e) => setSets(e.target.value)}
                 onKeyPress={handleKeyPress}
                 sx={{ flex: 1 }}
-                inputProps={{ min: 1 }}
+                inputProps={{ min: 1, inputMode: 'numeric' }}
               />
               
               <TextField
@@ -800,7 +800,7 @@ export const Statistics = () => {
                 onChange={(e) => setReps(e.target.value)}
                 onKeyPress={handleKeyPress}
                 sx={{ flex: 1 }}
-                inputProps={{ min: 1 }}
+                inputProps={{ min: 1, inputMode: 'numeric' }}
               />
             </Box>
 
@@ -895,7 +895,7 @@ export const Statistics = () => {
                 value={weight}
                 onChange={(e) => setWeight(e.target.value)}
                 sx={{ flex: 1 }}
-                inputProps={{ min: 0, step: 0.5 }}
+                inputProps={{ min: 0, step: 0.5, inputMode: 'decimal' }}
               />
               
               <TextField
@@ -904,7 +904,7 @@ export const Statistics = () => {
                 value={sets}
                 onChange={(e) => setSets(e.target.value)}
                 sx={{ flex: 1 }}
-                inputProps={{ min: 1 }}
+                inputProps={{ min: 1, inputMode: 'numeric' }}
               />
               
               <TextField
@@ -913,7 +913,7 @@ export const Statistics = () => {
                 value={reps}
                 onChange={(e) => setReps(e.target.value)}
                 sx={{ flex: 1 }}
-                inputProps={{ min: 1 }}
+                inputProps={{ min: 1, inputMode: 'numeric' }}
               />
             </Box>
 
