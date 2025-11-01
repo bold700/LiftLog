@@ -34,7 +34,7 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { getAllExercisesByName, getExerciseNames, getWorkouts, addExercise, updateExercise, deleteExercise, getAllExercises } from '../utils/storage';
+import { getAllExercisesByName, getExerciseNames, addExercise, updateExercise, deleteExercise, getAllExercises } from '../utils/storage';
 import { Exercise } from '../types';
 import { getExerciseImageUrl } from '../utils/exercisedb';
 import { findExerciseMetadata, getAllExerciseNames } from '../data/exerciseMetadata';
@@ -587,10 +587,6 @@ export const Statistics = () => {
     
     return sortedExercises.slice(0, 3);
   }, [selectedExercise, allExercises.length]);
-
-  const allWorkouts = useMemo(() => {
-    return getWorkouts();
-  }, [selectedExercise]);
 
   // Nieuwe inzichten: spiergroepen, bewegingstypes, push/pull ratio
   const insights = useMemo(() => {
