@@ -14,11 +14,14 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Menu,
+  MenuItem,
+  IconButton,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import IconButton from '@mui/material/IconButton';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import {
   Line,
   XAxis,
@@ -28,6 +31,9 @@ import {
   Legend,
   ResponsiveContainer,
   ComposedChart,
+  PieChart,
+  Pie,
+  Cell,
 } from 'recharts';
 import { getAllExercisesByName, getExerciseNames, getWorkouts, addExercise, updateExercise, deleteExercise, getAllExercises } from '../utils/storage';
 import { Exercise } from '../types';
@@ -42,7 +48,6 @@ import '@material/web/icon/icon.js';
 interface ChartData {
   date: string;
   gewicht: number;
-  volume?: number; // sets × reps × gewicht
 }
 
 export const Statistics = () => {
@@ -66,6 +71,8 @@ export const Statistics = () => {
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
   const [deletingExerciseId, setDeletingExerciseId] = useState<string | null>(null);
   const [exerciseImages, setExerciseImages] = useState<Record<string, string | null>>({});
+  const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const [menuExerciseId, setMenuExerciseId] = useState<string | null>(null);
   const cancelButtonRef = useRef<any>(null);
   const addButtonRef = useRef<any>(null);
   const editCancelButtonRef = useRef<any>(null);
@@ -87,15 +94,17 @@ export const Statistics = () => {
   useEffect(() => {
     if (selectedExercise) {
       const exercises = getAllExercisesByName(selectedExercise);
-      const data: ChartData[] = exercises.map(ex => {
-        const volume = (ex.sets && ex.reps) ? ex.sets * ex.reps * ex.weight : undefined;
+      // Sorteer op datum (oudste eerst voor grafiek - chronologisch)
+      const sortedExercises = [...exercises].sort((a, b) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+      const data: ChartData[] = sortedExercises.map(ex => {
         return {
           date: new Date(ex.date).toLocaleDateString('nl-NL', { 
             month: 'short', 
             day: 'numeric' 
           }),
           gewicht: ex.weight,
-          volume,
         };
       });
       setChartData(data);
@@ -316,6 +325,27 @@ export const Statistics = () => {
     setDeletingExerciseId(null);
   }, []);
 
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, exerciseId: string) => {
+    event.stopPropagation();
+    setMenuAnchorEl(event.currentTarget);
+    setMenuExerciseId(exerciseId);
+  };
+
+  const handleMenuClose = () => {
+    setMenuAnchorEl(null);
+    setMenuExerciseId(null);
+  };
+
+  const handleEditFromMenu = (exercise: Exercise) => {
+    handleEditExercise(exercise);
+    handleMenuClose();
+  };
+
+  const handleDeleteFromMenu = (exerciseId: string) => {
+    handleDeleteExercise(exerciseId);
+    handleMenuClose();
+  };
+
   const handleCloseDialog = useCallback(() => {
     setOpenDialog(false);
     setExerciseName('');
@@ -523,36 +553,41 @@ export const Statistics = () => {
   };
 
   const stats = useMemo(() => {
-    if (!selectedExercise || chartData.length === 0) return null;
+    if (!selectedExercise) return null;
 
-    const weights = chartData.map(d => d.gewicht);
+    const exercises = getAllExercisesByName(selectedExercise);
+    if (exercises.length === 0) return null;
+
+    // Sorteer op datum (nieuwste eerst)
+    const sortedExercises = [...exercises].sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+
+    const weights = sortedExercises.map(ex => ex.weight);
     const max = Math.max(...weights);
-    const latest = weights[weights.length - 1];
-    const first = weights[0];
-    const improvement = latest - first;
-
-    // Volume calculations
-    const volumes = chartData.map(d => d.volume).filter((v): v is number => v !== undefined);
-    const maxVolume = volumes.length > 0 ? Math.max(...volumes) : undefined;
-    const latestVolume = volumes.length > 0 ? volumes[volumes.length - 1] : undefined;
-    const firstVolume = volumes.length > 0 ? volumes[0] : undefined;
-    const volumeImprovement = (latestVolume !== undefined && firstVolume !== undefined) 
-      ? latestVolume - firstVolume 
-      : undefined;
+    const latest = weights[0]; // Nieuwste is eerste in gesorteerde array
+    const maxVsLatest = max - latest; // Max gewicht ten opzichte van laatste sessie
 
     return {
       max,
       latest,
-      first,
-      improvement,
-      totalWorkouts: chartData.length,
-      maxVolume,
-      latestVolume,
-      firstVolume,
-      volumeImprovement,
-      hasVolumeData: volumes.length > 0,
+      maxVsLatest,
+      totalWorkouts: exercises.length,
     };
-  }, [selectedExercise, chartData]);
+  }, [selectedExercise, allExercises.length]);
+
+  // Laatste 3 sessies voor geselecteerde oefening
+  const lastThreeSessions = useMemo(() => {
+    if (!selectedExercise) return [];
+    
+    const exercises = getAllExercisesByName(selectedExercise);
+    // Sorteer op datum (nieuwste eerst) en pak laatste 3
+    const sortedExercises = [...exercises].sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+    
+    return sortedExercises.slice(0, 3);
+  }, [selectedExercise, allExercises.length]);
 
   const allWorkouts = useMemo(() => {
     return getWorkouts();
@@ -693,6 +728,14 @@ export const Statistics = () => {
     };
   }, [allExercises.length]);
 
+  // Kleuren voor pie charts - gebaseerd op #4E6543
+  // #4E6543 = RGB(78, 101, 67) - donkergroen
+  // Variaties: lichtere tinten voor meer items
+  const COLORS_PRIMARY = ['#4E6543', '#5D7A51', '#6C8F5F', '#7BA46D', '#8AB97B'];
+  const COLORS_SECONDARY = ['#4E6543', '#5D7A51', '#6C8F5F', '#7BA46D', '#8AB97B'];
+  const COLORS_PUSH_PULL = ['#4E6543', '#6C8F5F'];
+  const COLORS_MOVEMENT = ['#4E6543', '#5D7A51', '#6C8F5F', '#7BA46D'];
+
   return (
     <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
       {/* Logo bovenaan */}
@@ -813,22 +856,24 @@ export const Statistics = () => {
               rows={2}
               fullWidth
             />
+            
+            {/* Buttons direct onder notities */}
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2, pt: 2 }}>
+              {/* @ts-ignore - Material Web Components are web components */}
+              <md-text-button ref={cancelButtonRef}>
+                Annuleren
+              </md-text-button>
+              {/* @ts-ignore - Material Web Components are web components */}
+              <md-filled-button
+                ref={addButtonRef}
+              >
+                {/* @ts-ignore */}
+                <md-icon slot="start">add</md-icon>
+                Toevoegen
+              </md-filled-button>
+            </Box>
           </Box>
         </DialogContent>
-        <DialogActions>
-          {/* @ts-ignore - Material Web Components are web components */}
-          <md-text-button ref={cancelButtonRef}>
-            Annuleren
-          </md-text-button>
-          {/* @ts-ignore - Material Web Components are web components */}
-          <md-filled-button
-            ref={addButtonRef}
-          >
-            {/* @ts-ignore */}
-            <md-icon slot="start">add</md-icon>
-            Toevoegen
-          </md-filled-button>
-        </DialogActions>
       </Dialog>
 
       {/* Dialog voor bewerken oefening */}
@@ -926,22 +971,24 @@ export const Statistics = () => {
               rows={2}
               fullWidth
             />
+            
+            {/* Buttons direct onder notities */}
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2, pt: 2 }}>
+              {/* @ts-ignore - Material Web Components are web components */}
+              <md-text-button ref={editCancelButtonRef}>
+                Annuleren
+              </md-text-button>
+              {/* @ts-ignore - Material Web Components are web components */}
+              <md-filled-button
+                ref={editSaveButtonRef}
+              >
+                {/* @ts-ignore */}
+                <md-icon slot="start">save</md-icon>
+                Opslaan
+              </md-filled-button>
+            </Box>
           </Box>
         </DialogContent>
-        <DialogActions>
-          {/* @ts-ignore - Material Web Components are web components */}
-          <md-text-button ref={editCancelButtonRef}>
-            Annuleren
-          </md-text-button>
-          {/* @ts-ignore - Material Web Components are web components */}
-          <md-filled-button
-            ref={editSaveButtonRef}
-          >
-            {/* @ts-ignore */}
-            <md-icon slot="start">save</md-icon>
-            Opslaan
-          </md-filled-button>
-        </DialogActions>
       </Dialog>
 
       {/* Dialog voor verwijderen bevestiging */}
@@ -975,7 +1022,7 @@ export const Statistics = () => {
 
       {/* Statistieken sectie */}
       {exerciseNames.length === 0 ? (
-        <Card>
+        <Card sx={{ backgroundColor: '#FEF2E5', borderRadius: '16px' }} elevation={0}>
           <CardContent>
             <Typography variant="body1" color="text.secondary" align="center" sx={{ py: 4 }}>
               Nog geen data beschikbaar. Begin met het loggen van workouts!
@@ -984,7 +1031,7 @@ export const Statistics = () => {
         </Card>
       ) : (
         <>
-          <Card sx={{ mb: 3 }}>
+          <Card sx={{ mb: 3, backgroundColor: '#FEF2E5', borderRadius: '16px' }} elevation={0}>
             <CardContent>
               <Autocomplete
                 options={exerciseNames}
@@ -1001,304 +1048,113 @@ export const Statistics = () => {
             </CardContent>
           </Card>
 
-          {/* Algemene statistieken wanneer geen oefening geselecteerd */}
-          {!selectedExercise && overallStats && (
-            <>
-              <Typography variant="h6" gutterBottom sx={{ mb: 2, fontWeight: 600 }}>
-                Overzicht Statistieken
-              </Typography>
-              
-              <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-                <Card sx={{ 
-                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
-                  minWidth: { xs: 'auto', sm: 200 } 
-                }}>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary">
-                      Totaal Oefeningen
-                    </Typography>
-                    <Typography variant="h4" fontWeight={600}>
-                      {overallStats.totalExercises}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {overallStats.uniqueExercises} unieke oefeningen
-                    </Typography>
-                  </CardContent>
-                </Card>
-
-                <Card sx={{ 
-                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
-                  minWidth: { xs: 'auto', sm: 200 } 
-                }}>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary">
-                      Gemiddeld Gewicht
-                    </Typography>
-                    <Typography variant="h4" fontWeight={600}>
-                      {overallStats.avgWeight} kg
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      over alle oefeningen
-                    </Typography>
-                  </CardContent>
-                </Card>
-
-                <Card sx={{ 
-                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
-                  minWidth: { xs: 'auto', sm: 200 } 
-                }}>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary">
-                      Max Gewicht
-                    </Typography>
-                    <Typography variant="h4" fontWeight={600} sx={{ color: 'secondary.main' }}>
-                      {overallStats.maxWeight} kg
-                    </Typography>
-                  </CardContent>
-                </Card>
-
-                {overallStats.hasVolumeData && (
-                  <>
-                    <Card sx={{ 
-                      flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
-                      minWidth: { xs: 'auto', sm: 200 } 
-                    }}>
-                      <CardContent>
-                        <Typography variant="body2" color="text.secondary">
-                          Totaal Volume
-                        </Typography>
-                        <Typography variant="h4" fontWeight={600}>
-                          {overallStats.totalVolume} kg
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          sets × reps × gewicht
-                        </Typography>
-                      </CardContent>
-                    </Card>
-
-                    <Card sx={{ 
-                      flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
-                      minWidth: { xs: 'auto', sm: 200 } 
-                    }}>
-                      <CardContent>
-                        <Typography variant="body2" color="text.secondary">
-                          Gemiddeld Volume
-                        </Typography>
-                        <Typography variant="h4" fontWeight={600}>
-                          {overallStats.avgVolume} kg
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          per oefening
-                        </Typography>
-                      </CardContent>
-                    </Card>
-
-                    <Card sx={{ 
-                      flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
-                      minWidth: { xs: 'auto', sm: 200 } 
-                    }}>
-                      <CardContent>
-                        <Typography variant="body2" color="text.secondary">
-                          Max Volume
-                        </Typography>
-                        <Typography variant="h4" fontWeight={600} sx={{ color: 'secondary.main' }}>
-                          {overallStats.maxVolume} kg
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </>
-                )}
-
-                <Card sx={{ 
-                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
-                  minWidth: { xs: 'auto', sm: 200 } 
-                }}>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary">
-                      Totaal Workouts
-                    </Typography>
-                    <Typography variant="h4" fontWeight={600}>
-                      {overallStats.totalWorkouts}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {overallStats.uniqueDays} unieke dagen
-                    </Typography>
-                  </CardContent>
-                </Card>
-
-                <Card sx={{ 
-                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
-                  minWidth: { xs: 'auto', sm: 200 } 
-                }}>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary">
-                      Workouts per Dag
-                    </Typography>
-                    <Typography variant="h4" fontWeight={600}>
-                      {overallStats.workoutsPerDay}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      gemiddeld
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Box>
-
-              {overallStats.topExercises.length > 0 && (
-                <Card sx={{ mb: 3 }}>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      Meest Gedane Oefeningen
-                    </Typography>
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 2 }}>
-                      {overallStats.topExercises.map(({ name, count }) => (
-                        <Chip
-                          key={name}
-                          label={`${name} (${count}x)`}
-                          color="primary"
-                          variant="outlined"
-                          onClick={() => setSelectedExercise(name)}
-                          sx={{ cursor: 'pointer' }}
-                        />
-                      ))}
-                    </Box>
-                  </CardContent>
-                </Card>
-              )}
-            </>
-          )}
-
           {/* Specifieke oefening statistieken */}
           {selectedExercise && stats && (
-            <>
-              <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-                <Card sx={{ 
-                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
-                  minWidth: { xs: 'auto', sm: 200 } 
-                }}>
+            <Card sx={{ mb: 3, backgroundColor: '#FEF2E5', borderRadius: '16px' }} elevation={0}>
+              <CardContent>
+                {/* Progressie Sectie */}
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
+                    Progressie
+                  </Typography>
+                </Box>
+                {/* Max Gewicht Sectie */}
+                <Card sx={{ mb: 4, backgroundColor: 'transparent', borderRadius: '16px', border: '1px solid #D2C5B4' }} elevation={0}>
                   <CardContent>
-                    <Typography variant="body2" color="text.secondary">
-                      Huidig Gewicht
-                    </Typography>
-                    <Typography variant="h4" fontWeight={600}>
-                      {stats.latest} kg
-                    </Typography>
-                  </CardContent>
-                </Card>
-
-                <Card sx={{ 
-                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
-                  minWidth: { xs: 'auto', sm: 200 } 
-                }}>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
                       Max Gewicht
                     </Typography>
-                    <Typography variant="h4" fontWeight={600} sx={{ color: 'secondary.main' }}>
-                      {stats.max} kg
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                      <Typography variant="h4" fontWeight={600} sx={{ color: 'secondary.main' }}>
+                        {stats.max} kg
+                      </Typography>
+                      {stats.maxVsLatest !== 0 && (
+                        <Typography 
+                          variant="h6" 
+                          fontWeight={600}
+                          color={stats.maxVsLatest > 0 ? 'error.main' : 'success.main'}
+                        >
+                          {stats.maxVsLatest > 0 ? '-' : '+'}{Math.abs(stats.maxVsLatest)} kg
+                        </Typography>
+                      )}
+                    </Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                      Ten opzichte van laatste sessie ({stats.latest} kg)
                     </Typography>
                   </CardContent>
                 </Card>
 
-                <Card sx={{ 
-                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
-                  minWidth: { xs: 'auto', sm: 200 } 
-                }}>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary">
-                      Progressie
-                    </Typography>
-                    <Typography 
-                      variant="h4" 
-                      fontWeight={600}
-                      color={stats.improvement >= 0 ? 'success.main' : 'error.main'}
-                    >
-                      {stats.improvement >= 0 ? '+' : ''}{stats.improvement.toFixed(1)} kg
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      vanaf {stats.first} kg
-                    </Typography>
-                  </CardContent>
-                </Card>
-
-                <Card sx={{ 
-                  flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
-                  minWidth: { xs: 'auto', sm: 200 } 
-                }}>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary">
-                      Totaal Workouts
-                    </Typography>
-                    <Typography variant="h4" fontWeight={600}>
-                      {stats.totalWorkouts}
-                    </Typography>
-                  </CardContent>
-                </Card>
-
-                {stats.hasVolumeData && stats.latestVolume && (
-                  <>
-                    <Card sx={{ 
-                      flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
-                      minWidth: { xs: 'auto', sm: 200 } 
-                    }}>
-                      <CardContent>
-                        <Typography variant="body2" color="text.secondary">
-                          Huidig Volume
-                        </Typography>
-                        <Typography variant="h4" fontWeight={600}>
-                          {stats.latestVolume.toLocaleString('nl-NL')} kg
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          sets × reps × gewicht
-                        </Typography>
-                      </CardContent>
-                    </Card>
-
-                    <Card sx={{ 
-                      flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
-                      minWidth: { xs: 'auto', sm: 200 } 
-                    }}>
-                      <CardContent>
-                        <Typography variant="body2" color="text.secondary">
-                          Max Volume
-                        </Typography>
-                        <Typography variant="h4" fontWeight={600} sx={{ color: 'secondary.main' }}>
-                          {stats.maxVolume?.toLocaleString('nl-NL')} kg
-                        </Typography>
-                      </CardContent>
-                    </Card>
-
-                    {stats.volumeImprovement !== undefined && (
-                      <Card sx={{ 
-                        flex: { xs: '0 0 calc(50% - 8px)', sm: 1 }, 
-                        minWidth: { xs: 'auto', sm: 200 } 
-                      }}>
-                        <CardContent>
-                          <Typography variant="body2" color="text.secondary">
-                            Volume Progressie
-                          </Typography>
-                          <Typography 
-                            variant="h4" 
-                            fontWeight={600}
-                            color={stats.volumeImprovement >= 0 ? 'success.main' : 'error.main'}
-                          >
-                            {stats.volumeImprovement >= 0 ? '+' : ''}{stats.volumeImprovement.toLocaleString('nl-NL')} kg
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            vanaf {stats.firstVolume?.toLocaleString('nl-NL')} kg
-                          </Typography>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </>
+                {/* Laatste 3 Sessies */}
+                {lastThreeSessions.length > 0 && (
+                  <Card sx={{ mb: 4, backgroundColor: 'transparent', borderRadius: '16px', border: 'none', m: 0 }} elevation={0}>
+                    <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+                      <Typography variant="h6" gutterBottom>
+                        Laatste sessie(s)
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+                        {lastThreeSessions.map((exercise, index) => {
+                          const exerciseDate = new Date(exercise.date);
+                          const isToday = exerciseDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+                          const dateStr = exerciseDate.toLocaleDateString('nl-NL', { 
+                            weekday: 'short',
+                            year: 'numeric',
+                            month: 'short', 
+                            day: 'numeric' 
+                          });
+                          
+                          const details = [
+                            `${exercise.weight} kg`,
+                            exercise.sets && `${exercise.sets} ${exercise.sets === 1 ? 'set' : 'sets'}`,
+                            exercise.reps && `${exercise.reps} ${exercise.reps === 1 ? 'rep' : 'reps'}`
+                          ].filter(Boolean).join(' | ');
+                          
+                          return (
+                            <Card 
+                              key={exercise.id}
+                              sx={{ 
+                                backgroundColor: 'transparent', 
+                                borderRadius: '16px',
+                                border: '1px solid #D2C5B4',
+                                elevation: 0,
+                                m: 0,
+                                boxShadow: 'none'
+                              }}
+                            >
+                              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                  <Box sx={{ flex: 1 }}>
+                                    <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                                      {exercise.name}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                                      {isToday ? `Vandaag, ${exerciseDate.toLocaleDateString('nl-NL', { month: 'short', day: 'numeric' })}` : dateStr}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.primary">
+                                      {details}
+                                    </Typography>
+                                  </Box>
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => handleMenuOpen(e, exercise.id)}
+                                    sx={{ color: 'text.secondary', ml: 1 }}
+                                  >
+                                    <MoreVertIcon fontSize="small" />
+                                  </IconButton>
+                                </Box>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </Box>
+                    </CardContent>
+                  </Card>
                 )}
-              </Box>
 
-              {chartData.length > 0 && (
-                <Card sx={{ mb: 3 }}>
-                  <CardContent>
+                {/* Grafiek voor progressie */}
+                {chartData.length > 0 && (
+                  <Box sx={{ mt: 4 }}>
                     <Typography variant="h6" gutterBottom>
-                      Progressie Overzicht
+                      Overzicht
                     </Typography>
                     <Box sx={{ width: '100%', height: 400, mt: 3 }}>
                       <ResponsiveContainer>
@@ -1309,29 +1165,12 @@ export const Statistics = () => {
                             tick={{ fontSize: 12 }}
                           />
                           <YAxis 
-                            yAxisId="left"
                             label={{ value: 'Gewicht (kg)', angle: -90, position: 'insideLeft' }}
                             tick={{ fontSize: 12 }}
                           />
-                          {stats.hasVolumeData && (
-                            <YAxis 
-                              yAxisId="right"
-                              orientation="right"
-                              label={{ value: 'Volume (kg)', angle: 90, position: 'insideRight' }}
-                              tick={{ fontSize: 12 }}
-                            />
-                          )}
-                          <Tooltip 
-                            formatter={(value: number, name: string) => {
-                              if (name === 'Volume (kg)') {
-                                return [value.toLocaleString('nl-NL'), name];
-                              }
-                              return [value, name];
-                            }}
-                          />
+                          <Tooltip />
                           <Legend />
                           <Line
-                            yAxisId="left"
                             type="monotone"
                             dataKey="gewicht"
                             stroke={theme.palette.primary.main}
@@ -1340,335 +1179,261 @@ export const Statistics = () => {
                             activeDot={{ r: 7 }}
                             name="Gewicht (kg)"
                           />
-                          {stats.hasVolumeData && (
-                            <Line
-                              yAxisId="right"
-                              type="monotone"
-                              dataKey="volume"
-                              stroke={theme.palette.secondary.main}
-                              strokeWidth={2}
-                              dot={{ fill: theme.palette.secondary.main, r: 4 }}
-                              activeDot={{ r: 6 }}
-                              name="Volume (kg)"
-                              strokeDasharray="5 5"
-                            />
-                          )}
                         </ComposedChart>
                       </ResponsiveContainer>
                     </Box>
-                  </CardContent>
-                </Card>
-              )}
-            </>
-          )}
-
-          {allWorkouts.length > 0 && (
-            <Card sx={{ mb: 3 }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Totaal Workouts: {allWorkouts.length}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Totaal Oefeningen: {allWorkouts.reduce((sum, w) => sum + w.exercises.length, 0)}
-                </Typography>
+                  </Box>
+                )}
               </CardContent>
             </Card>
           )}
 
+
           {/* Nieuwe Inzichten Sectie */}
           {insights.exercisesWithMetadata > 0 && (
-            <>
-              <Card sx={{ mb: 3 }}>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Spiergroep Inzichten
-                  </Typography>
-                  
-                  {insights.topPrimaryMuscles.length > 0 && (
-                    <Box sx={{ mt: 2 }}>
-                      <Typography variant="body2" color="text.secondary" gutterBottom>
-                        Meest Getrainde Primaire Spiergroepen:
-                      </Typography>
-                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
-                        {insights.topPrimaryMuscles.map(({ muscle, count }) => (
-                          <Chip
-                            key={muscle}
-                            label={`${muscle} (${count}x)`}
-                            color="primary"
-                            size="small"
-                            variant="outlined"
-                          />
-                        ))}
-                      </Box>
-                    </Box>
-                  )}
+            <Card sx={{ mb: 3, backgroundColor: '#FEF2E5', borderRadius: '16px', mt: 4 }} elevation={0}>
+              <CardContent>
+                <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
+                  Spiergroep Inzichten
+                </Typography>
 
-                  {insights.topSecondaryMuscles.length > 0 && (
-                    <Box sx={{ mt: 2 }}>
-                      <Typography variant="body2" color="text.secondary" gutterBottom>
-                        Meest Getrainde Secundaire Spiergroepen:
+                {/* Primaire Spiergroepen Pie Chart */}
+                {insights.topPrimaryMuscles.length > 0 && (
+                  <Card sx={{ mb: 3, backgroundColor: 'transparent', borderRadius: '16px', border: '1px solid #D2C5B4' }} elevation={0}>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>
+                        Meest Getrainde Primaire Spiergroepen
                       </Typography>
-                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
-                        {insights.topSecondaryMuscles.map(({ muscle, count }) => (
-                          <Chip
-                            key={muscle}
-                            label={`${muscle} (${count}x)`}
-                            color="secondary"
-                            size="small"
-                            variant="outlined"
-                          />
-                        ))}
+                      <Box sx={{ width: '100%', height: 400, mt: 2 }}>
+                        <ResponsiveContainer>
+                          <PieChart>
+                            <Pie
+                              data={insights.topPrimaryMuscles.slice(0, 5).map(({ muscle, count }) => ({
+                                name: muscle,
+                                value: count,
+                              }))}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={false}
+                              label={({ name, value, percent }) => `${name} ${value}x`}
+                              outerRadius={120}
+                              fill="#8884d8"
+                              dataKey="value"
+                            >
+                              {insights.topPrimaryMuscles.slice(0, 5).map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS_PRIMARY[index % COLORS_PRIMARY.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
                       </Box>
-                    </Box>
-                  )}
+                    </CardContent>
+                  </Card>
+                )}
 
-                  {insights.pushPullRatio && (insights.pushPullRatio.push > 0 || insights.pushPullRatio.pull > 0) && (
-                    <Box sx={{ mt: 3 }}>
-                      <Typography variant="body2" color="text.secondary" gutterBottom>
-                        Push/Pull Ratio:
+                {/* Secundaire Spiergroepen Pie Chart */}
+                {insights.topSecondaryMuscles.length > 0 && (
+                  <Card sx={{ mb: 3, backgroundColor: 'transparent', borderRadius: '16px', border: '1px solid #D2C5B4' }} elevation={0}>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>
+                        Meest Getrainde Secundaire Spiergroepen
                       </Typography>
-                      <Box sx={{ display: 'flex', gap: 2, mt: 1, alignItems: 'center' }}>
-                        <Box sx={{ flex: 1 }}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                            <Typography variant="caption">Push</Typography>
-                            <Typography variant="caption">{insights.pushPullRatio.push}%</Typography>
-                          </Box>
-                          <Box
-                            sx={{
-                              height: 8,
-                              backgroundColor: theme.palette.secondary.light,
-                              borderRadius: 1,
-                              overflow: 'hidden',
-                            }}
-                          >
-                            <Box
-                              sx={{
-                                height: '100%',
-                                width: `${Math.max(insights.pushPullRatio.push, 1)}%`,
-                                backgroundColor: theme.palette.primary.main,
-                                minWidth: insights.pushPullRatio.push > 0 ? '4px' : 0,
-                              }}
-                            />
-                          </Box>
-                        </Box>
-                        <Box sx={{ flex: 1 }}>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                            <Typography variant="caption">Pull</Typography>
-                            <Typography variant="caption">{insights.pushPullRatio.pull}%</Typography>
-                          </Box>
-                          <Box
-                            sx={{
-                              height: 8,
-                              backgroundColor: theme.palette.secondary.light,
-                              borderRadius: 1,
-                              overflow: 'hidden',
-                            }}
-                          >
-                            <Box
-                              sx={{
-                                height: '100%',
-                                width: `${Math.max(insights.pushPullRatio.pull, 1)}%`,
-                                backgroundColor: theme.palette.secondary.main,
-                                minWidth: insights.pushPullRatio.pull > 0 ? '4px' : 0,
-                              }}
-                            />
-                          </Box>
-                        </Box>
+                      <Box sx={{ width: '100%', height: 400, mt: 2 }}>
+                        <ResponsiveContainer>
+                          <PieChart>
+                            <Pie
+                              data={insights.topSecondaryMuscles.slice(0, 5).map(({ muscle, count }) => ({
+                                name: muscle,
+                                value: count,
+                              }))}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={false}
+                              label={({ name, value, percent }) => `${name} ${value}x`}
+                              outerRadius={120}
+                              fill="#8884d8"
+                              dataKey="value"
+                            >
+                              {insights.topSecondaryMuscles.slice(0, 5).map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS_SECONDARY[index % COLORS_SECONDARY.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
                       </Box>
-                      {insights.pushCount === 0 && insights.pullCount === 0 && (
-                        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                          Geen Push of Pull oefeningen gedetecteerd. Voeg oefeningen toe met movementType 'Push' of 'Pull'.
-                        </Typography>
-                      )}
-                    </Box>
-                  )}
+                    </CardContent>
+                  </Card>
+                )}
 
-                  {Object.keys(insights.movementTypeCounts).length > 0 && (
-                    <Box sx={{ mt: 3 }}>
-                      <Typography variant="body2" color="text.secondary" gutterBottom>
-                        Bewegingstype Verdeling:
+                {/* Push/Pull Ratio Pie Chart */}
+                {insights.pushPullRatio && (insights.pushPullRatio.push > 0 || insights.pushPullRatio.pull > 0) && (
+                  <Card sx={{ mb: 3, backgroundColor: 'transparent', borderRadius: '16px', border: '1px solid #D2C5B4' }} elevation={0}>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>
+                        Push/Pull Ratio
                       </Typography>
-                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
-                        {Object.entries(insights.movementTypeCounts)
-                          .sort(([, a], [, b]) => b - a)
-                          .map(([type, count]) => (
-                            <Chip
-                              key={type}
-                              label={`${type}: ${count}x`}
-                              size="small"
-                            />
-                          ))}
+                      <Box sx={{ width: '100%', height: 400, mt: 2 }}>
+                        <ResponsiveContainer>
+                          <PieChart>
+                            <Pie
+                              data={[
+                                { name: 'Push', value: insights.pushPullRatio.push },
+                                { name: 'Pull', value: insights.pushPullRatio.pull },
+                              ]}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={false}
+                              label={({ name, value }) => `${name} ${value}%`}
+                              outerRadius={120}
+                              fill="#8884d8"
+                              dataKey="value"
+                            >
+                              {[
+                                { name: 'Push', value: insights.pushPullRatio.push },
+                                { name: 'Pull', value: insights.pushPullRatio.pull },
+                              ].map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS_PUSH_PULL[index % COLORS_PUSH_PULL.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
                       </Box>
-                    </Box>
-                  )}
-                </CardContent>
-              </Card>
-            </>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Bewegingstype Verdeling Pie Chart */}
+                {Object.keys(insights.movementTypeCounts).length > 0 && (
+                  <Card sx={{ mb: 3, backgroundColor: 'transparent', borderRadius: '16px', border: '1px solid #D2C5B4' }} elevation={0}>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>
+                        Bewegingstype Verdeling
+                      </Typography>
+                      <Box sx={{ width: '100%', height: 400, mt: 2 }}>
+                        <ResponsiveContainer>
+                          <PieChart>
+                            <Pie
+                              data={Object.entries(insights.movementTypeCounts)
+                                .sort(([, a], [, b]) => b - a)
+                                .map(([type, count]) => ({
+                                  name: type,
+                                  value: count,
+                                }))}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={false}
+                              label={({ name, value }) => `${name} ${value}x`}
+                              outerRadius={120}
+                              fill="#8884d8"
+                              dataKey="value"
+                            >
+                              {Object.entries(insights.movementTypeCounts)
+                                .sort(([, a], [, b]) => b - a)
+                                .map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={COLORS_MOVEMENT[index % COLORS_MOVEMENT.length]} />
+                                ))}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                )}
+              </CardContent>
+            </Card>
           )}
         </>
       )}
 
       {/* Logs sectie onderaan */}
-      <Box sx={{ mt: 4 }}>
-        <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
-          Log
-        </Typography>
-
-        {allExercises.length > 0 && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {allExercises.map((exercise) => {
-              const imageUrl = exerciseImages[exercise.name];
-              const exerciseDate = new Date(exercise.date);
-              const isToday = exerciseDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
-              const dateStr = exerciseDate.toLocaleDateString('nl-NL', { 
-                weekday: 'short',
-                year: 'numeric', 
-                month: 'short', 
-                day: 'numeric' 
-              });
-              
-              const metadata = findExerciseMetadata(exercise.name);
-              
-              return (
-                <Card key={exercise.id} elevation={1}>
-                  <CardContent>
-                    <Box sx={{ display: 'flex', gap: 2 }}>
-                      {imageUrl && (
-                        <Box
-                          component="img"
-                          src={imageUrl}
-                          alt={exercise.name}
-                          sx={{
-                            width: 120,
-                            height: 120,
-                            objectFit: 'cover',
-                            borderRadius: 2,
-                            flexShrink: 0,
-                          }}
-                          onError={() => {
-                            setExerciseImages(prev => ({ ...prev, [exercise.name]: null }));
-                          }}
-                        />
-                      )}
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                          <Box>
-                            <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                              {exercise.name}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {isToday ? `Vandaag, ${exerciseDate.toLocaleDateString('nl-NL', { month: 'short', day: 'numeric' })}` : dateStr}
-                            </Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', gap: 0.5 }}>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleEditExercise(exercise)}
-                              sx={{ color: 'text.secondary' }}
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              onClick={() => handleDeleteExercise(exercise.id)}
-                              sx={{ color: 'error.main' }}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Box>
-                        </Box>
-                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
-                          <Chip
-                            label={`${exercise.weight} kg`}
-                            color="primary"
-                            size="small"
-                          />
-                          {exercise.sets && (
-                            <Chip
-                              label={`${exercise.sets} ${exercise.sets === 1 ? 'set' : 'sets'}`}
-                              color="secondary"
-                              variant="outlined"
-                              size="small"
-                            />
-                          )}
-                          {exercise.reps && (
-                            <Chip
-                              label={`${exercise.reps} ${exercise.reps === 1 ? 'rep' : 'reps'}`}
-                              color="secondary"
-                              variant="outlined"
-                              size="small"
-                            />
-                          )}
-                        </Box>
-                        {exercise.notes && (
-                          <Box sx={{ mt: 1.5, p: 1.5, backgroundColor: 'rgba(0, 0, 0, 0.03)', borderRadius: 1 }}>
-                            <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
-                              {exercise.notes}
-                            </Typography>
-                          </Box>
-                        )}
-                        {metadata && (
-                          <Box sx={{ mt: 2 }}>
-                            {metadata.movementType && (
-                              <Chip
-                                label={metadata.movementType}
-                                size="small"
-                                sx={{ mr: 0.5, mb: 0.5 }}
-                              />
-                            )}
-                            {metadata.primaryMuscles.length > 0 && (
-                              <Box sx={{ mt: 1 }}>
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                                  Primaire spiergroepen:
-                                </Typography>
-                                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                                  {metadata.primaryMuscles.map((muscle) => (
-                                    <Chip
-                                      key={muscle}
-                                      label={muscle}
-                                      size="small"
-                                      color="primary"
-                                      variant="outlined"
-                                    />
-                                  ))}
-                                </Box>
-                              </Box>
-                            )}
-                            {metadata.secondaryMuscles.length > 0 && (
-                              <Box sx={{ mt: 1 }}>
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                                  Secundaire spiergroepen:
-                                </Typography>
-                                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                                  {metadata.secondaryMuscles.map((muscle) => (
-                                    <Chip
-                                      key={muscle}
-                                      label={muscle}
-                                      size="small"
-                                      color="secondary"
-                                      variant="outlined"
-                                    />
-                                  ))}
-                                </Box>
-                              </Box>
-                            )}
-                          </Box>
-                        )}
-                      </Box>
-                    </Box>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </Box>
-        )}
-
-        {allExercises.length === 0 && (
-          <Typography variant="body1" color="text.secondary" align="center" sx={{ py: 4 }}>
-            Nog geen oefeningen gelogd. Begin met het toevoegen van je eerste oefening!
+      <Card sx={{ mt: 4, backgroundColor: '#FEF2E5', borderRadius: '16px' }} elevation={0}>
+        <CardContent>
+          <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
+            Log
           </Typography>
+
+          {allExercises.length > 0 && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {allExercises.map((exercise) => {
+                const imageUrl = exerciseImages[exercise.name];
+                const exerciseDate = new Date(exercise.date);
+                const isToday = exerciseDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+                const dateStr = exerciseDate.toLocaleDateString('nl-NL', { 
+                  weekday: 'short',
+                  year: 'numeric', 
+                  month: 'short', 
+                  day: 'numeric' 
+                });
+                
+                const metadata = findExerciseMetadata(exercise.name);
+                
+                const details = [
+                  `${exercise.weight} kg`,
+                  exercise.sets && `${exercise.sets} ${exercise.sets === 1 ? 'set' : 'sets'}`,
+                  exercise.reps && `${exercise.reps} ${exercise.reps === 1 ? 'rep' : 'reps'}`
+                ].filter(Boolean).join(' | ');
+
+                return (
+                  <Card key={exercise.id} elevation={0} sx={{ backgroundColor: 'transparent', borderRadius: '16px', border: '1px solid #D2C5B4' }}>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                            {exercise.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                            {isToday ? `Vandaag, ${exerciseDate.toLocaleDateString('nl-NL', { month: 'short', day: 'numeric' })}` : dateStr}
+                          </Typography>
+                          <Typography variant="body2" color="text.primary">
+                            {details}
+                          </Typography>
+                        </Box>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => handleMenuOpen(e, exercise.id)}
+                          sx={{ color: 'text.secondary', ml: 1 }}
+                        >
+                          <MoreVertIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </Box>
+          )}
+
+          {allExercises.length === 0 && (
+            <Typography variant="body1" color="text.secondary" align="center" sx={{ py: 4 }}>
+              Nog geen oefeningen gelogd. Begin met het toevoegen van je eerste oefening!
+            </Typography>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Menu voor log entries */}
+      <Menu
+        anchorEl={menuAnchorEl}
+        open={Boolean(menuAnchorEl)}
+        onClose={handleMenuClose}
+      >
+        {menuExerciseId && allExercises.find(ex => ex.id === menuExerciseId) && (
+          <>
+            <MenuItem onClick={() => handleEditFromMenu(allExercises.find(ex => ex.id === menuExerciseId)!)}>
+              <EditIcon fontSize="small" sx={{ mr: 1 }} />
+              Bewerken
+            </MenuItem>
+            <MenuItem onClick={() => handleDeleteFromMenu(menuExerciseId)} sx={{ color: 'error.main' }}>
+              <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
+              Verwijderen
+            </MenuItem>
+          </>
         )}
-      </Box>
+      </Menu>
 
       {/* FAB Button */}
       <Fab

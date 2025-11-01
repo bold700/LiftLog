@@ -160,11 +160,11 @@ md-text-button md-icon {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Style Material Web Components buttons in DialogActions */
+/* Style Material Web Components buttons in DialogActions - M3 compliant spacing */
 .MuiDialogActions-root {
   display: flex;
   gap: 8px;
-  padding: 16px 24px;
+  padding: 16px 24px !important; /* M3: More generous padding around button containers */
   justify-content: flex-end;
 }
 
