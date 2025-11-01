@@ -799,7 +799,7 @@ export const Statistics = () => {
               label="Notitie (optioneel)"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              onFocus={(e) => {
+              onFocus={() => {
                 // Wacht even tot het toetsenbord verschijnt, scroll dan naar buttons
                 if (isMobile) {
                   setTimeout(() => {
@@ -942,7 +942,7 @@ export const Statistics = () => {
               label="Notitie (optioneel)"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              onFocus={(e) => {
+              onFocus={() => {
                 // Wacht even tot het toetsenbord verschijnt, scroll dan naar buttons
                 if (isMobile) {
                   setTimeout(() => {
