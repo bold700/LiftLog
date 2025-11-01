@@ -1,0 +1,190 @@
+/* Material Web Components theming via CSS variables - Light mode only */
+
+:root {
+  /* Light theme colors from theme.json */
+  --md-sys-color-primary: #000000;
+  --md-sys-color-on-primary: #FFFFFF;
+  --md-sys-color-primary-container: #1B1B1B;
+  --md-sys-color-on-primary-container: #FFFFFF;
+  
+  --md-sys-color-secondary: #795900;
+  --md-sys-color-on-secondary: #FFFFFF;
+  
+  --md-sys-color-surface: #F2E4D3;
+  --md-sys-color-on-surface: #1D1B1A;
+  --md-sys-color-surface-variant: #EBE1D6;
+  --md-sys-color-on-surface-variant: #4C463E;
+  
+  --md-sys-color-background: #F2E4D3;
+  --md-sys-color-on-background: #1D1B1A;
+  
+  --md-sys-color-outline: #7D766D;
+  --md-sys-color-outline-variant: #CEC5BB;
+}
+
+/* Navigation Bar specific styling - Fully beige like the rest of the app */
+md-navigation-bar {
+  --md-navigation-bar-container-color: #F2E4D3;
+  background-color: #F2E4D3;
+  font-family: 'Roboto', sans-serif;
+}
+
+/* Ensure md-icon uses Material Symbols font */
+md-navigation-bar md-icon {
+  font-family: 'Material Symbols Outlined', sans-serif;
+  font-weight: 400;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  /* Force immediate color update */
+  transition: color 0s !important;
+}
+
+/* Navigation Tab styling - beige theme with black icons/text */
+md-navigation-tab {
+  /* Force immediate transition to prevent delay */
+  transition: none !important;
+  
+  /* Active state - beige icon/text on black indicator */
+  --md-navigation-bar-active-icon-color: #F2E4D3;
+  --md-navigation-bar-active-label-text-color: #000000;
+  --md-navigation-bar-active-indicator-color: #000000;
+  --md-navigation-bar-active-pressed-icon-color: #000000;
+  --md-navigation-bar-active-pressed-label-text-color: #000000;
+  --md-navigation-bar-active-pressed-state-layer-color: rgba(0, 0, 0, 0.12);
+  --md-navigation-bar-active-hover-icon-color: #000000;
+  --md-navigation-bar-active-hover-label-text-color: #000000;
+  --md-navigation-bar-active-hover-state-layer-color: rgba(0, 0, 0, 0.08);
+  --md-navigation-bar-active-focus-icon-color: #000000;
+  --md-navigation-bar-active-focus-label-text-color: #000000;
+  --md-navigation-bar-active-focus-state-layer-color: rgba(0, 0, 0, 0.12);
+  
+  /* Inactive state */
+  --md-navigation-bar-inactive-icon-color: #4C463E;
+  --md-navigation-bar-inactive-label-text-color: #4C463E;
+  --md-navigation-bar-inactive-pressed-icon-color: #4C463E;
+  --md-navigation-bar-inactive-pressed-label-text-color: #4C463E;
+  --md-navigation-bar-inactive-pressed-state-layer-color: rgba(76, 70, 62, 0.12);
+  --md-navigation-bar-inactive-hover-icon-color: #4C463E;
+  --md-navigation-bar-inactive-hover-label-text-color: #4C463E;
+  --md-navigation-bar-inactive-hover-state-layer-color: rgba(76, 70, 62, 0.08);
+  --md-navigation-bar-inactive-focus-icon-color: #4C463E;
+  --md-navigation-bar-inactive-focus-label-text-color: #4C463E;
+  --md-navigation-bar-inactive-focus-state-layer-color: rgba(76, 70, 62, 0.12);
+}
+
+/* Material Web Components Button styling - beige theme - M3 compliant */
+md-filled-button {
+  /* Container styling */
+  --md-filled-button-container-color: #000000;
+  --md-filled-button-container-shape: 20px; /* M3: 20dp corner radius */
+  --md-filled-button-container-height: 40px; /* M3: 40dp height */
+  
+  /* Padding/spacing - M3 spec: 16dp padding links en rechts */
+  --md-filled-button-leading-space: 16px; /* M3: 16dp padding */
+  --md-filled-button-trailing-space: 16px; /* M3: 16dp padding */
+  --md-filled-button-with-leading-icon-leading-space: 12px; /* M3: padding tussen icon en tekst */
+  --md-filled-button-with-leading-icon-trailing-space: 16px; /* M3: 16dp padding rechts */
+  --md-filled-button-with-trailing-icon-leading-space: 16px; /* M3: 16dp padding links */
+  --md-filled-button-with-trailing-icon-trailing-space: 12px; /* M3: padding tussen tekst en icon */
+  
+  /* Label text styling - M3: Roboto Medium, 14sp, no text transform */
+  --md-filled-button-label-text-color: #F2E4D3;
+  --md-filled-button-label-text-font: 'Roboto', sans-serif;
+  --md-filled-button-label-text-size: 0.875rem; /* 14px */
+  --md-filled-button-label-text-weight: 500; /* Medium */
+  
+  /* State colors */
+  --md-filled-button-hover-label-text-color: #F2E4D3;
+  --md-filled-button-hover-container-elevation: 1; /* M3: subtle elevation on hover */
+  --md-filled-button-focus-label-text-color: #F2E4D3;
+  --md-filled-button-focus-container-elevation: 0;
+  --md-filled-button-pressed-label-text-color: #F2E4D3;
+  --md-filled-button-pressed-container-elevation: 0;
+  
+  /* Disabled state */
+  --md-filled-button-disabled-container-color: rgba(0, 0, 0, 0.12);
+  --md-filled-button-disabled-label-text-color: rgba(29, 27, 26, 0.38);
+  
+  /* Icon styling */
+  --md-filled-button-icon-color: #F2E4D3;
+  --md-filled-button-icon-size: 18px;
+}
+
+md-text-button {
+  /* Padding/spacing - M3 spec: 12dp padding voor text buttons */
+  --md-text-button-leading-space: 12px; /* M3: 12dp padding */
+  --md-text-button-trailing-space: 12px; /* M3: 12dp padding */
+  
+  /* Label text styling - M3: Roboto Medium, 14sp */
+  --md-text-button-label-text-color: #000000;
+  --md-text-button-label-text-font: 'Roboto', sans-serif;
+  --md-text-button-label-text-size: 0.875rem; /* 14px */
+  --md-text-button-label-text-weight: 500; /* Medium */
+  
+  /* State colors */
+  --md-text-button-hover-label-text-color: #000000;
+  --md-text-button-focus-label-text-color: #000000;
+  --md-text-button-pressed-label-text-color: #000000;
+  
+  /* Disabled state */
+  --md-text-button-disabled-label-text-color: rgba(29, 27, 26, 0.38);
+  
+  /* Container styling */
+  --md-text-button-container-height: 40px; /* M3: 40dp height */
+}
+
+/* Ensure md-icon in buttons uses Material Symbols font */
+md-filled-button md-icon,
+md-text-button md-icon {
+  font-family: 'Material Symbols Outlined', sans-serif;
+  font-weight: 400;
+  font-style: normal;
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Style Material Web Components buttons in DialogActions */
+.MuiDialogActions-root {
+  display: flex;
+  gap: 8px;
+  padding: 16px 24px;
+  justify-content: flex-end;
+}
+
+.MuiDialogActions-root md-text-button,
+.MuiDialogActions-root md-filled-button {
+  margin-left: 0;
+  margin-right: 0;
+  min-width: auto;
+}
+
+/* Ensure buttons have proper cursor */
+md-text-button,
+md-filled-button {
+  cursor: pointer;
+}
+
+md-filled-button[disabled],
+md-text-button[disabled] {
+  cursor: not-allowed;
+  pointer-events: none;
+  opacity: 0.38;
+}
+
