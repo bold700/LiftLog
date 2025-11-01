@@ -592,64 +592,6 @@ export const Statistics = () => {
     return getWorkouts();
   }, [selectedExercise]);
 
-  // Algemene statistieken voor wanneer er geen specifieke oefening is geselecteerd
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const overallStats = useMemo(() => {
-    const exercises = getAllExercises();
-    if (exercises.length === 0) return null;
-
-    // Bereken gemiddelden en totalen
-    const totalWeight = exercises.reduce((sum, ex) => sum + ex.weight, 0);
-    const avgWeight = totalWeight / exercises.length;
-    const maxWeight = Math.max(...exercises.map(ex => ex.weight));
-    const minWeight = Math.min(...exercises.map(ex => ex.weight));
-
-    // Volume berekenen
-    const volumes = exercises
-      .filter(ex => ex.sets && ex.reps)
-      .map(ex => ex.sets! * ex.reps! * ex.weight);
-    const totalVolume = volumes.reduce((sum, vol) => sum + vol, 0);
-    const avgVolume = volumes.length > 0 ? totalVolume / volumes.length : 0;
-    const maxVolume = volumes.length > 0 ? Math.max(...volumes) : 0;
-
-    // Meest gedane oefeningen
-    const exerciseCounts: Record<string, number> = {};
-    exercises.forEach(ex => {
-      exerciseCounts[ex.name] = (exerciseCounts[ex.name] || 0) + 1;
-    });
-    const topExercises = Object.entries(exerciseCounts)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5)
-      .map(([name, count]) => ({ name, count }));
-
-    // Unieke oefeningen
-    const uniqueExercises = new Set(exercises.map(ex => ex.name)).size;
-
-    // Workouts per dag/week
-    const workoutDates = allWorkouts.map(w => w.date).sort();
-    const uniqueDays = new Set(workoutDates).size;
-    const daysSinceFirst = workoutDates.length > 0 
-      ? Math.ceil((new Date().getTime() - new Date(workoutDates[0]).getTime()) / (1000 * 60 * 60 * 24))
-      : 0;
-    const workoutsPerDay = daysSinceFirst > 0 ? (allWorkouts.length / Math.max(daysSinceFirst, 1)) : 0;
-
-    return {
-      totalExercises: exercises.length,
-      uniqueExercises,
-      avgWeight: avgWeight.toFixed(1),
-      maxWeight,
-      minWeight,
-      totalVolume: totalVolume.toLocaleString('nl-NL'),
-      avgVolume: avgVolume > 0 ? avgVolume.toLocaleString('nl-NL', { maximumFractionDigits: 0 }) : 0,
-      maxVolume: maxVolume > 0 ? maxVolume.toLocaleString('nl-NL', { maximumFractionDigits: 0 }) : 0,
-      topExercises,
-      totalWorkouts: allWorkouts.length,
-      uniqueDays,
-      workoutsPerDay: workoutsPerDay.toFixed(1),
-      hasVolumeData: volumes.length > 0,
-    };
-  }, [allExercises.length, allWorkouts.length]);
-
   // Nieuwe inzichten: spiergroepen, bewegingstypes, push/pull ratio
   const insights = useMemo(() => {
     const exercises = getAllExercises();
