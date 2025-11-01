@@ -1,45 +1,119 @@
-# LiftLog - Fitness Progressie Tracker
+# 💪 LiftLog - Fitness Progressie Tracker
 
-Een simpele en snelle app om je fitness progressie bij te houden tijdens je gym sessies.
+Een moderne Progressive Web App (PWA) voor het bijhouden van je fitness workouts en progressie, gebouwd met React, TypeScript en Material Design 3.
 
-## Features
+## ✨ Features
 
-- 🏋️ **Snelle Workout Logging**: Log snel je oefeningen en gewichten tijdens je training
-- 📊 **Progressie Statistieken**: Bekijk je vooruitgang met visuele grafieken
-- 💾 **Local Storage**: Alle data wordt lokaal opgeslagen, geen account nodig
-- 📱 **Modern UI**: Gebouwd met Material Design 3 componenten
+- 📊 **Progressie Tracking**: Volg je gewicht progressie per oefening over tijd
+- 📈 **Volume Tracking**: Bereken en volg totaal volume (sets × reps × gewicht)
+- 💾 **Offline First**: Alle data wordt lokaal opgeslagen - werkt zonder internet
+- 🎯 **Oefening Database**: 80+ oefeningen met metadata (spiergroepen, bewegingstypes)
+- 📱 **Mobiel App**: Installeer als app op je telefoon (PWA)
+- 🎨 **Material Design 3**: Moderne, beige-themed UI
+- 📸 **Exercise Images**: Automatische oefening afbeeldingen via ExerciseDB API
 
-## Gebruik
+## 🚀 Quick Start
 
-### Workout Tab
-1. Voer de naam van je oefening in (bijv. "Bench Press")
-2. Voer het gewicht in (in kg)
-3. Optioneel: voeg sets en reps toe
-4. Druk op "Toevoegen" of Enter om te loggen
-
-### Statistieken Tab
-- Selecteer een oefening uit de dropdown
-- Bekijk je progressie met een interactieve grafiek
-- Zie je huidige gewicht, max gewicht, en totale progressie
-
-## Development
+### Installatie
 
 ```bash
-# Install dependencies
+# Installeer dependencies
 npm install
 
 # Start development server
 npm run dev
 
-# Build for production
+# Build voor productie
 npm run build
+
+# Preview productie build
+npm run preview
 ```
 
-## Tech Stack
+## 📱 App Installeren
 
-- React + TypeScript
-- Vite
-- Material UI (Material Design 3)
-- Recharts voor grafieken
-- LocalStorage voor data opslag
+### Android:
+1. Open in Chrome browser
+2. Menu → "Toevoegen aan startscherm"
+3. Bevestig installatie
 
+### iOS:
+1. Open in Safari browser
+2. Deel-knop → "Voeg toe aan beginscherm"
+3. Bevestig met "Toevoegen"
+
+## 🌐 Deployment
+
+Zie [DEPLOYMENT.md](./DEPLOYMENT.md) voor gedetailleerde instructies.
+
+**Snelle opties:**
+- **Vercel**: `vercel` (aanbevolen)
+- **Netlify**: `netlify deploy --prod --dir=dist`
+- **GitHub Pages**: `npm run deploy` (na setup)
+
+## 🛠️ Tech Stack
+
+- **React 18** - UI library
+- **TypeScript** - Type safety
+- **Vite** - Build tool
+- **Material UI (MUI)** - Component library
+- **Material Web Components** - M3 buttons & navigation
+- **Recharts** - Data visualisatie
+- **PWA** - Progressive Web App support
+- **ExerciseDB API** - Oefening afbeeldingen
+
+## 📦 Project Structuur
+
+```
+src/
+├── components/
+│   └── Statistics.tsx    # Hoofdcomponent met alle functionaliteit
+├── data/
+│   ├── exercises.ts     # Oefening database
+│   └── exerciseMetadata.ts  # Gedetailleerde metadata
+├── utils/
+│   ├── storage.ts       # LocalStorage helpers
+│   └── exercisedb.ts    # ExerciseDB API integratie
+├── styles/
+│   └── material-web-theme.css  # Material Web Components styling
+└── theme.ts            # MUI theme configuratie
+```
+
+## 📝 Features Uitleg
+
+### Statistieken
+- **Overzicht**: Algemene stats wanneer geen oefening geselecteerd
+- **Specifiek**: Gedetailleerde progressie per oefening met grafieken
+- **Inzichten**: Spiergroep analyse, push/pull ratio, bewegingstype verdeling
+
+### Oefeningen
+- **Toevoegen**: FAB button → snel nieuwe workout loggen
+- **Bewerken**: Klik op edit icon bij elke log entry
+- **Verwijderen**: Klik op delete icon met bevestiging
+
+### Data
+- Alle data wordt opgeslagen in browser localStorage
+- Geen server of account nodig
+- Privacy-vriendelijk - data blijft op je device
+
+## 🎨 Customization
+
+### Kleuren Aanpassen
+Bewerk `src/theme.json` of `src/theme.ts` voor kleuraanpassingen.
+
+### Oefeningen Toevoegen
+Bewerk `src/data/exerciseMetadata.ts` om nieuwe oefeningen toe te voegen met metadata.
+
+## 📄 Licentie
+
+Privé project - Alle rechten voorbehouden.
+
+## 🙏 Credits
+
+- **ExerciseDB API** voor oefening afbeeldingen
+- **Material Design 3** voor UI guidelines
+- **Recharts** voor data visualisatie
+
+---
+
+Gemaakt met ❤️ voor fitness enthousiastelingen
