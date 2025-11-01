@@ -8,7 +8,6 @@ import {
   TextField,
   useTheme,
   useMediaQuery,
-  Chip,
   Fab,
   Dialog,
   DialogTitle,
@@ -594,6 +593,7 @@ export const Statistics = () => {
   }, [selectedExercise]);
 
   // Algemene statistieken voor wanneer er geen specifieke oefening is geselecteerd
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const overallStats = useMemo(() => {
     const exercises = getAllExercises();
     if (exercises.length === 0) return null;
@@ -1092,7 +1092,7 @@ export const Statistics = () => {
                         Laatste sessie(s)
                       </Typography>
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-                        {lastThreeSessions.map((exercise, index) => {
+                        {lastThreeSessions.map((exercise) => {
                           const exerciseDate = new Date(exercise.date);
                           const isToday = exerciseDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
                           const dateStr = exerciseDate.toLocaleDateString('nl-NL', { 
@@ -1215,12 +1215,12 @@ export const Statistics = () => {
                               cx="50%"
                               cy="50%"
                               labelLine={false}
-                              label={({ name, value, percent }) => `${name} ${value}x`}
+                              label={({ name, value }) => `${name} ${value}x`}
                               outerRadius={120}
                               fill="#8884d8"
                               dataKey="value"
                             >
-                              {insights.topPrimaryMuscles.slice(0, 5).map((entry, index) => (
+                              {insights.topPrimaryMuscles.slice(0, 5).map((_, index) => (
                                 <Cell key={`cell-${index}`} fill={COLORS_PRIMARY[index % COLORS_PRIMARY.length]} />
                               ))}
                             </Pie>
@@ -1250,12 +1250,12 @@ export const Statistics = () => {
                               cx="50%"
                               cy="50%"
                               labelLine={false}
-                              label={({ name, value, percent }) => `${name} ${value}x`}
+                              label={({ name, value }) => `${name} ${value}x`}
                               outerRadius={120}
                               fill="#8884d8"
                               dataKey="value"
                             >
-                              {insights.topSecondaryMuscles.slice(0, 5).map((entry, index) => (
+                              {insights.topSecondaryMuscles.slice(0, 5).map((_, index) => (
                                 <Cell key={`cell-${index}`} fill={COLORS_SECONDARY[index % COLORS_SECONDARY.length]} />
                               ))}
                             </Pie>
@@ -1293,7 +1293,7 @@ export const Statistics = () => {
                               {[
                                 { name: 'Push', value: insights.pushPullRatio.push },
                                 { name: 'Pull', value: insights.pushPullRatio.pull },
-                              ].map((entry, index) => (
+                              ].map((_, index) => (
                                 <Cell key={`cell-${index}`} fill={COLORS_PUSH_PULL[index % COLORS_PUSH_PULL.length]} />
                               ))}
                             </Pie>
@@ -1332,7 +1332,7 @@ export const Statistics = () => {
                             >
                               {Object.entries(insights.movementTypeCounts)
                                 .sort(([, a], [, b]) => b - a)
-                                .map((entry, index) => (
+                                .map((_, index) => (
                                   <Cell key={`cell-${index}`} fill={COLORS_MOVEMENT[index % COLORS_MOVEMENT.length]} />
                                 ))}
                             </Pie>
@@ -1359,7 +1359,6 @@ export const Statistics = () => {
           {allExercises.length > 0 && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {allExercises.map((exercise) => {
-                const imageUrl = exerciseImages[exercise.name];
                 const exerciseDate = new Date(exercise.date);
                 const isToday = exerciseDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
                 const dateStr = exerciseDate.toLocaleDateString('nl-NL', { 
@@ -1368,8 +1367,6 @@ export const Statistics = () => {
                   month: 'short', 
                   day: 'numeric' 
                 });
-                
-                const metadata = findExerciseMetadata(exercise.name);
                 
                 const details = [
                   `${exercise.weight} kg`,
