@@ -78,6 +78,10 @@ export const Statistics = () => {
   const editSaveButtonRef = useRef<any>(null);
   const deleteCancelButtonRef = useRef<any>(null);
   const deleteConfirmButtonRef = useRef<any>(null);
+  const notesFieldRef = useRef<HTMLInputElement | null>(null);
+  const buttonsContainerRef = useRef<HTMLDivElement | null>(null);
+  const editNotesFieldRef = useRef<HTMLInputElement | null>(null);
+  const editButtonsContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const loggedNames = getExerciseNames();
@@ -791,9 +795,24 @@ export const Statistics = () => {
             </Box>
 
             <TextField
+              inputRef={notesFieldRef}
               label="Notitie (optioneel)"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
+              onFocus={(e) => {
+                // Wacht even tot het toetsenbord verschijnt, scroll dan naar buttons
+                if (isMobile) {
+                  setTimeout(() => {
+                    if (buttonsContainerRef.current) {
+                      buttonsContainerRef.current.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'end',
+                        inline: 'nearest'
+                      });
+                    }
+                  }, 300);
+                }
+              }}
               placeholder="Bijv. last van mn schouder, ging goed, was te zwaar..."
               multiline
               rows={3}
@@ -807,7 +826,9 @@ export const Statistics = () => {
             />
             
             {/* Buttons direct onder notities */}
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2, pt: 2, pb: { xs: 2, sm: 0 } }}>
+            <Box 
+              ref={buttonsContainerRef}
+              sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2, pt: 2, pb: { xs: 8, sm: 0 } }}>
               {/* @ts-ignore - Material Web Components are web components */}
               <md-text-button ref={cancelButtonRef}>
                 Annuleren
@@ -917,9 +938,24 @@ export const Statistics = () => {
             </Box>
 
             <TextField
+              inputRef={editNotesFieldRef}
               label="Notitie (optioneel)"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
+              onFocus={(e) => {
+                // Wacht even tot het toetsenbord verschijnt, scroll dan naar buttons
+                if (isMobile) {
+                  setTimeout(() => {
+                    if (editButtonsContainerRef.current) {
+                      editButtonsContainerRef.current.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'end',
+                        inline: 'nearest'
+                      });
+                    }
+                  }, 300);
+                }
+              }}
               placeholder="Bijv. last van mn schouder, ging goed, was te zwaar..."
               multiline
               rows={3}
@@ -933,7 +969,9 @@ export const Statistics = () => {
             />
             
             {/* Buttons direct onder notities */}
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2, pt: 2, pb: { xs: 2, sm: 0 } }}>
+            <Box 
+              ref={editButtonsContainerRef}
+              sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2, pt: 2, pb: { xs: 8, sm: 0 } }}>
               {/* @ts-ignore - Material Web Components are web components */}
               <md-text-button ref={editCancelButtonRef}>
                 Annuleren
