@@ -716,8 +716,13 @@ export const Statistics = () => {
         }}
       >
         <DialogTitle>Nieuwe Oefening</DialogTitle>
-        <DialogContent sx={{ overflowY: 'auto', maxHeight: { xs: 'calc(100vh - 180px)', sm: 'none' }, pb: 2 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+        <DialogContent sx={{ 
+          overflowY: 'auto', 
+          maxHeight: { xs: 'calc(100vh - 180px)', sm: 'none' }, 
+          pb: { xs: 4, sm: 2 },
+          px: { xs: 2, sm: 3 }
+        }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1, pb: { xs: 2, sm: 0 } }}>
             <Autocomplete
               freeSolo
               options={exerciseSuggestions}
@@ -791,12 +796,18 @@ export const Statistics = () => {
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Bijv. last van mn schouder, ging goed, was te zwaar..."
               multiline
-              rows={2}
+              rows={3}
+              minRows={3}
               fullWidth
+              sx={{
+                '& .MuiInputBase-root': {
+                  alignItems: 'flex-start',
+                }
+              }}
             />
             
             {/* Buttons direct onder notities */}
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2, pt: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2, pt: 2, pb: { xs: 2, sm: 0 } }}>
               {/* @ts-ignore - Material Web Components are web components */}
               <md-text-button ref={cancelButtonRef}>
                 Annuleren
@@ -835,8 +846,13 @@ export const Statistics = () => {
         }}
       >
         <DialogTitle>Oefening Bewerken</DialogTitle>
-        <DialogContent sx={{ overflowY: 'auto', maxHeight: { xs: 'calc(100vh - 180px)', sm: 'none' }, pb: 2 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+        <DialogContent sx={{ 
+          overflowY: 'auto', 
+          maxHeight: { xs: 'calc(100vh - 180px)', sm: 'none' }, 
+          pb: { xs: 4, sm: 2 },
+          px: { xs: 2, sm: 3 }
+        }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1, pb: { xs: 2, sm: 0 } }}>
             <Autocomplete
               freeSolo
               options={exerciseSuggestions}
@@ -906,12 +922,18 @@ export const Statistics = () => {
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Bijv. last van mn schouder, ging goed, was te zwaar..."
               multiline
-              rows={2}
+              rows={3}
+              minRows={3}
               fullWidth
+              sx={{
+                '& .MuiInputBase-root': {
+                  alignItems: 'flex-start',
+                }
+              }}
             />
             
             {/* Buttons direct onder notities */}
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2, pt: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2, pt: 2, pb: { xs: 2, sm: 0 } }}>
               {/* @ts-ignore - Material Web Components are web components */}
               <md-text-button ref={editCancelButtonRef}>
                 Annuleren
