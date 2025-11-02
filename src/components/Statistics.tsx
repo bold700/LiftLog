@@ -37,6 +37,7 @@ import { getAllExercisesByName, getExerciseNames, addExercise, updateExercise, d
 import { Exercise } from '../types';
 import { getExerciseImageUrl } from '../utils/exercisedb';
 import { findExerciseMetadata, getAllExerciseNames } from '../data/exerciseMetadata';
+import { exerciseDatabase, getExercisesByCategory } from '../data/exercises';
 
 // Import Material Web Components buttons
 import '@material/web/button/filled-button.js';
@@ -85,9 +86,7 @@ export const Statistics = () => {
   useEffect(() => {
     const loggedNames = getExerciseNames();
     setExerciseNames(loggedNames);
-    if (loggedNames.length > 0 && !selectedExercise) {
-      setSelectedExercise(loggedNames[0]);
-    }
+    // Geen automatische selectie meer - gebruiker moet bewust kiezen
     loadAllExercises();
     loadExerciseSuggestions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -185,11 +184,10 @@ export const Statistics = () => {
     const loggedNames = getExerciseNames();
     setExerciseNames(loggedNames);
     
-    // Update selectedExercise als nodig
-    if (!selectedExercise || !loggedNames.includes(selectedExercise)) {
-      if (loggedNames.length > 0) {
-        setSelectedExercise(loggedNames[0]);
-      }
+    // Update selectedExercise alleen als de geselecteerde oefening niet meer bestaat
+    if (selectedExercise && !loggedNames.includes(selectedExercise)) {
+      // Alleen resetten als de oefening niet meer bestaat, niet automatisch selecteren
+      setSelectedExercise(null);
     } else if (selectedExercise && loggedNames.includes(selectedExercise)) {
       // Forceer re-render van chart
       const current = selectedExercise;
@@ -307,13 +305,10 @@ export const Statistics = () => {
     const loggedNames = getExerciseNames();
     setExerciseNames(loggedNames);
     
-    // Update selectedExercise als nodig
+    // Update selectedExercise alleen als de geselecteerde oefening niet meer bestaat
     if (selectedExercise && !loggedNames.includes(selectedExercise)) {
-      if (loggedNames.length > 0) {
-        setSelectedExercise(loggedNames[0]);
-      } else {
-        setSelectedExercise(null);
-      }
+      // Reset alleen als de oefening is verwijderd
+      setSelectedExercise(null);
     } else if (selectedExercise) {
       // Forceer re-render van chart door state te updaten
       const current = selectedExercise;
@@ -591,31 +586,28 @@ export const Statistics = () => {
     return sortedExercises.slice(0, 3);
   }, [selectedExercise, allExercises.length]);
 
-  // Nieuwe inzichten: spiergroepen, bewegingstypes, push/pull ratio
+  // Nieuwe inzichten: categorieën, bewegingstypes, push/pull ratio
   const insights = useMemo(() => {
     const exercises = getAllExercises();
     
-    // Tel spiergroepen
-    const primaryMuscleCounts: Record<string, number> = {};
-    const secondaryMuscleCounts: Record<string, number> = {};
+    // Tel categorieën (in plaats van spiergroepen)
+    const categoryCounts: Record<string, number> = {};
     const movementTypeCounts: Record<string, number> = {};
     let pushCount = 0;
     let pullCount = 0;
     const unmatchedExercises: string[] = [];
     
     exercises.forEach(exercise => {
+      // Vind categorie uit exerciseDatabase
+      const exerciseData = exerciseDatabase.find(ex => ex.name === exercise.name);
+      if (exerciseData) {
+        // Tel categorie
+        categoryCounts[exerciseData.category] = (categoryCounts[exerciseData.category] || 0) + 1;
+      }
+      
+      // Gebruik metadata voor movement types en push/pull
       const metadata = findExerciseMetadata(exercise.name);
       if (metadata) {
-        // Tel primaire spiergroepen
-        metadata.primaryMuscles.forEach(muscle => {
-          primaryMuscleCounts[muscle] = (primaryMuscleCounts[muscle] || 0) + 1;
-        });
-        
-        // Tel secundaire spiergroepen
-        metadata.secondaryMuscles.forEach(muscle => {
-          secondaryMuscleCounts[muscle] = (secondaryMuscleCounts[muscle] || 0) + 1;
-        });
-        
         // Tel bewegingstypes
         movementTypeCounts[metadata.movementType] = (movementTypeCounts[metadata.movementType] || 0) + 1;
         
@@ -623,7 +615,9 @@ export const Statistics = () => {
         if (metadata.movementType === 'Push') pushCount++;
         if (metadata.movementType === 'Pull') pullCount++;
       } else {
-        unmatchedExercises.push(exercise.name);
+        if (!exerciseData) {
+          unmatchedExercises.push(exercise.name);
+        }
       }
     });
     
@@ -635,18 +629,14 @@ export const Statistics = () => {
       pushCount,
       pullCount,
       movementTypeCounts,
+      categoryCounts,
     });
     
-    // Sorteer spiergroepen op frequentie
-    const topPrimaryMuscles = Object.entries(primaryMuscleCounts)
+    // Sorteer categorieën op frequentie
+    const topCategories = Object.entries(categoryCounts)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 10)
-      .map(([muscle, count]) => ({ muscle, count }));
-    
-    const topSecondaryMuscles = Object.entries(secondaryMuscleCounts)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5)
-      .map(([muscle, count]) => ({ muscle, count }));
+      .map(([category, count]) => ({ muscle: category, count }));
     
     // Bereken push/pull ratio
     const totalPushPull = pushCount + pullCount;
@@ -658,8 +648,8 @@ export const Statistics = () => {
       : null;
     
     return {
-      topPrimaryMuscles,
-      topSecondaryMuscles,
+      topPrimaryMuscles: topCategories, // Gebruik categorieën in plaats van spiergroepen
+      topSecondaryMuscles: [], // Niet meer nodig, maar behouden voor compatibiliteit
       movementTypeCounts,
       pushPullRatio,
       pushCount,
@@ -1064,6 +1054,9 @@ export const Statistics = () => {
                 options={exerciseNames}
                 value={selectedExercise}
                 onChange={(_, newValue) => setSelectedExercise(newValue)}
+                clearOnEscape
+                clearText="Wissen"
+                noOptionsText="Geen oefeningen beschikbaar"
                 renderInput={(params) => (
                   <TextField
                     {...params}
@@ -1113,6 +1106,7 @@ export const Statistics = () => {
 
                 {/* Laatste 3 Sessies */}
                 {lastThreeSessions.length > 0 && (
+                  <>
                   <Card sx={{ mb: 4, backgroundColor: 'transparent', borderRadius: '16px', border: 'none', m: 0 }} elevation={0}>
                     <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
                       <Typography variant="h6" gutterBottom>
@@ -1191,6 +1185,7 @@ export const Statistics = () => {
                       </Box>
                     </CardContent>
                   </Card>
+                  </>
                 )}
 
                 {/* Grafiek voor progressie */}
@@ -1199,7 +1194,7 @@ export const Statistics = () => {
                     <Typography variant="h6" gutterBottom>
                       Overzicht
                     </Typography>
-                    <Box sx={{ width: '100%', height: 400, mt: 3 }}>
+                    <Box sx={{ width: '100%', height: 200, mt: 3 }}>
                       <ResponsiveContainer>
                         <ComposedChart data={chartData}>
                           <CartesianGrid strokeDasharray="3 3" />
@@ -1245,9 +1240,9 @@ export const Statistics = () => {
                   <Card sx={{ mb: 3, backgroundColor: 'transparent', borderRadius: '16px', border: '1px solid #D2C5B4' }} elevation={0}>
                     <CardContent>
                       <Typography variant="h6" gutterBottom>
-                        Meest Getrainde Primaire Spiergroepen
+                        Meest Getrainde Oefening Groepen
                       </Typography>
-                      <Box sx={{ width: '100%', height: 400, mt: 2 }}>
+                      <Box sx={{ width: '100%', height: 200, mt: 2 }}>
                         <ResponsiveContainer>
                           <PieChart>
                             <Pie
@@ -1259,7 +1254,7 @@ export const Statistics = () => {
                               cy="50%"
                               labelLine={false}
                               label={({ name, value }) => `${name} ${value}x`}
-                              outerRadius={120}
+                              outerRadius={60}
                               fill="#8884d8"
                               dataKey="value"
                             >
@@ -1275,14 +1270,14 @@ export const Statistics = () => {
                   </Card>
                 )}
 
-                {/* Secundaire Spiergroepen Pie Chart */}
-                {insights.topSecondaryMuscles.length > 0 && (
+                {/* Secundaire categorieën Pie Chart - Verwijderd, gebruiken we nu alleen primaire categorieën */}
+                {false && insights.topSecondaryMuscles.length > 0 && (
                   <Card sx={{ mb: 3, backgroundColor: 'transparent', borderRadius: '16px', border: '1px solid #D2C5B4' }} elevation={0}>
                     <CardContent>
                       <Typography variant="h6" gutterBottom>
                         Meest Getrainde Secundaire Spiergroepen
                       </Typography>
-                      <Box sx={{ width: '100%', height: 400, mt: 2 }}>
+                      <Box sx={{ width: '100%', height: 200, mt: 2 }}>
                         <ResponsiveContainer>
                           <PieChart>
                             <Pie
@@ -1294,7 +1289,7 @@ export const Statistics = () => {
                               cy="50%"
                               labelLine={false}
                               label={({ name, value }) => `${name} ${value}x`}
-                              outerRadius={120}
+                              outerRadius={60}
                               fill="#8884d8"
                               dataKey="value"
                             >
@@ -1317,7 +1312,7 @@ export const Statistics = () => {
                       <Typography variant="h6" gutterBottom>
                         Push/Pull Ratio
                       </Typography>
-                      <Box sx={{ width: '100%', height: 400, mt: 2 }}>
+                      <Box sx={{ width: '100%', height: 200, mt: 2 }}>
                         <ResponsiveContainer>
                           <PieChart>
                             <Pie
@@ -1329,7 +1324,7 @@ export const Statistics = () => {
                               cy="50%"
                               labelLine={false}
                               label={({ name, value }) => `${name} ${value}%`}
-                              outerRadius={120}
+                              outerRadius={60}
                               fill="#8884d8"
                               dataKey="value"
                             >
@@ -1355,7 +1350,7 @@ export const Statistics = () => {
                       <Typography variant="h6" gutterBottom>
                         Bewegingstype Verdeling
                       </Typography>
-                      <Box sx={{ width: '100%', height: 400, mt: 2 }}>
+                      <Box sx={{ width: '100%', height: 200, mt: 2 }}>
                         <ResponsiveContainer>
                           <PieChart>
                             <Pie
@@ -1369,7 +1364,7 @@ export const Statistics = () => {
                               cy="50%"
                               labelLine={false}
                               label={({ name, value }) => `${name} ${value}x`}
-                              outerRadius={120}
+                              outerRadius={60}
                               fill="#8884d8"
                               dataKey="value"
                             >
