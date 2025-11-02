@@ -35,7 +35,6 @@ import {
 } from 'recharts';
 import { getAllExercisesByName, getExerciseNames, addExercise, updateExercise, deleteExercise, getAllExercises } from '../utils/storage';
 import { Exercise } from '../types';
-import { getExerciseImageUrl } from '../utils/exercisedb';
 import { findExerciseMetadata, getAllExerciseNames } from '../data/exerciseMetadata';
 import { exerciseDatabase } from '../data/exercises';
 
@@ -69,7 +68,6 @@ export const Statistics = () => {
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
   const [deletingExerciseId, setDeletingExerciseId] = useState<string | null>(null);
-  const [exerciseImages, setExerciseImages] = useState<Record<string, string | null>>({});
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [menuExerciseId, setMenuExerciseId] = useState<string | null>(null);
   const cancelButtonRef = useRef<any>(null);
@@ -112,23 +110,9 @@ export const Statistics = () => {
     }
   }, [selectedExercise]);
 
-  const loadAllExercises = async () => {
+  const loadAllExercises = () => {
     const exercises = getAllExercises();
     setAllExercises(exercises);
-
-    // Haal afbeeldingen op voor alle oefeningen
-    const imageMap: Record<string, string | null> = {};
-    await Promise.all(
-      exercises.map(async (exercise) => {
-        if (!exerciseImages[exercise.name]) {
-          const imageUrl = await getExerciseImageUrl(exercise.name);
-          imageMap[exercise.name] = imageUrl;
-        } else {
-          imageMap[exercise.name] = exerciseImages[exercise.name];
-        }
-      })
-    );
-    setExerciseImages(prev => ({ ...prev, ...imageMap }));
   };
 
   const loadExerciseSuggestions = () => {
@@ -170,14 +154,6 @@ export const Statistics = () => {
     const exercises = getAllExercises();
     setAllExercises(exercises);
     
-    // Laad afbeelding voor nieuwe oefening als die er nog niet is
-    if (!exerciseImages[exercise.name]) {
-      const imageUrl = await getExerciseImageUrl(exercise.name);
-      if (imageUrl) {
-        setExerciseImages(prev => ({ ...prev, [exercise.name]: imageUrl }));
-      }
-    }
-    
     loadExerciseSuggestions();
     
     // Update exerciseNames voor statistieken
@@ -194,7 +170,7 @@ export const Statistics = () => {
       setSelectedExercise(null);
       setTimeout(() => setSelectedExercise(current), 0);
     }
-  }, [exerciseName, weight, sets, reps, notes, selectedExercise, exerciseImages]);
+  }, [exerciseName, weight, sets, reps, notes, selectedExercise]);
 
   const handleEditExercise = (exercise: Exercise) => {
     setEditingExercise(exercise);
@@ -288,18 +264,6 @@ export const Statistics = () => {
     const exercises = getAllExercises();
     setAllExercises(exercises);
     
-    // Update images cache - verwijder image van verwijderde oefening
-    setExerciseImages(prev => {
-      const updated = { ...prev };
-      // Verwijder images van oefeningen die niet meer bestaan
-      const existingNames = new Set(exercises.map(ex => ex.name));
-      Object.keys(updated).forEach(name => {
-        if (!existingNames.has(name)) {
-          delete updated[name];
-        }
-      });
-      return updated;
-    });
     
     // Update exerciseNames voor statistieken
     const loggedNames = getExerciseNames();

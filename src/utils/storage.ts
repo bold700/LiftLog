@@ -35,6 +35,9 @@ export const addExercise = (exercise: Exercise): void => {
   // Add exercise to today's workout
   todayWorkout.exercises.push(exercise);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(workouts));
+  
+  // Dispatch event voor andere tabs/components
+  window.dispatchEvent(new Event('workoutUpdated'));
 };
 
 export const getAllExercisesByName = (exerciseName: string): Exercise[] => {
@@ -69,7 +72,7 @@ export const updateExercise = (exerciseId: string, updatedExercise: Partial<Exer
   
   if (found) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(workouts));
-    console.log('Exercise updated, workouts saved:', workouts);
+    window.dispatchEvent(new Event('workoutUpdated'));
   } else {
     console.warn('Exercise not found for update:', exerciseId);
   }
@@ -97,7 +100,7 @@ export const deleteExercise = (exerciseId: string): void => {
   
   if (found) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(workouts));
-    console.log('Exercise deleted, workouts saved:', workouts);
+    window.dispatchEvent(new Event('workoutUpdated'));
   } else {
     console.warn('Exercise not found for deletion:', exerciseId);
   }

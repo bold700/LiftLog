@@ -17,7 +17,6 @@ import AddIcon from '@mui/icons-material/Add';
 import { addExercise, getWorkouts, getExerciseNames } from '../utils/storage';
 import { Exercise } from '../types';
 import { getExerciseNames as getDbExerciseNames } from '../data/exercises';
-import { getExerciseImageUrl } from '../utils/exercisedb';
 
 // Import Material Web Components buttons
 import '@material/web/button/filled-button.js';
@@ -33,41 +32,16 @@ export const WorkoutLog = () => {
   const [todayExercises, setTodayExercises] = useState<Exercise[]>([]);
   const [exerciseSuggestions, setExerciseSuggestions] = useState<string[]>([]);
   const [openDialog, setOpenDialog] = useState(false);
-  const [exerciseImages, setExerciseImages] = useState<Record<string, string | null>>({});
   const cancelButtonRef = useRef<any>(null);
   const addButtonRef = useRef<any>(null);
 
-  const loadTodayExercises = useCallback(async () => {
+  const loadTodayExercises = useCallback(() => {
     const workouts = getWorkouts();
     const today = new Date().toISOString().split('T')[0];
     const todayWorkout = workouts.find(w => w.date === today);
     const exercises = todayWorkout?.exercises || [];
-    // Debug: check if exercises have notes
-    exercises.forEach(ex => {
-      if (ex.notes) {
-        console.log('Loaded exercise with notes:', ex.name, 'Notes:', ex.notes);
-      }
-    });
-    console.log('All exercises loaded:', exercises.map(ex => ({ name: ex.name, hasNotes: !!ex.notes, notes: ex.notes })));
     setTodayExercises(exercises);
-
-    // Haal afbeeldingen op voor alle oefeningen
-    const imageMap: Record<string, string | null> = {};
-    await Promise.all(
-      exercises.map(async (exercise) => {
-        if (!exerciseImages[exercise.name]) {
-          console.log(`Fetching image for: ${exercise.name}`);
-          const imageUrl = await getExerciseImageUrl(exercise.name);
-          console.log(`Image URL for "${exercise.name}":`, imageUrl);
-          imageMap[exercise.name] = imageUrl;
-        } else {
-          // Gebruik cached image
-          imageMap[exercise.name] = exerciseImages[exercise.name];
-        }
-      })
-    );
-    setExerciseImages(prev => ({ ...prev, ...imageMap }));
-  }, [exerciseImages]);
+  }, []);
 
   const loadExerciseSuggestions = () => {
     const dbExercises = getDbExerciseNames();
@@ -76,7 +50,7 @@ export const WorkoutLog = () => {
     setExerciseSuggestions(allExercises);
   };
 
-  const handleAddExercise = useCallback(async () => {
+  const handleAddExercise = useCallback(() => {
     if (!exerciseName.trim() || !weight.trim()) return;
 
     const exercise: Exercise = {
@@ -98,9 +72,9 @@ export const WorkoutLog = () => {
     setNotes('');
     setOpenDialog(false);
     
-    await loadTodayExercises();
+    loadTodayExercises();
     loadExerciseSuggestions();
-  }, [exerciseName, weight, sets, reps, notes]);
+  }, [exerciseName, weight, sets, reps, notes, loadTodayExercises]);
 
   const handleCloseDialog = useCallback(() => {
     setOpenDialog(false);
@@ -278,29 +252,10 @@ export const WorkoutLog = () => {
       {todayExercises.length > 0 && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {todayExercises.map((exercise) => {
-            const imageUrl = exerciseImages[exercise.name];
             return (
               <Card key={exercise.id} elevation={1}>
                 <CardContent>
                   <Box sx={{ display: 'flex', gap: 2 }}>
-                    {imageUrl && (
-                      <Box
-                        component="img"
-                        src={imageUrl}
-                        alt={exercise.name}
-                        sx={{
-                          width: 120,
-                          height: 120,
-                          objectFit: 'cover',
-                          borderRadius: 2,
-                          flexShrink: 0,
-                        }}
-                        onError={() => {
-                          // Verwijder afbeelding bij error
-                          setExerciseImages(prev => ({ ...prev, [exercise.name]: null }));
-                        }}
-                      />
-                    )}
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                         {exercise.name}
