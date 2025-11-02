@@ -1159,6 +1159,22 @@ export const Statistics = () => {
                                     <Typography variant="body2" color="text.primary">
                                       {details}
                                     </Typography>
+                                    {exercise.notes && String(exercise.notes).trim() && (
+                                      <Typography 
+                                        variant="body2" 
+                                        color="text.secondary" 
+                                        sx={{ 
+                                          mt: 1.5, 
+                                          fontStyle: 'italic', 
+                                          display: 'block',
+                                          opacity: 0.75,
+                                          fontSize: '0.875rem',
+                                          lineHeight: 1.5
+                                        }}
+                                      >
+                                        &quot;{String(exercise.notes).trim()}&quot;
+                                      </Typography>
+                                    )}
                                   </Box>
                                   <IconButton
                                     size="small"
@@ -1415,6 +1431,22 @@ export const Statistics = () => {
                           <Typography variant="body2" color="text.primary">
                             {details}
                           </Typography>
+                          {exercise.notes && String(exercise.notes).trim() && (
+                            <Typography 
+                              variant="body2" 
+                              color="text.secondary" 
+                              sx={{ 
+                                mt: 1.5, 
+                                fontStyle: 'italic', 
+                                display: 'block',
+                                opacity: 0.75,
+                                fontSize: '0.875rem',
+                                lineHeight: 1.5
+                              }}
+                            >
+                              &quot;{String(exercise.notes).trim()}&quot;
+                            </Typography>
+                          )}
                         </Box>
                         <IconButton
                           size="small"

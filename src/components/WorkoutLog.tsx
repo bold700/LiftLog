@@ -29,6 +29,7 @@ export const WorkoutLog = () => {
   const [weight, setWeight] = useState('');
   const [sets, setSets] = useState('');
   const [reps, setReps] = useState('');
+  const [notes, setNotes] = useState('');
   const [todayExercises, setTodayExercises] = useState<Exercise[]>([]);
   const [exerciseSuggestions, setExerciseSuggestions] = useState<string[]>([]);
   const [openDialog, setOpenDialog] = useState(false);
@@ -36,11 +37,18 @@ export const WorkoutLog = () => {
   const cancelButtonRef = useRef<any>(null);
   const addButtonRef = useRef<any>(null);
 
-  const loadTodayExercises = async () => {
+  const loadTodayExercises = useCallback(async () => {
     const workouts = getWorkouts();
     const today = new Date().toISOString().split('T')[0];
     const todayWorkout = workouts.find(w => w.date === today);
     const exercises = todayWorkout?.exercises || [];
+    // Debug: check if exercises have notes
+    exercises.forEach(ex => {
+      if (ex.notes) {
+        console.log('Loaded exercise with notes:', ex.name, 'Notes:', ex.notes);
+      }
+    });
+    console.log('All exercises loaded:', exercises.map(ex => ({ name: ex.name, hasNotes: !!ex.notes, notes: ex.notes })));
     setTodayExercises(exercises);
 
     // Haal afbeeldingen op voor alle oefeningen
@@ -59,7 +67,7 @@ export const WorkoutLog = () => {
       })
     );
     setExerciseImages(prev => ({ ...prev, ...imageMap }));
-  };
+  }, [exerciseImages]);
 
   const loadExerciseSuggestions = () => {
     const dbExercises = getDbExerciseNames();
@@ -68,7 +76,7 @@ export const WorkoutLog = () => {
     setExerciseSuggestions(allExercises);
   };
 
-  const handleAddExercise = useCallback(() => {
+  const handleAddExercise = useCallback(async () => {
     if (!exerciseName.trim() || !weight.trim()) return;
 
     const exercise: Exercise = {
@@ -78,6 +86,7 @@ export const WorkoutLog = () => {
       date: new Date().toISOString(),
       sets: sets ? parseInt(sets) : undefined,
       reps: reps ? parseInt(reps) : undefined,
+      notes: notes.trim() || undefined,
     };
 
     addExercise(exercise);
@@ -86,11 +95,12 @@ export const WorkoutLog = () => {
     setWeight('');
     setSets('');
     setReps('');
+    setNotes('');
     setOpenDialog(false);
     
-    loadTodayExercises();
+    await loadTodayExercises();
     loadExerciseSuggestions();
-  }, [exerciseName, weight, sets, reps]);
+  }, [exerciseName, weight, sets, reps, notes]);
 
   const handleCloseDialog = useCallback(() => {
     setOpenDialog(false);
@@ -98,12 +108,13 @@ export const WorkoutLog = () => {
     setWeight('');
     setSets('');
     setReps('');
+    setNotes('');
   }, []);
 
   useEffect(() => {
     loadTodayExercises();
     loadExerciseSuggestions();
-  }, []);
+  }, [loadTodayExercises]);
 
   // Update disabled state and add event listeners for Material Web Components buttons
   useEffect(() => {
@@ -232,6 +243,16 @@ export const WorkoutLog = () => {
                 inputProps={{ min: 1 }}
               />
             </Box>
+
+            <TextField
+              label="Notitie (optioneel)"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              onKeyPress={handleKeyPress}
+              multiline
+              rows={2}
+              placeholder="Bijv. last van mn schouder, ging goed, was te zwaar"
+            />
           </Box>
         </DialogContent>
         <DialogActions>
@@ -307,6 +328,23 @@ export const WorkoutLog = () => {
                           />
                         )}
                       </Box>
+                      {exercise.notes && String(exercise.notes).trim() ? (
+                        <Box sx={{ mt: 1.5 }}>
+                          <Typography 
+                            variant="body2" 
+                            color="text.secondary" 
+                            sx={{ 
+                              fontStyle: 'italic', 
+                              display: 'block',
+                              opacity: 0.75,
+                              fontSize: '0.875rem',
+                              lineHeight: 1.5
+                            }}
+                          >
+                            &quot;{String(exercise.notes).trim()}&quot;
+                          </Typography>
+                        </Box>
+                      ) : null}
                     </Box>
                   </Box>
                 </CardContent>
