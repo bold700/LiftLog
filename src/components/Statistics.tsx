@@ -37,7 +37,7 @@ import { getAllExercisesByName, getExerciseNames, addExercise, updateExercise, d
 import { Exercise } from '../types';
 import { getExerciseImageUrl } from '../utils/exercisedb';
 import { findExerciseMetadata, getAllExerciseNames } from '../data/exerciseMetadata';
-import { exerciseDatabase, getExercisesByCategory } from '../data/exercises';
+import { exerciseDatabase } from '../data/exercises';
 
 // Import Material Web Components buttons
 import '@material/web/button/filled-button.js';
