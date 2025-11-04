@@ -14,49 +14,97 @@ import {
 } from 'recharts';
 import { getAllExercises } from '../utils/storage';
 import { findExerciseMetadata } from '../data/exerciseMetadata';
-import { exerciseDatabase } from '../data/exercises';
+import { MuscleFrequencyBody, GREEN_TINTS } from './MuscleFrequencyBody';
+
+// Helper functie om spiergroep naam te normaliseren (zelfde als in MuscleFrequencyBody)
+const normalizeMuscleName = (muscleName: string): string => {
+  const normalized = muscleName.toLowerCase().trim();
+  
+  if (normalized.includes('borst') || normalized.includes('chest') || normalized.includes('pectoral')) {
+    return 'Borst';
+  }
+  if (normalized.includes('biceps') || normalized.includes('bicep')) {
+    return 'Biceps';
+  }
+  if (normalized.includes('triceps') || normalized.includes('tricep')) {
+    return 'Triceps';
+  }
+  if (normalized.includes('schouder') || normalized.includes('shoulder') || normalized.includes('deltoid')) {
+    return 'Schouders';
+  }
+  if (normalized.includes('rug') || normalized.includes('back') || normalized.includes('lat') || normalized.includes('trapezius') || normalized.includes('rhomboid')) {
+    return 'Traps';
+  }
+  if (normalized.includes('buik') || normalized.includes('abdom') || normalized.includes('core') || normalized.includes('rectus')) {
+    return 'Buik';
+  }
+  if (normalized.includes('oblique')) {
+    return 'Obliques';
+  }
+  if (normalized.includes('quad') || normalized.includes('thigh')) {
+    return 'Quadriceps';
+  }
+  if (normalized.includes('kuit') || normalized.includes('calf') || normalized.includes('soleus') || normalized.includes('gastrocnemius')) {
+    return 'Kuiten';
+  }
+  
+  return muscleName;
+};
+
+// Helper functie om weergave naam te krijgen (zelfde als in MuscleFrequencyBody)
+const getDisplayName = (muscleName: string): string => {
+  const displayNames: Record<string, string> = {
+    'Borst': 'Borst',
+    'Biceps': 'Biceps',
+    'Triceps': 'Triceps',
+    'Schouders': 'Schouders',
+    'Traps': 'Rug/Traps',
+    'Buik': 'Buikspieren',
+    'Obliques': 'Obliques',
+    'Quadriceps': 'Quadriceps',
+    'Quads': 'Quadriceps',
+    'Kuiten': 'Kuiten',
+  };
+  
+  return displayNames[muscleName] || muscleName;
+};
 
 export const SpiergroepenPage = () => {
-  // Nieuwe inzichten: categorieën, bewegingstypes, push/pull ratio
+  // Nieuwe inzichten: gebruik primaryMuscles uit metadata (zelfde als MuscleFrequencyBody)
   const insights = useMemo(() => {
     const exercises = getAllExercises();
     
-    // Tel categorieën (in plaats van spiergroepen)
-    const categoryCounts: Record<string, number> = {};
+    // Tel primary muscles (zelfde als MuscleFrequencyBody)
+    const muscleCounts: Record<string, number> = {};
     const movementTypeCounts: Record<string, number> = {};
     let pushCount = 0;
     let pullCount = 0;
-    const unmatchedExercises: string[] = [];
     
     exercises.forEach(exercise => {
-      // Vind categorie uit exerciseDatabase
-      const exerciseData = exerciseDatabase.find(ex => ex.name === exercise.name);
-      if (exerciseData) {
-        // Tel categorie
-        categoryCounts[exerciseData.category] = (categoryCounts[exerciseData.category] || 0) + 1;
-      }
-      
-      // Gebruik metadata voor movement types en push/pull
       const metadata = findExerciseMetadata(exercise.name);
       if (metadata) {
+        // Tel primary muscles (zelfde logica als MuscleFrequencyBody)
+        if (metadata.primaryMuscles) {
+          metadata.primaryMuscles.forEach(muscle => {
+            const normalized = normalizeMuscleName(muscle);
+            muscleCounts[normalized] = (muscleCounts[normalized] || 0) + 1;
+          });
+        }
+        
         // Tel bewegingstypes
         movementTypeCounts[metadata.movementType] = (movementTypeCounts[metadata.movementType] || 0) + 1;
         
         // Tel push/pull
         if (metadata.movementType === 'Push') pushCount++;
         if (metadata.movementType === 'Pull') pullCount++;
-      } else {
-        if (!exerciseData) {
-          unmatchedExercises.push(exercise.name);
-        }
       }
     });
     
-    // Sorteer categorieën op frequentie
-    const topCategories = Object.entries(categoryCounts)
+    // Sorteer spiergroepen op frequentie en map naar display namen
+    const topMuscles = Object.entries(muscleCounts)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 10)
-      .map(([category, count]) => ({ muscle: category, count }));
+      .map(([muscle, count]) => ({ muscle: getDisplayName(muscle), count }));
     
     // Bereken push/pull ratio
     const totalPushPull = pushCount + pullCount;
@@ -68,7 +116,7 @@ export const SpiergroepenPage = () => {
       : null;
     
     return {
-      topPrimaryMuscles: topCategories,
+      topPrimaryMuscles: topMuscles,
       topSecondaryMuscles: [],
       movementTypeCounts,
       pushPullRatio,
@@ -79,10 +127,10 @@ export const SpiergroepenPage = () => {
     };
   }, []);
 
-  // Kleuren voor pie charts
-  const COLORS_PRIMARY = ['#4E6543', '#5D7A51', '#6C8F5F', '#7BA46D', '#8AB97B'];
-  const COLORS_PUSH_PULL = ['#4E6543', '#6C8F5F'];
-  const COLORS_MOVEMENT = ['#4E6543', '#5D7A51', '#6C8F5F', '#7BA46D'];
+  // Kleuren voor pie charts - gebruik dezelfde kleuren als de level SVG's
+  const COLORS_PRIMARY = GREEN_TINTS; // ['#D0EABF', '#A5C392', '#799A64', '#4B6738', '#293B1D']
+  const COLORS_PUSH_PULL = [GREEN_TINTS[4], GREEN_TINTS[2]]; // Level 5 en Level 3
+  const COLORS_MOVEMENT = [GREEN_TINTS[4], GREEN_TINTS[3], GREEN_TINTS[2], GREEN_TINTS[1]]; // Level 5, 4, 3, 2
 
   return (
     <Box sx={{ maxWidth: 1200, mx: 'auto', pb: 10 }}>
@@ -112,14 +160,21 @@ export const SpiergroepenPage = () => {
             Spiergroep Inzichten
           </Typography>
 
-          {/* Primaire Spiergroepen Pie Chart */}
-          {insights.topPrimaryMuscles.length > 0 && (
-            <Card sx={{ mb: 3, backgroundColor: 'transparent', borderRadius: '16px', border: '1px solid #D2C5B4' }} elevation={0}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Meest Getrainde Oefening Groepen
-                </Typography>
-                <Box sx={{ width: '100%', height: 200, mt: 2 }}>
+          {/* Body SVG en Pie Chart in één card */}
+          <Card sx={{ mb: 3, backgroundColor: 'transparent', borderRadius: '16px', border: '1px solid #D2C5B4' }} elevation={0}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Meest Getrainde Spiergroepen
+              </Typography>
+              
+              {/* Body SVG */}
+              <Box sx={{ mb: 1 }}>
+                <MuscleFrequencyBody />
+              </Box>
+              
+              {/* Pie Chart */}
+              {insights.topPrimaryMuscles.length > 0 && (
+                <Box sx={{ width: '100%', height: 200, mt: 1 }}>
                   <ResponsiveContainer>
                     <PieChart>
                       <Pie
@@ -143,9 +198,9 @@ export const SpiergroepenPage = () => {
                     </PieChart>
                   </ResponsiveContainer>
                 </Box>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </CardContent>
+          </Card>
 
           {/* Push/Pull Ratio Pie Chart */}
           {insights.pushPullRatio && (insights.pushPullRatio.push > 0 || insights.pushPullRatio.pull > 0) && (
