@@ -19,7 +19,7 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import { getWorkouts, updateExercise, deleteExercise, getExerciseNames } from '../utils/storage';
+import { getAllExercises, updateExercise, deleteExercise, getExerciseNames } from '../utils/storage';
 import { Exercise } from '../types';
 import { getExerciseNames as getDbExerciseNames } from '../data/exercises';
 
@@ -31,7 +31,7 @@ import '@material/web/icon/icon.js';
 export const LogsPage = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const [todayExercises, setTodayExercises] = useState<Exercise[]>([]);
+  const [allExercises, setAllExercises] = useState<Exercise[]>([]);
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [menuExerciseId, setMenuExerciseId] = useState<string | null>(null);
   const [openEditDialog, setOpenEditDialog] = useState(false);
@@ -61,25 +61,22 @@ export const LogsPage = () => {
   }, [loadExerciseSuggestions]);
 
   useEffect(() => {
-    const loadTodayExercises = () => {
-      const workouts = getWorkouts();
-      const today = new Date().toISOString().split('T')[0];
-      const todayWorkout = workouts.find(w => w.date === today);
-      const exercises = todayWorkout?.exercises || [];
-      setTodayExercises(exercises);
+    const loadAllExercises = () => {
+      const exercises = getAllExercises(); // Sorteert al op datum (nieuwste eerst)
+      setAllExercises(exercises);
     };
 
-    loadTodayExercises();
+    loadAllExercises();
     
     // Luister naar storage events voor updates
     const handleStorageChange = () => {
-      loadTodayExercises();
+      loadAllExercises();
     };
     window.addEventListener('storage', handleStorageChange);
     
     // Ook luisteren naar custom storage events (voor updates binnen dezelfde tab)
     const handleCustomStorageChange = () => {
-      loadTodayExercises();
+      loadAllExercises();
     };
     window.addEventListener('workoutUpdated', handleCustomStorageChange);
     
@@ -140,11 +137,8 @@ export const LogsPage = () => {
     await new Promise(resolve => setTimeout(resolve, 50));
     
     // Herlaad exercises
-    const workouts = getWorkouts();
-    const today = new Date().toISOString().split('T')[0];
-    const todayWorkout = workouts.find(w => w.date === today);
-    const exercises = todayWorkout?.exercises || [];
-    setTodayExercises(exercises);
+    const exercises = getAllExercises();
+    setAllExercises(exercises);
     
     loadExerciseSuggestions();
   }, [editingExercise, exerciseName, weight, sets, reps, notes, loadExerciseSuggestions]);
@@ -170,11 +164,8 @@ export const LogsPage = () => {
     await new Promise(resolve => setTimeout(resolve, 50));
     
     // Herlaad exercises
-    const workouts = getWorkouts();
-    const today = new Date().toISOString().split('T')[0];
-    const todayWorkout = workouts.find(w => w.date === today);
-    const exercises = todayWorkout?.exercises || [];
-    setTodayExercises(exercises);
+    const exercises = getAllExercises();
+    setAllExercises(exercises);
   }, [deletingExerciseId]);
 
   const handleCloseDeleteDialog = useCallback(() => {
@@ -308,9 +299,9 @@ export const LogsPage = () => {
             Log
           </Typography>
 
-          {todayExercises.length > 0 && (
+          {allExercises.length > 0 && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {todayExercises.map((exercise) => {
+              {allExercises.map((exercise) => {
                 const exerciseDate = new Date(exercise.date);
                 const isToday = exerciseDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
                 const dateStr = exerciseDate.toLocaleDateString('nl-NL', { 
@@ -382,9 +373,9 @@ export const LogsPage = () => {
             </Box>
           )}
 
-          {todayExercises.length === 0 && (
+          {allExercises.length === 0 && (
             <Typography variant="body1" color="text.secondary" align="center" sx={{ py: 4 }}>
-              Nog geen oefeningen gelogd vandaag. Begin met het toevoegen van je eerste oefening!
+              Nog geen oefeningen gelogd. Begin met het toevoegen van je eerste oefening!
             </Typography>
           )}
         </CardContent>
@@ -396,10 +387,10 @@ export const LogsPage = () => {
         open={Boolean(menuAnchorEl)}
         onClose={handleMenuClose}
       >
-        {menuExerciseId && todayExercises.find(ex => ex.id === menuExerciseId) && (
+        {menuExerciseId && allExercises.find(ex => ex.id === menuExerciseId) && (
           <>
             <MenuItem
-              onClick={() => handleEditExercise(todayExercises.find(ex => ex.id === menuExerciseId)!)}
+              onClick={() => handleEditExercise(allExercises.find(ex => ex.id === menuExerciseId)!)}
             >
               <EditIcon sx={{ mr: 1 }} fontSize="small" />
               Bewerken
