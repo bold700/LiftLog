@@ -283,11 +283,13 @@ export const MuscleFrequencyBody = () => {
         sx={{
           position: 'relative',
           width: '350px',
-          height: '600px',
-          overflow: 'hidden',
+          height: '350px',
+          overflow: 'visible',
           display: 'flex',
           justifyContent: 'center',
-          alignItems: 'center',
+          alignItems: 'flex-end',
+          mb: 0,
+          pb: 0,
         }}
       >
         {/* Render alle spiergroepen met hun frequentie-gebaseerde level SVG's */}

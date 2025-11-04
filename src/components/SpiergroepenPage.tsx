@@ -162,19 +162,19 @@ export const SpiergroepenPage = () => {
 
           {/* Body SVG en Pie Chart in één card */}
           <Card sx={{ mb: 3, backgroundColor: 'transparent', borderRadius: '16px', border: '1px solid #D2C5B4' }} elevation={0}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
+            <CardContent sx={{ '&:last-child': { pb: 2 }, pt: 2, px: 2 }}>
+              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
                 Meest Getrainde Spiergroepen
               </Typography>
               
               {/* Body SVG */}
-              <Box sx={{ mb: 1 }}>
+              <Box sx={{ mb: 0, pb: 0, lineHeight: 0, display: 'flex', justifyContent: 'center' }}>
                 <MuscleFrequencyBody />
               </Box>
               
               {/* Pie Chart */}
               {insights.topPrimaryMuscles.length > 0 && (
-                <Box sx={{ width: '100%', height: 200, mt: 1 }}>
+                <Box sx={{ width: '100%', height: 200, mt: '-40px', pt: 0 }}>
                   <ResponsiveContainer>
                     <PieChart>
                       <Pie
