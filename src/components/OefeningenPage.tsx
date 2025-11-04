@@ -31,6 +31,7 @@ import {
 import { getAllExercisesByName, getExerciseNames, updateExercise, deleteExercise, getAllExercises } from '../utils/storage';
 import { Exercise } from '../types';
 import { getExerciseNames as getDbExerciseNamesFromData } from '../data/exercises';
+import { MuscleHighlightBody } from './MuscleHighlightBody';
 
 // Import Material Web Components buttons
 import '@material/web/button/filled-button.js';
@@ -512,7 +513,17 @@ export const OefeningenPage = () => {
                   </Box>
                 </CardContent>
               </Card>
-              </>
+              </>  
+            )}
+
+            {/* Spiergroepen Sectie */}
+            {selectedExercise && (
+              <Box sx={{ mt: 4 }}>
+                <Typography variant="h6" gutterBottom>
+                  Spiergroepen
+                </Typography>
+                <MuscleHighlightBody exerciseName={selectedExercise} />
+              </Box>
             )}
 
             {/* Grafiek voor progressie */}
