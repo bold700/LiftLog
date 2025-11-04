@@ -157,7 +157,7 @@ const normalizeMuscleName = (muscleName: string): string => {
 /**
  * Map interne naam naar weergave naam
  */
-const getDisplayName = (muscleName: string): string => {
+export const getDisplayName = (muscleName: string): string => {
   const displayNames: Record<string, string> = {
     'Borst': 'Borst',
     'Biceps': 'Biceps',
@@ -197,7 +197,7 @@ const getLevelForFrequency = (frequency: number, maxFrequency: number, sortedFre
 /**
  * Krijg de kleur voor een gegeven frequentie (voor pie charts)
  */
-const getColorForFrequency = (frequency: number, maxFrequency: number, sortedFrequencies: number[]): string => {
+export const getColorForFrequency = (frequency: number, maxFrequency: number, sortedFrequencies: number[]): string => {
   const level = getLevelForFrequency(frequency, maxFrequency, sortedFrequencies);
   if (level === 0) return 'transparent';
   return GREEN_TINTS[level - 1]; // level 1-5 -> index 0-4
@@ -295,7 +295,7 @@ export const MuscleFrequencyBody = () => {
         {/* Render alle spiergroepen met hun frequentie-gebaseerde level SVG's */}
         {Object.entries(svgMap)
           .sort(([, a], [, b]) => b.frequency - a.frequency) // Sorteer van hoog naar laag
-          .map(([muscle, { levelSvgs, frequency }], index) => {
+          .map(([muscle, { levelSvgs, frequency }]) => {
           const level = getLevelForFrequency(frequency, maxFrequency, sortedFrequencies);
           const svg = level > 0 ? levelSvgs[level - 1] : null; // level 1-5 -> index 0-4
           
