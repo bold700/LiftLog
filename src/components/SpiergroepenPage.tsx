@@ -11,7 +11,6 @@ import {
   Cell,
   Tooltip,
   ResponsiveContainer,
-  LabelList,
 } from 'recharts';
 import { getAllExercises } from '../utils/storage';
 import { findExerciseMetadata } from '../data/exerciseMetadata';
@@ -186,7 +185,7 @@ export const SpiergroepenPage = () => {
                         cx="50%"
                         cy="50%"
                         labelLine={{ stroke: '#3D532E', strokeWidth: 1 }}
-                        label={({ name, value, cx, cy, midAngle, innerRadius, outerRadius }) => {
+                        label={({ name, value, cx, cy, midAngle, outerRadius }) => {
                           const RADIAN = Math.PI / 180;
                           const radius = outerRadius + 20;
                           const x = cx + radius * Math.cos(-midAngle * RADIAN);
@@ -238,7 +237,7 @@ export const SpiergroepenPage = () => {
                         cx="50%"
                         cy="50%"
                         labelLine={{ stroke: '#3D532E', strokeWidth: 1 }}
-                        label={({ name, value, cx, cy, midAngle, innerRadius, outerRadius }) => {
+                        label={({ name, value, cx, cy, midAngle, outerRadius }) => {
                           const RADIAN = Math.PI / 180;
                           const radius = outerRadius + 20;
                           const x = cx + radius * Math.cos(-midAngle * RADIAN);
@@ -295,7 +294,7 @@ export const SpiergroepenPage = () => {
                         cx="50%"
                         cy="50%"
                         labelLine={{ stroke: '#3D532E', strokeWidth: 1 }}
-                        label={({ name, value, cx, cy, midAngle, innerRadius, outerRadius }) => {
+                        label={({ name, value, cx, cy, midAngle, outerRadius }) => {
                           const RADIAN = Math.PI / 180;
                           const radius = outerRadius + 20;
                           const x = cx + radius * Math.cos(-midAngle * RADIAN);
