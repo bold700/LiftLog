@@ -53,8 +53,9 @@ import BodyBackObliquesSecondarySvg from '../assets/body/Body Back Obliques Seco
 import BodyBackTricpesSecondarySvg from '../assets/body/Body Back Tricpes Secondary.svg';
 import BodyBackUnderarmSecondarySvg from '../assets/body/Body Back Underarm Secondary.svg';
 
-// Basis body SVG (achterkant)
+// Basis body SVG's
 import BodyBackSvg from '../assets/body/Body Back.svg';
+import ChestSvg from '../assets/body/Chest.svg'; // Gebruikt als base voor voorkant body outline
 
 interface MuscleHighlightBodyProps {
   exerciseName: string | null;
@@ -227,10 +228,12 @@ const getMusclesFromMapping = (exerciseName: string) => {
   
   // Debug: log de resultaten
   console.log(`Mapping voor "${exerciseName}":`, {
+    actualExerciseName,
     frontPrimary,
     frontSecondary,
     backPrimary,
-    backSecondary
+    backSecondary,
+    mapping
   });
   
   return {
@@ -257,28 +260,36 @@ const renderBodySide = (
     const svgMapping = muscleMap[muscle];
     if (svgMapping) {
       // Bepaal of deze spier primary of secondary is op basis van de naam
-      const isMusclePrimary = muscle.includes('Primary') && !muscle.includes('Secondary');
-      const isMuscleSecondary = muscle.includes('Secondary');
+      // Check expliciet voor "Primary" en niet "Secondary" in de naam
+      const isMusclePrimary = /Primary/.test(muscle) && !/Secondary/.test(muscle);
+      const isMuscleSecondary = /Secondary/.test(muscle);
       
       // Kies de juiste SVG op basis van de spier naam
       let svg: string | undefined;
       let opacity: number;
       
       if (isMusclePrimary) {
+        // Voor Primary spieren: gebruik altijd de Primary SVG met volledige opacity
         svg = svgMapping.primary;
         opacity = 1.0; // Primary spieren zijn volledig zichtbaar
+        console.log(`[PRIMARY] ${muscle}: Using PRIMARY SVG (${svg}) with opacity 1.0`);
       } else if (isMuscleSecondary) {
+        // Voor Secondary spieren: gebruik altijd de Secondary SVG met lagere opacity
         svg = svgMapping.secondary;
         opacity = 0.6; // Secondary spieren zijn 60% zichtbaar
+        console.log(`[SECONDARY] ${muscle}: Using SECONDARY SVG (${svg}) with opacity 0.6`);
       } else {
         // Fallback: gebruik primary als default
         svg = svgMapping.primary;
         opacity = isPrimary ? 1.0 : 0.6;
+        console.log(`[FALLBACK] ${muscle}: Using PRIMARY SVG (${svg}) with opacity ${opacity}`);
       }
       
       if (svg && !svgs.some(s => s.svg === svg)) {
         svgs.push({ svg, opacity });
-        console.log(`Rendering ${isBack ? 'achterkant' : 'voorkant'}: ${muscle} → ${svg} (opacity: ${opacity})`);
+        console.log(`Rendering ${isBack ? 'achterkant' : 'voorkant'}: ${muscle} → ${svg} (opacity: ${opacity}, isMusclePrimary: ${isMusclePrimary}, isMuscleSecondary: ${isMuscleSecondary})`);
+      } else if (!svg) {
+        console.error(`Geen SVG gevonden voor spier: ${muscle}, isMusclePrimary: ${isMusclePrimary}, isMuscleSecondary: ${isMuscleSecondary}`);
       }
     } else {
       console.warn(`Geen SVG mapping gevonden voor spier: "${muscle}" (${isBack ? 'achterkant' : 'voorkant'})`);
@@ -375,7 +386,24 @@ export const MuscleHighlightBody: React.FC<MuscleHighlightBodyProps> = ({ exerci
             alignItems: 'center',
           }}
         >
-          {/* Primary spiergroepen voorkant - onderste laag */}
+          {/* Basis voorkant body - onderste laag */}
+          <Box
+            component="img"
+            src={ChestSvg}
+            alt="body front"
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              objectPosition: 'center',
+              zIndex: 1,
+            }}
+          />
+          
+          {/* Primary spiergroepen voorkant - midden laag */}
           {renderBodySide(muscles.frontPrimary, true, false, 10)}
           
           {/* Secondary spiergroepen voorkant - bovenste laag */}

@@ -2,6 +2,7 @@ import { useMemo, useEffect, useState } from 'react';
 import { Box } from '@mui/material';
 import { getAllExercises } from '../utils/storage';
 import { findExerciseMetadata } from '../data/exerciseMetadata';
+import exerciseMuscleMapping from '../data/exerciseMuscleMapping.json';
 
 // Import Level SVG bestanden - Level 1 (lichtste) tot Level 5 (donkerste)
 import ChestLevel1 from '../assets/body/levels/Chest Primary Level 1.svg';
@@ -57,6 +58,82 @@ import CalvesLevel2 from '../assets/body/levels/Calves Primary Level 2.svg';
 import CalvesLevel3 from '../assets/body/levels/Calves Primary Level 3.svg';
 import CalvesLevel4 from '../assets/body/levels/Calves Primary Level 4.svg';
 import CalvesLevel5 from '../assets/body/levels/Calves Primary Level 5.svg';
+
+// Import achterkant level SVG bestanden
+import BodyBackLatsLevel1 from '../assets/body/Body Back Lats Level 1.svg';
+import BodyBackLatsLevel2 from '../assets/body/Body Back Lats Level 2.svg';
+import BodyBackLatsLevel3 from '../assets/body/Body Back Lats Level 3.svg';
+import BodyBackLatsLevel4 from '../assets/body/Body Back Lats Level 4.svg';
+import BodyBackLatsLevel5 from '../assets/body/Body Back Lats Level 5.svg';
+
+import BodyBackUpperBackLevel1 from '../assets/body/Body Back Upper Back Level 1.svg';
+import BodyBackUpperBackLevel2 from '../assets/body/Body Back Upper Back Level 2.svg';
+import BodyBackUpperBackLevel3 from '../assets/body/Body Back Upper Back Level 3.svg';
+import BodyBackUpperBackLevel4 from '../assets/body/Body Back Upper Back Level 4.svg';
+import BodyBackUpperBackLevel5 from '../assets/body/Body Back Upper Back Level 5.svg';
+
+import BodyBackLowerBackLevel1 from '../assets/body/Body Back Lower Back Level 1.svg';
+import BodyBackLowerBackLevel2 from '../assets/body/Body Back Lower Back Level 2.svg';
+import BodyBackLowerBackLevel3 from '../assets/body/Body Back Lower Back Level 3.svg';
+import BodyBackLowerBackLevel4 from '../assets/body/Body Back Lower Back Level 4.svg';
+import BodyBackLowerBackLevel5 from '../assets/body/Body Back Lower Back Level 5.svg';
+
+import BodyBackTrapsLevel1 from '../assets/body/Body Back Traps Level 1.svg';
+import BodyBackTrapsLevel2 from '../assets/body/Body Back Traps Level 2.svg';
+import BodyBackTrapsLevel3 from '../assets/body/Body Back Traps Level 3.svg';
+import BodyBackTrapsLevel4 from '../assets/body/Body Back Traps Level 4.svg';
+import BodyBackTrapsLevel5 from '../assets/body/Body Back Traps Level 5.svg';
+
+import BodyBackShouldersLevel1 from '../assets/body/Body Back Shoulders Level 1.svg';
+import BodyBackShouldersLevel2 from '../assets/body/Body Back Shoulders Level 2.svg';
+import BodyBackShouldersLevel3 from '../assets/body/Body Back Shoulders Level 3.svg';
+import BodyBackShouldersLevel4 from '../assets/body/Body Back Shoulders Level 4.svg';
+import BodyBackShouldersLevel5 from '../assets/body/Body Back Shoulders Level 5.svg';
+
+import BodyBackGlutealsLevel1 from '../assets/body/Body Back Gluteals Level 1.svg';
+import BodyBackGlutealsLevel2 from '../assets/body/Body Back Gluteals Level 2.svg';
+import BodyBackGlutealsLevel3 from '../assets/body/Body Back Gluteals Level 3.svg';
+import BodyBackGlutealsLevel4 from '../assets/body/Body Back Gluteals Level 4.svg';
+import BodyBackGlutealsLevel5 from '../assets/body/Body Back Gluteals Level 5.svg';
+
+import BodyBackHamstringsLevel1 from '../assets/body/Body Back Hamstrings Level 1.svg';
+import BodyBackHamstringsLevel2 from '../assets/body/Body Back Hamstrings Level 2.svg';
+import BodyBackHamstringsLevel3 from '../assets/body/Body Back Hamstrings Level 3.svg';
+import BodyBackHamstringsLevel4 from '../assets/body/Body Back Hamstrings Level 4.svg';
+import BodyBackHamstringsLevel5 from '../assets/body/Body Back Hamstrings Level 5.svg';
+
+import BodyBackCalvesLevel1 from '../assets/body/Body Back Calves Level 1.svg';
+import BodyBackCalvesLevel2 from '../assets/body/Body Back Calves Level 2.svg';
+import BodyBackCalvesLevel3 from '../assets/body/Body Back Calves Level 3.svg';
+import BodyBackCalvesLevel4 from '../assets/body/Body Back Calves Level 4.svg';
+import BodyBackCalvesLevel5 from '../assets/body/Body Back Calves Level 5.svg';
+
+import BodyBackQuadsLevel1 from '../assets/body/Body Back Quads Level 1.svg';
+import BodyBackQuadsLevel2 from '../assets/body/Body Back Quads Level 2.svg';
+import BodyBackQuadsLevel3 from '../assets/body/Body Back Quads Level 3.svg';
+import BodyBackQuadsLevel4 from '../assets/body/Body Back Quads Level 4.svg';
+import BodyBackQuadsLevel5 from '../assets/body/Body Back Quads Level 5.svg';
+
+import BodyBackObliquesLevel1 from '../assets/body/Body Back Obliques Level 1.svg';
+import BodyBackObliquesLevel2 from '../assets/body/Body Back Obliques Level 2.svg';
+import BodyBackObliquesLevel3 from '../assets/body/Body Back Obliques Level 3.svg';
+import BodyBackObliquesLevel4 from '../assets/body/Body Back Obliques Level 4.svg';
+import BodyBackObliquesLevel5 from '../assets/body/Body Back Obliques Level 5.svg';
+
+import BodyBackTricpesLevel1 from '../assets/body/Body Back Tricpes Level 1.svg';
+import BodyBackTricpesLevel2 from '../assets/body/Body Back Tricpes Level 2.svg';
+import BodyBackTricpesLevel3 from '../assets/body/Body Back Tricpes Level 3.svg';
+import BodyBackTricpesLevel4 from '../assets/body/Body Back Tricpes Level 4.svg';
+import BodyBackTricpesLevel5 from '../assets/body/Body Back Tricpes Level 5.svg';
+
+import BodyBackUnderarmLevel1 from '../assets/body/Body Back Underarm Level 1.svg';
+import BodyBackUnderarmLevel2 from '../assets/body/Body Back Underarm Level 2.svg';
+import BodyBackUnderarmLevel3 from '../assets/body/Body Back Underarm Level 3.svg';
+import BodyBackUnderarmLevel4 from '../assets/body/Body Back Underarm Level 4.svg';
+import BodyBackUnderarmLevel5 from '../assets/body/Body Back Underarm Level 5.svg';
+
+// Basis achterkant body SVG
+import BodyBackSvg from '../assets/body/Body Back.svg';
 
 // Groentinten - level 1 (lichtste) tot level 5 (donkerste)
 export const GREEN_TINTS = ['#D0EABF', '#A5C392', '#799A64', '#4B6738', '#3D532E'];
@@ -114,6 +191,32 @@ const muscleGroupToLevelSvgs: Record<string, string[]> = {
   'Kuiten': [CalvesLevel1, CalvesLevel2, CalvesLevel3, CalvesLevel4, CalvesLevel5],
   'Calves': [CalvesLevel1, CalvesLevel2, CalvesLevel3, CalvesLevel4, CalvesLevel5],
   'Calf': [CalvesLevel1, CalvesLevel2, CalvesLevel3, CalvesLevel4, CalvesLevel5],
+  
+  // Achterkant spieren
+  'Body Back Lats Primary': [BodyBackLatsLevel1, BodyBackLatsLevel2, BodyBackLatsLevel3, BodyBackLatsLevel4, BodyBackLatsLevel5],
+  'Body Back Lats Secondary': [BodyBackLatsLevel1, BodyBackLatsLevel2, BodyBackLatsLevel3, BodyBackLatsLevel4, BodyBackLatsLevel5],
+  'Body Back Upper Back Primary': [BodyBackUpperBackLevel1, BodyBackUpperBackLevel2, BodyBackUpperBackLevel3, BodyBackUpperBackLevel4, BodyBackUpperBackLevel5],
+  'Body Back Upper Back Secondary': [BodyBackUpperBackLevel1, BodyBackUpperBackLevel2, BodyBackUpperBackLevel3, BodyBackUpperBackLevel4, BodyBackUpperBackLevel5],
+  'Body Back Lower Back Primary': [BodyBackLowerBackLevel1, BodyBackLowerBackLevel2, BodyBackLowerBackLevel3, BodyBackLowerBackLevel4, BodyBackLowerBackLevel5],
+  'Body Back Lower Back Secondary': [BodyBackLowerBackLevel1, BodyBackLowerBackLevel2, BodyBackLowerBackLevel3, BodyBackLowerBackLevel4, BodyBackLowerBackLevel5],
+  'Body Back Traps Primary': [BodyBackTrapsLevel1, BodyBackTrapsLevel2, BodyBackTrapsLevel3, BodyBackTrapsLevel4, BodyBackTrapsLevel5],
+  'Body Back Traps Secondary': [BodyBackTrapsLevel1, BodyBackTrapsLevel2, BodyBackTrapsLevel3, BodyBackTrapsLevel4, BodyBackTrapsLevel5],
+  'Body Back Shoulders Primary': [BodyBackShouldersLevel1, BodyBackShouldersLevel2, BodyBackShouldersLevel3, BodyBackShouldersLevel4, BodyBackShouldersLevel5],
+  'Body Back Shoulders Secondary': [BodyBackShouldersLevel1, BodyBackShouldersLevel2, BodyBackShouldersLevel3, BodyBackShouldersLevel4, BodyBackShouldersLevel5],
+  'Body Back Gluteals Primary': [BodyBackGlutealsLevel1, BodyBackGlutealsLevel2, BodyBackGlutealsLevel3, BodyBackGlutealsLevel4, BodyBackGlutealsLevel5],
+  'Body Back Gluteals Secondary': [BodyBackGlutealsLevel1, BodyBackGlutealsLevel2, BodyBackGlutealsLevel3, BodyBackGlutealsLevel4, BodyBackGlutealsLevel5],
+  'Body Back Hamstrings Primary': [BodyBackHamstringsLevel1, BodyBackHamstringsLevel2, BodyBackHamstringsLevel3, BodyBackHamstringsLevel4, BodyBackHamstringsLevel5],
+  'Body Back Hamstrings Secondary': [BodyBackHamstringsLevel1, BodyBackHamstringsLevel2, BodyBackHamstringsLevel3, BodyBackHamstringsLevel4, BodyBackHamstringsLevel5],
+  'Body Back Calves Primary': [BodyBackCalvesLevel1, BodyBackCalvesLevel2, BodyBackCalvesLevel3, BodyBackCalvesLevel4, BodyBackCalvesLevel5],
+  'Body Back Calves Secondary': [BodyBackCalvesLevel1, BodyBackCalvesLevel2, BodyBackCalvesLevel3, BodyBackCalvesLevel4, BodyBackCalvesLevel5],
+  'Body Back Quads Primary': [BodyBackQuadsLevel1, BodyBackQuadsLevel2, BodyBackQuadsLevel3, BodyBackQuadsLevel4, BodyBackQuadsLevel5],
+  'Body Back Quads Secondary': [BodyBackQuadsLevel1, BodyBackQuadsLevel2, BodyBackQuadsLevel3, BodyBackQuadsLevel4, BodyBackQuadsLevel5],
+  'Body Back Obliques Primary': [BodyBackObliquesLevel1, BodyBackObliquesLevel2, BodyBackObliquesLevel3, BodyBackObliquesLevel4, BodyBackObliquesLevel5],
+  'Body Back Obliques Secondary': [BodyBackObliquesLevel1, BodyBackObliquesLevel2, BodyBackObliquesLevel3, BodyBackObliquesLevel4, BodyBackObliquesLevel5],
+  'Body Back Tricpes Primary': [BodyBackTricpesLevel1, BodyBackTricpesLevel2, BodyBackTricpesLevel3, BodyBackTricpesLevel4, BodyBackTricpesLevel5],
+  'Body Back Tricpes Secondary': [BodyBackTricpesLevel1, BodyBackTricpesLevel2, BodyBackTricpesLevel3, BodyBackTricpesLevel4, BodyBackTricpesLevel5],
+  'Body Back Underarm Primary': [BodyBackUnderarmLevel1, BodyBackUnderarmLevel2, BodyBackUnderarmLevel3, BodyBackUnderarmLevel4, BodyBackUnderarmLevel5],
+  'Body Back Underarm Secondary': [BodyBackUnderarmLevel1, BodyBackUnderarmLevel2, BodyBackUnderarmLevel3, BodyBackUnderarmLevel4, BodyBackUnderarmLevel5],
 };
 
 /**
@@ -226,59 +329,164 @@ export const MuscleFrequencyBody = () => {
     };
   }, []);
 
-  const { muscleFrequencies, svgMap } = useMemo(() => {
+  const { frontFrequencies, backFrequencies, frontSvgMap, backSvgMap } = useMemo(() => {
     const exercises = getAllExercises();
-    const frequencies: Record<string, number> = {};
+    const mappingData = exerciseMuscleMapping as Record<string, { primary: string[]; secondary: string[] }>;
     
-    // Tel frequenties van primary muscles
+    const frontFreq: Record<string, number> = {};
+    const backFreq: Record<string, number> = {};
+    
+    // Tel frequenties van primary muscles per oefening
     exercises.forEach(exercise => {
+      // Gebruik metadata om de echte naam te vinden (voor alternatieve namen)
       const metadata = findExerciseMetadata(exercise.name);
-      if (metadata && metadata.primaryMuscles) {
-        metadata.primaryMuscles.forEach(muscle => {
-          const normalized = normalizeMuscleName(muscle);
-          frequencies[normalized] = (frequencies[normalized] || 0) + 1;
+      const actualExerciseName = metadata ? metadata.name : exercise.name;
+      
+      // Zoek mapping in exerciseMuscleMapping.json
+      let mapping = mappingData[actualExerciseName];
+      
+      // Als geen exacte match, probeer case-insensitive
+      if (!mapping) {
+        const exerciseNameLower = actualExerciseName.toLowerCase();
+        for (const key in mappingData) {
+          if (key.toLowerCase() === exerciseNameLower) {
+            mapping = mappingData[key];
+            break;
+          }
+        }
+      }
+      
+      // Als nog steeds geen match, probeer met originele naam
+      if (!mapping) {
+        mapping = mappingData[exercise.name];
+      }
+      
+      if (mapping && mapping.primary) {
+        mapping.primary.forEach(muscle => {
+          // Bepaal of spier voorkant of achterkant is
+          if (muscle.includes('Body Back')) {
+            // Achterkant spier
+            backFreq[muscle] = (backFreq[muscle] || 0) + 1;
+          } else if (muscle.includes('Triceps')) {
+            // Triceps zijn aan de achterkant
+            const backMuscle = muscle.replace('Triceps', 'Body Back Tricpes');
+            backFreq[backMuscle] = (backFreq[backMuscle] || 0) + 1;
+          } else {
+            // Voorkant spier
+            frontFreq[muscle] = (frontFreq[muscle] || 0) + 1;
+          }
         });
       }
     });
     
-    // Map spiergroepen naar level SVG arrays
-    const svgMapping: Record<string, { levelSvgs: string[]; frequency: number }> = {};
-    
-    Object.entries(frequencies).forEach(([muscle, frequency]) => {
-      // Vind de juiste level SVG array voor deze spiergroep
+    // Map voorkant spiergroepen naar level SVG arrays
+    const frontSvgMapping: Record<string, { levelSvgs: string[]; frequency: number }> = {};
+    Object.entries(frontFreq).forEach(([muscle, frequency]) => {
       let levelSvgsArray: string[] | undefined;
       
       for (const [key, levelSvgs] of Object.entries(muscleGroupToLevelSvgs)) {
-        if (normalizeMuscleName(key) === muscle) {
+        if (key === muscle || normalizeMuscleName(key) === normalizeMuscleName(muscle)) {
           levelSvgsArray = levelSvgs;
           break;
         }
       }
       
       if (levelSvgsArray) {
-        svgMapping[muscle] = { levelSvgs: levelSvgsArray, frequency };
+        frontSvgMapping[muscle] = { levelSvgs: levelSvgsArray, frequency };
       }
     });
     
-    return { muscleFrequencies: frequencies, svgMap: svgMapping };
+    // Map achterkant spiergroepen naar level SVG arrays
+    const backSvgMapping: Record<string, { levelSvgs: string[]; frequency: number }> = {};
+    Object.entries(backFreq).forEach(([muscle, frequency]) => {
+      let levelSvgsArray: string[] | undefined;
+      
+      for (const [key, levelSvgs] of Object.entries(muscleGroupToLevelSvgs)) {
+        if (key === muscle) {
+          levelSvgsArray = levelSvgs;
+          break;
+        }
+      }
+      
+      if (levelSvgsArray) {
+        backSvgMapping[muscle] = { levelSvgs: levelSvgsArray, frequency };
+      }
+    });
+    
+    return { 
+      frontFrequencies: frontFreq, 
+      backFrequencies: backFreq, 
+      frontSvgMap: frontSvgMapping,
+      backSvgMap: backSvgMapping
+    };
   }, [refreshKey]);
 
-  const maxFrequency = Math.max(...Object.values(muscleFrequencies), 0);
+  // Combineer alle frequenties voor ranking
+  const allFrequencies = { ...frontFrequencies, ...backFrequencies };
+  const maxFrequency = Math.max(...Object.values(allFrequencies), 0);
   // Sorteer frequenties van hoog naar laag voor ranking
-  const sortedFrequencies = Array.from(new Set(Object.values(muscleFrequencies)))
+  const sortedFrequencies = Array.from(new Set(Object.values(allFrequencies)))
     .sort((a, b) => b - a)
     .filter(f => f > 0);
+
+  // Helper functie om een lichaamsdeel te renderen
+  const renderBodySide = (
+    svgMap: Record<string, { levelSvgs: string[]; frequency: number }>
+  ) => {
+    return Object.entries(svgMap)
+      .sort(([, a], [, b]) => b.frequency - a.frequency) // Sorteer van hoog naar laag
+      .map(([muscle, { levelSvgs, frequency }]) => {
+        const level = getLevelForFrequency(frequency, maxFrequency, sortedFrequencies);
+        const svg = level > 0 ? levelSvgs[level - 1] : null; // level 1-5 -> index 0-4
+        
+        if (!svg) return null;
+        
+        return (
+          <Box
+            key={muscle}
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              zIndex: sortedFrequencies.length - sortedFrequencies.indexOf(frequency),
+            }}
+          >
+            {/* Level SVG - al gekleurd */}
+            <Box
+              component="img"
+              src={svg}
+              alt={muscle}
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                objectPosition: 'center',
+                pointerEvents: 'none',
+              }}
+            />
+          </Box>
+        );
+      });
+  };
 
   return (
     <Box 
       sx={{ 
         display: 'flex', 
-        flexDirection: 'column',
+        flexDirection: 'row',
         justifyContent: 'center', 
         alignItems: 'center', 
         width: '100%',
+        gap: 3,
+        flexWrap: 'wrap',
       }}
     >
+      {/* Voorkant */}
       <Box
         sx={{
           position: 'relative',
@@ -287,49 +495,41 @@ export const MuscleFrequencyBody = () => {
           overflow: 'visible',
           display: 'flex',
           justifyContent: 'center',
-          alignItems: 'flex-end',
-          mb: 0,
-          pb: 0,
+          alignItems: 'center',
         }}
       >
-        {/* Render alle spiergroepen met hun frequentie-gebaseerde level SVG's */}
-        {Object.entries(svgMap)
-          .sort(([, a], [, b]) => b.frequency - a.frequency) // Sorteer van hoog naar laag
-          .map(([muscle, { levelSvgs, frequency }]) => {
-          const level = getLevelForFrequency(frequency, maxFrequency, sortedFrequencies);
-          const svg = level > 0 ? levelSvgs[level - 1] : null; // level 1-5 -> index 0-4
-          
-          if (!svg) return null;
-          
-          return (
-            <Box
-              key={muscle}
-              sx={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                zIndex: sortedFrequencies.length - sortedFrequencies.indexOf(frequency),
-              }}
-            >
-              {/* Level SVG - al gekleurd */}
-              <Box
-                component="img"
-                src={svg}
-                alt={muscle}
-                sx={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                }}
-              />
-            </Box>
-          );
-        })}
+        {renderBodySide(frontSvgMap)}
+      </Box>
+
+      {/* Achterkant */}
+      <Box
+        sx={{
+          position: 'relative',
+          width: '350px',
+          height: '350px',
+          overflow: 'visible',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        {/* Basis achterkant body */}
+        <Box
+          component="img"
+          src={BodyBackSvg}
+          alt="body back"
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            objectPosition: 'center',
+            zIndex: 1,
+          }}
+        />
+        {renderBodySide(backSvgMap)}
       </Box>
     </Box>
   );
