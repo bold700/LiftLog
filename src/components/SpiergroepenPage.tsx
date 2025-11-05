@@ -11,6 +11,7 @@ import {
   Cell,
   Tooltip,
   ResponsiveContainer,
+  LabelList,
 } from 'recharts';
 import { getAllExercises } from '../utils/storage';
 import { findExerciseMetadata } from '../data/exerciseMetadata';
@@ -184,8 +185,25 @@ export const SpiergroepenPage = () => {
                         }))}
                         cx="50%"
                         cy="50%"
-                        labelLine={false}
-                        label={({ name, value }) => `${name} ${value}x`}
+                        labelLine={{ stroke: '#3D532E', strokeWidth: 1 }}
+                        label={({ name, value, cx, cy, midAngle, innerRadius, outerRadius }) => {
+                          const RADIAN = Math.PI / 180;
+                          const radius = outerRadius + 20;
+                          const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                          const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                          return (
+                            <text
+                              x={x}
+                              y={y}
+                              fill="#3D532E"
+                              textAnchor={x > cx ? 'start' : 'end'}
+                              dominantBaseline="central"
+                              style={{ fontSize: '12px', fontWeight: 500 }}
+                            >
+                              {`${name} ${value}x`}
+                            </text>
+                          );
+                        }}
                         outerRadius={60}
                         fill="#8884d8"
                         dataKey="value"
@@ -219,8 +237,25 @@ export const SpiergroepenPage = () => {
                         ]}
                         cx="50%"
                         cy="50%"
-                        labelLine={false}
-                        label={({ name, value }) => `${name} ${value}%`}
+                        labelLine={{ stroke: '#3D532E', strokeWidth: 1 }}
+                        label={({ name, value, cx, cy, midAngle, innerRadius, outerRadius }) => {
+                          const RADIAN = Math.PI / 180;
+                          const radius = outerRadius + 20;
+                          const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                          const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                          return (
+                            <text
+                              x={x}
+                              y={y}
+                              fill="#3D532E"
+                              textAnchor={x > cx ? 'start' : 'end'}
+                              dominantBaseline="central"
+                              style={{ fontSize: '12px', fontWeight: 500 }}
+                            >
+                              {`${name} ${value}%`}
+                            </text>
+                          );
+                        }}
                         outerRadius={60}
                         fill="#8884d8"
                         dataKey="value"
@@ -259,8 +294,25 @@ export const SpiergroepenPage = () => {
                           }))}
                         cx="50%"
                         cy="50%"
-                        labelLine={false}
-                        label={({ name, value }) => `${name} ${value}x`}
+                        labelLine={{ stroke: '#3D532E', strokeWidth: 1 }}
+                        label={({ name, value, cx, cy, midAngle, innerRadius, outerRadius }) => {
+                          const RADIAN = Math.PI / 180;
+                          const radius = outerRadius + 20;
+                          const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                          const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                          return (
+                            <text
+                              x={x}
+                              y={y}
+                              fill="#3D532E"
+                              textAnchor={x > cx ? 'start' : 'end'}
+                              dominantBaseline="central"
+                              style={{ fontSize: '12px', fontWeight: 500 }}
+                            >
+                              {`${name} ${value}x`}
+                            </text>
+                          );
+                        }}
                         outerRadius={60}
                         fill="#8884d8"
                         dataKey="value"
