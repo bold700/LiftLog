@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import { Box, Typography } from '@mui/material';
 import { findExerciseMetadata } from '../data/exerciseMetadata';
+import exerciseMuscleMapping from '../data/exerciseMuscleMapping.json';
 
-// Import Primary SVG bestanden
+// Import Primary SVG bestanden (voorkant)
 import ChestPrimarySvg from '../assets/body/Chest Primary.svg';
 import BicepsPrimarySvg from '../assets/body/Biceps Primary.svg';
 import UnderarmsPrimarySvg from '../assets/body/Underarms Primary.svg';
@@ -13,7 +14,7 @@ import ObliquesPrimarySvg from '../assets/body/Obliques Primary.svg';
 import QuadsPrimarySvg from '../assets/body/Quads Primary.svg';
 import CalvesPrimarySvg from '../assets/body/Calves Primary.svg';
 
-// Import Secondary SVG bestanden
+// Import Secondary SVG bestanden (voorkant)
 import ChestSecondarySvg from '../assets/body/Chest Secundary.svg';
 import BicepsSecondarySvg from '../assets/body/Biceps Secundary.svg';
 import UnderarmsSecondarySvg from '../assets/body/Underarms Secundary.svg';
@@ -24,272 +25,314 @@ import ObliquesSecondarySvg from '../assets/body/Obliques Secundary.svg';
 import QuadsSecondarySvg from '../assets/body/Quads Secundary.svg';
 import CalvesSecondarySvg from '../assets/body/Calves Secundary.svg';
 
+// Import Primary SVG bestanden (achterkant)
+import BodyBackLatsPrimarySvg from '../assets/body/Body Back Lats Primary.svg';
+import BodyBackUpperBackPrimarySvg from '../assets/body/Body Back Upper Back Primary.svg';
+import BodyBackLowerBackPrimarySvg from '../assets/body/Body Back Lower Back Primary.svg';
+import BodyBackTrapsPrimarySvg from '../assets/body/Body Back Traps Primary.svg';
+import BodyBackShouldersPrimarySvg from '../assets/body/Body Back Shoulders Primary.svg';
+import BodyBackGlutealsPrimarySvg from '../assets/body/Body Back Gluteals Primary.svg';
+import BodyBackHamstringsPrimarySvg from '../assets/body/Body Back Hamstrings Primary.svg';
+import BodyBackCalvesPrimarySvg from '../assets/body/Body Back Calves Primary.svg';
+import BodyBackQuadsPrimarySvg from '../assets/body/Body Back Quads Primary.svg';
+import BodyBackObliquesPrimarySvg from '../assets/body/Body Back Obliques Primary.svg';
+import BodyBackTricpesPrimarySvg from '../assets/body/Body Back Tricpes Primary.svg';
+import BodyBackUnderarmPrimarySvg from '../assets/body/Body Back Underarm Primary.svg';
+
+// Import Secondary SVG bestanden (achterkant)
+import BodyBackLatsSecondarySvg from '../assets/body/Body Back Lats Secondary.svg';
+import BodyBackUpperBackSecondarySvg from '../assets/body/Body Back Upper Back Secondary.svg';
+import BodyBackLowerBackSecondarySvg from '../assets/body/Body Back Lower Back Secondary.svg';
+import BodyBackTrapsSecondarySvg from '../assets/body/Body Back Traps Secondary.svg';
+import BodyBackShouldersSecondarySvg from '../assets/body/Body Back Shoulders Secondary.svg';
+import BodyBackGlutealsSecondarySvg from '../assets/body/Body Back Gluteals Secondary.svg';
+import BodyBackHamstringsSecondarySvg from '../assets/body/Body Back Hamstrings Secondary.svg';
+import BodyBackCalvesSecondarySvg from '../assets/body/Body Back Calves Secondary.svg';
+import BodyBackQuadsSecondarySvg from '../assets/body/Body Back Quads Secondary.svg';
+import BodyBackObliquesSecondarySvg from '../assets/body/Body Back Obliques Secondary.svg';
+import BodyBackTricpesSecondarySvg from '../assets/body/Body Back Tricpes Secondary.svg';
+import BodyBackUnderarmSecondarySvg from '../assets/body/Body Back Underarm Secondary.svg';
+
+// Basis body SVG (achterkant)
+import BodyBackSvg from '../assets/body/Body Back.svg';
+
 interface MuscleHighlightBodyProps {
   exerciseName: string | null;
 }
 
-// Mapping van spiergroep namen naar Primary SVG imports
-const muscleGroupToPrimarySvg: Record<string, string> = {
-  // Borst
-  'Borst': ChestPrimarySvg,
-  'Borst (pectoralis major)': ChestPrimarySvg,
-  'Borst (bovenkant pectoralis)': ChestPrimarySvg,
-  
-  // Biceps
-  'Biceps': BicepsPrimarySvg,
-  'Biceps brachii': BicepsPrimarySvg,
-  'Bicep': BicepsPrimarySvg,
-  
-  // Triceps
-  'Triceps': UnderarmsPrimarySvg,
-  'Triceps brachii': UnderarmsPrimarySvg,
-  'Tricep': UnderarmsPrimarySvg,
-  
-  // Schouders
-  'Schouders': ShouldersPrimarySvg,
-  'Schouders (deltoids)': ShouldersPrimarySvg,
-  'Schouders (voorste deltoid)': ShouldersPrimarySvg,
-  'Schouders (voorzijde)': ShouldersPrimarySvg,
-  'Schouders (achterzijde)': ShouldersPrimarySvg,
-  'Schouders (zijkant)': ShouldersPrimarySvg,
-  'Schouders (laterale deltoid)': ShouldersPrimarySvg,
-  
-  // Rug/Traps
-  'Rug': TrapsPrimarySvg,
-  'Trapezius': TrapsPrimarySvg,
-  'Traps': TrapsPrimarySvg,
-  'Latissimus dorsi': TrapsPrimarySvg,
-  'Lats': TrapsPrimarySvg,
-  
-  // Buik
-  'Buik': AbsPrimarySvg,
-  'Buikspieren': AbsPrimarySvg,
-  'Buikspieren (rectus abdominis)': AbsPrimarySvg,
-  'Core': AbsPrimarySvg,
-  'Abdominals': AbsPrimarySvg,
-  
-  // Obliques
-  'Obliques': ObliquesPrimarySvg,
-  'Oblique': ObliquesPrimarySvg,
-  
-  // Quadriceps
-  'Quadriceps': QuadsPrimarySvg,
-  'Quads': QuadsPrimarySvg,
-  'Quad': QuadsPrimarySvg,
-  
-  // Kuiten
-  'Kuiten': CalvesPrimarySvg,
-  'Calves': CalvesPrimarySvg,
-  'Calf': CalvesPrimarySvg,
+// Mapping van JSON mapping namen naar SVG imports (voorkant)
+const frontMuscleToSvg: Record<string, { primary: string; secondary: string }> = {
+  'Chest Primary': { primary: ChestPrimarySvg, secondary: ChestSecondarySvg },
+  'Chest Secondary': { primary: ChestPrimarySvg, secondary: ChestSecondarySvg },
+  'Biceps Primary': { primary: BicepsPrimarySvg, secondary: BicepsSecondarySvg },
+  'Biceps Secondary': { primary: BicepsPrimarySvg, secondary: BicepsSecondarySvg },
+  'Triceps Primary': { primary: UnderarmsPrimarySvg, secondary: UnderarmsSecondarySvg },
+  'Triceps Secondary': { primary: UnderarmsPrimarySvg, secondary: UnderarmsSecondarySvg },
+  'Shoulders Primary': { primary: ShouldersPrimarySvg, secondary: ShouldersSecondarySvg },
+  'Shoulders Secondary': { primary: ShouldersPrimarySvg, secondary: ShouldersSecondarySvg },
+  'Traps Primary': { primary: TrapsPrimarySvg, secondary: TrapsSecondarySvg },
+  'Traps Secondary': { primary: TrapsPrimarySvg, secondary: TrapsSecondarySvg },
+  'Abs Primary': { primary: AbsPrimarySvg, secondary: AbsSecondarySvg },
+  'Abs Secondary': { primary: AbsPrimarySvg, secondary: AbsSecondarySvg },
+  'Obliques Primary': { primary: ObliquesPrimarySvg, secondary: ObliquesSecondarySvg },
+  'Obliques Secondary': { primary: ObliquesPrimarySvg, secondary: ObliquesSecondarySvg },
+  'Quads Primary': { primary: QuadsPrimarySvg, secondary: QuadsSecondarySvg },
+  'Quads Secondary': { primary: QuadsPrimarySvg, secondary: QuadsSecondarySvg },
+  'Calves Primary': { primary: CalvesPrimarySvg, secondary: CalvesSecondarySvg },
+  'Calves Secondary': { primary: CalvesPrimarySvg, secondary: CalvesSecondarySvg },
+  'Underarms Primary': { primary: UnderarmsPrimarySvg, secondary: UnderarmsSecondarySvg },
+  'Underarms Secondary': { primary: UnderarmsPrimarySvg, secondary: UnderarmsSecondarySvg },
 };
 
-// Mapping van spiergroep namen naar Secondary SVG imports
-const muscleGroupToSecondarySvg: Record<string, string> = {
-  // Borst
-  'Borst': ChestSecondarySvg,
-  'Borst (pectoralis major)': ChestSecondarySvg,
-  'Borst (bovenkant pectoralis)': ChestSecondarySvg,
-  
-  // Biceps
-  'Biceps': BicepsSecondarySvg,
-  'Biceps brachii': BicepsSecondarySvg,
-  'Bicep': BicepsSecondarySvg,
-  
-  // Triceps
-  'Triceps': UnderarmsSecondarySvg,
-  'Triceps brachii': UnderarmsSecondarySvg,
-  'Tricep': UnderarmsSecondarySvg,
-  
-  // Schouders
-  'Schouders': ShouldersSecondarySvg,
-  'Schouders (deltoids)': ShouldersSecondarySvg,
-  'Schouders (voorste deltoid)': ShouldersSecondarySvg,
-  'Schouders (voorzijde)': ShouldersSecondarySvg,
-  'Schouders (achterzijde)': ShouldersSecondarySvg,
-  'Schouders (zijkant)': ShouldersSecondarySvg,
-  'Schouders (laterale deltoid)': ShouldersSecondarySvg,
-  
-  // Rug/Traps
-  'Rug': TrapsSecondarySvg,
-  'Trapezius': TrapsSecondarySvg,
-  'Traps': TrapsSecondarySvg,
-  'Latissimus dorsi': TrapsSecondarySvg,
-  'Lats': TrapsSecondarySvg,
-  
-  // Buik
-  'Buik': AbsSecondarySvg,
-  'Buikspieren': AbsSecondarySvg,
-  'Buikspieren (rectus abdominis)': AbsSecondarySvg,
-  'Core': AbsSecondarySvg,
-  'Abdominals': AbsSecondarySvg,
-  
-  // Obliques
-  'Obliques': ObliquesSecondarySvg,
-  'Oblique': ObliquesSecondarySvg,
-  
-  // Quadriceps
-  'Quadriceps': QuadsSecondarySvg,
-  'Quads': QuadsSecondarySvg,
-  'Quad': QuadsSecondarySvg,
-  
-  // Kuiten
-  'Kuiten': CalvesSecondarySvg,
-  'Calves': CalvesSecondarySvg,
-  'Calf': CalvesSecondarySvg,
+// Mapping van JSON mapping namen naar SVG imports (achterkant)
+const backMuscleToSvg: Record<string, { primary: string; secondary: string }> = {
+  'Body Back Lats Primary': { primary: BodyBackLatsPrimarySvg, secondary: BodyBackLatsSecondarySvg },
+  'Body Back Lats Secondary': { primary: BodyBackLatsPrimarySvg, secondary: BodyBackLatsSecondarySvg },
+  'Body Back Upper Back Primary': { primary: BodyBackUpperBackPrimarySvg, secondary: BodyBackUpperBackSecondarySvg },
+  'Body Back Upper Back Secondary': { primary: BodyBackUpperBackPrimarySvg, secondary: BodyBackUpperBackSecondarySvg },
+  'Body Back Lower Back Primary': { primary: BodyBackLowerBackPrimarySvg, secondary: BodyBackLowerBackSecondarySvg },
+  'Body Back Lower Back Secondary': { primary: BodyBackLowerBackPrimarySvg, secondary: BodyBackLowerBackSecondarySvg },
+  'Body Back Traps Primary': { primary: BodyBackTrapsPrimarySvg, secondary: BodyBackTrapsSecondarySvg },
+  'Body Back Traps Secondary': { primary: BodyBackTrapsPrimarySvg, secondary: BodyBackTrapsSecondarySvg },
+  'Body Back Shoulders Primary': { primary: BodyBackShouldersPrimarySvg, secondary: BodyBackShouldersSecondarySvg },
+  'Body Back Shoulders Secondary': { primary: BodyBackShouldersPrimarySvg, secondary: BodyBackShouldersSecondarySvg },
+  'Body Back Gluteals Primary': { primary: BodyBackGlutealsPrimarySvg, secondary: BodyBackGlutealsSecondarySvg },
+  'Body Back Gluteals Secondary': { primary: BodyBackGlutealsPrimarySvg, secondary: BodyBackGlutealsSecondarySvg },
+  'Body Back Hamstrings Primary': { primary: BodyBackHamstringsPrimarySvg, secondary: BodyBackHamstringsSecondarySvg },
+  'Body Back Hamstrings Secondary': { primary: BodyBackHamstringsPrimarySvg, secondary: BodyBackHamstringsSecondarySvg },
+  'Body Back Calves Primary': { primary: BodyBackCalvesPrimarySvg, secondary: BodyBackCalvesSecondarySvg },
+  'Body Back Calves Secondary': { primary: BodyBackCalvesPrimarySvg, secondary: BodyBackCalvesSecondarySvg },
+  'Body Back Quads Primary': { primary: BodyBackQuadsPrimarySvg, secondary: BodyBackQuadsSecondarySvg },
+  'Body Back Quads Secondary': { primary: BodyBackQuadsPrimarySvg, secondary: BodyBackQuadsSecondarySvg },
+  'Body Back Obliques Primary': { primary: BodyBackObliquesPrimarySvg, secondary: BodyBackObliquesSecondarySvg },
+  'Body Back Obliques Secondary': { primary: BodyBackObliquesPrimarySvg, secondary: BodyBackObliquesSecondarySvg },
+  'Body Back Tricpes Primary': { primary: BodyBackTricpesPrimarySvg, secondary: BodyBackTricpesSecondarySvg },
+  'Body Back Tricpes Secondary': { primary: BodyBackTricpesPrimarySvg, secondary: BodyBackTricpesSecondarySvg },
+  'Body Back Underarm Primary': { primary: BodyBackUnderarmPrimarySvg, secondary: BodyBackUnderarmSecondarySvg },
+  'Body Back Underarm Secondary': { primary: BodyBackUnderarmPrimarySvg, secondary: BodyBackUnderarmSecondarySvg },
 };
 
 /**
- * Zet spiergroep namen om naar Primary SVG imports
+ * Haal spieren op uit JSON mapping en scheid ze in voorkant en achterkant
  */
-const getPrimaryMuscleSvgs = (muscleNames: string[]): string[] => {
-  const svgImports = new Set<string>();
+const getMusclesFromMapping = (exerciseName: string) => {
+  const mappingData = exerciseMuscleMapping as Record<string, { primary: string[]; secondary: string[] }>;
   
-  muscleNames.forEach(muscleName => {
-    const normalizedName = muscleName.toLowerCase().trim();
-    let found = false;
-    
-    // Eerst exacte match proberen
-    for (const [key, svgImport] of Object.entries(muscleGroupToPrimarySvg)) {
-      if (key.toLowerCase() === normalizedName) {
-        svgImports.add(svgImport);
-        found = true;
+  // Eerst: gebruik metadata om de echte naam te vinden (voor alternatieve namen zoals "Crunches" → "Crunch")
+  const metadata = findExerciseMetadata(exerciseName);
+  const actualExerciseName = metadata ? metadata.name : exerciseName;
+  
+  // Probeer exacte match met de echte naam
+  let mapping = mappingData[actualExerciseName];
+  
+  // Als geen exacte match, probeer met originele naam
+  if (!mapping) {
+    mapping = mappingData[exerciseName];
+  }
+  
+  // Als geen exacte match, probeer case-insensitive match
+  if (!mapping) {
+    const exerciseNameLower = actualExerciseName.toLowerCase();
+    for (const key in mappingData) {
+      if (key.toLowerCase() === exerciseNameLower) {
+        mapping = mappingData[key];
         break;
       }
     }
+  }
+  
+  // Als nog steeds geen match, probeer met originele naam (case-insensitive)
+  if (!mapping) {
+    const exerciseNameLower = exerciseName.toLowerCase();
+    for (const key in mappingData) {
+      if (key.toLowerCase() === exerciseNameLower) {
+        mapping = mappingData[key];
+        break;
+      }
+    }
+  }
+  
+  if (!mapping) {
+    console.warn(`Geen mapping gevonden voor oefening: "${exerciseName}"`);
+    return {
+      frontPrimary: [],
+      frontSecondary: [],
+      backPrimary: [],
+      backSecondary: [],
+    };
+  }
+  
+  const frontPrimary: string[] = [];
+  const frontSecondary: string[] = [];
+  const backPrimary: string[] = [];
+  const backSecondary: string[] = [];
+  
+  // Bepaal welke spieren op voorkant, achterkant, of beide moeten worden getoond
+  const determineMuscleLocation = (muscle: string): { front: boolean; back: boolean } => {
+    // Als expliciet "Body Back" in de naam staat, alleen achterkant
+    if (muscle.includes('Body Back')) {
+      return { front: false, back: true };
+    }
     
-    // Als geen exacte match, probeer partial matches
-    if (!found) {
-      for (const [key, svgImport] of Object.entries(muscleGroupToPrimarySvg)) {
-        const keyLower = key.toLowerCase();
-        
-        // Check of de key een deel van de muscle name bevat of vice versa
-        if (normalizedName.includes(keyLower) || keyLower.includes(normalizedName)) {
-          svgImports.add(svgImport);
-          found = true;
-          break;
+    // Triceps zijn altijd aan de achterkant (van de arm)
+    if (muscle.includes('Triceps')) {
+      return { front: false, back: true };
+    }
+    
+    // Alle andere spieren (Chest, Shoulders zonder "Body Back", Biceps, Abs, etc.) zijn voorkant
+    return { front: true, back: false };
+  };
+  
+  // Verwerk primary spieren
+  if (mapping.primary) {
+    mapping.primary.forEach(muscle => {
+      const location = determineMuscleLocation(muscle);
+      
+      if (location.back) {
+        // Map naar achterkant - controleer of we de naam moeten aanpassen
+        if (muscle.includes('Triceps')) {
+          const backMuscle = muscle.replace('Triceps', 'Body Back Tricpes');
+          backPrimary.push(backMuscle);
+        } else {
+          backPrimary.push(muscle);
         }
       }
-    }
-    
-    // Fallback: probeer op basis van keywords
-    if (!found) {
-      if (normalizedName.includes('buik') || normalizedName.includes('abdom') || normalizedName.includes('core') || normalizedName.includes('rectus')) {
-        svgImports.add(AbsPrimarySvg);
+      
+      if (location.front) {
+        frontPrimary.push(muscle);
       }
-      if (normalizedName.includes('borst') || normalizedName.includes('chest') || normalizedName.includes('pectoral')) {
-        svgImports.add(ChestPrimarySvg);
+    });
+  }
+  
+  // Verwerk secondary spieren
+  if (mapping.secondary) {
+    mapping.secondary.forEach(muscle => {
+      const location = determineMuscleLocation(muscle);
+      
+      if (location.back) {
+        // Map naar achterkant - controleer of we de naam moeten aanpassen
+        if (muscle.includes('Triceps')) {
+          const backMuscle = muscle.replace('Triceps', 'Body Back Tricpes');
+          backSecondary.push(backMuscle);
+        } else {
+          backSecondary.push(muscle);
+        }
       }
-      if (normalizedName.includes('biceps') || normalizedName.includes('bicep')) {
-        svgImports.add(BicepsPrimarySvg);
+      
+      if (location.front) {
+        frontSecondary.push(muscle);
       }
-      if (normalizedName.includes('triceps') || normalizedName.includes('tricep')) {
-        svgImports.add(UnderarmsPrimarySvg);
-      }
-      if (normalizedName.includes('schouder') || normalizedName.includes('shoulder') || normalizedName.includes('deltoid')) {
-        svgImports.add(ShouldersPrimarySvg);
-      }
-      if (normalizedName.includes('rug') || normalizedName.includes('back') || normalizedName.includes('lat') || normalizedName.includes('trapezius') || normalizedName.includes('rhomboid')) {
-        svgImports.add(TrapsPrimarySvg);
-      }
-      if (normalizedName.includes('oblique')) {
-        svgImports.add(ObliquesPrimarySvg);
-      }
-      if (normalizedName.includes('quad') || normalizedName.includes('thigh')) {
-        svgImports.add(QuadsPrimarySvg);
-      }
-      if (normalizedName.includes('kuit') || normalizedName.includes('calf') || normalizedName.includes('soleus') || normalizedName.includes('gastrocnemius')) {
-        svgImports.add(CalvesPrimarySvg);
-      }
-    }
+    });
+  }
+  
+  // Debug: log de resultaten
+  console.log(`Mapping voor "${exerciseName}":`, {
+    frontPrimary,
+    frontSecondary,
+    backPrimary,
+    backSecondary
   });
   
-  return Array.from(svgImports);
+  return {
+    frontPrimary,
+    frontSecondary,
+    backPrimary,
+    backSecondary,
+  };
 };
 
 /**
- * Zet spiergroep namen om naar Secondary SVG imports
+ * Render een lichaamsdeel (voorkant of achterkant) met de juiste spieren
  */
-const getSecondaryMuscleSvgs = (muscleNames: string[]): string[] => {
-  const svgImports = new Set<string>();
+const renderBodySide = (
+  muscles: string[],
+  isPrimary: boolean,
+  isBack: boolean,
+  zIndex: number
+) => {
+  const muscleMap = isBack ? backMuscleToSvg : frontMuscleToSvg;
+  const svgs: { svg: string; opacity: number }[] = [];
   
-  muscleNames.forEach(muscleName => {
-    const normalizedName = muscleName.toLowerCase().trim();
-    let found = false;
-    
-    // Eerst exacte match proberen
-    for (const [key, svgImport] of Object.entries(muscleGroupToSecondarySvg)) {
-      if (key.toLowerCase() === normalizedName) {
-        svgImports.add(svgImport);
-        found = true;
-        break;
+  muscles.forEach(muscle => {
+    const svgMapping = muscleMap[muscle];
+    if (svgMapping) {
+      // Bepaal of deze spier primary of secondary is op basis van de naam
+      const isMusclePrimary = muscle.includes('Primary') && !muscle.includes('Secondary');
+      const isMuscleSecondary = muscle.includes('Secondary');
+      
+      // Kies de juiste SVG op basis van de spier naam
+      let svg: string | undefined;
+      let opacity: number;
+      
+      if (isMusclePrimary) {
+        svg = svgMapping.primary;
+        opacity = 1.0; // Primary spieren zijn volledig zichtbaar
+      } else if (isMuscleSecondary) {
+        svg = svgMapping.secondary;
+        opacity = 0.6; // Secondary spieren zijn 60% zichtbaar
+      } else {
+        // Fallback: gebruik primary als default
+        svg = svgMapping.primary;
+        opacity = isPrimary ? 1.0 : 0.6;
       }
-    }
-    
-    // Als geen exacte match, probeer partial matches
-    if (!found) {
-      for (const [key, svgImport] of Object.entries(muscleGroupToSecondarySvg)) {
-        const keyLower = key.toLowerCase();
-        
-        // Check of de key een deel van de muscle name bevat of vice versa
-        if (normalizedName.includes(keyLower) || keyLower.includes(normalizedName)) {
-          svgImports.add(svgImport);
-          found = true;
-          break;
-        }
+      
+      if (svg && !svgs.some(s => s.svg === svg)) {
+        svgs.push({ svg, opacity });
+        console.log(`Rendering ${isBack ? 'achterkant' : 'voorkant'}: ${muscle} → ${svg} (opacity: ${opacity})`);
       }
-    }
-    
-    // Fallback: probeer op basis van keywords
-    if (!found) {
-      if (normalizedName.includes('buik') || normalizedName.includes('abdom') || normalizedName.includes('core') || normalizedName.includes('rectus')) {
-        svgImports.add(AbsSecondarySvg);
-      }
-      if (normalizedName.includes('borst') || normalizedName.includes('chest') || normalizedName.includes('pectoral')) {
-        svgImports.add(ChestSecondarySvg);
-      }
-      if (normalizedName.includes('biceps') || normalizedName.includes('bicep')) {
-        svgImports.add(BicepsSecondarySvg);
-      }
-      if (normalizedName.includes('triceps') || normalizedName.includes('tricep')) {
-        svgImports.add(UnderarmsSecondarySvg);
-      }
-      if (normalizedName.includes('schouder') || normalizedName.includes('shoulder') || normalizedName.includes('deltoid')) {
-        svgImports.add(ShouldersSecondarySvg);
-      }
-      if (normalizedName.includes('rug') || normalizedName.includes('back') || normalizedName.includes('lat') || normalizedName.includes('trapezius') || normalizedName.includes('rhomboid')) {
-        svgImports.add(TrapsSecondarySvg);
-      }
-      if (normalizedName.includes('oblique')) {
-        svgImports.add(ObliquesSecondarySvg);
-      }
-      if (normalizedName.includes('quad') || normalizedName.includes('thigh')) {
-        svgImports.add(QuadsSecondarySvg);
-      }
-      if (normalizedName.includes('kuit') || normalizedName.includes('calf') || normalizedName.includes('soleus') || normalizedName.includes('gastrocnemius')) {
-        svgImports.add(CalvesSecondarySvg);
-      }
+    } else {
+      console.warn(`Geen SVG mapping gevonden voor spier: "${muscle}" (${isBack ? 'achterkant' : 'voorkant'})`);
     }
   });
   
-  return Array.from(svgImports);
+  if (svgs.length === 0 && muscles.length > 0) {
+    console.warn(`Geen SVG's gevonden voor spieren:`, muscles);
+  }
+  
+  return svgs.map(({ svg, opacity }, index) => (
+    <Box
+      key={`${isBack ? 'back' : 'front'}-${index}-${muscles[index] || index}`}
+      component="img"
+      src={svg}
+      alt={`${muscles[index] || 'muscle'}`}
+      sx={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        objectFit: 'contain',
+        objectPosition: 'center',
+        zIndex: zIndex,
+        opacity: opacity,
+        pointerEvents: 'none',
+      }}
+    />
+  ));
 };
 
 export const MuscleHighlightBody: React.FC<MuscleHighlightBodyProps> = ({ exerciseName }) => {
-  const { primarySvgs, secondarySvgs, metadata } = useMemo(() => {
+  const { muscles, metadata } = useMemo(() => {
     if (!exerciseName) {
-      return { primarySvgs: [], secondarySvgs: [], metadata: null };
+      return {
+        muscles: {
+          frontPrimary: [],
+          frontSecondary: [],
+          backPrimary: [],
+          backSecondary: [],
+        },
+        metadata: null,
+      };
     }
     
     const metadata = findExerciseMetadata(exerciseName);
+    const muscles = getMusclesFromMapping(exerciseName);
     
-    if (!metadata) {
-      return { primarySvgs: [], secondarySvgs: [], metadata: null };
-    }
+    // Debug logging
+    console.log('MuscleHighlightBody - Oefening:', exerciseName);
+    console.log('MuscleHighlightBody - Spieren:', muscles);
     
-    const primarySvgs = getPrimaryMuscleSvgs(metadata.primaryMuscles);
-    const secondarySvgs = getSecondaryMuscleSvgs(metadata.secondaryMuscles);
-    
-    return { primarySvgs, secondarySvgs, metadata };
+    return { muscles, metadata };
   }, [exerciseName]);
 
   if (!exerciseName) {
@@ -308,57 +351,72 @@ export const MuscleHighlightBody: React.FC<MuscleHighlightBodyProps> = ({ exerci
         gap: 2
       }}
     >
+      {/* Beide lichaamsdelen naast elkaar */}
       <Box
         sx={{
-          position: 'relative',
-          width: '350px',
-          height: '600px',
-          overflow: 'hidden',
           display: 'flex',
+          flexDirection: 'row',
+          gap: 3,
           justifyContent: 'center',
           alignItems: 'center',
+          width: '100%',
+          flexWrap: 'wrap',
         }}
       >
-        {/* Primary spiergroepen - volledige kleur (onderste laag) */}
-        {primarySvgs.map((svgImport, index) => (
-          <Box
-            key={`primary-${index}`}
-            component="img"
-            src={svgImport}
-            alt="primary muscle"
-            sx={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: '120%',
-              height: '120%',
-              objectFit: 'contain',
-              zIndex: 2,
-            }}
-          />
-        ))}
+        {/* Voorkant */}
+        <Box
+          sx={{
+            position: 'relative',
+            width: '350px',
+            height: '600px',
+            overflow: 'visible',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          {/* Primary spiergroepen voorkant - onderste laag */}
+          {renderBodySide(muscles.frontPrimary, true, false, 10)}
+          
+          {/* Secondary spiergroepen voorkant - bovenste laag */}
+          {renderBodySide(muscles.frontSecondary, false, false, 20)}
+        </Box>
 
-        {/* Secondary spiergroepen - direct renderen */}
-        {secondarySvgs.map((svgImport, index) => (
+        {/* Achterkant */}
+        <Box
+          sx={{
+            position: 'relative',
+            width: '350px',
+            height: '600px',
+            overflow: 'visible',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          {/* Basis achterkant body - onderste laag */}
           <Box
-            key={`secondary-${index}`}
             component="img"
-            src={svgImport}
-            alt="secondary muscle"
+            src={BodyBackSvg}
+            alt="body back"
             sx={{
               position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: '120%',
-              height: '120%',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
               objectFit: 'contain',
-              zIndex: 3,
-              opacity: 0.6,
+              objectPosition: 'center',
+              zIndex: 1,
             }}
           />
-        ))}
+          
+          {/* Primary spiergroepen achterkant - midden laag */}
+          {renderBodySide(muscles.backPrimary, true, true, 10)}
+          
+          {/* Secondary spiergroepen achterkant - bovenste laag */}
+          {renderBodySide(muscles.backSecondary, false, true, 20)}
+        </Box>
       </Box>
 
       {/* Beschrijving van spiergroepen */}
