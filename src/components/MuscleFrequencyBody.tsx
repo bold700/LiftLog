@@ -177,6 +177,8 @@ const muscleGroupToLevelSvgs: Record<string, string[]> = {
   'Buikspieren (rectus abdominis)': [AbsLevel1, AbsLevel2, AbsLevel3, AbsLevel4, AbsLevel5],
   'Core': [AbsLevel1, AbsLevel2, AbsLevel3, AbsLevel4, AbsLevel5],
   'Abdominals': [AbsLevel1, AbsLevel2, AbsLevel3, AbsLevel4, AbsLevel5],
+  'Abs Primary': [AbsLevel1, AbsLevel2, AbsLevel3, AbsLevel4, AbsLevel5],
+  'Abs Secondary': [AbsLevel1, AbsLevel2, AbsLevel3, AbsLevel4, AbsLevel5],
   
   // Obliques
   'Obliques': [ObliquesLevel1, ObliquesLevel2, ObliquesLevel3, ObliquesLevel4, ObliquesLevel5],
@@ -241,7 +243,7 @@ const normalizeMuscleName = (muscleName: string): string => {
   if (normalized.includes('rug') || normalized.includes('back') || normalized.includes('lat') || normalized.includes('trapezius') || normalized.includes('rhomboid')) {
     return 'Traps';
   }
-  if (normalized.includes('buik') || normalized.includes('abdom') || normalized.includes('core') || normalized.includes('rectus')) {
+  if (normalized.includes('buik') || normalized.includes('abdom') || normalized.includes('abs') || normalized.includes('core') || normalized.includes('rectus')) {
     return 'Buik';
   }
   if (normalized.includes('oblique')) {
@@ -384,8 +386,12 @@ export const MuscleFrequencyBody = () => {
     Object.entries(frontFreq).forEach(([muscle, frequency]) => {
       let levelSvgsArray: string[] | undefined;
       
+      // Normaliseer de muscle naam eerst (bijv. "Abs Primary" -> "Buik")
+      const normalizedMuscle = normalizeMuscleName(muscle);
+      
       for (const [key, levelSvgs] of Object.entries(muscleGroupToLevelSvgs)) {
-        if (key === muscle || normalizeMuscleName(key) === normalizeMuscleName(muscle)) {
+        const normalizedKey = normalizeMuscleName(key);
+        if (key === muscle || normalizedKey === normalizedMuscle) {
           levelSvgsArray = levelSvgs;
           break;
         }
