@@ -73,6 +73,7 @@ md-navigation-bar md-icon {
 md-navigation-tab {
   /* Force immediate transition to prevent delay */
   transition: none !important;
+  margin: 20px 0 40px;
   
   /* Active state - beige icon/text on black indicator */
   --md-navigation-bar-active-icon-color: #F2E4D3;
