@@ -355,9 +355,9 @@ export const MuscleHighlightBody: React.FC<MuscleHighlightBodyProps> = ({ exerci
       sx={{ 
         display: 'flex', 
         flexDirection: 'column',
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        width: '100%', 
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: '100%',
         mb: 2,
         gap: 2
       }}
@@ -366,20 +366,20 @@ export const MuscleHighlightBody: React.FC<MuscleHighlightBodyProps> = ({ exerci
       <Box
         sx={{
           display: 'flex',
-          flexDirection: 'row',
-          gap: 3,
+          flexDirection: { xs: 'column', md: 'row' },
+          gap: { xs: 1.5, sm: 2, md: 3 },
           justifyContent: 'center',
           alignItems: 'center',
           width: '100%',
-          flexWrap: 'wrap',
+          flexWrap: { xs: 'nowrap', md: 'wrap' },
         }}
       >
         {/* Voorkant */}
         <Box
           sx={{
             position: 'relative',
-            width: '350px',
-            height: '600px',
+            width: { xs: '240px', sm: '280px', md: '320px', lg: '350px' },
+            height: { xs: '420px', sm: '500px', md: '560px', lg: '600px' },
             overflow: 'visible',
             display: 'flex',
             justifyContent: 'center',
@@ -414,8 +414,8 @@ export const MuscleHighlightBody: React.FC<MuscleHighlightBodyProps> = ({ exerci
         <Box
           sx={{
             position: 'relative',
-            width: '350px',
-            height: '600px',
+            width: { xs: '240px', sm: '280px', md: '320px', lg: '350px' },
+            height: { xs: '420px', sm: '500px', md: '560px', lg: '600px' },
             overflow: 'visible',
             display: 'flex',
             justifyContent: 'center',

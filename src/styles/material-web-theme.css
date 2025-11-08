@@ -48,6 +48,27 @@ md-navigation-bar md-icon {
   transition: color 0s !important;
 }
 
+.nav-icon {
+  font-family: 'Material Symbols Outlined', sans-serif;
+  font-weight: 400;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-svg-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  fill: currentColor;
+}
+
 /* Navigation Tab styling - beige theme with black icons/text */
 md-navigation-tab {
   /* Force immediate transition to prevent delay */

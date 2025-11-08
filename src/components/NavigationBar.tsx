@@ -1,15 +1,35 @@
-import { useEffect, useRef } from 'react';
+import { ReactNode, cloneElement, isValidElement, useEffect, useRef } from 'react';
 
 // Import Material Web Components - navigation bar is in labs
 import '@material/web/labs/navigationbar/navigation-bar.js';
 import '@material/web/labs/navigationtab/navigation-tab.js';
-import '@material/web/icon/icon.js';
+
+type NavigationTab = {
+  label: string;
+  icon: ReactNode;
+  activeIcon?: ReactNode;
+};
 
 interface NavigationBarProps {
   value: number;
   onChange: (index: number) => void;
-  tabs: Array<{ label: string; icon: string }>;
+  tabs: NavigationTab[];
 }
+
+const renderIcon = (icon: ReactNode, slot: 'inactive-icon' | 'active-icon') => {
+  if (isValidElement(icon)) {
+    return cloneElement(icon, {
+      slot,
+      className: ['nav-svg-icon', icon.props.className].filter(Boolean).join(' '),
+    });
+  }
+
+  return (
+    <span slot={slot} className="nav-icon material-symbols-outlined" aria-hidden="true">
+      {icon}
+    </span>
+  );
+};
 
 export const NavigationBar = ({ value, onChange, tabs }: NavigationBarProps) => {
   const navBarRef = useRef<HTMLElement>(null);
@@ -81,15 +101,9 @@ export const NavigationBar = ({ value, onChange, tabs }: NavigationBarProps) => 
     >
       {tabs.map((tab, index) => (
         // @ts-ignore - Material Web Components are web components
-        <md-navigation-tab
-          key={index}
-          label={tab.label}
-        >
-          {/* Material Symbols icons - inactive is dark gray, active is beige */}
-          {/* @ts-ignore */}
-          <md-icon slot="inactive-icon">{tab.icon}</md-icon>
-          {/* @ts-ignore */}
-          <md-icon slot="active-icon">{tab.icon}</md-icon>
+        <md-navigation-tab key={index} label={tab.label}>
+          {renderIcon(tab.icon, 'inactive-icon')}
+          {renderIcon(tab.activeIcon ?? tab.icon, 'active-icon')}
         </md-navigation-tab>
       ))}
     </md-navigation-bar>

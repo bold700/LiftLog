@@ -7,6 +7,10 @@ import { OefeningenPage } from './components/OefeningenPage';
 import { LogsPage } from './components/LogsPage';
 import { AddPage } from './components/AddPage';
 import { Box } from '@mui/material';
+import FitnessCenterRoundedIcon from '@mui/icons-material/FitnessCenterRounded';
+import DonutLargeRoundedIcon from '@mui/icons-material/DonutLargeRounded';
+import ListAltRoundedIcon from '@mui/icons-material/ListAltRounded';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import './styles/material-web-theme.css';
 
 function App() {
@@ -23,10 +27,10 @@ function App() {
   }, []);
 
   const tabs = [
-    { label: 'Spiergroepen', icon: 'fitness_center' },
-    { label: 'Oefeningen', icon: 'analytics' },
-    { label: 'Logs', icon: 'list' },
-    { label: 'Toevoegen', icon: 'add' },
+    { label: 'Spiergroepen', icon: <FitnessCenterRoundedIcon fontSize="small" /> },
+    { label: 'Oefeningen', icon: <DonutLargeRoundedIcon fontSize="small" /> },
+    { label: 'Logs', icon: <ListAltRoundedIcon fontSize="small" /> },
+    { label: 'Toevoegen', icon: <AddRoundedIcon fontSize="small" /> },
   ];
 
   const renderPage = () => {

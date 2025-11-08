@@ -23,3 +23,28 @@ dist-ssr
 *.sln
 *.sw?
 
+# Capacitor
+.capacitor
+ios/App/Pods
+ios/App/Podfile.lock
+
+# Android
+android/.gradle
+android/app/build
+android/build
+android/.idea
+android/local.properties
+android/*.iml
+android/.externalNativeBuild
+android/.cxx
+*.keystore
+android/key.properties
+android/app/release
+
+# iOS
+ios/App/build
+*.xcworkspace
+!ios/App/App.xcworkspace
+*.xcuserdata
+*.xcuserstate
+

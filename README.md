@@ -32,24 +32,44 @@ npm run preview
 
 ## 📱 App Installeren
 
-### Android:
+### Als PWA (Progressive Web App):
+**Android:**
 1. Open in Chrome browser
 2. Menu → "Toevoegen aan startscherm"
 3. Bevestig installatie
 
-### iOS:
+**iOS:**
 1. Open in Safari browser
 2. Deel-knop → "Voeg toe aan beginscherm"
 3. Bevestig met "Toevoegen"
 
+### Als Native App:
+De app kan ook worden geïnstalleerd als native app via de App Store (iOS) en Play Store (Android). Zie [APP_STORE_DEPLOYMENT.md](./APP_STORE_DEPLOYMENT.md) voor instructies.
+
 ## 🌐 Deployment
 
-Zie [DEPLOYMENT.md](./DEPLOYMENT.md) voor gedetailleerde instructies.
+### Web Deployment (PWA)
+Zie [DEPLOYMENT.md](./DEPLOYMENT.md) voor gedetailleerde instructies voor web deployment.
 
 **Snelle opties:**
 - **Vercel**: `vercel` (aanbevolen)
 - **Netlify**: `netlify deploy --prod --dir=dist`
 - **GitHub Pages**: `npm run deploy` (na setup)
+
+### Native App Deployment (App Store & Play Store)
+Zie [APP_STORE_DEPLOYMENT.md](./APP_STORE_DEPLOYMENT.md) voor complete instructies om de app te publiceren in de Apple App Store en Google Play Store.
+
+**Quick start voor native apps:**
+```bash
+# Build en sync naar native platforms
+npm run cap:sync
+
+# Open iOS project (Mac vereist)
+npm run cap:open:ios
+
+# Open Android project
+npm run cap:open:android
+```
 
 ## 🛠️ Tech Stack
 
@@ -60,6 +80,7 @@ Zie [DEPLOYMENT.md](./DEPLOYMENT.md) voor gedetailleerde instructies.
 - **Material Web Components** - M3 buttons & navigation
 - **Recharts** - Data visualisatie
 - **PWA** - Progressive Web App support
+- **Capacitor** - Native app wrapper (iOS & Android)
 - **ExerciseDB API** - Oefening afbeeldingen
 
 ## 📦 Project Structuur
