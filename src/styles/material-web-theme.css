@@ -30,7 +30,9 @@ md-navigation-bar {
 }
 
 /* Ensure md-icon uses Material Symbols font */
-md-navigation-bar md-icon {
+.nav-icon,
+.nav-svg-icon,
+md-navigation-tab .material-symbols-outlined {
   font-family: 'Material Symbols Outlined', sans-serif;
   font-weight: 400;
   font-style: normal;
@@ -38,22 +40,6 @@ md-navigation-bar md-icon {
   line-height: 1;
   letter-spacing: normal;
   text-transform: none;
-  display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  -webkit-font-feature-settings: 'liga';
-  -webkit-font-smoothing: antialiased;
-  /* Force immediate color update */
-  transition: color 0s !important;
-}
-
-.nav-icon {
-  font-family: 'Material Symbols Outlined', sans-serif;
-  font-weight: 400;
-  font-style: normal;
-  font-size: 24px;
-  line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -62,11 +48,15 @@ md-navigation-bar md-icon {
 .nav-svg-icon {
   width: 24px;
   height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   color: inherit;
   fill: currentColor;
+}
+
+md-navigation-tab[active] .nav-icon,
+md-navigation-tab[active] .nav-svg-icon,
+md-navigation-tab[active] .material-symbols-outlined {
+  color: #F2E4D3 !important;
+  fill: #F2E4D3 !important;
 }
 
 /* Navigation Tab styling - beige theme with black icons/text */
@@ -79,13 +69,13 @@ md-navigation-tab {
   --md-navigation-bar-active-icon-color: #F2E4D3;
   --md-navigation-bar-active-label-text-color: #000000;
   --md-navigation-bar-active-indicator-color: #000000;
-  --md-navigation-bar-active-pressed-icon-color: #000000;
+  --md-navigation-bar-active-pressed-icon-color: #F2E4D3;
   --md-navigation-bar-active-pressed-label-text-color: #000000;
   --md-navigation-bar-active-pressed-state-layer-color: rgba(0, 0, 0, 0.12);
-  --md-navigation-bar-active-hover-icon-color: #000000;
+  --md-navigation-bar-active-hover-icon-color: #F2E4D3;
   --md-navigation-bar-active-hover-label-text-color: #000000;
   --md-navigation-bar-active-hover-state-layer-color: rgba(0, 0, 0, 0.08);
-  --md-navigation-bar-active-focus-icon-color: #000000;
+  --md-navigation-bar-active-focus-icon-color: #F2E4D3;
   --md-navigation-bar-active-focus-label-text-color: #000000;
   --md-navigation-bar-active-focus-state-layer-color: rgba(0, 0, 0, 0.12);
   
