@@ -9,8 +9,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['app-icon.svg', 'va-logo.svg'],
       manifest: {
-        name: 'Van As Personal Training - LiftLog',
-        short_name: 'LiftLog',
+        name: 'Van As Personal Training Logs',
+        short_name: 'Van As PT Logs',
         description: 'Track je fitness progressie en workouts',
         theme_color: '#F2E4D3',
         background_color: '#F2E4D3',

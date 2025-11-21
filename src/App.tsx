@@ -18,7 +18,7 @@ function App() {
 
   // Zorg ervoor dat de document title altijd correct is (voor PWA)
   useEffect(() => {
-    document.title = 'Van As Personal Training - LiftLog';
+    document.title = 'Van As Personal Training Logs';
   }, []);
 
   const handleExerciseAdded = useCallback(() => {
