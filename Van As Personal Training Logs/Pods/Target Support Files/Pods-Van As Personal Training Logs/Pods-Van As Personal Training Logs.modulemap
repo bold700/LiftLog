@@ -1,0 +1,6 @@
+framework module Pods_Van_As_Personal_Training_Logs {
+  umbrella header "Pods-Van As Personal Training Logs-umbrella.h"
+
+  export *
+  module * { export * }
+}

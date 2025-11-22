@@ -2,10 +2,9 @@
 <Workspace
    version = "1.0">
    <FileRef
-      location = "self:App.xcodeproj">
+      location = "absolute:/Users/kennytimmer/Documents/GitHub/LiftLog/ios/App">
    </FileRef>
    <FileRef
       location = "group:Pods/Pods.xcodeproj">
    </FileRef>
 </Workspace>
-
