@@ -274,23 +274,6 @@ export const LogsPage = () => {
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'center', mb: 4 }}>
-        <Box
-          component="svg"
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 1260.31 837.16"
-          sx={{
-            height: { xs: 60, sm: 80 },
-            width: 'auto',
-            color: 'text.primary',
-          }}
-        >
-          <path
-            fill="currentColor"
-            d="M1260.31,837.16,887,0H746L445.75,673.28,145.49,0H0L373,836.4l-.34.76H518.84l-.34-.76,85.21-195,423.83,4,87.27,191.81ZM665.08,507.72l151.41-339.5,151.4,339.5Z"
-          />
-        </Box>
-      </Box>
 
       {/* Log container card met Spiergroepen styling */}
       <Card sx={{ mb: 3, backgroundColor: '#FEF2E5', borderRadius: '16px' }} elevation={0}>

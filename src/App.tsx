@@ -57,7 +57,15 @@ function App() {
         minHeight: '100vh',
         pb: 8, // Ruimte voor navigation bar
       }}>
-        <Box sx={{ flex: 1, p: 3, overflow: 'auto' }}>
+        <Box sx={{ 
+          flex: 1, 
+          p: 3, 
+          paddingTop: { 
+            xs: 'calc(24px + env(safe-area-inset-top, 0px))',
+            sm: 'calc(24px + env(safe-area-inset-top, 0px))'
+          },
+          overflow: 'auto' 
+        }}>
           {renderPage()}
         </Box>
         <NavigationBar value={activeTab} onChange={setActiveTab} tabs={tabs} />
