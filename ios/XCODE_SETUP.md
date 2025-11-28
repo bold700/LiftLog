@@ -147,3 +147,4 @@ Als je problemen blijft houden:
 2. Zorg dat je de nieuwste versie van Xcode hebt
 3. Controleer de Capacitor documentatie: https://capacitorjs.com/docs/ios
 
+
