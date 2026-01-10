@@ -68,6 +68,14 @@ export const exerciseMetadata: ExerciseMetadata[] = [
     alternativeNames: ['Dumbbell Flyes', 'Chest Fly'],
   },
   {
+    name: 'Butterfly Dumbbells',
+    primaryMuscles: ['Borst'],
+    secondaryMuscles: ['Schouders (voorzijde)'],
+    movementType: 'Isolatie',
+    exerciseType: 'Dumbbell',
+    alternativeNames: ['Dumbbell Butterfly', 'Butterfly Fly'],
+  },
+  {
     name: 'Incline Dumbbell Fly',
     primaryMuscles: ['Borst (bovenkant)'],
     secondaryMuscles: ['Schouders (voorzijde)'],
@@ -82,6 +90,14 @@ export const exerciseMetadata: ExerciseMetadata[] = [
     movementType: 'Push',
     exerciseType: 'Machine',
     alternativeNames: ['Machine Chest Press'],
+  },
+  {
+    name: 'Seated Chest Press',
+    primaryMuscles: ['Borst'],
+    secondaryMuscles: ['Schouders', 'Triceps'],
+    movementType: 'Push',
+    exerciseType: 'Machine',
+    alternativeNames: ['Seated Machine Chest Press'],
   },
   {
     name: 'Barbell Declined Bench Press',
@@ -156,6 +172,14 @@ export const exerciseMetadata: ExerciseMetadata[] = [
     movementType: 'Isolatie',
     exerciseType: 'Dumbbell',
     alternativeNames: ['Triceps Kickback'],
+  },
+  {
+    name: 'Tricep Kickback Dumbbels',
+    primaryMuscles: ['Triceps brachii'],
+    secondaryMuscles: ['Schouders'],
+    movementType: 'Isolatie',
+    exerciseType: 'Dumbbell',
+    alternativeNames: ['Tricep Kickback Dumbbells', 'Dumbbell Tricep Kickback'],
   },
   {
     name: 'Reverse Grip Cable Triceps Extension with Barbell',
@@ -242,6 +266,14 @@ export const exerciseMetadata: ExerciseMetadata[] = [
     alternativeNames: ['Single Arm Row', 'One-Arm Row'],
   },
   {
+    name: 'One Arm Row Dumbbel',
+    primaryMuscles: ['Rug (latissimus dorsi)'],
+    secondaryMuscles: ['Biceps', 'Rhomboids'],
+    movementType: 'Pull',
+    exerciseType: 'Dumbbell',
+    alternativeNames: ['One Arm Dumbbell Row', 'Single Arm Dumbbell Row'],
+  },
+  {
     name: 'Wide-Grip Pulldown',
     primaryMuscles: ['Rug (latissimus dorsi)'],
     secondaryMuscles: ['Biceps'],
@@ -256,6 +288,14 @@ export const exerciseMetadata: ExerciseMetadata[] = [
     movementType: 'Pull',
     exerciseType: 'Kabel',
     alternativeNames: ['Cable Row', 'Seated Row'],
+  },
+  {
+    name: 'Horizontal Row Machine',
+    primaryMuscles: ['Rug (middenrug)'],
+    secondaryMuscles: ['Biceps', 'Lats'],
+    movementType: 'Pull',
+    exerciseType: 'Machine',
+    alternativeNames: ['Machine Row', 'Seated Row Machine'],
   },
   {
     name: 'Close-Grip Pulldown',
@@ -550,6 +590,14 @@ export const exerciseMetadata: ExerciseMetadata[] = [
     alternativeNames: ['Side Crunch'],
   },
   {
+    name: 'Bicycle Kick',
+    primaryMuscles: ['Buikspieren'],
+    secondaryMuscles: ['Obliques'],
+    movementType: 'Core',
+    exerciseType: 'Lichaamsgewicht',
+    alternativeNames: ['Bicycle Crunch', 'Bicycle Kicks'],
+  },
+  {
     name: 'Crunch Machine',
     primaryMuscles: ['Buikspieren'],
     secondaryMuscles: [],
@@ -624,6 +672,14 @@ export const exerciseMetadata: ExerciseMetadata[] = [
     alternativeNames: ['Lateral Raise', 'Side Raise'],
   },
   {
+    name: 'Side Raise Seated',
+    primaryMuscles: ['Schouders (laterale deltoid)'],
+    secondaryMuscles: ['Trapezius'],
+    movementType: 'Isolatie',
+    exerciseType: 'Dumbbell',
+    alternativeNames: ['Seated Lateral Raise', 'Seated Side Raise'],
+  },
+  {
     name: 'Dumbbell Front Raise',
     primaryMuscles: ['Schouders (voorste deltoid)'],
     secondaryMuscles: ['Schouders (laterale deltoid)'],
@@ -638,6 +694,22 @@ export const exerciseMetadata: ExerciseMetadata[] = [
     movementType: 'Isolatie',
     exerciseType: 'Kabel',
     alternativeNames: ['Rear Delt Fly', 'Reverse Fly'],
+  },
+  {
+    name: 'Reverse Pectoral Fly Machine',
+    primaryMuscles: ['Schouders (achterste deltoid)'],
+    secondaryMuscles: ['Bovenrug'],
+    movementType: 'Isolatie',
+    exerciseType: 'Machine',
+    alternativeNames: ['Reverse Fly Machine', 'Rear Delt Fly Machine'],
+  },
+  {
+    name: 'Face Pull',
+    primaryMuscles: ['Schouders (achterste deltoid)'],
+    secondaryMuscles: ['Rhomboids', 'Middenrug'],
+    movementType: 'Pull',
+    exerciseType: 'Kabel',
+    alternativeNames: ['Cable Face Pull', 'Rope Face Pull'],
   },
   {
     name: 'Smith Machine Shoulder Press',

@@ -11,7 +11,7 @@ import {
   FormControl,
   InputLabel,
 } from '@mui/material';
-import { addExercise, getExerciseNames } from '../utils/storage';
+import { addExercise, getExerciseNames, getAllExercisesByName } from '../utils/storage';
 import { Exercise } from '../types';
 import { getExerciseNames as getDbExerciseNames } from '../data/exercises';
 import exerciseMuscleMapping from '../data/exerciseMuscleMapping.json';
@@ -448,6 +448,11 @@ export const AddPage = ({ onExerciseAdded }: AddPageProps) => {
                 if (!newValue || typeof newValue !== 'string') {
                   setExerciseName('');
                   setSelectedMuscleGroup(null);
+                  // Reset velden wanneer oefening wordt gewist
+                  setWeight('');
+                  setSets('');
+                  setReps('');
+                  setNotes('');
                   return;
                 }
 
@@ -469,6 +474,30 @@ export const AddPage = ({ onExerciseAdded }: AddPageProps) => {
                 const primaryMuscleGroup = getPrimaryMuscleGroupFromExercise(newValue);
                 if (primaryMuscleGroup) {
                   setSelectedMuscleGroup(primaryMuscleGroup);
+                }
+
+                // Haal de laatste oefening op en vul de velden in
+                const lastExercises = getAllExercisesByName(newValue);
+                if (lastExercises.length > 0) {
+                  // Sorteer op datum (nieuwste eerst) en neem de laatste
+                  const sortedExercises = [...lastExercises].sort((a, b) => 
+                    new Date(b.date).getTime() - new Date(a.date).getTime()
+                  );
+                  const lastExercise = sortedExercises[0];
+                  
+                  // Vul alleen in als de velden leeg zijn (optioneel: altijd invullen)
+                  if (lastExercise.weight !== undefined && lastExercise.weight !== null) {
+                    setWeight(lastExercise.weight.toString());
+                  }
+                  if (lastExercise.sets !== undefined && lastExercise.sets !== null) {
+                    setSets(lastExercise.sets.toString());
+                  }
+                  if (lastExercise.reps !== undefined && lastExercise.reps !== null) {
+                    setReps(lastExercise.reps.toString());
+                  }
+                  if (lastExercise.notes) {
+                    setNotes(lastExercise.notes);
+                  }
                 }
               }}
               onInputChange={(_, newValue) => {

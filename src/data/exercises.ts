@@ -17,7 +17,9 @@ export const exerciseDatabase: ExerciseData[] = [
   { name: 'Dumbbell Bench Press', category: 'Chest' },
   { name: 'Dumbbell Fly', category: 'Chest' },
   { name: 'Incline Dumbbell Fly', category: 'Chest' },
+  { name: 'Butterfly Dumbbells', category: 'Chest' },
   { name: 'Chest Press Machine', category: 'Chest' },
+  { name: 'Seated Chest Press', category: 'Chest' },
   { name: 'Barbell Declined Bench Press', category: 'Chest' },
   { name: 'Dumbbell Declined Bench Press', category: 'Chest' },
   { name: 'Push Ups', category: 'Chest' },
@@ -29,6 +31,7 @@ export const exerciseDatabase: ExerciseData[] = [
   { name: 'Dumbbell Overhead Triceps Extension', category: 'Triceps' },
   { name: 'Close Grip Bench Press', category: 'Triceps' },
   { name: 'Kickback', category: 'Triceps' },
+  { name: 'Tricep Kickback Dumbbels', category: 'Triceps' },
   { name: 'Reverse Grip Cable Triceps Extension with Barbell', category: 'Triceps' },
   { name: 'Single-Arm Cable Triceps Extension', category: 'Triceps' },
   { name: 'Single-Arm Cable Triceps Extension with Supinated Grip', category: 'Triceps' },
@@ -43,8 +46,10 @@ export const exerciseDatabase: ExerciseData[] = [
   
   // BACK
   { name: 'Dumbbell Bent-Over Row (Single Arm)', category: 'Back' },
+  { name: 'One Arm Row Dumbbel', category: 'Back' },
   { name: 'Wide-Grip Pulldown', category: 'Back' },
   { name: 'Seated Cable Row', category: 'Back' },
+  { name: 'Horizontal Row Machine', category: 'Back' },
   { name: 'Close-Grip Pulldown', category: 'Back' },
   { name: 'Barbell Row', category: 'Back' },
   { name: 'Behind-Neck Pulldown', category: 'Back' },
@@ -85,6 +90,7 @@ export const exerciseDatabase: ExerciseData[] = [
   // ABDOMINALS
   { name: 'Crunch', category: 'Abdominals' },
   { name: 'Oblique Crunch', category: 'Abdominals' },
+  { name: 'Bicycle Kick', category: 'Abdominals' },
   { name: 'Crunch Machine', category: 'Abdominals' },
   { name: 'Rope Ab Pulldown', category: 'Abdominals' },
   { name: 'Plank', category: 'Abdominals' },
@@ -96,8 +102,11 @@ export const exerciseDatabase: ExerciseData[] = [
   // SHOULDERS
   { name: 'Dumbbell Shoulder Press', category: 'Shoulders' },
   { name: 'Dumbbell Lateral Raise', category: 'Shoulders' },
+  { name: 'Side Raise Seated', category: 'Shoulders' },
   { name: 'Dumbbell Front Raise', category: 'Shoulders' },
   { name: 'High Cable Rear Delt Fly', category: 'Shoulders' },
+  { name: 'Reverse Pectoral Fly Machine', category: 'Shoulders' },
+  { name: 'Face Pull', category: 'Shoulders' },
   { name: 'Smith Machine Shoulder Press', category: 'Shoulders' },
   { name: 'Barbell Upright Row', category: 'Shoulders' },
   { name: 'Bent-Over Lateral Raise', category: 'Shoulders' },
