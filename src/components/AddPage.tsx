@@ -16,7 +16,6 @@ import { Exercise } from '../types';
 import { getExerciseNames as getDbExerciseNames } from '../data/exercises';
 import exerciseMuscleMapping from '../data/exerciseMuscleMapping.json';
 import { findExerciseMetadata } from '../data/exerciseMetadata';
-import { GREEN_TINTS } from './MuscleFrequencyBody';
 
 // Import body SVG's
 import BodyBackSvg from '../assets/body/Body Back.svg';
@@ -235,7 +234,6 @@ export const AddPage = ({ onExerciseAdded }: AddPageProps) => {
   const [sets, setSets] = useState('');
   const [reps, setReps] = useState('');
   const [notes, setNotes] = useState('');
-  const [exerciseSuggestions, setExerciseSuggestions] = useState<string[]>([]);
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<string | null>(null);
   const [exerciseMuscleGroups, setExerciseMuscleGroups] = useState<string[]>([]);
   const cancelButtonRef = useRef<any>(null);
@@ -353,17 +351,6 @@ export const AddPage = ({ onExerciseAdded }: AddPageProps) => {
     }
   };
 
-  const handleBodyClick = (area: string, isBack: boolean) => {
-    const muscles = bodyAreaToMuscle[area] || [];
-    if (muscles.length > 0) {
-      // Als dezelfde spiergroep al geselecteerd is, deselecteer
-      if (selectedMuscleGroup === muscles[0]) {
-        setSelectedMuscleGroup(null);
-      } else {
-        setSelectedMuscleGroup(muscles[0]);
-      }
-    }
-  };
 
   // Update disabled state and add event listeners for Material Web Components buttons
   useEffect(() => {

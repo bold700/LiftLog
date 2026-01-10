@@ -97,15 +97,17 @@ export const Statistics = () => {
       const sortedExercises = [...exercises].sort((a, b) => 
         new Date(a.date).getTime() - new Date(b.date).getTime()
       );
-      const data: ChartData[] = sortedExercises.map(ex => {
-        return {
-          date: new Date(ex.date).toLocaleDateString('nl-NL', { 
-            month: 'short', 
-            day: 'numeric' 
-          }),
-          gewicht: ex.weight,
-        };
-      });
+      const data: ChartData[] = sortedExercises
+        .filter(ex => ex.weight !== undefined && ex.weight !== null)
+        .map(ex => {
+          return {
+            date: new Date(ex.date).toLocaleDateString('nl-NL', { 
+              month: 'short', 
+              day: 'numeric' 
+            }),
+            gewicht: ex.weight!,
+          };
+        });
       setChartData(data);
     }
   }, [selectedExercise]);
@@ -524,7 +526,12 @@ export const Statistics = () => {
       new Date(b.date).getTime() - new Date(a.date).getTime()
     );
 
-    const weights = sortedExercises.map(ex => ex.weight);
+    const weights = sortedExercises
+      .filter(ex => ex.weight !== undefined && ex.weight !== null)
+      .map(ex => ex.weight!);
+    
+    if (weights.length === 0) return null;
+    
     const max = Math.max(...weights);
     const latest = weights[0]; // Nieuwste is eerste in gesorteerde array
     const maxVsLatest = max - latest; // Max gewicht ten opzichte van laatste sessie
