@@ -133,12 +133,12 @@ export const SpiergroepenPage = () => {
   const COLORS_MOVEMENT = [GREEN_TINTS[4], GREEN_TINTS[3], GREEN_TINTS[2], GREEN_TINTS[1]]; // Level 5, 4, 3, 2
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: 'auto', pb: 10 }}>
-      {/* Spiergroep Inzichten */}
+    <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10 }}>
+      {/* Inzichten */}
       <Card sx={{ mb: 3, backgroundColor: '#FEF2E5', borderRadius: '16px' }} elevation={0}>
         <CardContent>
           <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
-            Spiergroep Inzichten
+            Inzichten
           </Typography>
 
           {/* Body SVG en Pie Chart in één card */}

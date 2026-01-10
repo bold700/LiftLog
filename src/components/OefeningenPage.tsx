@@ -355,7 +355,7 @@ export const OefeningenPage = () => {
   }, [allExercises.length, selectedExercise]);
 
   return (
-    <Box sx={{ maxWidth: 1200, mx: 'auto', pb: 10 }}>
+    <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10 }}>
 
       {/* Oefening Selector */}
       <Card sx={{ mb: 3, backgroundColor: '#FEF2E5', borderRadius: '16px' }} elevation={0}>

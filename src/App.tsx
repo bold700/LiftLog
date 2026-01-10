@@ -27,7 +27,7 @@ function App() {
   }, []);
 
   const tabs = [
-    { label: 'Spiergroepen', icon: <FitnessCenterRoundedIcon fontSize="small" /> },
+    { label: 'Inzichten', icon: <FitnessCenterRoundedIcon fontSize="small" /> },
     { label: 'Oefeningen', icon: <DonutLargeRoundedIcon fontSize="small" /> },
     { label: 'Logs', icon: <ListAltRoundedIcon fontSize="small" /> },
     { label: 'Toevoegen', icon: <AddRoundedIcon fontSize="small" /> },

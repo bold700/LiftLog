@@ -5,135 +5,137 @@ import { findExerciseMetadata } from '../data/exerciseMetadata';
 import exerciseMuscleMapping from '../data/exerciseMuscleMapping.json';
 
 // Import Level SVG bestanden - Level 1 (lichtste) tot Level 5 (donkerste)
-import ChestLevel1 from '../assets/body/levels/Chest Primary Level 1.svg';
-import ChestLevel2 from '../assets/body/levels/Chest Primary Level 2.svg';
-import ChestLevel3 from '../assets/body/levels/Chest Primary Level 3.svg';
-import ChestLevel4 from '../assets/body/levels/Chest Primary Level 4.svg';
-import ChestLevel5 from '../assets/body/levels/Chest Primary Level 5.svg';
+// Voorkant levels vanuit front levels folder
+import ChestLevel1 from '../assets/body/levels/front levels/Chest Primary Level 1.svg';
+import ChestLevel2 from '../assets/body/levels/front levels/Chest Primary Level 2.svg';
+import ChestLevel3 from '../assets/body/levels/front levels/Chest Primary Level 3.svg';
+import ChestLevel4 from '../assets/body/levels/front levels/Chest Primary Level 4.svg';
+import ChestLevel5 from '../assets/body/levels/front levels/Chest Primary Level 5.svg';
 
-import BicepsLevel1 from '../assets/body/levels/Biceps Primary Level 1.svg';
-import BicepsLevel2 from '../assets/body/levels/Biceps Primary Level 2.svg';
-import BicepsLevel3 from '../assets/body/levels/Biceps Primary Level 3.svg';
-import BicepsLevel4 from '../assets/body/levels/Biceps Primary Level 4.svg';
-import BicepsLevel5 from '../assets/body/levels/Biceps Primary Level 5.svg';
+import BicepsLevel1 from '../assets/body/levels/front levels/Biceps Primary Level 1.svg';
+import BicepsLevel2 from '../assets/body/levels/front levels/Biceps Primary Level 2.svg';
+import BicepsLevel3 from '../assets/body/levels/front levels/Biceps Primary Level 3.svg';
+import BicepsLevel4 from '../assets/body/levels/front levels/Biceps Primary Level 4.svg';
+import BicepsLevel5 from '../assets/body/levels/front levels/Biceps Primary Level 5.svg';
 
-import UnderarmsLevel1 from '../assets/body/levels/Underarms Primary Level 1.svg';
-import UnderarmsLevel2 from '../assets/body/levels/Underarms Primary Level 2.svg';
-import UnderarmsLevel3 from '../assets/body/levels/Underarms Primary Level 3.svg';
-import UnderarmsLevel4 from '../assets/body/levels/Underarms Primary Level 4.svg';
-import UnderarmsLevel5 from '../assets/body/levels/Underarms Primary Level 5.svg';
+import UnderarmsLevel1 from '../assets/body/levels/front levels/Underarms Primary Level 1.svg';
+import UnderarmsLevel2 from '../assets/body/levels/front levels/Underarms Primary Level 2.svg';
+import UnderarmsLevel3 from '../assets/body/levels/front levels/Underarms Primary Level 3.svg';
+import UnderarmsLevel4 from '../assets/body/levels/front levels/Underarms Primary Level 4.svg';
+import UnderarmsLevel5 from '../assets/body/levels/front levels/Underarms Primary Level 5.svg';
 
-import ShouldersLevel1 from '../assets/body/levels/Shoulders Primary Level 1.svg';
-import ShouldersLevel2 from '../assets/body/levels/Shoulders Primary Level 2.svg';
-import ShouldersLevel3 from '../assets/body/levels/Shoulders Primary Level 3.svg';
-import ShouldersLevel4 from '../assets/body/levels/Shoulders Primary Level 4.svg';
-import ShouldersLevel5 from '../assets/body/levels/Shoulders Primary Level 5.svg';
+import ShouldersLevel1 from '../assets/body/levels/front levels/Shoulders Primary Level 1.svg';
+import ShouldersLevel2 from '../assets/body/levels/front levels/Shoulders Primary Level 2.svg';
+import ShouldersLevel3 from '../assets/body/levels/front levels/Shoulders Primary Level 3.svg';
+import ShouldersLevel4 from '../assets/body/levels/front levels/Shoulders Primary Level 4.svg';
+import ShouldersLevel5 from '../assets/body/levels/front levels/Shoulders Primary Level 5.svg';
 
-import TrapsLevel1 from '../assets/body/levels/Traps Primary Level 1.svg';
-import TrapsLevel2 from '../assets/body/levels/Traps Primary Level 2.svg';
-import TrapsLevel3 from '../assets/body/levels/Traps Primary Level 3.svg';
-import TrapsLevel4 from '../assets/body/levels/Traps Primary Level 4.svg';
-import TrapsLevel5 from '../assets/body/levels/Traps Primary Level 5.svg';
+import TrapsLevel1 from '../assets/body/levels/front levels/Traps Primary Level 1.svg';
+import TrapsLevel2 from '../assets/body/levels/front levels/Traps Primary Level 2.svg';
+import TrapsLevel3 from '../assets/body/levels/front levels/Traps Primary Level 3.svg';
+import TrapsLevel4 from '../assets/body/levels/front levels/Traps Primary Level 4.svg';
+import TrapsLevel5 from '../assets/body/levels/front levels/Traps Primary Level 5.svg';
 
-import AbsLevel1 from '../assets/body/levels/Abs Primary Level 1.svg';
-import AbsLevel2 from '../assets/body/levels/Abs Primary Level 2.svg';
-import AbsLevel3 from '../assets/body/levels/Abs Primary Level 3.svg';
-import AbsLevel4 from '../assets/body/levels/Abs Primary Level 4.svg';
-import AbsLevel5 from '../assets/body/levels/Abs Primary Level 5.svg';
+import AbsLevel1 from '../assets/body/levels/front levels/Abs Primary Level 1.svg';
+import AbsLevel2 from '../assets/body/levels/front levels/Abs Primary Level 2.svg';
+import AbsLevel3 from '../assets/body/levels/front levels/Abs Primary Level 3.svg';
+import AbsLevel4 from '../assets/body/levels/front levels/Abs Primary Level 4.svg';
+import AbsLevel5 from '../assets/body/levels/front levels/Abs Primary Level 5.svg';
 
-import ObliquesLevel1 from '../assets/body/levels/Obliques Primary Level 1.svg';
-import ObliquesLevel2 from '../assets/body/levels/Obliques Primary Level 2.svg';
-import ObliquesLevel3 from '../assets/body/levels/Obliques Primary Level 3.svg';
-import ObliquesLevel4 from '../assets/body/levels/Obliques Primary Level 4.svg';
-import ObliquesLevel5 from '../assets/body/levels/Obliques Primary Level 5.svg';
+import ObliquesLevel1 from '../assets/body/levels/front levels/Obliques Primary Level 1.svg';
+import ObliquesLevel2 from '../assets/body/levels/front levels/Obliques Primary Level 2.svg';
+import ObliquesLevel3 from '../assets/body/levels/front levels/Obliques Primary Level 3.svg';
+import ObliquesLevel4 from '../assets/body/levels/front levels/Obliques Primary Level 4.svg';
+import ObliquesLevel5 from '../assets/body/levels/front levels/Obliques Primary Level 5.svg';
 
-import QuadsLevel1 from '../assets/body/levels/Quads Primary Level 1.svg';
-import QuadsLevel2 from '../assets/body/levels/Quads Primary Level 2.svg';
-import QuadsLevel3 from '../assets/body/levels/Quads Primary Level 3.svg';
-import QuadsLevel4 from '../assets/body/levels/Quads Primary Level 4.svg';
-import QuadsLevel5 from '../assets/body/levels/Quads Primary Level 5.svg';
+import QuadsLevel1 from '../assets/body/levels/front levels/Quads Primary Level 1.svg';
+import QuadsLevel2 from '../assets/body/levels/front levels/Quads Primary Level 2.svg';
+import QuadsLevel3 from '../assets/body/levels/front levels/Quads Primary Level 3.svg';
+import QuadsLevel4 from '../assets/body/levels/front levels/Quads Primary Level 4.svg';
+import QuadsLevel5 from '../assets/body/levels/front levels/Quads Primary Level 5.svg';
 
-import CalvesLevel1 from '../assets/body/levels/Calves Primary Level 1.svg';
-import CalvesLevel2 from '../assets/body/levels/Calves Primary Level 2.svg';
-import CalvesLevel3 from '../assets/body/levels/Calves Primary Level 3.svg';
-import CalvesLevel4 from '../assets/body/levels/Calves Primary Level 4.svg';
-import CalvesLevel5 from '../assets/body/levels/Calves Primary Level 5.svg';
+import CalvesLevel1 from '../assets/body/levels/front levels/Calves Primary Level 1.svg';
+import CalvesLevel2 from '../assets/body/levels/front levels/Calves Primary Level 2.svg';
+import CalvesLevel3 from '../assets/body/levels/front levels/Calves Primary Level 3.svg';
+import CalvesLevel4 from '../assets/body/levels/front levels/Calves Primary Level 4.svg';
+import CalvesLevel5 from '../assets/body/levels/front levels/Calves Primary Level 5.svg';
 
-// Import achterkant level SVG bestanden
-import BodyBackLatsLevel1 from '../assets/body/Body Back Lats Level 1.svg';
-import BodyBackLatsLevel2 from '../assets/body/Body Back Lats Level 2.svg';
-import BodyBackLatsLevel3 from '../assets/body/Body Back Lats Level 3.svg';
-import BodyBackLatsLevel4 from '../assets/body/Body Back Lats Level 4.svg';
-import BodyBackLatsLevel5 from '../assets/body/Body Back Lats Level 5.svg';
+// Import achterkant level SVG bestanden - vanuit back levels folder
+import BodyBackLatsLevel1 from '../assets/body/levels/back levels/Body Back Lats Level 1.svg';
+import BodyBackLatsLevel2 from '../assets/body/levels/back levels/Body Back Lats Level 2.svg';
+import BodyBackLatsLevel3 from '../assets/body/levels/back levels/Body Back Lats Level 3.svg';
+import BodyBackLatsLevel4 from '../assets/body/levels/back levels/Body Back Lats Level 4.svg';
+import BodyBackLatsLevel5 from '../assets/body/levels/back levels/Body Back Lats Level 5.svg';
 
-import BodyBackUpperBackLevel1 from '../assets/body/Body Back Upper Back Level 1.svg';
-import BodyBackUpperBackLevel2 from '../assets/body/Body Back Upper Back Level 2.svg';
-import BodyBackUpperBackLevel3 from '../assets/body/Body Back Upper Back Level 3.svg';
-import BodyBackUpperBackLevel4 from '../assets/body/Body Back Upper Back Level 4.svg';
-import BodyBackUpperBackLevel5 from '../assets/body/Body Back Upper Back Level 5.svg';
+import BodyBackUpperBackLevel1 from '../assets/body/levels/back levels/Body Back Upper Back Level 1.svg';
+import BodyBackUpperBackLevel2 from '../assets/body/levels/back levels/Body Back Upper Back Level 2.svg';
+import BodyBackUpperBackLevel3 from '../assets/body/levels/back levels/Body Back Upper Back Level 3.svg';
+import BodyBackUpperBackLevel4 from '../assets/body/levels/back levels/Body Back Upper Back Level 4.svg';
+import BodyBackUpperBackLevel5 from '../assets/body/levels/back levels/Body Back Upper Back Level 5.svg';
 
-import BodyBackLowerBackLevel1 from '../assets/body/Body Back Lower Back Level 1.svg';
-import BodyBackLowerBackLevel2 from '../assets/body/Body Back Lower Back Level 2.svg';
-import BodyBackLowerBackLevel3 from '../assets/body/Body Back Lower Back Level 3.svg';
-import BodyBackLowerBackLevel4 from '../assets/body/Body Back Lower Back Level 4.svg';
-import BodyBackLowerBackLevel5 from '../assets/body/Body Back Lower Back Level 5.svg';
+import BodyBackLowerBackLevel1 from '../assets/body/levels/back levels/Body Back Lower Back Level 1.svg';
+import BodyBackLowerBackLevel2 from '../assets/body/levels/back levels/Body Back Lower Back Level 2.svg';
+import BodyBackLowerBackLevel3 from '../assets/body/levels/back levels/Body Back Lower Back Level 3.svg';
+import BodyBackLowerBackLevel4 from '../assets/body/levels/back levels/Body Back Lower Back Level 4.svg';
+import BodyBackLowerBackLevel5 from '../assets/body/levels/back levels/Body Back Lower Back Level 5.svg';
 
-import BodyBackTrapsLevel1 from '../assets/body/Body Back Traps Level 1.svg';
-import BodyBackTrapsLevel2 from '../assets/body/Body Back Traps Level 2.svg';
-import BodyBackTrapsLevel3 from '../assets/body/Body Back Traps Level 3.svg';
-import BodyBackTrapsLevel4 from '../assets/body/Body Back Traps Level 4.svg';
-import BodyBackTrapsLevel5 from '../assets/body/Body Back Traps Level 5.svg';
+import BodyBackTrapsLevel1 from '../assets/body/levels/back levels/Body Back Traps Level 1.svg';
+import BodyBackTrapsLevel2 from '../assets/body/levels/back levels/Body Back Traps Level 2.svg';
+import BodyBackTrapsLevel3 from '../assets/body/levels/back levels/Body Back Traps Level 3.svg';
+import BodyBackTrapsLevel4 from '../assets/body/levels/back levels/Body Back Traps Level 4.svg';
+import BodyBackTrapsLevel5 from '../assets/body/levels/back levels/Body Back Traps Level 5.svg';
 
-import BodyBackShouldersLevel1 from '../assets/body/Body Back Shoulders Level 1.svg';
-import BodyBackShouldersLevel2 from '../assets/body/Body Back Shoulders Level 2.svg';
-import BodyBackShouldersLevel3 from '../assets/body/Body Back Shoulders Level 3.svg';
-import BodyBackShouldersLevel4 from '../assets/body/Body Back Shoulders Level 4.svg';
-import BodyBackShouldersLevel5 from '../assets/body/Body Back Shoulders Level 5.svg';
+import BodyBackShouldersLevel1 from '../assets/body/levels/back levels/Body Back Shoulders Level 1.svg';
+import BodyBackShouldersLevel2 from '../assets/body/levels/back levels/Body Back Shoulders Level 2.svg';
+import BodyBackShouldersLevel3 from '../assets/body/levels/back levels/Body Back Shoulders Level 3.svg';
+import BodyBackShouldersLevel4 from '../assets/body/levels/back levels/Body Back Shoulders Level 4.svg';
+import BodyBackShouldersLevel5 from '../assets/body/levels/back levels/Body Back Shoulders Level 5.svg';
 
-import BodyBackGlutealsLevel1 from '../assets/body/Body Back Gluteals Level 1.svg';
-import BodyBackGlutealsLevel2 from '../assets/body/Body Back Gluteals Level 2.svg';
-import BodyBackGlutealsLevel3 from '../assets/body/Body Back Gluteals Level 3.svg';
-import BodyBackGlutealsLevel4 from '../assets/body/Body Back Gluteals Level 4.svg';
-import BodyBackGlutealsLevel5 from '../assets/body/Body Back Gluteals Level 5.svg';
+import BodyBackGlutealsLevel1 from '../assets/body/levels/back levels/Body Back Gluteals Level 1.svg';
+import BodyBackGlutealsLevel2 from '../assets/body/levels/back levels/Body Back Gluteals Level 2.svg';
+import BodyBackGlutealsLevel3 from '../assets/body/levels/back levels/Body Back Gluteals Level 3.svg';
+import BodyBackGlutealsLevel4 from '../assets/body/levels/back levels/Body Back Gluteals Level 4.svg';
+import BodyBackGlutealsLevel5 from '../assets/body/levels/back levels/Body Back Gluteals Level 5.svg';
 
-import BodyBackHamstringsLevel1 from '../assets/body/Body Back Hamstrings Level 1.svg';
-import BodyBackHamstringsLevel2 from '../assets/body/Body Back Hamstrings Level 2.svg';
-import BodyBackHamstringsLevel3 from '../assets/body/Body Back Hamstrings Level 3.svg';
-import BodyBackHamstringsLevel4 from '../assets/body/Body Back Hamstrings Level 4.svg';
-import BodyBackHamstringsLevel5 from '../assets/body/Body Back Hamstrings Level 5.svg';
+import BodyBackHamstringsLevel1 from '../assets/body/levels/back levels/Body Back Hamstrings Level 1.svg';
+import BodyBackHamstringsLevel2 from '../assets/body/levels/back levels/Body Back Hamstrings Level 2.svg';
+import BodyBackHamstringsLevel3 from '../assets/body/levels/back levels/Body Back Hamstrings Level 3.svg';
+import BodyBackHamstringsLevel4 from '../assets/body/levels/back levels/Body Back Hamstrings Level 4.svg';
+import BodyBackHamstringsLevel5 from '../assets/body/levels/back levels/Body Back Hamstrings Level 5.svg';
 
-import BodyBackCalvesLevel1 from '../assets/body/Body Back Calves Level 1.svg';
-import BodyBackCalvesLevel2 from '../assets/body/Body Back Calves Level 2.svg';
-import BodyBackCalvesLevel3 from '../assets/body/Body Back Calves Level 3.svg';
-import BodyBackCalvesLevel4 from '../assets/body/Body Back Calves Level 4.svg';
-import BodyBackCalvesLevel5 from '../assets/body/Body Back Calves Level 5.svg';
+import BodyBackCalvesLevel1 from '../assets/body/levels/back levels/Body Back Calves Level 1.svg';
+import BodyBackCalvesLevel2 from '../assets/body/levels/back levels/Body Back Calves Level 2.svg';
+import BodyBackCalvesLevel3 from '../assets/body/levels/back levels/Body Back Calves Level 3.svg';
+import BodyBackCalvesLevel4 from '../assets/body/levels/back levels/Body Back Calves Level 4.svg';
+import BodyBackCalvesLevel5 from '../assets/body/levels/back levels/Body Back Calves Level 5.svg';
 
-import BodyBackQuadsLevel1 from '../assets/body/Body Back Quads Level 1.svg';
-import BodyBackQuadsLevel2 from '../assets/body/Body Back Quads Level 2.svg';
-import BodyBackQuadsLevel3 from '../assets/body/Body Back Quads Level 3.svg';
-import BodyBackQuadsLevel4 from '../assets/body/Body Back Quads Level 4.svg';
-import BodyBackQuadsLevel5 from '../assets/body/Body Back Quads Level 5.svg';
+import BodyBackQuadsLevel1 from '../assets/body/levels/back levels/Body Back Quads Level 1.svg';
+import BodyBackQuadsLevel2 from '../assets/body/levels/back levels/Body Back Quads Level 2.svg';
+import BodyBackQuadsLevel3 from '../assets/body/levels/back levels/Body Back Quads Level 3.svg';
+import BodyBackQuadsLevel4 from '../assets/body/levels/back levels/Body Back Quads Level 4.svg';
+import BodyBackQuadsLevel5 from '../assets/body/levels/back levels/Body Back Quads Level 5.svg';
 
-import BodyBackObliquesLevel1 from '../assets/body/Body Back Obliques Level 1.svg';
-import BodyBackObliquesLevel2 from '../assets/body/Body Back Obliques Level 2.svg';
-import BodyBackObliquesLevel3 from '../assets/body/Body Back Obliques Level 3.svg';
-import BodyBackObliquesLevel4 from '../assets/body/Body Back Obliques Level 4.svg';
-import BodyBackObliquesLevel5 from '../assets/body/Body Back Obliques Level 5.svg';
+import BodyBackObliquesLevel1 from '../assets/body/levels/back levels/Body Back Obliques Level 1.svg';
+import BodyBackObliquesLevel2 from '../assets/body/levels/back levels/Body Back Obliques Level 2.svg';
+import BodyBackObliquesLevel3 from '../assets/body/levels/back levels/Body Back Obliques Level 3.svg';
+import BodyBackObliquesLevel4 from '../assets/body/levels/back levels/Body Back Obliques Level 4.svg';
+import BodyBackObliquesLevel5 from '../assets/body/levels/back levels/Body Back Obliques Level 5.svg';
 
-import BodyBackTricpesLevel1 from '../assets/body/Body Back Tricpes Level 1.svg';
-import BodyBackTricpesLevel2 from '../assets/body/Body Back Tricpes Level 2.svg';
-import BodyBackTricpesLevel3 from '../assets/body/Body Back Tricpes Level 3.svg';
-import BodyBackTricpesLevel4 from '../assets/body/Body Back Tricpes Level 4.svg';
-import BodyBackTricpesLevel5 from '../assets/body/Body Back Tricpes Level 5.svg';
+import BodyBackTricpesLevel1 from '../assets/body/levels/back levels/Body Back Tricpes Level 1.svg';
+import BodyBackTricpesLevel2 from '../assets/body/levels/back levels/Body Back Tricpes Level 2.svg';
+import BodyBackTricpesLevel3 from '../assets/body/levels/back levels/Body Back Tricpes Level 3.svg';
+import BodyBackTricpesLevel4 from '../assets/body/levels/back levels/Body Back Tricpes Level 4.svg';
+import BodyBackTricpesLevel5 from '../assets/body/levels/back levels/Body Back Tricpes Level 5.svg';
 
-import BodyBackUnderarmLevel1 from '../assets/body/Body Back Underarm Level 1.svg';
-import BodyBackUnderarmLevel2 from '../assets/body/Body Back Underarm Level 2.svg';
-import BodyBackUnderarmLevel3 from '../assets/body/Body Back Underarm Level 3.svg';
-import BodyBackUnderarmLevel4 from '../assets/body/Body Back Underarm Level 4.svg';
-import BodyBackUnderarmLevel5 from '../assets/body/Body Back Underarm Level 5.svg';
+import BodyBackUnderarmLevel1 from '../assets/body/levels/back levels/Body Back Underarm Level 1.svg';
+import BodyBackUnderarmLevel2 from '../assets/body/levels/back levels/Body Back Underarm Level 2.svg';
+import BodyBackUnderarmLevel3 from '../assets/body/levels/back levels/Body Back Underarm Level 3.svg';
+import BodyBackUnderarmLevel4 from '../assets/body/levels/back levels/Body Back Underarm Level 4.svg';
+import BodyBackUnderarmLevel5 from '../assets/body/levels/back levels/Body Back Underarm Level 5.svg';
 
-// Basis achterkant body SVG
+// Basis body SVG's
 import BodyBackSvg from '../assets/body/Body Back.svg';
+import BodyFrontSvg from '../assets/body/Body Front.svg'; // Gebruikt als base voor voorkant body outline
 
 // Groentinten - level 1 (lichtste) tot level 5 (donkerste)
 export const GREEN_TINTS = ['#D0EABF', '#A5C392', '#799A64', '#4B6738', '#3D532E'];
@@ -365,7 +367,7 @@ export const MuscleFrequencyBody = () => {
       
       if (mapping && mapping.primary) {
         mapping.primary.forEach(muscle => {
-          // Bepaal of spier voorkant of achterkant is
+          // Bepaal of spier voorkant, achterkant, of beide is
           if (muscle.includes('Body Back')) {
             // Achterkant spier
             backFreq[muscle] = (backFreq[muscle] || 0) + 1;
@@ -373,8 +375,33 @@ export const MuscleFrequencyBody = () => {
             // Triceps zijn aan de achterkant
             const backMuscle = muscle.replace('Triceps', 'Body Back Tricpes');
             backFreq[backMuscle] = (backFreq[backMuscle] || 0) + 1;
+          } else if (muscle.includes('Shoulders')) {
+            // Schouders zijn zichtbaar op beide kanten
+            frontFreq[muscle] = (frontFreq[muscle] || 0) + 1;
+            const backMuscle = muscle.replace('Shoulders', 'Body Back Shoulders');
+            backFreq[backMuscle] = (backFreq[backMuscle] || 0) + 1;
+          } else if (muscle.includes('Traps')) {
+            // Traps zijn zichtbaar op beide kanten
+            frontFreq[muscle] = (frontFreq[muscle] || 0) + 1;
+            const backMuscle = muscle.replace('Traps', 'Body Back Traps');
+            backFreq[backMuscle] = (backFreq[backMuscle] || 0) + 1;
+          } else if (muscle.includes('Obliques')) {
+            // Obliques zijn zichtbaar op beide kanten
+            frontFreq[muscle] = (frontFreq[muscle] || 0) + 1;
+            const backMuscle = muscle.replace('Obliques', 'Body Back Obliques');
+            backFreq[backMuscle] = (backFreq[backMuscle] || 0) + 1;
+          } else if (muscle.includes('Quads')) {
+            // Quads zijn zichtbaar op beide kanten
+            frontFreq[muscle] = (frontFreq[muscle] || 0) + 1;
+            const backMuscle = muscle.replace('Quads', 'Body Back Quads');
+            backFreq[backMuscle] = (backFreq[backMuscle] || 0) + 1;
+          } else if (muscle.includes('Calves')) {
+            // Calves zijn zichtbaar op beide kanten
+            frontFreq[muscle] = (frontFreq[muscle] || 0) + 1;
+            const backMuscle = muscle.replace('Calves', 'Body Back Calves');
+            backFreq[backMuscle] = (backFreq[backMuscle] || 0) + 1;
           } else {
-            // Voorkant spier
+            // Voorkant spier (Chest, Biceps, Abs, etc.)
             frontFreq[muscle] = (frontFreq[muscle] || 0) + 1;
           }
         });
@@ -504,6 +531,22 @@ export const MuscleFrequencyBody = () => {
           alignItems: 'center',
         }}
       >
+        {/* Basis voorkant body */}
+        <Box
+          component="img"
+          src={BodyFrontSvg}
+          alt="body front"
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            objectPosition: 'center',
+            zIndex: 1,
+          }}
+        />
         {renderBodySide(frontSvgMap)}
       </Box>
 

@@ -148,3 +148,4 @@ Als je problemen blijft houden:
 3. Controleer de Capacitor documentatie: https://capacitorjs.com/docs/ios
 
 
+
