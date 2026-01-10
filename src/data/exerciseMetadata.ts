@@ -1175,7 +1175,10 @@ export const exerciseMetadata: ExerciseMetadata[] = [
  * Vind exercise metadata op basis van oefening naam
  * Probeert exact match, dan fuzzy match op alternatieve namen
  */
-export const findExerciseMetadata = (exerciseName: string): ExerciseMetadata | null => {
+export const findExerciseMetadata = (exerciseName: string | undefined): ExerciseMetadata | null => {
+  if (!exerciseName || typeof exerciseName !== 'string') {
+    return null;
+  }
   const normalizedName = exerciseName.trim().toLowerCase();
   
   // Exact match op hoofdnaam

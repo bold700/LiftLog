@@ -1,7 +1,7 @@
 export interface Exercise {
   id: string;
-  name: string;
-  weight: number;
+  name?: string; // Optioneel: kan leeg zijn voor alleen notities
+  weight?: number; // Optioneel: kan leeg zijn voor alleen notities
   date: string; // ISO date string
   sets?: number;
   reps?: number;

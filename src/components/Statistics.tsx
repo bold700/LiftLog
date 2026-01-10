@@ -174,8 +174,8 @@ export const Statistics = () => {
 
   const handleEditExercise = (exercise: Exercise) => {
     setEditingExercise(exercise);
-    setExerciseName(exercise.name);
-    setWeight(exercise.weight.toString());
+    setExerciseName(exercise.name || '');
+    setWeight(exercise.weight?.toString() || '');
     setSets(exercise.sets?.toString() || '');
     setReps(exercise.reps?.toString() || '');
     setNotes(exercise.notes || '');
@@ -562,6 +562,9 @@ export const Statistics = () => {
     const unmatchedExercises: string[] = [];
     
     exercises.forEach(exercise => {
+      // Sla oefeningen zonder naam over (alleen notities)
+      if (!exercise.name) return;
+      
       // Vind categorie uit exerciseDatabase
       const exerciseData = exerciseDatabase.find(ex => ex.name === exercise.name);
       if (exerciseData) {
@@ -619,7 +622,7 @@ export const Statistics = () => {
       pushCount,
       pullCount,
       totalExercises: exercises.length,
-      exercisesWithMetadata: exercises.filter(ex => findExerciseMetadata(ex.name) !== null).length,
+      exercisesWithMetadata: exercises.filter(ex => ex.name && findExerciseMetadata(ex.name) !== null).length,
     };
   }, [allExercises.length]);
 
@@ -1070,7 +1073,7 @@ export const Statistics = () => {
                           });
                           
                           const details = [
-                            `${exercise.weight} kg`,
+                            exercise.weight && `${exercise.weight} kg`,
                             exercise.sets && `${exercise.sets} ${exercise.sets === 1 ? 'set' : 'sets'}`,
                             exercise.reps && `${exercise.reps} ${exercise.reps === 1 ? 'rep' : 'reps'}`
                           ].filter(Boolean).join(' | ');
@@ -1091,7 +1094,7 @@ export const Statistics = () => {
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                   <Box sx={{ flex: 1 }}>
                                     <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                                      {exercise.name}
+                                      {exercise.name || 'Notitie'}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                                       {isToday ? `Vandaag, ${exerciseDate.toLocaleDateString('nl-NL', { month: 'short', day: 'numeric' })}` : dateStr}
@@ -1353,7 +1356,7 @@ export const Statistics = () => {
                 });
                 
                 const details = [
-                  `${exercise.weight} kg`,
+                  exercise.weight && `${exercise.weight} kg`,
                   exercise.sets && `${exercise.sets} ${exercise.sets === 1 ? 'set' : 'sets'}`,
                   exercise.reps && `${exercise.reps} ${exercise.reps === 1 ? 'rep' : 'reps'}`
                 ].filter(Boolean).join(' | ');
@@ -1364,7 +1367,7 @@ export const Statistics = () => {
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <Box sx={{ flex: 1 }}>
                           <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                            {exercise.name}
+                            {exercise.name || 'Notitie'}
                           </Typography>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                             {isToday ? `Vandaag, ${exerciseDate.toLocaleDateString('nl-NL', { month: 'short', day: 'numeric' })}` : dateStr}

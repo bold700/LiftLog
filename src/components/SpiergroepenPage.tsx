@@ -81,6 +81,9 @@ export const SpiergroepenPage = () => {
     let pullCount = 0;
     
     exercises.forEach(exercise => {
+      // Sla oefeningen zonder naam over (alleen notities)
+      if (!exercise.name) return;
+      
       const metadata = findExerciseMetadata(exercise.name);
       if (metadata) {
         // Tel primary muscles (zelfde logica als MuscleFrequencyBody)
@@ -123,7 +126,7 @@ export const SpiergroepenPage = () => {
       pushCount,
       pullCount,
       totalExercises: exercises.length,
-      exercisesWithMetadata: exercises.filter(ex => findExerciseMetadata(ex.name) !== null).length,
+      exercisesWithMetadata: exercises.filter(ex => ex.name && findExerciseMetadata(ex.name) !== null).length,
     };
   }, []);
 

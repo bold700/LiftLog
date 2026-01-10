@@ -44,7 +44,7 @@ export const getAllExercisesByName = (exerciseName: string): Exercise[] => {
   const workouts = getWorkouts();
   return workouts
     .flatMap(workout => workout.exercises)
-    .filter(ex => ex.name.toLowerCase() === exerciseName.toLowerCase())
+    .filter(ex => ex.name && ex.name.toLowerCase() === exerciseName.toLowerCase())
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 };
 
@@ -52,7 +52,12 @@ export const getExerciseNames = (): string[] => {
   const workouts = getWorkouts();
   const names = new Set<string>();
   workouts.forEach(workout => {
-    workout.exercises.forEach(ex => names.add(ex.name));
+    workout.exercises.forEach(ex => {
+      // Voeg alleen oefeningen met een naam toe (sla notities zonder oefening over)
+      if (ex.name) {
+        names.add(ex.name);
+      }
+    });
   });
   return Array.from(names).sort();
 };

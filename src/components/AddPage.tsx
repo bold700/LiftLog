@@ -317,12 +317,16 @@ export const AddPage = ({ onExerciseAdded }: AddPageProps) => {
   }, []);
 
   const handleAddExercise = useCallback(async () => {
-    if (!exerciseName.trim() || !weight.trim()) return;
+    // Je moet minimaal een oefening OF een notitie hebben
+    const hasExercise = exerciseName.trim() && weight.trim();
+    const hasNotes = notes.trim();
+    
+    if (!hasExercise && !hasNotes) return;
 
     const exercise: Exercise = {
       id: Date.now().toString(),
-      name: exerciseName.trim(),
-      weight: parseFloat(weight),
+      name: exerciseName.trim() || undefined,
+      weight: weight.trim() ? parseFloat(weight) : undefined,
       date: new Date().toISOString(),
       sets: sets ? parseInt(sets) : undefined,
       reps: reps ? parseInt(reps) : undefined,
@@ -368,11 +372,16 @@ export const AddPage = ({ onExerciseAdded }: AddPageProps) => {
 
     // Update disabled state
     if (addButton) {
-      const isDisabled = !exerciseName.trim() || !weight.trim();
+      // Knop is actief als er een oefening + gewicht is OF alleen een notitie
+      const hasExercise = exerciseName.trim() && weight.trim();
+      const hasNotes = notes.trim();
+      const isDisabled = !hasExercise && !hasNotes;
       addButton.disabled = isDisabled;
       
       const updateDisabled = () => {
-        const isDisabled = !exerciseName.trim() || !weight.trim();
+        const hasExercise = exerciseName.trim() && weight.trim();
+        const hasNotes = notes.trim();
+        const isDisabled = !hasExercise && !hasNotes;
         addButton.disabled = isDisabled;
       };
       
@@ -394,7 +403,9 @@ export const AddPage = ({ onExerciseAdded }: AddPageProps) => {
     }
     if (addButton) {
       const addClickHandler = async () => {
-        if (!addButton?.disabled) {
+        const hasExercise = exerciseName.trim() && weight.trim();
+        const hasNotes = notes.trim();
+        if (hasExercise || hasNotes) {
           await handleAddExercise();
         }
       };
@@ -418,7 +429,7 @@ export const AddPage = ({ onExerciseAdded }: AddPageProps) => {
         }
       }
     };
-  }, [exerciseName, weight, handleAddExercise]);
+  }, [exerciseName, weight, notes, handleAddExercise]);
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10 }}>

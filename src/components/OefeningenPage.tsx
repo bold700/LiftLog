@@ -89,15 +89,17 @@ export const OefeningenPage = () => {
       const sortedExercises = [...exercises].sort((a, b) => 
         new Date(a.date).getTime() - new Date(b.date).getTime()
       );
-      const data: ChartData[] = sortedExercises.map(ex => {
-        return {
-          date: new Date(ex.date).toLocaleDateString('nl-NL', { 
-            month: 'short', 
-            day: 'numeric' 
-          }),
-          gewicht: ex.weight,
-        };
-      });
+      const data: ChartData[] = sortedExercises
+        .filter(ex => ex.weight !== undefined && ex.weight !== null)
+        .map(ex => {
+          return {
+            date: new Date(ex.date).toLocaleDateString('nl-NL', { 
+              month: 'short', 
+              day: 'numeric' 
+            }),
+            gewicht: ex.weight!,
+          };
+        });
       setChartData(data);
     }
   }, [selectedExercise]);
@@ -111,9 +113,11 @@ export const OefeningenPage = () => {
   const stats = useMemo(() => {
     if (!selectedExercise) return null;
     const exercises = getAllExercisesByName(selectedExercise);
-    if (exercises.length === 0) return null;
+    // Filter alleen oefeningen met gewicht
+    const exercisesWithWeight = exercises.filter(ex => ex.weight !== undefined && ex.weight !== null);
+    if (exercisesWithWeight.length === 0) return null;
 
-    const weights = exercises.map(ex => ex.weight);
+    const weights = exercisesWithWeight.map(ex => ex.weight!);
     const max = Math.max(...weights);
     const latest = weights[weights.length - 1];
     const maxVsLatest = max - latest;
@@ -122,7 +126,7 @@ export const OefeningenPage = () => {
       max,
       latest,
       maxVsLatest,
-      totalWorkouts: exercises.length,
+      totalWorkouts: exercisesWithWeight.length,
     };
   }, [selectedExercise]);
 
@@ -150,8 +154,8 @@ export const OefeningenPage = () => {
 
   const handleEditExercise = (exercise: Exercise) => {
     setEditingExercise(exercise);
-    setExerciseName(exercise.name);
-    setWeight(exercise.weight.toString());
+    setExerciseName(exercise.name || '');
+    setWeight(exercise.weight?.toString() || '');
     setSets(exercise.sets?.toString() || '');
     setReps(exercise.reps?.toString() || '');
     setNotes(exercise.notes || '');
@@ -434,7 +438,7 @@ export const OefeningenPage = () => {
                       });
                       
                       const details = [
-                        `${exercise.weight} kg`,
+                        exercise.weight && `${exercise.weight} kg`,
                         exercise.sets && `${exercise.sets} ${exercise.sets === 1 ? 'set' : 'sets'}`,
                         exercise.reps && `${exercise.reps} ${exercise.reps === 1 ? 'rep' : 'reps'}`
                       ].filter(Boolean).join(' | ');
@@ -455,7 +459,7 @@ export const OefeningenPage = () => {
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                               <Box sx={{ flex: 1 }}>
                                 <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                                  {exercise.name}
+                                  {exercise.name || 'Notitie'}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                                   {isToday ? `Vandaag, ${exerciseDate.toLocaleDateString('nl-NL', { month: 'short', day: 'numeric' })}` : dateStr}

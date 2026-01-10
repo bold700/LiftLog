@@ -342,6 +342,9 @@ export const MuscleFrequencyBody = () => {
     
     // Tel frequenties van primary muscles per oefening
     exercises.forEach(exercise => {
+      // Sla oefeningen zonder naam over (alleen notities)
+      if (!exercise.name) return;
+      
       // Gebruik metadata om de echte naam te vinden (voor alternatieve namen)
       const metadata = findExerciseMetadata(exercise.name);
       const actualExerciseName = metadata ? metadata.name : exercise.name;

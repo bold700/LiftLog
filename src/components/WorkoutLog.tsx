@@ -241,14 +241,16 @@ export const WorkoutLog = () => {
                   <Box sx={{ display: 'flex', gap: 2 }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                        {exercise.name}
+                        {exercise.name || 'Notitie'}
                       </Typography>
                       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
-                        <Chip
-                          label={`${exercise.weight} kg`}
-                          color="primary"
-                          size="small"
-                        />
+                        {exercise.weight && (
+                          <Chip
+                            label={`${exercise.weight} kg`}
+                            color="primary"
+                            size="small"
+                          />
+                        )}
                         {exercise.sets && (
                           <Chip
                             label={`${exercise.sets} ${exercise.sets === 1 ? 'set' : 'sets'}`}
