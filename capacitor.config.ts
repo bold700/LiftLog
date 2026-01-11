@@ -1,8 +1,9 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.kennytimmer.vanaspersonaltraininglogs',
-  appName: 'Van As Personal Training Logs',
+  // Houd dit gelijk aan Android applicationId / iOS bundle id
+  appId: 'com.vanas.liftlog',
+  appName: 'LiftLog',
   webDir: 'dist',
   server: {
     androidScheme: 'https',

@@ -7,7 +7,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: false, // Schakel automatische registratie uit
+      // Belangrijk: in (Capacitor) native builds kan een service worker leiden tot "oude UI" door caching.
+      // We injecteren daarom géén SW-register script in de output.
+      injectRegister: null,
       includeAssets: ['app-icon.svg', 'va-logo.svg'],
       manifest: {
         name: 'Van As Personal Training Logs',

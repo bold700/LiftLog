@@ -39,6 +39,7 @@ android/.externalNativeBuild
 android/.cxx
 *.keystore
 android/key.properties
+keystore.properties
 android/app/release
 
 # iOS

@@ -7,8 +7,10 @@ android {
         applicationId "com.vanas.liftlog"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 13
-        versionName "1.0.13"
+        // Play Store vereist dat versionCode altijd oploopt.
+        // We gebruiken een future-proof schema: major*10000 + minor*100 + patch (1.2.15 -> 10215)
+        versionCode 10215
+        versionName "1.2.15"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +18,29 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            // Laad keystore properties uit keystore.properties bestand (optioneel)
+            // Als dit bestand niet bestaat, kun je via Android Studio "Generate Signed Bundle" gebruiken
+            def keystorePropertiesFile = rootProject.file("../keystore.properties")
+            if (keystorePropertiesFile.exists()) {
+                def keystoreProperties = new Properties()
+                keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+                storeFile file("../keystore/liftlog-release.keystore")
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            // Alleen signing config gebruiken als keystore.properties bestaat
+            // Anders kun je handmatig signen via "Generate Signed Bundle" in Android Studio
+            def keystorePropertiesFile = rootProject.file("../keystore.properties")
+            if (keystorePropertiesFile.exists()) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
@@ -43,6 +66,28 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
+
+// --- Web assets (Vite/React) automatisch updaten voor Android builds ---
+// Dit voorkomt dat Android Studio een "oude interface" laat zien omdat assets/public niet is vernieuwd.
+def webAppDir = file("$rootDir/..")               // repo root (één niveau boven /android)
+def webDistDir = file("$webAppDir/dist")          // Vite output
+def assetsPublicDir = file("$projectDir/src/main/assets/public")
+
+tasks.register("npmBuild", Exec) {
+    workingDir webAppDir
+    commandLine "cmd", "/c", "npm", "run", "build"
+}
+
+tasks.register("copyWebAssets", Copy) {
+    dependsOn "npmBuild"
+    from(webDistDir)
+    into(assetsPublicDir)
+    doFirst {
+        delete assetsPublicDir
+    }
+}
+
+preBuild.dependsOn "copyWebAssets"
 
 try {
     def servicesJSON = file('google-services.json')
