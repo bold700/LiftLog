@@ -12,7 +12,8 @@
     "cap:open:ios": "npx cap open ios",
     "cap:open:android": "npx cap open android",
     "cap:run:ios": "npm run cap:sync && npx cap open ios",
-    "cap:run:android": "npm run cap:sync && npx cap open android"
+    "cap:run:android": "npm run cap:sync && npx cap open android",
+    "build:ios": "npm run build && cp -r dist/* \"Van As Personal Training Logs/Van As Personal Training Logs/public/\" && echo \"✅ Build voltooid en bestanden gekopieerd naar iOS project!\""
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",

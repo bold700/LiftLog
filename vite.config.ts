@@ -7,6 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: false, // Schakel automatische registratie uit
       includeAssets: ['app-icon.svg', 'va-logo.svg'],
       manifest: {
         name: 'Van As Personal Training Logs',

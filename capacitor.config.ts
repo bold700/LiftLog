@@ -1,12 +1,14 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.vanas.liftlog',
+  appId: 'com.kennytimmer.vanaspersonaltraininglogs',
   appName: 'Van As Personal Training Logs',
   webDir: 'dist',
   server: {
     androidScheme: 'https',
-    iosScheme: 'https'
+    iosScheme: 'https',
+    // Forceer dat bestanden niet gecached worden tijdens development
+    cleartext: false
   },
   plugins: {
     SplashScreen: {
