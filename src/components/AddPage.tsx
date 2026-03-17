@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
-  Card,
-  CardContent,
   Box,
   Typography,
   TextField,
@@ -10,12 +8,19 @@ import {
   Select,
   FormControl,
   InputLabel,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
 } from '@mui/material';
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import { addExercise, getExerciseNames, getAllExercisesByName } from '../utils/storage';
 import { Exercise } from '../types';
 import { getExerciseNames as getDbExerciseNames } from '../data/exercises';
+import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import exerciseMuscleMapping from '../data/exerciseMuscleMapping.json';
 import { findExerciseMetadata } from '../data/exerciseMetadata';
+import { PageLayout, ContentCard, PageTitle } from './layout';
 
 // Import body SVG's
 import BodyBackSvg from '../assets/body/Body Back.svg';
@@ -28,6 +33,9 @@ import '@material/web/icon/icon.js';
 
 interface AddPageProps {
   onExerciseAdded?: () => void;
+  onClose?: () => void;
+  /** Als true: toon als dialog (zoals Training log). Als false: fullscreen overlay. */
+  useDialog?: boolean;
 }
 
 // Mapping van spiergroep display namen naar mapping namen
@@ -228,7 +236,8 @@ const getPrimaryMuscleGroupFromExercise = (exerciseName: string): string | null 
   return displayName;
 };
 
-export const AddPage = ({ onExerciseAdded }: AddPageProps) => {
+export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPageProps) => {
+  const addFromSchema = useAddFromSchema();
   const [exerciseName, setExerciseName] = useState('');
   const [weight, setWeight] = useState('');
   const [sets, setSets] = useState('');
@@ -238,6 +247,18 @@ export const AddPage = ({ onExerciseAdded }: AddPageProps) => {
   const [exerciseMuscleGroups, setExerciseMuscleGroups] = useState<string[]>([]);
   const cancelButtonRef = useRef<any>(null);
   const addButtonRef = useRef<any>(null);
+
+  // Prefill vanuit schema (Log toevoegen in training sessie) – oefening, sets, reps, doelgewicht
+  useEffect(() => {
+    if (addFromSchema?.prefill) {
+      setExerciseName(addFromSchema.prefill.exerciseName);
+      setSets(String(addFromSchema.prefill.sets));
+      setReps(String(addFromSchema.prefill.reps));
+      if (addFromSchema.prefill.targetWeight != null && addFromSchema.prefill.targetWeight > 0) {
+        setWeight(String(addFromSchema.prefill.targetWeight));
+      }
+    }
+  }, [addFromSchema?.prefill]);
   
   // Bepaal welke spiergroepen getoond moeten worden (handmatig geselecteerd OF automatisch van oefening)
   const displayedMuscleGroups = useMemo(() => {
@@ -331,19 +352,29 @@ export const AddPage = ({ onExerciseAdded }: AddPageProps) => {
       notes: notes.trim() || undefined,
     };
 
+    const wasFromSchema =
+      addFromSchema?.schemaId != null && addFromSchema?.schemaDayIndex != null;
+    if (wasFromSchema) {
+      exercise.schemaId = addFromSchema.schemaId!;
+      exercise.schemaDayIndex = addFromSchema.schemaDayIndex!;
+      addFromSchema.clearAddFromSchema();
+    }
+
     addExercise(exercise);
-    
+
     setExerciseName('');
     setWeight('');
     setSets('');
     setReps('');
     setNotes('');
     setSelectedMuscleGroup(null);
-    
-    if (onExerciseAdded) {
+
+    if (wasFromSchema && addFromSchema?.setReturnToSession) {
+      addFromSchema.setReturnToSession(exercise.schemaId!, exercise.schemaDayIndex!, exercise.id);
+    } else if (onExerciseAdded) {
       onExerciseAdded();
     }
-  }, [exerciseName, weight, sets, reps, notes, onExerciseAdded]);
+  }, [exerciseName, weight, sets, reps, notes, onExerciseAdded, addFromSchema]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -418,14 +449,8 @@ export const AddPage = ({ onExerciseAdded }: AddPageProps) => {
     };
   }, [exerciseName, weight, notes, handleAddExercise]);
 
-  return (
-    <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10 }}>
-      <Card sx={{ mb: 3, backgroundColor: '#FEF2E5', borderRadius: '16px' }} elevation={0}>
-        <CardContent>
-          <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
-            Nieuwe Oefening
-          </Typography>
-
+  const formContent = (
+    <>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Autocomplete
               freeSolo={!selectedMuscleGroup}
@@ -571,7 +596,11 @@ export const AddPage = ({ onExerciseAdded }: AddPageProps) => {
               onKeyPress={handleKeyPress}
               multiline
               rows={2}
-              placeholder="Bijv. last van mn schouder, ging goed, was te zwaar"
+              placeholder={
+                addFromSchema?.prefill
+                  ? 'Bijv. maar 4 reps gehaald, zwaar gevoeld'
+                  : 'Bijv. last van mn schouder, ging goed, was te zwaar'
+              }
             />
           </Box>
 
@@ -702,8 +731,40 @@ export const AddPage = ({ onExerciseAdded }: AddPageProps) => {
               Toevoegen
             </md-filled-button>
           </Box>
-        </CardContent>
-      </Card>
-    </Box>
+    </>
+  );
+
+  if (useDialog) {
+    return (
+      <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pr: 2 }}>
+          Nieuwe oefening
+          {onClose && (
+            <IconButton onClick={onClose} size="small" aria-label="Sluiten">
+              <CloseRoundedIcon />
+            </IconButton>
+          )}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 0 }}>
+          {formContent}
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <PageLayout>
+      {onClose && (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+          <IconButton aria-label="Sluiten" onClick={onClose} size="large">
+            <CloseRoundedIcon />
+          </IconButton>
+        </Box>
+      )}
+      <ContentCard>
+        <PageTitle>Nieuwe Oefening</PageTitle>
+        {formContent}
+      </ContentCard>
+    </PageLayout>
   );
 };

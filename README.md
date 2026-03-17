@@ -117,6 +117,16 @@ src/
 - Geen server of account nodig
 - Privacy-vriendelijk - data blijft op je device
 
+## 🔥 Firebase (optioneel)
+
+Voor cloud-opslag kun je Firebase/Firestore aanzetten. **Geen keys in Git:**
+
+1. Kopieer `.env.example` naar `.env`
+2. Vul in `.env` je Firebase-waarden in (uit de Firebase Console)
+3. Het bestand `.env` staat in `.gitignore` en wordt **niet** geüpload naar Git
+
+Commit alleen `.env.example` (met placeholders); je echte keys blijven lokaal in `.env`.
+
 ## 🎨 Customization
 
 ### Kleuren Aanpassen

@@ -1,76 +1,13 @@
 import { useMemo } from 'react';
-import {
-  Card,
-  CardContent,
-  Typography,
-  Box,
-} from '@mui/material';
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
+import { Typography, Box } from '@mui/material';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { getAllExercises } from '../utils/storage';
 import { findExerciseMetadata } from '../data/exerciseMetadata';
+import { normalizeMuscleName, getDisplayName } from '../utils/muscleNames';
 import { MuscleFrequencyBody, GREEN_TINTS } from './MuscleFrequencyBody';
-
-// Helper functie om spiergroep naam te normaliseren (zelfde als in MuscleFrequencyBody)
-const normalizeMuscleName = (muscleName: string): string => {
-  const normalized = muscleName.toLowerCase().trim();
-  
-  if (normalized.includes('borst') || normalized.includes('chest') || normalized.includes('pectoral')) {
-    return 'Borst';
-  }
-  if (normalized.includes('biceps') || normalized.includes('bicep')) {
-    return 'Biceps';
-  }
-  if (normalized.includes('triceps') || normalized.includes('tricep')) {
-    return 'Triceps';
-  }
-  if (normalized.includes('schouder') || normalized.includes('shoulder') || normalized.includes('deltoid')) {
-    return 'Schouders';
-  }
-  if (normalized.includes('rug') || normalized.includes('back') || normalized.includes('lat') || normalized.includes('trapezius') || normalized.includes('rhomboid')) {
-    return 'Traps';
-  }
-  if (normalized.includes('buik') || normalized.includes('abdom') || normalized.includes('core') || normalized.includes('rectus')) {
-    return 'Buik';
-  }
-  if (normalized.includes('oblique')) {
-    return 'Obliques';
-  }
-  if (normalized.includes('quad') || normalized.includes('thigh')) {
-    return 'Quadriceps';
-  }
-  if (normalized.includes('kuit') || normalized.includes('calf') || normalized.includes('soleus') || normalized.includes('gastrocnemius')) {
-    return 'Kuiten';
-  }
-  
-  return muscleName;
-};
-
-// Helper functie om weergave naam te krijgen (zelfde als in MuscleFrequencyBody)
-const getDisplayName = (muscleName: string): string => {
-  const displayNames: Record<string, string> = {
-    'Borst': 'Borst',
-    'Biceps': 'Biceps',
-    'Triceps': 'Triceps',
-    'Schouders': 'Schouders',
-    'Traps': 'Rug/Traps',
-    'Buik': 'Buikspieren',
-    'Obliques': 'Obliques',
-    'Quadriceps': 'Quadriceps',
-    'Quads': 'Quadriceps',
-    'Kuiten': 'Kuiten',
-  };
-  
-  return displayNames[muscleName] || muscleName;
-};
+import { PageLayout, ContentCard, OutlineCard, PageTitle } from './layout';
 
 export const SpiergroepenPage = () => {
-  // Nieuwe inzichten: gebruik primaryMuscles uit metadata (zelfde als MuscleFrequencyBody)
   const insights = useMemo(() => {
     const exercises = getAllExercises();
     
@@ -136,20 +73,14 @@ export const SpiergroepenPage = () => {
   const COLORS_MOVEMENT = [GREEN_TINTS[4], GREEN_TINTS[3], GREEN_TINTS[2], GREEN_TINTS[1]]; // Level 5, 4, 3, 2
 
   return (
-    <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10 }}>
-      {/* Inzichten */}
-      <Card sx={{ mb: 3, backgroundColor: '#FEF2E5', borderRadius: '16px' }} elevation={0}>
-        <CardContent>
-          <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
-            Inzichten
-          </Typography>
+    <PageLayout>
+      <ContentCard>
+        <PageTitle>Inzichten</PageTitle>
 
-          {/* Body SVG en Pie Chart in één card */}
-          <Card sx={{ mb: 3, backgroundColor: 'transparent', borderRadius: '16px', border: '1px solid #D2C5B4' }} elevation={0}>
-            <CardContent sx={{ '&:last-child': { pb: 2 }, pt: 2, px: 2 }}>
-              <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                Meest Getrainde Spiergroepen
-              </Typography>
+        <OutlineCard sx={{ '& .MuiCardContent-root': { pt: 2, px: 2 } }}>
+          <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+            Meest Getrainde Spiergroepen
+          </Typography>
               
               {/* Body SVG */}
               <Box sx={{ mb: 0, pb: 0, lineHeight: 0, display: 'flex', justifyContent: 'center' }}>
@@ -200,13 +131,10 @@ export const SpiergroepenPage = () => {
                   </ResponsiveContainer>
                 </Box>
               )}
-            </CardContent>
-          </Card>
+        </OutlineCard>
 
-          {/* Push/Pull Ratio Pie Chart */}
-          {insights.pushPullRatio && (insights.pushPullRatio.push > 0 || insights.pushPullRatio.pull > 0) && (
-            <Card sx={{ mb: 3, backgroundColor: 'transparent', borderRadius: '16px', border: '1px solid #D2C5B4' }} elevation={0}>
-              <CardContent>
+        {insights.pushPullRatio && (insights.pushPullRatio.push > 0 || insights.pushPullRatio.pull > 0) && (
+          <OutlineCard>
                 <Typography variant="h6" gutterBottom>
                   Push/Pull Ratio
                 </Typography>
@@ -254,14 +182,11 @@ export const SpiergroepenPage = () => {
                     </PieChart>
                   </ResponsiveContainer>
                 </Box>
-              </CardContent>
-            </Card>
-          )}
+          </OutlineCard>
+        )}
 
-          {/* Bewegingstype Verdeling Pie Chart */}
-          {Object.keys(insights.movementTypeCounts).length > 0 && (
-            <Card sx={{ mb: 3, backgroundColor: 'transparent', borderRadius: '16px', border: '1px solid #D2C5B4' }} elevation={0}>
-              <CardContent>
+        {Object.keys(insights.movementTypeCounts).length > 0 && (
+          <OutlineCard>
                 <Typography variant="h6" gutterBottom>
                   Bewegingstype Verdeling
                 </Typography>
@@ -310,12 +235,10 @@ export const SpiergroepenPage = () => {
                     </PieChart>
                   </ResponsiveContainer>
                 </Box>
-              </CardContent>
-            </Card>
-          )}
-        </CardContent>
-      </Card>
-    </Box>
+          </OutlineCard>
+        )}
+      </ContentCard>
+    </PageLayout>
   );
 };
 

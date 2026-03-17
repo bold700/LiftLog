@@ -97,7 +97,7 @@ export const NavigationBar = ({ value, onChange, tabs }: NavigationBarProps) => 
         left: 0,
         right: 0,
         zIndex: 1000,
-        '--md-navigation-bar-container-height': '104px',
+        '--md-navigation-bar-container-height': '80px',
       } as any}
     >
       {tabs.map((tab, index) => (

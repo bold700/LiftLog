@@ -6,6 +6,11 @@
   box-sizing: border-box;
 }
 
+html {
+  /* Reserveer ruimte voor scrollbalk zodat layout niet verschuift bij veel content */
+  scrollbar-gutter: stable;
+}
+
 body {
   margin: 0;
   font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Oxygen',
@@ -18,5 +23,103 @@ body {
 #root {
   width: 100%;
   min-height: 100vh;
+}
+
+/* Standaard: print-layout verbergen op scherm, scherm-layout tonen */
+.workout-detail-print {
+  display: none;
+}
+
+.workout-detail-screen {
+  display: block;
+}
+
+/* --- Printvriendelijke layout voor workout-PDF's --- */
+@media print {
+  body {
+    margin: 0;
+    background: #ffffff !important;
+  }
+
+  #root {
+    background: #ffffff !important;
+  }
+
+  .workout-detail-print {
+    display: block;
+  }
+
+  .workout-detail-screen {
+    display: none;
+  }
+
+  /* Verberg navigatiebalk onderin en floating action buttons bij print */
+  .MuiBottomNavigation-root,
+  .MuiFab-root {
+    display: none !important;
+  }
+
+  /* Verberg context-menu's (More menu) en overbodige icon-buttons */
+  .MuiMenu-root,
+  .MuiMenu-paper,
+  .MuiMenuItem-root,
+  .MuiIconButton-root[aria-label='Meer acties'],
+  .MuiIconButton-root[aria-label='add'],
+  .MuiIconButton-root[aria-label='Log toevoegen'],
+  .MuiIconButton-root[aria-label='Terug'] {
+    display: none !important;
+  }
+
+  /* Kaarten over hele breedte, zonder schaduw, lichte rand */
+  .MuiCard-root {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    border: 1px solid #dddddd !important;
+  }
+
+  /* Geen scrollbars of overbodige margins */
+  * {
+    scrollbar-width: none !important;
+  }
+
+  *::-webkit-scrollbar {
+    display: none !important;
+  }
+}
+
+/* ---- Scrollbar M3 style (Material Design 3) ---- */
+/* Kleuren uit theme: outline #7D766D, outlineVariant #CEC5BB */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #7D766D #CEC5BB;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #CEC5BB;
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #7D766D;
+  border-radius: 4px;
+  border: 1px solid #CEC5BB;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #4C463E;
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: #1D1B1A;
+}
+
+*::-webkit-scrollbar-corner {
+  background: #CEC5BB;
+  border-radius: 4px;
 }
 

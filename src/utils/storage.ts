@@ -17,25 +17,29 @@ export const saveWorkout = (workout: Workout): void => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(workouts));
 };
 
+/**
+ * Voegt een oefening/log toe aan de workout van vandaag.
+ * Optioneel: geef schemaId en schemaDayIndex mee wanneer de log vanuit een schema-sessie komt.
+ */
 export const addExercise = (exercise: Exercise): void => {
   const workouts = getWorkouts();
   const today = new Date().toISOString().split('T')[0];
-  
+
   // Find or create today's workout
-  let todayWorkout = workouts.find(w => w.date === today);
+  let todayWorkout = workouts.find((w) => w.date === today);
   if (!todayWorkout) {
     todayWorkout = {
       id: Date.now().toString(),
       date: today,
-      exercises: []
+      exercises: [],
     };
     workouts.push(todayWorkout);
   }
-  
-  // Add exercise to today's workout
+
+  // Add exercise to today's workout (inclusief optionele schemaId/schemaDayIndex)
   todayWorkout.exercises.push(exercise);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(workouts));
-  
+
   // Dispatch event voor andere tabs/components
   window.dispatchEvent(new Event('workoutUpdated'));
 };

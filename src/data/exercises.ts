@@ -1,10 +1,21 @@
 // Database met fitness oefeningen
-// Categorieën: Chest, Triceps, Calves, Back, Biceps, Abdominals, Shoulders, Legs
+// Primaire bron: mega_exercise_db.json (AALO + uitgebreide bibliotheek, 160 oefeningen met equipment).
+// Legacy: onderstaande lijst voor oefeningen die nog niet in de mega-DB zitten (bijv. oude logs).
+
+import {
+  getMegaExerciseData,
+  getMegaExerciseByName,
+  getMegaExerciseNames,
+} from './megaExerciseDb';
+
+export type ExerciseEquipment = 'machine' | 'free_weight' | 'cable' | 'bodyweight' | 'other';
 
 export interface ExerciseData {
   name: string;
   category: string;
   muscles?: string[];
+  /** Voor filter op voorkeur klant (bijv. alleen machines). */
+  equipment?: ExerciseEquipment;
 }
 
 export const exerciseDatabase: ExerciseData[] = [
@@ -177,25 +188,75 @@ export const exerciseDatabase: ExerciseData[] = [
   { name: 'Squat Sit to Reach', category: 'Legs' },
 ];
 
-// Helper functies
+// Helper: equipment uit naam afleiden (voor oefeningen zonder equipment-veld of user-oefeningen)
+function inferEquipmentFromName(name: string): ExerciseEquipment {
+  const n = name.toLowerCase();
+  if (/\bmachine\b|leg Press|pec deck|leg extension|leg curl|hack squat|horizontal row machine|crunch machine|reverse pectoral fly|smith machine|seated hip abduction|glute ham raise|seated calf raise|seated chest press|chest press machine/i.test(n)) return 'machine';
+  if (/\bcable\b|pulldown|pulley|rope cable|cable rope|face pull/i.test(n)) return 'cable';
+  if (/\bbodyweight\b|push up|pull up|plank|dips|hanging leg raise|burpee|wall sit|donkey kick|bird dog|duck walk|fire hydrant|groiner|frog pump|banded |mini-band|side lying leg raise/i.test(n)) return 'bodyweight';
+  if (/\bbarbell\b|dumbbell\b|dumbbel\b|kettlebell|ez barbell|medicine ball|t-bar/i.test(n)) return 'free_weight';
+  return 'other';
+}
+
+/** Gecombineerde lijst: mega-DB (primair) + legacy-oefeningen die niet in mega zitten. */
+function getCombinedDatabase(): ExerciseData[] {
+  const mega = getMegaExerciseData();
+  const megaNames = new Set(mega.map((e) => e.name));
+  const legacyOnly = exerciseDatabase.filter((e) => !megaNames.has(e.name));
+  return [...mega, ...legacyOnly];
+}
+
+/** Bepaalt equipment voor een oefening (mega-DB → legacy → inferentie). */
+export function getExerciseEquipment(exerciseName: string): ExerciseEquipment {
+  const mega = getMegaExerciseByName(exerciseName);
+  if (mega?.equipment) return mega.equipment;
+  const legacy = exerciseDatabase.find((e) => e.name === exerciseName);
+  if (legacy?.equipment) return legacy.equipment;
+  return inferEquipmentFromName(exerciseName);
+}
+
+// Helper functies (gebruiken gecombineerde bron)
 export const getExerciseNames = (): string[] => {
-  return exerciseDatabase.map(ex => ex.name);
+  const megaNames = new Set(getMegaExerciseNames());
+  const legacyOnly = exerciseDatabase.filter((e) => !megaNames.has(e.name)).map((e) => e.name);
+  return [...getMegaExerciseNames(), ...legacyOnly].sort();
 };
 
 export const getExercisesByCategory = (category: string): ExerciseData[] => {
-  return exerciseDatabase.filter(ex => ex.category === category);
+  return getCombinedDatabase().filter((ex) => ex.category === category);
 };
+
+/** Filter oefeningnamen op equipment (voor schema-stap 3: "klant wil alleen machines"). */
+export function getExerciseNamesByEquipment(
+  equipmentFilter: ExerciseEquipment | 'all',
+  includeUserNames: string[]
+): string[] {
+  const combined = getCombinedDatabase();
+  const dbNames = combined
+    .filter(
+      (ex) =>
+        equipmentFilter === 'all' ||
+        (ex.equipment ?? inferEquipmentFromName(ex.name)) === equipmentFilter
+    )
+    .map((ex) => ex.name);
+  const userFiltered =
+    equipmentFilter === 'all'
+      ? includeUserNames
+      : includeUserNames.filter((name) => getExerciseEquipment(name) === equipmentFilter);
+  return [...new Set([...dbNames, ...userFiltered])].sort();
+}
 
 export const searchExercises = (query: string): ExerciseData[] => {
   const lowerQuery = query.toLowerCase();
-  return exerciseDatabase.filter(ex => 
-    ex.name.toLowerCase().includes(lowerQuery) ||
-    ex.category.toLowerCase().includes(lowerQuery) ||
-    ex.muscles?.some(m => m.toLowerCase().includes(lowerQuery))
+  return getCombinedDatabase().filter(
+    (ex) =>
+      ex.name.toLowerCase().includes(lowerQuery) ||
+      ex.category.toLowerCase().includes(lowerQuery) ||
+      ex.muscles?.some((m) => m.toLowerCase().includes(lowerQuery))
   );
 };
 
 export const getCategories = (): string[] => {
-  const categories = new Set(exerciseDatabase.map(ex => ex.category));
+  const categories = new Set(getCombinedDatabase().map((ex) => ex.category));
   return Array.from(categories).sort();
 };

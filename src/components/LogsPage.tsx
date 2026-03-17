@@ -13,22 +13,39 @@ import {
   DialogActions,
   TextField,
   Autocomplete,
+  FormControl,
+  InputLabel,
+  Select,
+  Button,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import { getAllExercises, updateExercise, deleteExercise, getExerciseNames } from '../utils/storage';
-import { Exercise } from '../types';
-import { getExerciseNames as getDbExerciseNames } from '../data/exercises';
+import { getAllExercises, updateExercise, deleteExercise } from '../utils/storage';
+import { getSessionLogs, saveSessionLog, deleteSessionLog } from '../utils/sessionLogStorage';
+import { getSchemas, getSchemaById } from '../utils/schemaStorage';
+import { Exercise, TrainingSessionLog } from '../types';
+import { useAddFromSchema } from '../context/AddFromSchemaContext';
+import { formatExerciseDateShort, formatExerciseDetails } from '../utils/format';
+import { useExerciseSuggestions } from '../hooks/useExerciseSuggestions';
+import { designTokens } from '../theme/designTokens';
+import { PageLayout, ContentCard, PageTitle, EmptyState } from './layout';
 
 // Import Material Web Components buttons
 import '@material/web/button/filled-button.js';
 import '@material/web/button/text-button.js';
 import '@material/web/icon/icon.js';
 
-export const LogsPage = () => {
+export interface LogsPageProps {
+  /** Open direct het dialoog "Training log toevoegen" (bijv. na klik FAB → Training log). */
+  openSessionLogDialogRequested?: boolean;
+  onConsumeOpenSessionLogDialog?: () => void;
+}
+
+export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLogDialog }: LogsPageProps) => {
+  const addFromSchema = useAddFromSchema();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [allExercises, setAllExercises] = useState<Exercise[]>([]);
@@ -43,22 +60,40 @@ export const LogsPage = () => {
   const [sets, setSets] = useState('');
   const [reps, setReps] = useState('');
   const [notes, setNotes] = useState('');
-  const [exerciseSuggestions, setExerciseSuggestions] = useState<string[]>([]);
+  const exerciseSuggestions = useExerciseSuggestions();
   const editCancelButtonRef = useRef<any>(null);
   const editSaveButtonRef = useRef<any>(null);
   const deleteCancelButtonRef = useRef<any>(null);
   const deleteConfirmButtonRef = useRef<any>(null);
 
-  const loadExerciseSuggestions = useCallback(() => {
-    const dbExercises = getDbExerciseNames();
-    const userExercises = getExerciseNames();
-    const allExercises = [...new Set([...dbExercises, ...userExercises])].sort();
-    setExerciseSuggestions(allExercises);
-  }, []);
+  // Sessie-logs (trainingen)
+  const [sessionLogs, setSessionLogs] = useState<TrainingSessionLog[]>(() => getSessionLogs());
+  const [openSessionLogDialog, setOpenSessionLogDialog] = useState<'add' | 'edit' | null>(null);
+  const [editingSessionLog, setEditingSessionLog] = useState<TrainingSessionLog | null>(null);
+  const [sessionLogDate, setSessionLogDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [sessionLogSchemaId, setSessionLogSchemaId] = useState<string>('');
+  const [sessionLogDayIndex, setSessionLogDayIndex] = useState<number>(0);
+  const [sessionLogNotes, setSessionLogNotes] = useState('');
+  const [deletingSessionLogId, setDeletingSessionLogId] = useState<string | null>(null);
+  const [openDeleteSessionLogDialog, setOpenDeleteSessionLogDialog] = useState(false);
+  const schemas = getSchemas();
 
+  // Open bewerk-dialog wanneer we vanaf schema "Gelogd" hebben geklikt
   useEffect(() => {
-    loadExerciseSuggestions();
-  }, [loadExerciseSuggestions]);
+    const openId = addFromSchema?.openLogId;
+    if (!openId || allExercises.length === 0) return;
+    const exercise = allExercises.find((ex) => ex.id === openId);
+    if (exercise) {
+      setEditingExercise(exercise);
+      setExerciseName(exercise.name || '');
+      setWeight(exercise.weight?.toString() || '');
+      setSets(exercise.sets?.toString() || '');
+      setReps(exercise.reps?.toString() || '');
+      setNotes(exercise.notes || '');
+      setOpenEditDialog(true);
+    }
+    addFromSchema.clearOpenLogId();
+  }, [addFromSchema?.openLogId, addFromSchema, allExercises]);
 
   useEffect(() => {
     const loadAllExercises = () => {
@@ -85,6 +120,20 @@ export const LogsPage = () => {
       window.removeEventListener('workoutUpdated', handleCustomStorageChange);
     };
   }, []);
+
+  const refreshSessionLogs = useCallback(() => setSessionLogs(getSessionLogs()), []);
+  useEffect(() => {
+    const handler = () => refreshSessionLogs();
+    window.addEventListener('workoutUpdated', handler);
+    return () => window.removeEventListener('workoutUpdated', handler);
+  }, [refreshSessionLogs]);
+
+  useEffect(() => {
+    if (openSessionLogDialogRequested && onConsumeOpenSessionLogDialog) {
+      openAddSessionLog();
+      onConsumeOpenSessionLogDialog();
+    }
+  }, [openSessionLogDialogRequested, onConsumeOpenSessionLogDialog]);
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, exerciseId: string) => {
     setMenuAnchorEl(event.currentTarget);
@@ -139,9 +188,7 @@ export const LogsPage = () => {
     // Herlaad exercises
     const exercises = getAllExercises();
     setAllExercises(exercises);
-    
-    loadExerciseSuggestions();
-  }, [editingExercise, exerciseName, weight, sets, reps, notes, loadExerciseSuggestions]);
+  }, [editingExercise, exerciseName, weight, sets, reps, notes]);
 
   const handleCloseEditDialog = useCallback(() => {
     setOpenEditDialog(false);
@@ -272,58 +319,154 @@ export const LogsPage = () => {
     };
   }, [openDeleteDialog, handleCloseDeleteDialog, handleConfirmDelete]);
 
+  const selectedSchemaForSessionLog = sessionLogSchemaId ? getSchemaById(sessionLogSchemaId) : null;
+
+  const openAddSessionLog = useCallback(() => {
+    setEditingSessionLog(null);
+    setSessionLogDate(new Date().toISOString().split('T')[0]);
+    setSessionLogSchemaId(schemas[0]?.id ?? '');
+    setSessionLogDayIndex(0);
+    setSessionLogNotes('');
+    setOpenSessionLogDialog('add');
+  }, [schemas]);
+
+  const openEditSessionLog = useCallback((log: TrainingSessionLog) => {
+    setEditingSessionLog(log);
+    setSessionLogDate(log.date);
+    setSessionLogSchemaId(log.schemaId);
+    setSessionLogDayIndex(log.schemaDayIndex);
+    setSessionLogNotes(log.notes ?? '');
+    setOpenSessionLogDialog('edit');
+  }, []);
+
+  const saveSessionLogFromDialog = useCallback(() => {
+    if (!sessionLogSchemaId) return;
+    saveSessionLog({
+      date: sessionLogDate,
+      schemaId: sessionLogSchemaId,
+      schemaDayIndex: sessionLogDayIndex,
+      notes: sessionLogNotes.trim() || null,
+    });
+    if (editingSessionLog) {
+      // bij edit: als datum/schema/dag gewijzigd, oude verwijderen (saveSessionLog maakt/update op key date+schemaId+dayIndex)
+      if (
+        editingSessionLog.date !== sessionLogDate ||
+        editingSessionLog.schemaId !== sessionLogSchemaId ||
+        editingSessionLog.schemaDayIndex !== sessionLogDayIndex
+      ) {
+        deleteSessionLog(editingSessionLog.id);
+      }
+    }
+    refreshSessionLogs();
+    setOpenSessionLogDialog(null);
+    setEditingSessionLog(null);
+  }, [sessionLogDate, sessionLogSchemaId, sessionLogDayIndex, sessionLogNotes, editingSessionLog, refreshSessionLogs]);
+
+  const closeSessionLogDialog = useCallback(() => {
+    setOpenSessionLogDialog(null);
+    setEditingSessionLog(null);
+  }, []);
+
+  const confirmDeleteSessionLog = useCallback(() => {
+    if (deletingSessionLogId) {
+      deleteSessionLog(deletingSessionLogId);
+      refreshSessionLogs();
+      setDeletingSessionLogId(null);
+      setOpenDeleteSessionLogDialog(false);
+    }
+  }, [deletingSessionLogId, refreshSessionLogs]);
+
   return (
-    <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10 }}>
+    <PageLayout>
+      <ContentCard>
+        <PageTitle>Log</PageTitle>
 
-      {/* Log container card met Spiergroepen styling */}
-      <Card sx={{ mb: 3, backgroundColor: '#FEF2E5', borderRadius: '16px' }} elevation={0}>
-        <CardContent>
-          <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
-            Log
-          </Typography>
+        <Typography variant="subtitle2" color="text.secondary" fontWeight={600} sx={{ mb: 1 }}>
+          Trainingen
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 3 }}>
+          {sessionLogs.map((log) => {
+            const schema = getSchemaById(log.schemaId);
+            const dayLabel = schema?.days[log.schemaDayIndex]?.dayLabel ?? `Dag ${log.schemaDayIndex + 1}`;
+            return (
+              <Card
+                key={log.id}
+                sx={{
+                  backgroundColor: 'transparent',
+                  borderRadius: `${designTokens.cardRadius}px`,
+                  border: `1px solid ${designTokens.cardBorder}`,
+                  boxShadow: 'none',
+                }}
+              >
+                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="subtitle1" fontWeight={600}>
+                        {schema?.name ?? log.schemaId} – {dayLabel}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        {formatExerciseDateShort(log.date)}
+                      </Typography>
+                      {log.notes?.trim() && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontStyle: 'italic' }}>
+                          &quot;{log.notes.trim()}&quot;
+                        </Typography>
+                      )}
+                    </Box>
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        setMenuAnchorEl(e.currentTarget);
+                        setMenuExerciseId(`session-${log.id}`);
+                      }}
+                      sx={{ color: 'text.secondary', ml: 1 }}
+                      aria-label="Menu sessie-log"
+                    >
+                      <MoreVertIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </Box>
 
-          {allExercises.length > 0 && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {allExercises.map((exercise) => {
-                const exerciseDate = new Date(exercise.date);
-                const isToday = exerciseDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
-                const dateStr = exerciseDate.toLocaleDateString('nl-NL', { 
-                  weekday: 'short',
-                  year: 'numeric',
-                  month: 'short', 
-                  day: 'numeric' 
-                });
-                
-                const details = [
-                  exercise.weight && `${exercise.weight} kg`,
-                  exercise.sets && `${exercise.sets} ${exercise.sets === 1 ? 'set' : 'sets'}`,
-                  exercise.reps && `${exercise.reps} ${exercise.reps === 1 ? 'rep' : 'reps'}`
-                ].filter(Boolean).join(' | ');
+        <Typography variant="subtitle2" color="text.secondary" fontWeight={600} sx={{ mb: 1 }}>
+          Oefeningen
+        </Typography>
 
-                return (
-                  <Card 
-                    key={exercise.id}
-                    sx={{ 
-                      backgroundColor: 'transparent', 
-                      borderRadius: '16px',
-                      border: '1px solid #D2C5B4',
-                      elevation: 0,
-                      m: 0,
-                      boxShadow: 'none'
-                    }}
-                  >
-                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                            {exercise.name || 'Notitie'}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                            {isToday ? `Vandaag, ${exerciseDate.toLocaleDateString('nl-NL', { month: 'short', day: 'numeric' })}` : dateStr}
-                          </Typography>
-                          <Typography variant="body2" color="text.primary">
-                            {details}
-                          </Typography>
+        {allExercises.length > 0 && (
+          <Box className="stagger-children" sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {allExercises.map((exercise, index) => (
+              <Card
+                key={exercise.id}
+                sx={{
+                  '--stagger-index': index,
+                  backgroundColor: 'transparent',
+                  borderRadius: `${designTokens.cardRadius}px`,
+                  border: `1px solid ${designTokens.cardBorder}`,
+                  m: 0,
+                  boxShadow: 'none',
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                  '&:hover': {
+                    transform: 'translateY(-1px)',
+                    boxShadow: 1,
+                  },
+                } as any}
+                elevation={0}
+              >
+                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                        {exercise.name || 'Notitie'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                        {formatExerciseDateShort(exercise.date)}
+                      </Typography>
+                      <Typography variant="body2" color="text.primary">
+                        {formatExerciseDetails(exercise)}
+                      </Typography>
                           {exercise.notes && String(exercise.notes).trim() && (
                             <Typography 
                               variant="body2" 
@@ -351,30 +494,49 @@ export const LogsPage = () => {
                       </Box>
                     </CardContent>
                   </Card>
-                );
-              })}
-            </Box>
-          )}
+            ))}
+          </Box>
+        )}
 
-          {allExercises.length === 0 && (
-            <Typography variant="body1" color="text.secondary" align="center" sx={{ py: 4 }}>
-              Nog geen oefeningen gelogd. Begin met het toevoegen van je eerste oefening!
-            </Typography>
-          )}
-        </CardContent>
-      </Card>
+        {allExercises.length === 0 && (
+          <EmptyState>Nog geen oefeningen gelogd. Begin met het toevoegen van je eerste oefening!</EmptyState>
+        )}
+      </ContentCard>
 
-      {/* Menu voor edit/delete */}
+      {/* Menu voor edit/delete (oefening of sessie-log) */}
       <Menu
         anchorEl={menuAnchorEl}
         open={Boolean(menuAnchorEl)}
         onClose={handleMenuClose}
       >
-        {menuExerciseId && allExercises.find(ex => ex.id === menuExerciseId) && (
+        {menuExerciseId?.startsWith('session-') ? (
+          (() => {
+            const logId = menuExerciseId.replace('session-', '');
+            const log = sessionLogs.find((l) => l.id === logId);
+            if (!log) return null;
+            return (
+              <>
+                <MenuItem onClick={() => { openEditSessionLog(log); handleMenuClose(); }}>
+                  <EditIcon sx={{ mr: 1 }} fontSize="small" />
+                  Bewerken
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setDeletingSessionLogId(logId);
+                    setOpenDeleteSessionLogDialog(true);
+                    handleMenuClose();
+                  }}
+                  sx={{ color: 'error.main' }}
+                >
+                  <DeleteIcon sx={{ mr: 1 }} fontSize="small" />
+                  Verwijderen
+                </MenuItem>
+              </>
+            );
+          })()
+        ) : menuExerciseId && allExercises.find(ex => ex.id === menuExerciseId) ? (
           <>
-            <MenuItem
-              onClick={() => handleEditExercise(allExercises.find(ex => ex.id === menuExerciseId)!)}
-            >
+            <MenuItem onClick={() => handleEditExercise(allExercises.find(ex => ex.id === menuExerciseId)!)}>
               <EditIcon sx={{ mr: 1 }} fontSize="small" />
               Bewerken
             </MenuItem>
@@ -386,7 +548,7 @@ export const LogsPage = () => {
               Verwijderen
             </MenuItem>
           </>
-        )}
+        ) : null}
       </Menu>
 
       {/* Dialog voor bewerken oefening */}
@@ -504,7 +666,137 @@ export const LogsPage = () => {
           </md-filled-button>
         </DialogActions>
       </Dialog>
-    </Box>
+
+      {/* Dialog training log toevoegen/bewerken */}
+      <Dialog
+        open={openSessionLogDialog !== null}
+        onClose={closeSessionLogDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{openSessionLogDialog === 'edit' ? 'Training log bewerken' : 'Training log toevoegen'}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+            <TextField
+              label="Datum"
+              type="date"
+              value={sessionLogDate}
+              onChange={(e) => setSessionLogDate(e.target.value)}
+              size="small"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
+            <FormControl size="small" fullWidth>
+              <InputLabel id="session-log-schema-label">Workout</InputLabel>
+              <Select
+                labelId="session-log-schema-label"
+                label="Workout"
+                value={sessionLogSchemaId}
+                onChange={(e) => {
+                  setSessionLogSchemaId(e.target.value);
+                  setSessionLogDayIndex(0);
+                }}
+              >
+                {schemas.map((s) => (
+                  <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {selectedSchemaForSessionLog && selectedSchemaForSessionLog.days.length > 0 && (
+              <FormControl size="small" fullWidth>
+                <InputLabel id="session-log-day-label">Trainingsdag</InputLabel>
+                <Select
+                  labelId="session-log-day-label"
+                  label="Trainingsdag"
+                  value={sessionLogDayIndex}
+                  onChange={(e) => setSessionLogDayIndex(Number(e.target.value))}
+                >
+                  {selectedSchemaForSessionLog.days.map((d, idx) => (
+                    <MenuItem key={idx} value={idx}>{d.dayLabel}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+            <TextField
+              label="Notitie (optioneel)"
+              value={sessionLogNotes}
+              onChange={(e) => setSessionLogNotes(e.target.value)}
+              placeholder="Bijv. goede sessie, moe aan het eind"
+              multiline
+              rows={3}
+              size="small"
+              fullWidth
+            />
+            <Box sx={{ display: 'flex', gap: 2, mt: 3, justifyContent: 'flex-end' }}>
+              <Button
+                variant="text"
+                onClick={closeSessionLogDialog}
+                disableElevation
+                sx={{
+                  color: '#000000',
+                  borderRadius: '20px',
+                  textTransform: 'none',
+                  fontWeight: 500,
+                  minHeight: 40,
+                  px: 2,
+                  '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' },
+                }}
+              >
+                Annuleren
+              </Button>
+              <Button
+                variant="contained"
+                onClick={saveSessionLogFromDialog}
+                disabled={!sessionLogSchemaId}
+                disableElevation
+                sx={{
+                  bgcolor: '#000000',
+                  color: '#F2E4D3',
+                  borderRadius: '20px',
+                  textTransform: 'none',
+                  fontWeight: 500,
+                  minHeight: 40,
+                  px: 2,
+                  '&:hover': { bgcolor: '#1a1a1a' },
+                  '&.Mui-disabled': {
+                    bgcolor: 'rgba(0,0,0,0.12)',
+                    color: 'rgba(29,27,26,0.38)',
+                  },
+                }}
+              >
+                Opslaan
+              </Button>
+            </Box>
+          </Box>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog sessie-log verwijderen */}
+      <Dialog
+        open={openDeleteSessionLogDialog}
+        onClose={() => { setOpenDeleteSessionLogDialog(false); setDeletingSessionLogId(null); }}
+        maxWidth="sm"
+      >
+        <DialogTitle>Training log verwijderen</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1">
+            Weet je zeker dat je deze training log wilt verwijderen?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <md-text-button onClick={() => { setOpenDeleteSessionLogDialog(false); setDeletingSessionLogId(null); }}>
+            Annuleren
+          </md-text-button>
+          <md-filled-button
+            onClick={confirmDeleteSessionLog}
+            style={{ '--md-filled-button-container-color': '#BA1A1A' } as any}
+          >
+            <md-icon slot="start">delete</md-icon>
+            Verwijderen
+          </md-filled-button>
+        </DialogActions>
+      </Dialog>
+    </PageLayout>
   );
 };
 

@@ -1,0 +1,3197 @@
+{
+  "meta": {
+    "version": "2.0",
+    "total_exercises": 160,
+    "source": "AALO Fitness Instructeur + uitgebreide bibliotheek",
+    "equipment_types": [
+      "vaste_machine",
+      "cable_pulley",
+      "dumbbell",
+      "barbell",
+      "bodyweight",
+      "anders"
+    ],
+    "muscle_groups": [
+      "borst",
+      "rug_breed",
+      "rug_dik",
+      "schouders",
+      "biceps",
+      "triceps",
+      "onderarm",
+      "buik",
+      "onderrug",
+      "billen",
+      "quadriceps",
+      "hamstrings",
+      "kuiten",
+      "adductoren",
+      "abductoren"
+    ],
+    "movement_patterns": [
+      "push_horizontaal",
+      "push_verticaal",
+      "pull_horizontaal",
+      "pull_verticaal",
+      "squat",
+      "hinge",
+      "lunge",
+      "carry",
+      "rotatie",
+      "isolatie",
+      "cardio"
+    ]
+  },
+  "muscle_map": {
+    "borst": {
+      "label": "Borst",
+      "latin": "m. pectoralis major / minor",
+      "muscles": [
+        "pectoralis_major_boven",
+        "pectoralis_major_midden",
+        "pectoralis_major_onder",
+        "pectoralis_minor"
+      ]
+    },
+    "rug_breed": {
+      "label": "Brede rugspier",
+      "latin": "m. latissimus dorsi",
+      "muscles": [
+        "latissimus_dorsi"
+      ]
+    },
+    "rug_dik": {
+      "label": "Dikke rug / trapezius / rhomboids",
+      "latin": "m. trapezius / m. rhomboideus",
+      "muscles": [
+        "trapezius_boven",
+        "trapezius_midden",
+        "trapezius_onder",
+        "rhomboideus"
+      ]
+    },
+    "schouders": {
+      "label": "Schouders",
+      "latin": "m. deltoideus",
+      "muscles": [
+        "deltoideus_voor",
+        "deltoideus_zij",
+        "deltoideus_achter",
+        "rotator_cuff"
+      ]
+    },
+    "biceps": {
+      "label": "Biceps",
+      "latin": "m. biceps brachii",
+      "muscles": [
+        "biceps_brachii",
+        "brachialis",
+        "brachioradialis"
+      ]
+    },
+    "triceps": {
+      "label": "Triceps",
+      "latin": "m. triceps brachii",
+      "muscles": [
+        "triceps_lang",
+        "triceps_lateraal",
+        "triceps_mediaal"
+      ]
+    },
+    "onderarm": {
+      "label": "Onderarm",
+      "latin": "flexoren/extensoren pols",
+      "muscles": [
+        "flexoren_pols",
+        "extensoren_pols"
+      ]
+    },
+    "buik": {
+      "label": "Buikspieren",
+      "latin": "m. rectus abdominis / obliquus",
+      "muscles": [
+        "rectus_abdominis",
+        "obliquus_externus",
+        "obliquus_internus",
+        "transversus_abdominis"
+      ]
+    },
+    "onderrug": {
+      "label": "Onderrug",
+      "latin": "m. erector spinae",
+      "muscles": [
+        "erector_spinae",
+        "multifidus"
+      ]
+    },
+    "billen": {
+      "label": "Billen",
+      "latin": "m. gluteus",
+      "muscles": [
+        "gluteus_maximus",
+        "gluteus_medius",
+        "gluteus_minimus"
+      ]
+    },
+    "quadriceps": {
+      "label": "Voorzijde bovenbeen",
+      "latin": "mm. quadriceps femoris",
+      "muscles": [
+        "rectus_femoris",
+        "vastus_lateralis",
+        "vastus_medialis",
+        "vastus_intermedius"
+      ]
+    },
+    "hamstrings": {
+      "label": "Achterzijde bovenbeen",
+      "latin": "mm. hamstrings",
+      "muscles": [
+        "biceps_femoris",
+        "semitendinosus",
+        "semimembranosus"
+      ]
+    },
+    "kuiten": {
+      "label": "Kuiten",
+      "latin": "mm. triceps surae",
+      "muscles": [
+        "gastrocnemius",
+        "soleus"
+      ]
+    },
+    "adductoren": {
+      "label": "Binnenzijde bovenbeen",
+      "latin": "mm. adductores",
+      "muscles": [
+        "adductor_magnus",
+        "adductor_longus",
+        "adductor_brevis",
+        "gracilis"
+      ]
+    },
+    "abductoren": {
+      "label": "Buitenzijde bovenbeen",
+      "latin": "mm. abductores",
+      "muscles": [
+        "gluteus_medius",
+        "tensor_fasciae_latae"
+      ]
+    }
+  },
+  "exercises": [
+    {
+      "id": "m_chest_press",
+      "name": "Chest Press Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "push_horizontaal",
+      "muscles_primary": [
+        "borst"
+      ],
+      "muscles_secondary": [
+        "schouders",
+        "triceps"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Handvatten op okselplooi-hoogte",
+        "Rug volledig tegen rugsteun",
+        "Ellebogen niet overstrekken"
+      ],
+      "aalo_note": "Startpunt non-mover borsttraining",
+      "machine_equivalent": null,
+      "free_equivalent": "dumbbell_chest_press"
+    },
+    {
+      "id": "m_pec_deck",
+      "name": "Pec Deck / Butterfly Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "borst"
+      ],
+      "muscles_secondary": [
+        "deltoideus_voor"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Ellebogen op elbow pads",
+        "Kleine ROM bij schouderklachten",
+        "Knijp borstspieren samen"
+      ],
+      "machine_equivalent": null,
+      "free_equivalent": "dumbbell_flye"
+    },
+    {
+      "id": "m_incline_chest_press",
+      "name": "Incline Chest Press Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "push_horizontaal",
+      "muscles_primary": [
+        "borst"
+      ],
+      "muscles_secondary": [
+        "schouders",
+        "triceps"
+      ],
+      "sub_muscle_focus": [
+        "pectoralis_major_boven"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Bank op 30-45 graden",
+        "Meer nadruk op bovenkant borst",
+        "Schouders laag houden"
+      ]
+    },
+    {
+      "id": "m_lat_pulldown",
+      "name": "Lat Pulldown",
+      "equipment": "vaste_machine",
+      "movement_pattern": "pull_verticaal",
+      "muscles_primary": [
+        "rug_breed"
+      ],
+      "muscles_secondary": [
+        "rug_dik",
+        "biceps",
+        "schouders"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Greep wijder dan schouders",
+        "Trek naar bovenkant borst",
+        "Schouders laag houden tijdens beweging"
+      ],
+      "aalo_note": "Standaard pull-verticaal voor non-mover"
+    },
+    {
+      "id": "m_seated_row",
+      "name": "Seated Row Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "pull_horizontaal",
+      "muscles_primary": [
+        "rug_dik"
+      ],
+      "muscles_secondary": [
+        "rug_breed",
+        "biceps",
+        "schouders"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Trek naar borst/buik",
+        "Schouderbladen naar elkaar",
+        "Ellebogen 90 graden max (non-mover)"
+      ],
+      "aalo_note": "Standaard pull-horizontaal voor non-mover"
+    },
+    {
+      "id": "m_back_extension_machine",
+      "name": "Lower Back Extension Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "hinge",
+      "muscles_primary": [
+        "onderrug"
+      ],
+      "muscles_secondary": [
+        "billen"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Kussen ter hoogte schouderbladen",
+        "Neutrale wervelkolom",
+        "Niet overstrekken"
+      ]
+    },
+    {
+      "id": "m_reverse_fly_machine",
+      "name": "Reverse Fly Machine (Rear Delt)",
+      "equipment": "vaste_machine",
+      "movement_pattern": "pull_horizontaal",
+      "muscles_primary": [
+        "schouders"
+      ],
+      "muscles_secondary": [
+        "rug_dik"
+      ],
+      "sub_muscle_focus": [
+        "deltoideus_achter",
+        "rhomboideus"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Armen licht gebogen",
+        "Ellebogen omhoog naar achter",
+        "Geen nek spanning"
+      ]
+    },
+    {
+      "id": "m_shoulder_press",
+      "name": "Shoulder Press Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "push_verticaal",
+      "muscles_primary": [
+        "schouders"
+      ],
+      "muscles_secondary": [
+        "triceps"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Handvatten op ooghoogte (non-mover start)",
+        "Rug volledig tegen steun",
+        "Niet overstrekken"
+      ]
+    },
+    {
+      "id": "m_lateral_raise_machine",
+      "name": "Lateral Raise Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "schouders"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "deltoideus_zij"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Ellebogen licht gebogen",
+        "Heffen tot schouderhoogte",
+        "Geen momentum gebruiken"
+      ]
+    },
+    {
+      "id": "m_bicep_curl_machine",
+      "name": "Bicep Curl Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "biceps"
+      ],
+      "muscles_secondary": [
+        "onderarm"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Ellebogen op pad",
+        "Volledig strekken onderaan",
+        "Bovenarmen bewegen niet"
+      ]
+    },
+    {
+      "id": "m_tricep_pushdown_machine",
+      "name": "Tricep Extension Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "triceps"
+      ],
+      "muscles_secondary": [],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Bovenarmen stil",
+        "Volledig strekken",
+        "Rug recht"
+      ]
+    },
+    {
+      "id": "m_leg_press",
+      "name": "Leg Press Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "squat",
+      "muscles_primary": [
+        "quadriceps",
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Voeten heup-schouderbreedte",
+        "Knieën in lijn met tenen",
+        "90 graden knie (non-mover)",
+        "Rug aan steun"
+      ],
+      "aalo_note": "Standaard squat-patroon voor non-mover"
+    },
+    {
+      "id": "m_leg_extension",
+      "name": "Leg Extension Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "quadriceps"
+      ],
+      "muscles_secondary": [],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "90 graden start (non-mover)",
+        "Niet overstrekken",
+        "Billen op stoel houden"
+      ],
+      "contraindications": [
+        "knieklachten_algemeen",
+        "meniscus"
+      ]
+    },
+    {
+      "id": "m_leg_curl_sitting",
+      "name": "Seated Leg Curl Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "hamstrings"
+      ],
+      "muscles_secondary": [
+        "kuiten"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Voetkussen bij enkels",
+        "Bovenbeen kussen erop",
+        "Licht gebogen start",
+        "90 graden max (non-mover)"
+      ]
+    },
+    {
+      "id": "m_leg_curl_lying",
+      "name": "Lying Leg Curl Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "hamstrings"
+      ],
+      "muscles_secondary": [
+        "kuiten"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Lig plat op buik",
+        "Kussen bij enkels",
+        "Heupen aan pad houden"
+      ]
+    },
+    {
+      "id": "m_hip_abductor",
+      "name": "Hip Abductor Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "abductoren"
+      ],
+      "muscles_secondary": [
+        "billen"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Rug recht",
+        "Gecontroleerde beweging",
+        "Niet zwaaien"
+      ]
+    },
+    {
+      "id": "m_hip_adductor",
+      "name": "Hip Adductor Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "adductoren"
+      ],
+      "muscles_secondary": [],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Rug recht",
+        "Gecontroleerde beweging naar binnen",
+        "Geen klap op de pads"
+      ],
+      "contraindications": [
+        "zwangerschapsklachten"
+      ]
+    },
+    {
+      "id": "m_calf_raise_machine",
+      "name": "Calf Raise Machine (Standing)",
+      "equipment": "vaste_machine",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "kuiten"
+      ],
+      "muscles_secondary": [],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Volle ROM omhoog en omlaag",
+        "Hak volledig laten zakken",
+        "Gecontroleerde beweging"
+      ]
+    },
+    {
+      "id": "m_calf_raise_seated",
+      "name": "Calf Raise Machine (Seated)",
+      "equipment": "vaste_machine",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "kuiten"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "soleus"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Zittend traint meer soleus",
+        "Knie 90 graden",
+        "Volle ROM"
+      ]
+    },
+    {
+      "id": "m_hip_thrust_machine",
+      "name": "Hip Thrust Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "hinge",
+      "muscles_primary": [
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Rug op bank",
+        "Volledig strekken boven",
+        "Billen knijpen bovenaan"
+      ]
+    },
+    {
+      "id": "m_glute_kickback",
+      "name": "Glute Kickback Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Rug recht",
+        "Geen zwaai in de heup",
+        "Knijp boven"
+      ]
+    },
+    {
+      "id": "m_ab_crunch_machine",
+      "name": "Abdominal Crunch Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "buik"
+      ],
+      "muscles_secondary": [],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Borstbeen naar navel",
+        "Gewichten raken elkaar niet",
+        "Voeten op grond"
+      ],
+      "aalo_note": "Standaard buikoefening voor non-mover"
+    },
+    {
+      "id": "m_hyperextension_machine",
+      "name": "Hyperextension Machine (Back Extension)",
+      "equipment": "vaste_machine",
+      "movement_pattern": "hinge",
+      "muscles_primary": [
+        "onderrug"
+      ],
+      "muscles_secondary": [
+        "billen",
+        "hamstrings"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Kussen op heupgewricht",
+        "Neutrale rug",
+        "Niet overstrekken bovenaan"
+      ]
+    },
+    {
+      "id": "c_cable_crossover",
+      "name": "Cable Crossover",
+      "equipment": "cable_pulley",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "borst"
+      ],
+      "muscles_secondary": [
+        "schouders"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Hoge of lage positie bepaalt focus",
+        "Constant spanning via kabel",
+        "Romp stabiel"
+      ]
+    },
+    {
+      "id": "c_cable_fly_high",
+      "name": "Cable Fly (Hoog naar laag)",
+      "equipment": "cable_pulley",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "borst"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "pectoralis_major_onder"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Kabel hoog instellen",
+        "Brengt handen samen omlaag",
+        "Ellebogen licht gebogen"
+      ]
+    },
+    {
+      "id": "c_cable_fly_low",
+      "name": "Cable Fly (Laag naar hoog)",
+      "equipment": "cable_pulley",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "borst"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "pectoralis_major_boven"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Kabel laag instellen",
+        "Handen kruisen boven",
+        "Romp stabiel"
+      ]
+    },
+    {
+      "id": "c_cable_lat_pulldown",
+      "name": "Cable Lat Pulldown",
+      "equipment": "cable_pulley",
+      "movement_pattern": "pull_verticaal",
+      "muscles_primary": [
+        "rug_breed"
+      ],
+      "muscles_secondary": [
+        "biceps",
+        "rug_dik"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Veel griepmogelijkheden: breed, smal, neutraal",
+        "Trek naar borst",
+        "Constant spanning"
+      ]
+    },
+    {
+      "id": "c_cable_row_sitting",
+      "name": "Cable Seated Row",
+      "equipment": "cable_pulley",
+      "movement_pattern": "pull_horizontaal",
+      "muscles_primary": [
+        "rug_dik"
+      ],
+      "muscles_secondary": [
+        "rug_breed",
+        "biceps"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Diverse handgrepen mogelijk",
+        "Schouderbladen retractie",
+        "Romp stil"
+      ]
+    },
+    {
+      "id": "c_cable_row_standing",
+      "name": "Cable Row Standing (1-arm)",
+      "equipment": "cable_pulley",
+      "movement_pattern": "pull_horizontaal",
+      "muscles_primary": [
+        "rug_dik"
+      ],
+      "muscles_secondary": [
+        "rug_breed",
+        "biceps",
+        "buik"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Romp stabiel",
+        "Anti-rotatie actief",
+        "Trek naar heup"
+      ]
+    },
+    {
+      "id": "c_cable_face_pull",
+      "name": "Cable Face Pull",
+      "equipment": "cable_pulley",
+      "movement_pattern": "pull_horizontaal",
+      "muscles_primary": [
+        "schouders",
+        "rug_dik"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "deltoideus_achter",
+        "rotator_cuff",
+        "rhomboideus"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Kabel op ooghoogte",
+        "Trek naar gezicht",
+        "Ellebogen omhoog",
+        "Preventief voor schouders"
+      ]
+    },
+    {
+      "id": "c_cable_pushdown_bar",
+      "name": "Cable Tricep Pushdown (Stang)",
+      "equipment": "cable_pulley",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "triceps"
+      ],
+      "muscles_secondary": [],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Ellebogen langs het lichaam",
+        "Volledig strekken",
+        "Geen zwaai in de romp"
+      ]
+    },
+    {
+      "id": "c_cable_pushdown_rope",
+      "name": "Cable Tricep Pushdown (Rope)",
+      "equipment": "cable_pulley",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "triceps"
+      ],
+      "muscles_secondary": [],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Rope uiteinden naar buiten onderin",
+        "Grotere ROM dan stang",
+        "Ellebogen stil"
+      ]
+    },
+    {
+      "id": "c_cable_curl",
+      "name": "Cable Bicep Curl",
+      "equipment": "cable_pulley",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "biceps"
+      ],
+      "muscles_secondary": [
+        "onderarm"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Constant spanning vs. dumbbell",
+        "Ellebogen stil langs lichaam",
+        "Volledig strekken onderaan"
+      ]
+    },
+    {
+      "id": "c_cable_hammer_curl",
+      "name": "Cable Hammer Curl (Rope)",
+      "equipment": "cable_pulley",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "biceps"
+      ],
+      "muscles_secondary": [
+        "onderarm"
+      ],
+      "sub_muscle_focus": [
+        "brachialis",
+        "brachioradialis"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Neutrale grip (duim omhoog)",
+        "Ellebogen stil",
+        "Traint ook brachialis"
+      ]
+    },
+    {
+      "id": "c_cable_lateral_raise",
+      "name": "Cable Lateral Raise",
+      "equipment": "cable_pulley",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "schouders"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "deltoideus_zij"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Kabel laag",
+        "Arm iets voor lichaam",
+        "Constante spanning vs. dumbbell"
+      ]
+    },
+    {
+      "id": "c_cable_front_raise",
+      "name": "Cable Front Raise",
+      "equipment": "cable_pulley",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "schouders"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "deltoideus_voor"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Kabel achter lichaam",
+        "Arm tot schouderhoogte",
+        "Constant spanning"
+      ]
+    },
+    {
+      "id": "c_cable_squat",
+      "name": "Cable Squat",
+      "equipment": "cable_pulley",
+      "movement_pattern": "squat",
+      "muscles_primary": [
+        "quadriceps",
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings",
+        "buik"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Kabel laag voor je",
+        "Romp rechtop door trek omhoog",
+        "Knieën in lijn met tenen"
+      ]
+    },
+    {
+      "id": "c_cable_hip_thrust",
+      "name": "Cable Pull Through (Hip Hinge)",
+      "equipment": "cable_pulley",
+      "movement_pattern": "hinge",
+      "muscles_primary": [
+        "billen",
+        "hamstrings"
+      ],
+      "muscles_secondary": [
+        "onderrug"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Kabel laag tussen benen door",
+        "Heup extensie als beweging",
+        "Rug recht blijven"
+      ]
+    },
+    {
+      "id": "c_cable_kickback",
+      "name": "Cable Glute Kickback",
+      "equipment": "cable_pulley",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Enkel in cuff",
+        "Kabel laag",
+        "Heup strekken, niet zwaaien"
+      ]
+    },
+    {
+      "id": "c_cable_crunch",
+      "name": "Cable Crunch (Knielen)",
+      "equipment": "cable_pulley",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "buik"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "rectus_abdominis"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Kabel hoog, touw greep",
+        "Kniel voor kabel",
+        "Ellebogen naast hoofd",
+        "Buig romp naar beneden"
+      ]
+    },
+    {
+      "id": "c_cable_woodchop",
+      "name": "Cable Woodchop",
+      "equipment": "cable_pulley",
+      "movement_pattern": "rotatie",
+      "muscles_primary": [
+        "buik"
+      ],
+      "muscles_secondary": [
+        "schouders",
+        "rug_breed"
+      ],
+      "sub_muscle_focus": [
+        "obliquus_externus",
+        "obliquus_internus"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Rotatie vanuit de romp",
+        "Armen gestrekt",
+        "Voeten stabiel"
+      ]
+    },
+    {
+      "id": "c_cable_tricep_overhead",
+      "name": "Cable Overhead Tricep Extension",
+      "equipment": "cable_pulley",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "triceps"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "triceps_lang"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Kabel laag, touw boven hoofd",
+        "Ellebogen naast oren",
+        "Volledig strekken"
+      ]
+    },
+    {
+      "id": "d_dumbbell_chest_press",
+      "name": "Dumbbell Chest Press",
+      "equipment": "dumbbell",
+      "movement_pattern": "push_horizontaal",
+      "muscles_primary": [
+        "borst"
+      ],
+      "muscles_secondary": [
+        "schouders",
+        "triceps"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Polsen recht boven ellebogen",
+        "90 graden bij non-mover",
+        "Dumbbells iets naar buiten bij afdalen"
+      ],
+      "machine_equivalent": "m_chest_press"
+    },
+    {
+      "id": "d_incline_chest_press",
+      "name": "Incline Dumbbell Chest Press",
+      "equipment": "dumbbell",
+      "movement_pattern": "push_horizontaal",
+      "muscles_primary": [
+        "borst"
+      ],
+      "muscles_secondary": [
+        "schouders",
+        "triceps"
+      ],
+      "sub_muscle_focus": [
+        "pectoralis_major_boven"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Bank 30-45 graden",
+        "Meer schouderbelasting dan flat",
+        "Schouders laag houden"
+      ]
+    },
+    {
+      "id": "d_decline_chest_press",
+      "name": "Decline Dumbbell Chest Press",
+      "equipment": "dumbbell",
+      "movement_pattern": "push_horizontaal",
+      "muscles_primary": [
+        "borst"
+      ],
+      "muscles_secondary": [
+        "triceps"
+      ],
+      "sub_muscle_focus": [
+        "pectoralis_major_onder"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Bank iets aflopend",
+        "Minder schouder",
+        "Voeten vast"
+      ]
+    },
+    {
+      "id": "d_dumbbell_flye",
+      "name": "Dumbbell Flye",
+      "equipment": "dumbbell",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "borst"
+      ],
+      "muscles_secondary": [
+        "schouders"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Ellebogen licht gebogen",
+        "Grote boog beweging",
+        "Borstspier strekt onderaan"
+      ]
+    },
+    {
+      "id": "d_incline_flye",
+      "name": "Incline Dumbbell Flye",
+      "equipment": "dumbbell",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "borst"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "pectoralis_major_boven"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Bank 30-45 graden",
+        "Focus bovenkant borst",
+        "Ellebogen licht gebogen"
+      ]
+    },
+    {
+      "id": "d_single_arm_row",
+      "name": "Single Arm Dumbbell Row",
+      "equipment": "dumbbell",
+      "movement_pattern": "pull_horizontaal",
+      "muscles_primary": [
+        "rug_breed",
+        "rug_dik"
+      ],
+      "muscles_secondary": [
+        "biceps"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Knie en hand op bank",
+        "Trek naar heup",
+        "Schouderblad retractie eerst"
+      ],
+      "machine_equivalent": "m_seated_row"
+    },
+    {
+      "id": "d_bent_over_row",
+      "name": "Dumbbell Bent-Over Row",
+      "equipment": "dumbbell",
+      "movement_pattern": "pull_horizontaal",
+      "muscles_primary": [
+        "rug_breed",
+        "rug_dik"
+      ],
+      "muscles_secondary": [
+        "biceps",
+        "onderrug"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Romp 45-60 graden voorover",
+        "Rug recht",
+        "Trek naar navel"
+      ]
+    },
+    {
+      "id": "d_shoulder_press",
+      "name": "Dumbbell Shoulder Press",
+      "equipment": "dumbbell",
+      "movement_pattern": "push_verticaal",
+      "muscles_primary": [
+        "schouders"
+      ],
+      "muscles_secondary": [
+        "triceps"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Start op ooghoogte",
+        "Licht gebogen bij bovenkant",
+        "Onderrug neutraal"
+      ],
+      "machine_equivalent": "m_shoulder_press"
+    },
+    {
+      "id": "d_lateral_raise",
+      "name": "Dumbbell Lateral Raise",
+      "equipment": "dumbbell",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "schouders"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "deltoideus_zij"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Tot schouderhoogte",
+        "Duim iets naar beneden",
+        "Elleboog licht gebogen",
+        "Geen momentum"
+      ],
+      "aalo_note": "Dumbbell Side Raise uit AALO schema"
+    },
+    {
+      "id": "d_front_raise",
+      "name": "Dumbbell Front Raise",
+      "equipment": "dumbbell",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "schouders"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "deltoideus_voor"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Tot schouderhoogte",
+        "Rug van hand voorwaarts",
+        "Geen zwaai in het lichaam"
+      ],
+      "aalo_note": "Dumbbell Front Raise uit AALO"
+    },
+    {
+      "id": "d_rear_delt_raise",
+      "name": "Dumbbell Rear Delt Raise",
+      "equipment": "dumbbell",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "schouders"
+      ],
+      "muscles_secondary": [
+        "rug_dik"
+      ],
+      "sub_muscle_focus": [
+        "deltoideus_achter"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Romp voorover",
+        "Armen naar zijkant omhoog",
+        "Geen zwaai"
+      ]
+    },
+    {
+      "id": "d_arnold_press",
+      "name": "Arnold Press",
+      "equipment": "dumbbell",
+      "movement_pattern": "push_verticaal",
+      "muscles_primary": [
+        "schouders"
+      ],
+      "muscles_secondary": [
+        "triceps"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Start met palmen naar je toe",
+        "Draaien tijdens het duwen",
+        "Full range of motion"
+      ]
+    },
+    {
+      "id": "d_bicep_curl",
+      "name": "Dumbbell Bicep Curl",
+      "equipment": "dumbbell",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "biceps"
+      ],
+      "muscles_secondary": [
+        "onderarm"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Ellebogen langs het lichaam",
+        "Supinatie bovenaan",
+        "Volledig strekken onderaan"
+      ]
+    },
+    {
+      "id": "d_hammer_curl",
+      "name": "Hammer Curl",
+      "equipment": "dumbbell",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "biceps"
+      ],
+      "muscles_secondary": [
+        "onderarm"
+      ],
+      "sub_muscle_focus": [
+        "brachialis",
+        "brachioradialis"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Neutrale grip (duim omhoog)",
+        "Ellebogen stil",
+        "Traint brachialis extra"
+      ]
+    },
+    {
+      "id": "d_incline_curl",
+      "name": "Incline Dumbbell Curl",
+      "equipment": "dumbbell",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "biceps"
+      ],
+      "muscles_secondary": [],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Bank 45-60 graden",
+        "Arm hangt achter lichaam",
+        "Grotere stretch onderaan"
+      ]
+    },
+    {
+      "id": "d_tricep_kickback",
+      "name": "Dumbbell Tricep Kickback",
+      "equipment": "dumbbell",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "triceps"
+      ],
+      "muscles_secondary": [],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Bovenarm parallel aan vloer",
+        "Strek volledig",
+        "Bovenarm beweegt niet"
+      ],
+      "aalo_note": "Dumbbell Triceps Kickback uit AALO"
+    },
+    {
+      "id": "d_overhead_tricep_ext",
+      "name": "Dumbbell Overhead Tricep Extension",
+      "equipment": "dumbbell",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "triceps"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "triceps_lang"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Ellebogen naast oren",
+        "Volledig strekken boven",
+        "Geen zwaai in romp"
+      ]
+    },
+    {
+      "id": "d_zottman_curl",
+      "name": "Zottman Curl",
+      "equipment": "dumbbell",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "biceps",
+        "onderarm"
+      ],
+      "muscles_secondary": [],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Omhoog supinatie, omlaag pronatie",
+        "Traint voor- en achterkant onderarm",
+        "Gecontroleerd"
+      ]
+    },
+    {
+      "id": "d_goblet_squat",
+      "name": "Goblet Squat",
+      "equipment": "dumbbell",
+      "movement_pattern": "squat",
+      "muscles_primary": [
+        "quadriceps",
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings",
+        "buik"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Dumbbell voor de borst houden",
+        "Rechte rug",
+        "Diep door de knieën"
+      ],
+      "aalo_note": "Ideaal instapmodel squat voor non-mover"
+    },
+    {
+      "id": "d_dumbbell_squat",
+      "name": "Dumbbell Squat",
+      "equipment": "dumbbell",
+      "movement_pattern": "squat",
+      "muscles_primary": [
+        "quadriceps",
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Dumbbells langs het lichaam",
+        "90 graden knie (non-mover)",
+        "Knieën in lijn met tenen"
+      ],
+      "machine_equivalent": "m_leg_press"
+    },
+    {
+      "id": "d_dumbbell_lunge",
+      "name": "Dumbbell Lunge",
+      "equipment": "dumbbell",
+      "movement_pattern": "lunge",
+      "muscles_primary": [
+        "quadriceps",
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings",
+        "adductoren"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Knie boven de voet",
+        "5-10 cm boven de vloer zakken",
+        "Rug recht"
+      ],
+      "aalo_note": "Dumbbell Lunge uit AALO",
+      "contraindications": [
+        "zwangerschapsklachten"
+      ]
+    },
+    {
+      "id": "d_walking_lunge",
+      "name": "Dumbbell Walking Lunge",
+      "equipment": "dumbbell",
+      "movement_pattern": "lunge",
+      "muscles_primary": [
+        "quadriceps",
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings",
+        "adductoren"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Doorstappen naar voren",
+        "Ritmische beweging",
+        "Romp rechtop"
+      ]
+    },
+    {
+      "id": "d_romanian_deadlift",
+      "name": "Dumbbell Romanian Deadlift",
+      "equipment": "dumbbell",
+      "movement_pattern": "hinge",
+      "muscles_primary": [
+        "hamstrings",
+        "billen"
+      ],
+      "muscles_secondary": [
+        "onderrug"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Rug recht",
+        "Knieën licht gebogen",
+        "Dumbells langs het lichaam",
+        "Gevoel in hamstrings"
+      ]
+    },
+    {
+      "id": "d_sumo_deadlift",
+      "name": "Dumbbell Sumo Deadlift",
+      "equipment": "dumbbell",
+      "movement_pattern": "hinge",
+      "muscles_primary": [
+        "billen",
+        "adductoren"
+      ],
+      "muscles_secondary": [
+        "quadriceps",
+        "hamstrings"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Brede stance",
+        "Voeten naar buiten",
+        "Dumbbell tussen de benen",
+        "Rug recht"
+      ]
+    },
+    {
+      "id": "d_step_up",
+      "name": "Dumbbell Step-Up",
+      "equipment": "dumbbell",
+      "movement_pattern": "lunge",
+      "muscles_primary": [
+        "quadriceps",
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Volledig op bank staan",
+        "Duwende voet doet het werk",
+        "Gecontroleerd afdalen"
+      ]
+    },
+    {
+      "id": "d_calf_raise_standing",
+      "name": "Dumbbell Calf Raise (Standing)",
+      "equipment": "dumbbell",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "kuiten"
+      ],
+      "muscles_secondary": [],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Hak volledig omlaag",
+        "Volledig op teen omhoog",
+        "Gecontroleerd"
+      ]
+    },
+    {
+      "id": "d_hip_thrust_dumbbell",
+      "name": "Dumbbell Hip Thrust",
+      "equipment": "dumbbell",
+      "movement_pattern": "hinge",
+      "muscles_primary": [
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Rug op bank",
+        "Dumbbell op heupen",
+        "Billen knijpen bovenaan",
+        "Neutrale nek"
+      ]
+    },
+    {
+      "id": "d_dumbbell_side_bend",
+      "name": "Dumbbell Side Bend",
+      "equipment": "dumbbell",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "buik"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "obliquus_externus",
+        "obliquus_internus"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Alleen zijwaarts buigen",
+        "Geen rotatie",
+        "Eén dumbbell aan de zijkant"
+      ]
+    },
+    {
+      "id": "d_dumbbell_pullover",
+      "name": "Dumbbell Pullover",
+      "equipment": "dumbbell",
+      "movement_pattern": "pull_verticaal",
+      "muscles_primary": [
+        "rug_breed"
+      ],
+      "muscles_secondary": [
+        "borst",
+        "triceps"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Dwars op bank liggen",
+        "Dumbbell boven borst start",
+        "Grote boog naar achter over hoofd"
+      ]
+    },
+    {
+      "id": "b_bench_press",
+      "name": "Barbell Bench Press",
+      "equipment": "barbell",
+      "movement_pattern": "push_horizontaal",
+      "muscles_primary": [
+        "borst"
+      ],
+      "muscles_secondary": [
+        "schouders",
+        "triceps"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Greep iets wijder dan schouders",
+        "Stang naar borst",
+        "Schouderbladen ingetrokken",
+        "Voeten plat op vloer"
+      ]
+    },
+    {
+      "id": "b_incline_bench_press",
+      "name": "Incline Barbell Bench Press",
+      "equipment": "barbell",
+      "movement_pattern": "push_horizontaal",
+      "muscles_primary": [
+        "borst"
+      ],
+      "muscles_secondary": [
+        "schouders",
+        "triceps"
+      ],
+      "sub_muscle_focus": [
+        "pectoralis_major_boven"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Bank 30-45 graden",
+        "Meer deltoid activatie",
+        "Stang naar bovenkant borst"
+      ]
+    },
+    {
+      "id": "b_decline_bench_press",
+      "name": "Decline Barbell Bench Press",
+      "equipment": "barbell",
+      "movement_pattern": "push_horizontaal",
+      "muscles_primary": [
+        "borst"
+      ],
+      "muscles_secondary": [
+        "triceps"
+      ],
+      "sub_muscle_focus": [
+        "pectoralis_major_onder"
+      ],
+      "level": [
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Voeten vast",
+        "Bank aflopend",
+        "Minimale schouderbelasting"
+      ]
+    },
+    {
+      "id": "b_barbell_row",
+      "name": "Barbell Bent-Over Row",
+      "equipment": "barbell",
+      "movement_pattern": "pull_horizontaal",
+      "muscles_primary": [
+        "rug_breed",
+        "rug_dik"
+      ],
+      "muscles_secondary": [
+        "biceps",
+        "onderrug"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Romp 45 graden",
+        "Trek naar navel",
+        "Rug recht onder spanning"
+      ]
+    },
+    {
+      "id": "b_pendlay_row",
+      "name": "Pendlay Row",
+      "equipment": "barbell",
+      "movement_pattern": "pull_horizontaal",
+      "muscles_primary": [
+        "rug_breed",
+        "rug_dik"
+      ],
+      "muscles_secondary": [
+        "biceps"
+      ],
+      "level": [
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Stang van grond per rep",
+        "Romp horizontaal",
+        "Explosieve trek"
+      ]
+    },
+    {
+      "id": "b_deadlift",
+      "name": "Barbell Deadlift",
+      "equipment": "barbell",
+      "movement_pattern": "hinge",
+      "muscles_primary": [
+        "hamstrings",
+        "billen",
+        "onderrug"
+      ],
+      "muscles_secondary": [
+        "quadriceps",
+        "rug_dik",
+        "onderarm"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Rug recht",
+        "Stang langs het lichaam",
+        "Voeten heupbreedte",
+        "Greep krachtig"
+      ],
+      "aalo_note": "Barbell Deadlift uit AALO low-mover schema"
+    },
+    {
+      "id": "b_romanian_deadlift",
+      "name": "Barbell Romanian Deadlift",
+      "equipment": "barbell",
+      "movement_pattern": "hinge",
+      "muscles_primary": [
+        "hamstrings",
+        "billen"
+      ],
+      "muscles_secondary": [
+        "onderrug"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Knieën licht gebogen",
+        "Rug recht",
+        "Stang langs been",
+        "Focus hamstring stretch"
+      ]
+    },
+    {
+      "id": "b_good_morning",
+      "name": "Barbell Good Morning",
+      "equipment": "barbell",
+      "movement_pattern": "hinge",
+      "muscles_primary": [
+        "hamstrings",
+        "onderrug"
+      ],
+      "muscles_secondary": [
+        "billen"
+      ],
+      "level": [
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Stang op schouders",
+        "Hinge in de heup",
+        "Knieën licht gebogen",
+        "Rug recht"
+      ],
+      "aalo_note": "Barbell Goodmorning uit AALO high-mover schema"
+    },
+    {
+      "id": "b_barbell_squat",
+      "name": "Barbell Back Squat",
+      "equipment": "barbell",
+      "movement_pattern": "squat",
+      "muscles_primary": [
+        "quadriceps",
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings",
+        "onderrug"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Stang op trapezius",
+        "Voeten schouderbreedte",
+        "Diep tot 90+ graden",
+        "Knieën in lijn"
+      ],
+      "aalo_note": "Barbell Squat = alternatief voor Leg Press in AALO"
+    },
+    {
+      "id": "b_front_squat",
+      "name": "Barbell Front Squat",
+      "equipment": "barbell",
+      "movement_pattern": "squat",
+      "muscles_primary": [
+        "quadriceps"
+      ],
+      "muscles_secondary": [
+        "billen",
+        "onderrug"
+      ],
+      "sub_muscle_focus": [
+        "rectus_femoris",
+        "vastus_medialis"
+      ],
+      "level": [
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Stang voor op schouders",
+        "Ellebogen hoog",
+        "Rechte romp",
+        "Diep squatten"
+      ],
+      "aalo_note": "Barbell Front Squat uit AALO high-mover schema"
+    },
+    {
+      "id": "b_barbell_lunge",
+      "name": "Barbell Lunge",
+      "equipment": "barbell",
+      "movement_pattern": "lunge",
+      "muscles_primary": [
+        "quadriceps",
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Stang op schouders",
+        "Grote stap naar voren",
+        "90 graden beide knieën"
+      ],
+      "aalo_note": "Barbell Lunge uit AALO low-mover schema"
+    },
+    {
+      "id": "b_hip_thrust",
+      "name": "Barbell Hip Thrust",
+      "equipment": "barbell",
+      "movement_pattern": "hinge",
+      "muscles_primary": [
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Rug op bank",
+        "Stang op heupen met pad",
+        "Volledig strekken boven",
+        "Billen knijpen"
+      ]
+    },
+    {
+      "id": "b_overhead_press",
+      "name": "Barbell Overhead Press (OHP)",
+      "equipment": "barbell",
+      "movement_pattern": "push_verticaal",
+      "muscles_primary": [
+        "schouders"
+      ],
+      "muscles_secondary": [
+        "triceps",
+        "rug_dik"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Stang van borst omhoog",
+        "Hoofd naar achter om stang langs te laten",
+        "Romp strak"
+      ]
+    },
+    {
+      "id": "b_bicep_curl",
+      "name": "Barbell Bicep Curl",
+      "equipment": "barbell",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "biceps"
+      ],
+      "muscles_secondary": [
+        "onderarm"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Ellebogen langs lichaam",
+        "Bovenarmen stil",
+        "Volledig strekken"
+      ],
+      "aalo_note": "Barbell Biceps Curl uit AALO"
+    },
+    {
+      "id": "b_ez_bar_curl",
+      "name": "EZ-Bar Curl",
+      "equipment": "barbell",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "biceps"
+      ],
+      "muscles_secondary": [
+        "onderarm"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "EZ-bar minder polsdruk dan rechte stang",
+        "Ellebogen stil",
+        "Neutrale polspositie"
+      ]
+    },
+    {
+      "id": "b_skullcrusher",
+      "name": "Skullcrusher (EZ-bar / Barbell)",
+      "equipment": "barbell",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "triceps"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "triceps_lang"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Lig op bank",
+        "Stang boven hoofd",
+        "Ellebogen naast oren",
+        "Strek volledig"
+      ]
+    },
+    {
+      "id": "b_upright_row",
+      "name": "Barbell Upright Row",
+      "equipment": "barbell",
+      "movement_pattern": "pull_verticaal",
+      "muscles_primary": [
+        "schouders",
+        "rug_dik"
+      ],
+      "muscles_secondary": [
+        "biceps"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Smalle greep",
+        "Ellebogen hoog",
+        "Stang langs het lichaam omhoog"
+      ],
+      "contraindications": [
+        "schouderklachten"
+      ]
+    },
+    {
+      "id": "bw_push_up",
+      "name": "Push-Up",
+      "equipment": "bodyweight",
+      "movement_pattern": "push_horizontaal",
+      "muscles_primary": [
+        "borst"
+      ],
+      "muscles_secondary": [
+        "schouders",
+        "triceps"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Lichaam als plank",
+        "Borst raakt bijna de vloer",
+        "Ellebogen 45 graden van het lichaam"
+      ]
+    },
+    {
+      "id": "bw_push_up_incline",
+      "name": "Incline Push-Up (handen op bank)",
+      "equipment": "bodyweight",
+      "movement_pattern": "push_horizontaal",
+      "muscles_primary": [
+        "borst"
+      ],
+      "muscles_secondary": [
+        "triceps"
+      ],
+      "sub_muscle_focus": [
+        "pectoralis_major_onder"
+      ],
+      "level": [
+        "non_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Makkelijker dan standaard push-up",
+        "Handen op verhoogd vlak",
+        "Ideaal voor beginners"
+      ]
+    },
+    {
+      "id": "bw_push_up_decline",
+      "name": "Decline Push-Up (voeten op bank)",
+      "equipment": "bodyweight",
+      "movement_pattern": "push_horizontaal",
+      "muscles_primary": [
+        "borst"
+      ],
+      "muscles_secondary": [
+        "schouders",
+        "triceps"
+      ],
+      "sub_muscle_focus": [
+        "pectoralis_major_boven"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Voeten op verhoogd vlak",
+        "Meer bovenkant borst + schouder",
+        "Moeilijker dan standaard"
+      ]
+    },
+    {
+      "id": "bw_dip",
+      "name": "Dip (tricep / borst)",
+      "equipment": "bodyweight",
+      "movement_pattern": "push_verticaal",
+      "muscles_primary": [
+        "triceps",
+        "borst"
+      ],
+      "muscles_secondary": [
+        "schouders"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Voorover = meer borst",
+        "Rechtop = meer triceps",
+        "Gecontroleerd zakken"
+      ]
+    },
+    {
+      "id": "bw_diamond_push_up",
+      "name": "Diamond Push-Up",
+      "equipment": "bodyweight",
+      "movement_pattern": "push_horizontaal",
+      "muscles_primary": [
+        "triceps"
+      ],
+      "muscles_secondary": [
+        "borst"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Handen in ruit onder de borst",
+        "Ellebogen langs het lichaam",
+        "Meer tricepsfocus"
+      ]
+    },
+    {
+      "id": "bw_pull_up",
+      "name": "Pull-Up",
+      "equipment": "bodyweight",
+      "movement_pattern": "pull_verticaal",
+      "muscles_primary": [
+        "rug_breed"
+      ],
+      "muscles_secondary": [
+        "biceps",
+        "rug_dik"
+      ],
+      "level": [
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Greep wijder dan schouders",
+        "Borst naar de stang",
+        "Gecontroleerd zakken"
+      ]
+    },
+    {
+      "id": "bw_chin_up",
+      "name": "Chin-Up",
+      "equipment": "bodyweight",
+      "movement_pattern": "pull_verticaal",
+      "muscles_primary": [
+        "rug_breed",
+        "biceps"
+      ],
+      "muscles_secondary": [
+        "rug_dik"
+      ],
+      "level": [
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Supinatie grip",
+        "Ellebogen naar heup",
+        "Meer biceps dan pull-up"
+      ]
+    },
+    {
+      "id": "bw_inverted_row",
+      "name": "Inverted Row (TRX / Roeien laag)",
+      "equipment": "bodyweight",
+      "movement_pattern": "pull_horizontaal",
+      "muscles_primary": [
+        "rug_dik"
+      ],
+      "muscles_secondary": [
+        "biceps",
+        "rug_breed"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Hoek = moeilijkheidsgraad",
+        "Lichaam recht",
+        "Trek borst naar stang"
+      ]
+    },
+    {
+      "id": "bw_squat",
+      "name": "Bodyweight Squat",
+      "equipment": "bodyweight",
+      "movement_pattern": "squat",
+      "muscles_primary": [
+        "quadriceps",
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings"
+      ],
+      "level": [
+        "non_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Voeten schouderbreedte",
+        "Knieën in lijn",
+        "Armen voor balans",
+        "Ideaal als techniektraining"
+      ]
+    },
+    {
+      "id": "bw_bulgarian_split_squat",
+      "name": "Bulgarian Split Squat",
+      "equipment": "bodyweight",
+      "movement_pattern": "lunge",
+      "muscles_primary": [
+        "quadriceps",
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings",
+        "adductoren"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Achterste voet op bank",
+        "Knie boven de voet voorste been",
+        "Rechtop romp"
+      ]
+    },
+    {
+      "id": "bw_glute_bridge",
+      "name": "Glute Bridge",
+      "equipment": "bodyweight",
+      "movement_pattern": "hinge",
+      "muscles_primary": [
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Op rug",
+        "Voeten plat op vloer",
+        "Billen omhoog knijpen",
+        "Neutrale nek"
+      ]
+    },
+    {
+      "id": "bw_single_leg_glute_bridge",
+      "name": "Single Leg Glute Bridge",
+      "equipment": "bodyweight",
+      "movement_pattern": "hinge",
+      "muscles_primary": [
+        "billen"
+      ],
+      "muscles_secondary": [
+        "hamstrings"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Één been gestrekt",
+        "Heup volledig strekken",
+        "Stabiele kern"
+      ]
+    },
+    {
+      "id": "bw_calf_raise",
+      "name": "Bodyweight Calf Raise",
+      "equipment": "bodyweight",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "kuiten"
+      ],
+      "muscles_secondary": [],
+      "level": [
+        "non_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Op de rand van een trede voor extra ROM",
+        "Volle hak-naar-teen beweging",
+        "Langzaam zakken"
+      ]
+    },
+    {
+      "id": "bw_crunch",
+      "name": "Crunch",
+      "equipment": "bodyweight",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "buik"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "rectus_abdominis"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Schouders van de grond",
+        "Onderrug aan de vloer",
+        "Benen ontspannen"
+      ],
+      "aalo_note": "Crunch uit AALO"
+    },
+    {
+      "id": "bw_oblique_crunch",
+      "name": "Schuine Crunch",
+      "equipment": "bodyweight",
+      "movement_pattern": "rotatie",
+      "muscles_primary": [
+        "buik"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "obliquus_externus",
+        "obliquus_internus"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Licht indraaien",
+        "Schouder naar tegenovergestelde knie",
+        "Onderrug aan vloer"
+      ],
+      "aalo_note": "Schuine Crunch uit AALO"
+    },
+    {
+      "id": "bw_plank",
+      "name": "Plank",
+      "equipment": "bodyweight",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "buik"
+      ],
+      "muscles_secondary": [
+        "onderrug",
+        "schouders"
+      ],
+      "sub_muscle_focus": [
+        "transversus_abdominis"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Rechte lijn nek-hielen",
+        "Navel intrekken",
+        "Niet doorzakken in de lage rug"
+      ]
+    },
+    {
+      "id": "bw_side_plank",
+      "name": "Zijplank (Side Plank)",
+      "equipment": "bodyweight",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "buik"
+      ],
+      "muscles_secondary": [
+        "abductoren"
+      ],
+      "sub_muscle_focus": [
+        "obliquus_externus",
+        "obliquus_internus"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Rechte lijn oor-heup-enkel",
+        "Heup niet doorhangen",
+        "Stabiele schouder"
+      ]
+    },
+    {
+      "id": "bw_leg_raise",
+      "name": "Leg Raise (liggend)",
+      "equipment": "bodyweight",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "buik"
+      ],
+      "muscles_secondary": [
+        "adductoren"
+      ],
+      "sub_muscle_focus": [
+        "rectus_abdominis"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Handen onder de billen",
+        "Benen niet volledig neerlaten",
+        "Onderrug aan de vloer"
+      ]
+    },
+    {
+      "id": "bw_hanging_leg_raise",
+      "name": "Hanging Leg Raise",
+      "equipment": "bodyweight",
+      "movement_pattern": "isolatie",
+      "muscles_primary": [
+        "buik"
+      ],
+      "muscles_secondary": [
+        "adductoren",
+        "rug_breed"
+      ],
+      "level": [
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Hang aan stang",
+        "Benen gebogen of gestrekt",
+        "Romp stabiel, geen zwaai"
+      ]
+    },
+    {
+      "id": "bw_mountain_climber",
+      "name": "Mountain Climber",
+      "equipment": "bodyweight",
+      "movement_pattern": "rotatie",
+      "muscles_primary": [
+        "buik"
+      ],
+      "muscles_secondary": [
+        "schouders",
+        "quadriceps"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": false,
+      "cues": [
+        "Plankpositie",
+        "Kniet afwisselend naar borst",
+        "Heupen laag",
+        "Snel tempo = cardio"
+      ]
+    },
+    {
+      "id": "bw_hyperextension",
+      "name": "Hyperextension (roman chair)",
+      "equipment": "bodyweight",
+      "movement_pattern": "hinge",
+      "muscles_primary": [
+        "onderrug"
+      ],
+      "muscles_secondary": [
+        "billen",
+        "hamstrings"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Kussen op heup",
+        "Neutrale wervelkolom",
+        "Niet overstrekken"
+      ],
+      "aalo_note": "Hyperextension uit AALO"
+    },
+    {
+      "id": "a_kettlebell_swing",
+      "name": "Kettlebell Swing",
+      "equipment": "anders",
+      "movement_pattern": "hinge",
+      "muscles_primary": [
+        "billen",
+        "hamstrings"
+      ],
+      "muscles_secondary": [
+        "onderrug",
+        "schouders"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Heupbeweging, niet squat",
+        "Kettlebell zwiept, heupen drijven",
+        "Rug recht"
+      ]
+    },
+    {
+      "id": "a_kettlebell_goblet",
+      "name": "Kettlebell Goblet Squat",
+      "equipment": "anders",
+      "movement_pattern": "squat",
+      "muscles_primary": [
+        "quadriceps",
+        "billen"
+      ],
+      "muscles_secondary": [
+        "buik"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Kettlebell voor de borst",
+        "Rechte rug",
+        "Ellebogen binnen de knieën onderaan"
+      ]
+    },
+    {
+      "id": "a_trx_row",
+      "name": "TRX Row",
+      "equipment": "anders",
+      "movement_pattern": "pull_horizontaal",
+      "muscles_primary": [
+        "rug_dik"
+      ],
+      "muscles_secondary": [
+        "biceps"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Hoek bepaalt zwaarte",
+        "Lichaam recht",
+        "Trek borst naar handen"
+      ]
+    },
+    {
+      "id": "a_battle_rope",
+      "name": "Battle Rope Waves",
+      "equipment": "anders",
+      "movement_pattern": "cardio",
+      "muscles_primary": [
+        "schouders"
+      ],
+      "muscles_secondary": [
+        "buik",
+        "biceps"
+      ],
+      "level": [
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Knielend of staand",
+        "Heupen laag",
+        "Ritme en kracht"
+      ]
+    },
+    {
+      "id": "a_resistance_band_pull_apart",
+      "name": "Band Pull-Apart",
+      "equipment": "anders",
+      "movement_pattern": "pull_horizontaal",
+      "muscles_primary": [
+        "schouders",
+        "rug_dik"
+      ],
+      "muscles_secondary": [],
+      "sub_muscle_focus": [
+        "deltoideus_achter",
+        "rhomboideus"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "cues": [
+        "Band voor de borst",
+        "Trek naar uitgestrekte armen",
+        "Ideaal voor schouderherstel"
+      ]
+    },
+    {
+      "id": "cardio_fiets",
+      "name": "Stationary Bike / Fiets",
+      "equipment": "vaste_machine",
+      "movement_pattern": "cardio",
+      "muscles_primary": [
+        "quadriceps",
+        "hamstrings"
+      ],
+      "muscles_secondary": [
+        "billen",
+        "kuiten"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "low_impact": true,
+      "cues": [
+        "Zadel zo dat knie licht gebogen blijft",
+        "Schouders ontspannen",
+        "Rechte houding"
+      ]
+    },
+    {
+      "id": "cardio_crosstrainer",
+      "name": "Crosstrainer / Elliptical",
+      "equipment": "vaste_machine",
+      "movement_pattern": "cardio",
+      "muscles_primary": [
+        "quadriceps",
+        "hamstrings"
+      ],
+      "muscles_secondary": [
+        "billen",
+        "borst",
+        "rug_breed"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "low_impact": true,
+      "cues": [
+        "Armen actief mee",
+        "Rechtop staan",
+        "Optie: armen niet gebruiken voor meer beenfocus"
+      ]
+    },
+    {
+      "id": "cardio_loopband",
+      "name": "Loopband / Treadmill",
+      "equipment": "vaste_machine",
+      "movement_pattern": "cardio",
+      "muscles_primary": [
+        "quadriceps",
+        "hamstrings",
+        "kuiten"
+      ],
+      "muscles_secondary": [
+        "billen"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "low_impact": false,
+      "cues": [
+        "Noodstop bevestigen",
+        "Rustig tempo aanwennen",
+        "Natuurlijke armzwaai"
+      ]
+    },
+    {
+      "id": "cardio_roeier",
+      "name": "Roeiapparaat / Rowing Machine",
+      "equipment": "vaste_machine",
+      "movement_pattern": "cardio",
+      "muscles_primary": [
+        "rug_breed",
+        "rug_dik",
+        "hamstrings"
+      ],
+      "muscles_secondary": [
+        "biceps",
+        "quadriceps"
+      ],
+      "level": [
+        "non_mover",
+        "low_mover",
+        "high_mover"
+      ],
+      "bilateral": true,
+      "low_impact": true,
+      "cues": [
+        "Benen strekken terwijl armen trekken",
+        "Rechte rug",
+        "Knieën niet overstrekken"
+      ]
+    }
+  ],
+  "muscle_coverage_check": {
+    "description": "Gebruik dit object om per training te controleren of alle spiergroepen aan bod komen",
+    "full_body_required": [
+      "borst",
+      "rug_breed",
+      "rug_dik",
+      "schouders",
+      "biceps",
+      "triceps",
+      "buik",
+      "onderrug",
+      "billen",
+      "quadriceps",
+      "hamstrings",
+      "kuiten"
+    ],
+    "minimum_full_body": [
+      "borst",
+      "rug_breed",
+      "schouders",
+      "buik",
+      "billen",
+      "quadriceps",
+      "hamstrings"
+    ],
+    "push_muscles": [
+      "borst",
+      "schouders",
+      "triceps"
+    ],
+    "pull_muscles": [
+      "rug_breed",
+      "rug_dik",
+      "biceps"
+    ],
+    "leg_muscles": [
+      "billen",
+      "quadriceps",
+      "hamstrings",
+      "kuiten",
+      "adductoren",
+      "abductoren"
+    ],
+    "core_muscles": [
+      "buik",
+      "onderrug"
+    ],
+    "rest_days_per_muscle": {
+      "grote_spiergroepen": "48-72 uur",
+      "kleine_spiergroepen": "24-48 uur",
+      "note": "Grote = borst, rug, benen. Kleine = armen, schouders"
+    },
+    "split_templates": {
+      "full_body_2x": {
+        "dagen": [
+          "Maandag",
+          "Donderdag"
+        ],
+        "focus_per_dag": "Alle spiergroepen"
+      },
+      "full_body_3x": {
+        "dagen": [
+          "Maandag",
+          "Woensdag",
+          "Vrijdag"
+        ],
+        "focus_per_dag": "Alle spiergroepen"
+      },
+      "push_pull_legs": {
+        "dag_1": {
+          "naam": "Push",
+          "spieren": [
+            "borst",
+            "schouders",
+            "triceps"
+          ]
+        },
+        "dag_2": {
+          "naam": "Pull",
+          "spieren": [
+            "rug_breed",
+            "rug_dik",
+            "biceps"
+          ]
+        },
+        "dag_3": {
+          "naam": "Legs",
+          "spieren": [
+            "quadriceps",
+            "hamstrings",
+            "billen",
+            "kuiten"
+          ]
+        },
+        "frequentie": "3-6x per week (1x of 2x de cyclus)"
+      },
+      "upper_lower": {
+        "dag_1": {
+          "naam": "Upper",
+          "spieren": [
+            "borst",
+            "rug_breed",
+            "rug_dik",
+            "schouders",
+            "biceps",
+            "triceps"
+          ]
+        },
+        "dag_2": {
+          "naam": "Lower",
+          "spieren": [
+            "quadriceps",
+            "hamstrings",
+            "billen",
+            "kuiten",
+            "buik"
+          ]
+        },
+        "frequentie": "4x per week (2x upper, 2x lower)"
+      },
+      "split_4dag": {
+        "dag_1": {
+          "naam": "Borst + Triceps",
+          "spieren": [
+            "borst",
+            "triceps"
+          ]
+        },
+        "dag_2": {
+          "naam": "Rug + Biceps",
+          "spieren": [
+            "rug_breed",
+            "rug_dik",
+            "biceps"
+          ]
+        },
+        "dag_3": {
+          "naam": "Schouders + Core",
+          "spieren": [
+            "schouders",
+            "buik",
+            "onderrug"
+          ]
+        },
+        "dag_4": {
+          "naam": "Benen",
+          "spieren": [
+            "quadriceps",
+            "hamstrings",
+            "billen",
+            "kuiten"
+          ]
+        }
+      },
+      "split_aalo_high": {
+        "dag_1": {
+          "naam": "Onderlichaam",
+          "spieren": [
+            "quadriceps",
+            "hamstrings",
+            "billen",
+            "kuiten",
+            "buik",
+            "onderrug"
+          ]
+        },
+        "dag_2": {
+          "naam": "Bovenlichaam",
+          "spieren": [
+            "borst",
+            "rug_breed",
+            "rug_dik",
+            "schouders",
+            "biceps",
+            "triceps"
+          ]
+        },
+        "nota_bene": "AALO high-mover schema: ma/do onderlichaam, di/vr bovenlichaam"
+      }
+    }
+  }
+}

@@ -30,8 +30,11 @@ import {
 } from 'recharts';
 import { getAllExercisesByName, getExerciseNames, updateExercise, deleteExercise, getAllExercises } from '../utils/storage';
 import { Exercise } from '../types';
-import { getExerciseNames as getDbExerciseNamesFromData } from '../data/exercises';
 import { MuscleHighlightBody } from './MuscleHighlightBody';
+import { useExerciseSuggestions } from '../hooks/useExerciseSuggestions';
+import { formatExerciseDateShort, formatExerciseDetails } from '../utils/format';
+import { designTokens } from '../theme/designTokens';
+import { PageLayout, ContentCard, OutlineCard, EmptyState } from './layout';
 
 // Import Material Web Components buttons
 import '@material/web/button/filled-button.js';
@@ -61,7 +64,7 @@ export const OefeningenPage = () => {
   const [sets, setSets] = useState('');
   const [reps, setReps] = useState('');
   const [notes, setNotes] = useState('');
-  const [exerciseSuggestions, setExerciseSuggestions] = useState<string[]>([]);
+  const exerciseSuggestions = useExerciseSuggestions();
   const editCancelButtonRef = useRef<any>(null);
   const editSaveButtonRef = useRef<any>(null);
   const deleteCancelButtonRef = useRef<any>(null);
@@ -69,19 +72,10 @@ export const OefeningenPage = () => {
   const editNotesFieldRef = useRef<HTMLInputElement | null>(null);
   const editButtonsContainerRef = useRef<HTMLDivElement | null>(null);
 
-  const loadExerciseSuggestions = useCallback(() => {
-    const dbExercises = getDbExerciseNamesFromData();
-    const userExercises = getExerciseNames();
-    const allExercises = [...new Set([...dbExercises, ...userExercises])].sort();
-    setExerciseSuggestions(allExercises);
-  }, []);
-
   useEffect(() => {
-    const loggedNames = getExerciseNames();
-    setExerciseNames(loggedNames);
+    setExerciseNames(getExerciseNames());
     loadAllExercises();
-    loadExerciseSuggestions();
-  }, [loadExerciseSuggestions]);
+  }, []);
 
   useEffect(() => {
     if (selectedExercise) {
@@ -203,9 +197,7 @@ export const OefeningenPage = () => {
       setSelectedExercise(null);
       setTimeout(() => setSelectedExercise(current), 0);
     }
-    
-    loadExerciseSuggestions();
-  }, [editingExercise, exerciseName, weight, sets, reps, notes, selectedExercise, loadExerciseSuggestions]);
+  }, [editingExercise, exerciseName, weight, sets, reps, notes, selectedExercise]);
 
   const handleCloseEditDialog = useCallback(() => {
     setOpenEditDialog(false);
@@ -240,9 +232,7 @@ export const OefeningenPage = () => {
       setSelectedExercise(null);
       setTimeout(() => setSelectedExercise(current), 0);
     }
-    
-    loadExerciseSuggestions();
-  }, [deletingExerciseId, selectedExercise, loadExerciseSuggestions]);
+  }, [deletingExerciseId, selectedExercise]);
 
   const handleCloseDeleteDialog = useCallback(() => {
     setOpenDeleteDialog(false);
@@ -359,12 +349,9 @@ export const OefeningenPage = () => {
   }, [allExercises.length, selectedExercise]);
 
   return (
-    <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10 }}>
-
-      {/* Oefening Selector */}
-      <Card sx={{ mb: 3, backgroundColor: '#FEF2E5', borderRadius: '16px' }} elevation={0}>
-        <CardContent>
-          <Autocomplete
+    <PageLayout>
+      <ContentCard>
+        <Autocomplete
             options={exerciseNames}
             value={selectedExercise}
             onChange={(_, newValue) => setSelectedExercise(newValue)}
@@ -379,13 +366,10 @@ export const OefeningenPage = () => {
               />
             )}
           />
-        </CardContent>
-      </Card>
+      </ContentCard>
 
-      {/* Specifieke oefening statistieken */}
       {selectedExercise && stats && (
-        <Card sx={{ mb: 3, backgroundColor: '#FEF2E5', borderRadius: '16px' }} elevation={0}>
-          <CardContent>
+        <ContentCard>
             {/* Progressie Sectie */}
             <Box sx={{ mb: 2 }}>
               <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
@@ -393,8 +377,7 @@ export const OefeningenPage = () => {
               </Typography>
             </Box>
             {/* Max Gewicht Sectie */}
-            <Card sx={{ mb: 4, backgroundColor: 'transparent', borderRadius: '16px', border: '1px solid #D2C5B4' }} elevation={0}>
-              <CardContent>
+            <OutlineCard sx={{ mb: 4 }}>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
                   Max Gewicht
                 </Typography>
@@ -415,8 +398,7 @@ export const OefeningenPage = () => {
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
                   Ten opzichte van laatste sessie ({stats.latest} kg)
                 </Typography>
-              </CardContent>
-            </Card>
+            </OutlineCard>
 
             {/* Laatste 3 Sessies */}
             {lastThreeSessions.length > 0 && (
@@ -426,34 +408,21 @@ export const OefeningenPage = () => {
                   <Typography variant="h6" gutterBottom>
                     Laatste sessie(s)
                   </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-                    {lastThreeSessions.map((exercise) => {
-                      const exerciseDate = new Date(exercise.date);
-                      const isToday = exerciseDate.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
-                      const dateStr = exerciseDate.toLocaleDateString('nl-NL', { 
-                        weekday: 'short',
-                        year: 'numeric',
-                        month: 'short', 
-                        day: 'numeric' 
-                      });
-                      
-                      const details = [
-                        exercise.weight && `${exercise.weight} kg`,
-                        exercise.sets && `${exercise.sets} ${exercise.sets === 1 ? 'set' : 'sets'}`,
-                        exercise.reps && `${exercise.reps} ${exercise.reps === 1 ? 'rep' : 'reps'}`
-                      ].filter(Boolean).join(' | ');
-                      
-                      return (
-                        <Card 
+                  <Box className="stagger-children" sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+                    {lastThreeSessions.map((exercise, index) => (
+                        <Card
                           key={exercise.id}
-                          sx={{ 
-                            backgroundColor: 'transparent', 
-                            borderRadius: '16px',
-                            border: '1px solid #D2C5B4',
-                            elevation: 0,
+                          sx={{
+                            '--stagger-index': index,
+                            backgroundColor: 'transparent',
+                            borderRadius: `${designTokens.cardRadius}px`,
+                            border: `1px solid ${designTokens.cardBorder}`,
                             m: 0,
-                            boxShadow: 'none'
-                          }}
+                            boxShadow: 'none',
+                            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                            '&:hover': { transform: 'translateY(-1px)', boxShadow: 1 },
+                          } as any}
+                          elevation={0}
                         >
                           <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -462,10 +431,10 @@ export const OefeningenPage = () => {
                                   {exercise.name || 'Notitie'}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                                  {isToday ? `Vandaag, ${exerciseDate.toLocaleDateString('nl-NL', { month: 'short', day: 'numeric' })}` : dateStr}
+                                  {formatExerciseDateShort(exercise.date)}
                                 </Typography>
                                 <Typography variant="body2" color="text.primary">
-                                  {details}
+                                  {formatExerciseDetails(exercise)}
                                 </Typography>
                                 {exercise.notes && String(exercise.notes).trim() && (
                                   <Typography 
@@ -494,8 +463,7 @@ export const OefeningenPage = () => {
                             </Box>
                           </CardContent>
                         </Card>
-                      );
-                    })}
+                    ))}
                   </Box>
                 </CardContent>
               </Card>
@@ -546,18 +514,13 @@ export const OefeningenPage = () => {
                 </Box>
               </Box>
             )}
-          </CardContent>
-        </Card>
+        </ContentCard>
       )}
 
       {!selectedExercise && (
-        <Card sx={{ mb: 3, backgroundColor: '#FEF2E5', borderRadius: '16px' }} elevation={0}>
-          <CardContent>
-            <Typography variant="body1" color="text.secondary" align="center" sx={{ py: 4 }}>
-              Selecteer een oefening om de progressie en statistieken te bekijken.
-            </Typography>
-          </CardContent>
-        </Card>
+        <ContentCard>
+          <EmptyState>Selecteer een oefening om de progressie en statistieken te bekijken.</EmptyState>
+        </ContentCard>
       )}
 
       {/* Menu voor edit/delete */}
@@ -703,7 +666,7 @@ export const OefeningenPage = () => {
           </md-filled-button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </PageLayout>
   );
 };
 

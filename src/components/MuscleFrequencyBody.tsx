@@ -2,6 +2,7 @@ import { useMemo, useEffect, useState } from 'react';
 import { Box } from '@mui/material';
 import { getAllExercises } from '../utils/storage';
 import { findExerciseMetadata } from '../data/exerciseMetadata';
+import { normalizeMuscleName } from '../utils/muscleNames';
 import exerciseMuscleMapping from '../data/exerciseMuscleMapping.json';
 
 // Import Level SVG bestanden - Level 1 (lichtste) tot Level 5 (donkerste)
@@ -223,63 +224,8 @@ const muscleGroupToLevelSvgs: Record<string, string[]> = {
   'Body Back Underarm Secondary': [BodyBackUnderarmLevel1, BodyBackUnderarmLevel2, BodyBackUnderarmLevel3, BodyBackUnderarmLevel4, BodyBackUnderarmLevel5],
 };
 
-/**
- * Normaliseer spiergroep naam om verschillende varianten naar dezelfde base naam te mappen
- */
-const normalizeMuscleName = (muscleName: string): string => {
-  const normalized = muscleName.toLowerCase().trim();
-  
-  // Map naar base spiergroep namen
-  if (normalized.includes('borst') || normalized.includes('chest') || normalized.includes('pectoral')) {
-    return 'Borst';
-  }
-  if (normalized.includes('biceps') || normalized.includes('bicep')) {
-    return 'Biceps';
-  }
-  if (normalized.includes('triceps') || normalized.includes('tricep')) {
-    return 'Triceps';
-  }
-  if (normalized.includes('schouder') || normalized.includes('shoulder') || normalized.includes('deltoid')) {
-    return 'Schouders';
-  }
-  if (normalized.includes('rug') || normalized.includes('back') || normalized.includes('lat') || normalized.includes('trapezius') || normalized.includes('rhomboid')) {
-    return 'Traps';
-  }
-  if (normalized.includes('buik') || normalized.includes('abdom') || normalized.includes('abs') || normalized.includes('core') || normalized.includes('rectus')) {
-    return 'Buik';
-  }
-  if (normalized.includes('oblique')) {
-    return 'Obliques';
-  }
-  if (normalized.includes('quad') || normalized.includes('thigh')) {
-    return 'Quadriceps';
-  }
-  if (normalized.includes('kuit') || normalized.includes('calf') || normalized.includes('soleus') || normalized.includes('gastrocnemius')) {
-    return 'Kuiten';
-  }
-  
-  return muscleName;
-};
-
-/**
- * Map interne naam naar weergave naam
- */
-export const getDisplayName = (muscleName: string): string => {
-  const displayNames: Record<string, string> = {
-    'Borst': 'Borst',
-    'Biceps': 'Biceps',
-    'Triceps': 'Triceps',
-    'Schouders': 'Schouders',
-    'Traps': 'Rug/Traps',
-    'Buik': 'Buikspieren',
-    'Obliques': 'Obliques',
-    'Quadriceps': 'Quadriceps',
-    'Quads': 'Quadriceps',
-    'Kuiten': 'Kuiten',
-  };
-  
-  return displayNames[muscleName] || muscleName;
-};
+/** Re-export voor backward compatibility */
+export { getDisplayName } from '../utils/muscleNames';
 
 /**
  * Krijg het level (1-5) voor een gegeven frequentie

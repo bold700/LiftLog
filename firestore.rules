@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Profielen: eigen profiel + trainers mogen sporters beheren + beheerders mogen alles (o.a. trainer-aanvragen)
+    match /profiles/{userId} {
+      allow read: if request.auth != null
+        && (request.auth.uid == userId
+            || resource.data.trainerId == request.auth.uid
+            || get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'trainer'
+            || get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin');
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update, delete: if request.auth != null
+        && (request.auth.uid == userId
+            || get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'trainer'
+            || get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin');
+    }
+    // Workouts: alleen eigen (trainer of toegewezen sporter)
+    match /workouts/{workoutId} {
+      allow read: if request.auth != null
+        && (resource.data.trainerId == request.auth.uid
+            || resource.data.clientId == request.auth.uid);
+      allow create: if request.auth != null
+        && request.resource.data.trainerId == request.auth.uid;
+      allow update, delete: if request.auth != null
+        && resource.data.trainerId == request.auth.uid;
+    }
+  }
+}

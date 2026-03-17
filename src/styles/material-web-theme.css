@@ -59,11 +59,11 @@ md-navigation-tab[active] .material-symbols-outlined {
   fill: #F2E4D3 !important;
 }
 
-/* Navigation Tab styling - beige theme with black icons/text */
+/* Navigation Tab styling - beige theme with black icons/text (3 items = compact) */
 md-navigation-tab {
   /* Force immediate transition to prevent delay */
   transition: none !important;
-  margin: 20px 0 40px;
+  margin: 12px 0 16px;
   
   /* Active state - beige icon/text on black indicator */
   --md-navigation-bar-active-icon-color: #F2E4D3;
@@ -95,18 +95,24 @@ md-navigation-tab {
 
 /* Material Web Components Button styling - beige theme - M3 compliant */
 md-filled-button {
+  /* Expliciete padding op het element (DevTools: 16px links en rechts) */
+  padding-left: 16px;
+  padding-right: 16px;
+  padding-top: 0;
+  padding-bottom: 0;
+
   /* Container styling */
   --md-filled-button-container-color: #000000;
   --md-filled-button-container-shape: 20px; /* M3: 20dp corner radius */
   --md-filled-button-container-height: 40px; /* M3: 40dp height */
-  
-  /* Padding/spacing - M3 spec: 16dp padding links en rechts */
-  --md-filled-button-leading-space: 16px; /* M3: 16dp padding */
-  --md-filled-button-trailing-space: 16px; /* M3: 16dp padding */
-  --md-filled-button-with-leading-icon-leading-space: 12px; /* M3: padding tussen icon en tekst */
-  --md-filled-button-with-leading-icon-trailing-space: 16px; /* M3: 16dp padding rechts */
-  --md-filled-button-with-trailing-icon-leading-space: 16px; /* M3: 16dp padding links */
-  --md-filled-button-with-trailing-icon-trailing-space: 12px; /* M3: padding tussen tekst en icon */
+
+  /* Padding vars (backup voor component-intern) */
+  --md-filled-button-leading-space: 16px;
+  --md-filled-button-trailing-space: 16px;
+  --md-filled-button-with-leading-icon-leading-space: 16px;
+  --md-filled-button-with-leading-icon-trailing-space: 16px;
+  --md-filled-button-with-trailing-icon-leading-space: 16px;
+  --md-filled-button-with-trailing-icon-trailing-space: 16px;
   
   /* Label text styling - M3: Roboto Medium, 14sp, no text transform */
   --md-filled-button-label-text-color: #F2E4D3;
@@ -122,9 +128,11 @@ md-filled-button {
   --md-filled-button-pressed-label-text-color: #F2E4D3;
   --md-filled-button-pressed-container-elevation: 0;
   
-  /* Disabled state */
-  --md-filled-button-disabled-container-color: rgba(0, 0, 0, 0.12);
-  --md-filled-button-disabled-label-text-color: rgba(29, 27, 26, 0.38);
+  /* Disabled state – duidelijk zichtbaar op beige achtergrond */
+  --md-filled-button-disabled-container-color: rgba(0, 0, 0, 0.08);
+  --md-filled-button-disabled-outline-color: rgba(0, 0, 0, 0.25);
+  --md-filled-button-disabled-label-text-color: rgba(29, 27, 26, 0.6);
+  --md-filled-button-disabled-icon-color: rgba(29, 27, 26, 0.6);
   
   /* Icon styling */
   --md-filled-button-icon-color: #F2E4D3;
@@ -132,9 +140,14 @@ md-filled-button {
 }
 
 md-text-button {
-  /* Padding/spacing - M3 spec: 12dp padding voor text buttons */
-  --md-text-button-leading-space: 12px; /* M3: 12dp padding */
-  --md-text-button-trailing-space: 12px; /* M3: 12dp padding */
+  /* Expliciete padding op het element (gelijk aan filled buttons) */
+  padding-left: 16px;
+  padding-right: 16px;
+  padding-top: 0;
+  padding-bottom: 0;
+
+  --md-text-button-leading-space: 16px;
+  --md-text-button-trailing-space: 16px;
   
   /* Label text styling - M3: Roboto Medium, 14sp */
   --md-text-button-label-text-color: #000000;

@@ -45,6 +45,15 @@ export const lightTheme = createTheme({
   typography: {
     fontFamily: 'Roboto, sans-serif',
   },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: '9999999999px',
+        },
+      },
+    },
+  },
 });
 
 // Dark theme - alleen Material 3 tokens gebruiken
@@ -81,6 +90,15 @@ export const darkTheme = createTheme({
   },
   typography: {
     fontFamily: 'Roboto, sans-serif',
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: '9999999999px',
+        },
+      },
+    },
   },
 });
 
