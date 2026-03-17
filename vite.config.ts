@@ -2,7 +2,12 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const isGitHubPages = process.env.GITHUB_PAGES === 'true';
+
 export default defineConfig({
+  // Default voor app / Play Store builds: root ('/')
+  // Voor GitHub Pages: build met GITHUB_PAGES=true npm run build
+  base: isGitHubPages ? '/LiftLog/' : '/',
   plugins: [
     react(),
     VitePWA({
@@ -19,7 +24,7 @@ export default defineConfig({
         background_color: '#F2E4D3',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/',
+        start_url: '/LiftLog/',
         icons: [
           {
             src: '/app-icon.svg',
@@ -43,6 +48,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        // Bundel is > 2MB; verhoog limiet voor precache zodat de hoofdchunk wordt meegenomen
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
