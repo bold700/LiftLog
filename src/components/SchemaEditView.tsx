@@ -5,6 +5,9 @@ import {
   Typography,
   Box,
   IconButton,
+  Button,
+  Alert,
+  CircularProgress,
   TextField,
   Autocomplete,
   Tooltip,
@@ -30,6 +33,7 @@ import {
 import { designTokens } from '../theme/designTokens';
 import { addWeeks, getWeeksBetween } from '../utils/format';
 import { PageLayout, ContentCard } from './layout';
+import { generateWorkoutFromPrompt } from '../services/aiWorkoutService';
 import '@material/web/button/filled-button.js';
 import '@material/web/button/text-button.js';
 import '@material/web/icon/icon.js';
@@ -122,6 +126,9 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
   const [days, setDays] = useState<SchemaDay[]>(
     schema.days.length > 0 ? schema.days : [{ dayLabel: 'Dag 1', exercises: [] }]
   );
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [formule7, setFormule7] = useState<Formule7Routekaart | null>(() =>
     schema.formule7 ?? (schema.isFormule7Template ? createEmptyFormule7() : null)
   );
@@ -258,6 +265,22 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
   const addDay = useCallback(() => {
     setDays((prev) => [...prev, { dayLabel: `Dag ${prev.length + 1}`, exercises: [] }]);
   }, []);
+
+  const handleGenerateWithAi = useCallback(async () => {
+    const text = aiPrompt.trim();
+    if (!text || aiGenerating) return;
+    setAiGenerating(true);
+    setAiError(null);
+    try {
+      const generated = await generateWorkoutFromPrompt(text);
+      setName(generated.name.trim() || 'AI Workout');
+      setDays(generated.days);
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : 'Genereren mislukt. Probeer opnieuw.');
+    } finally {
+      setAiGenerating(false);
+    }
+  }, [aiPrompt, aiGenerating]);
 
   const updateDay = useCallback((dayIndex: number, upd: Partial<SchemaDay>) => {
     setDays((prev) =>
@@ -725,6 +748,49 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
             sx={{ mb: 2 }}
             placeholder="Bijv. Push Pull Legs"
           />
+
+          {!schema.isFormule7Template && (
+            <Box
+              sx={{
+                p: 2,
+                mb: 2,
+                borderRadius: 2,
+                backgroundColor: 'rgba(0,0,0,0.03)',
+                border: '1px solid rgba(0,0,0,0.08)',
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                Genereer workout met AI
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Beschrijf doel, niveau, aantal dagen, beschikbare apparatuur en eventuele blessures.
+              </Typography>
+              <TextField
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="Bijv. 3-daags schema voor spieropbouw, beginner, vooral dumbbells en kabels, geen squats i.v.m. knie."
+                multiline
+                minRows={3}
+                fullWidth
+                disabled={aiGenerating}
+              />
+              {aiError && (
+                <Alert severity="error" sx={{ mt: 1.5 }}>
+                  {aiError}
+                </Alert>
+              )}
+              <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'flex-end' }}>
+                <Button
+                  variant="contained"
+                  onClick={handleGenerateWithAi}
+                  disabled={aiGenerating || aiPrompt.trim().length < 10}
+                  startIcon={aiGenerating ? <CircularProgress size={16} color="inherit" /> : undefined}
+                >
+                  {aiGenerating ? 'Genereren…' : 'Genereer met AI'}
+                </Button>
+              </Box>
+            </Box>
+          )}
 
           {sporters.length > 0 ? (
             <Autocomplete
