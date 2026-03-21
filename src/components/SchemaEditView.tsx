@@ -33,7 +33,11 @@ import {
 import { designTokens } from '../theme/designTokens';
 import { addWeeks, getWeeksBetween } from '../utils/format';
 import { PageLayout, ContentCard } from './layout';
-import { generateWorkoutFromPrompt } from '../services/aiWorkoutService';
+import {
+  generateWorkoutFromPrompt,
+  getFormule7FollowUpQuestions,
+  type Formule7FollowUpQuestion,
+} from '../services/aiWorkoutService';
 import '@material/web/button/filled-button.js';
 import '@material/web/button/text-button.js';
 import '@material/web/icon/icon.js';
@@ -97,6 +101,35 @@ function createExercisesFromPreset(
   }));
 }
 
+const F7_EXERCISE_COUNT_ORDER = [4, 6, 7, 8, 9] as const;
+
+/** Na AI: dagen inkorten tot sessionsPerWeek en desiredExerciseCount laten aansluiten op de langste dag (anders snijdt de F7-sync oefeningen weg). */
+function postProcessFormule7Ai(
+  formule7: Formule7Routekaart,
+  days: SchemaDay[]
+): { formule7: Formule7Routekaart; days: SchemaDay[] } {
+  const n = formule7.sessionsPerWeek;
+  let nextDays = days;
+  if (n != null && n > 0 && days.length > n) {
+    nextDays = days.slice(0, n);
+  }
+  const maxEx = Math.max(0, ...nextDays.map((d) => d.exercises.length));
+  const desired =
+    maxEx > 0
+      ? F7_EXERCISE_COUNT_ORDER.find((x) => x >= maxEx) ?? 9
+      : formule7.neuromuscular.desiredExerciseCount;
+  return {
+    formule7: {
+      ...formule7,
+      neuromuscular: {
+        ...formule7.neuromuscular,
+        desiredExerciseCount: desired ?? formule7.neuromuscular.desiredExerciseCount,
+      },
+    },
+    days: nextDays,
+  };
+}
+
 interface SchemaEditViewProps {
   schema: Schema;
   onSave: (schema: Schema) => void;
@@ -128,7 +161,17 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
   );
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiQuestionsLoading, setAiQuestionsLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [aiQuestions, setAiQuestions] = useState<Formule7FollowUpQuestion[]>([]);
+  const [aiAnswers, setAiAnswers] = useState<Record<string, string>>({});
+  const [aiRationale, setAiRationale] = useState<
+    | null
+    | {
+        overall?: string;
+        whyByDay: { dayLabel: string; why: string }[];
+      }
+  >(null);
   const [formule7, setFormule7] = useState<Formule7Routekaart | null>(() =>
     schema.formule7 ?? (schema.isFormule7Template ? createEmptyFormule7() : null)
   );
@@ -158,6 +201,10 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
     setDays(
       schema.days.length > 0 ? schema.days : [{ dayLabel: 'Dag 1', exercises: [] }]
     );
+    setAiQuestions([]);
+    setAiAnswers({});
+    setAiError(null);
+    setAiRationale(null);
   }, [schema.id]);
 
   // Bij Formule 7: dagen aanmaken + per dag oefeningen met voorschrift (sets, reps, rust) voorinvullen
@@ -271,16 +318,62 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
     if (!text || aiGenerating) return;
     setAiGenerating(true);
     setAiError(null);
+    setAiRationale(null);
     try {
-      const generated = await generateWorkoutFromPrompt(text);
-      setName(generated.name.trim() || 'AI Workout');
-      setDays(generated.days);
+      const mode = schema.isFormule7Template ? 'formule7' : 'free';
+      const answersText =
+        mode === 'formule7'
+          ? aiQuestions
+              .map((q) => {
+                const answer = aiAnswers[q.id]?.trim() ?? '';
+                return answer ? `${q.question}\nAntwoord: ${answer}` : '';
+              })
+              .filter(Boolean)
+              .join('\n\n')
+          : '';
+      const mergedPrompt =
+        mode === 'formule7' && answersText
+          ? `${text}\n\nAanvullende antwoorden:\n${answersText}`
+          : text;
+      const generated = await generateWorkoutFromPrompt(mergedPrompt, { mode });
+      setName(
+        generated.name.trim() ||
+          (mode === 'formule7' ? 'Formule 7 workout' : 'AI Workout')
+      );
+      if (mode === 'formule7' && generated.formule7) {
+        const { formule7: f7, days: d } = postProcessFormule7Ai(
+          generated.formule7,
+          generated.days
+        );
+        setFormule7(f7);
+        setDays(d);
+      } else {
+        setDays(generated.days);
+      }
+      setAiRationale(generated.rationale ?? null);
     } catch (error) {
       setAiError(error instanceof Error ? error.message : 'Genereren mislukt. Probeer opnieuw.');
     } finally {
       setAiGenerating(false);
     }
-  }, [aiPrompt, aiGenerating]);
+  }, [aiPrompt, aiGenerating, schema.isFormule7Template, aiQuestions, aiAnswers]);
+
+  const handleGetFollowUpQuestions = useCallback(async () => {
+    const text = aiPrompt.trim();
+    if (!text || aiQuestionsLoading) return;
+    setAiQuestionsLoading(true);
+    setAiError(null);
+    try {
+      const questions = await getFormule7FollowUpQuestions(text, aiAnswers);
+      setAiQuestions(questions);
+    } catch (error) {
+      setAiError(
+        error instanceof Error ? error.message : 'Aanvullende vragen ophalen mislukt.'
+      );
+    } finally {
+      setAiQuestionsLoading(false);
+    }
+  }, [aiPrompt, aiQuestionsLoading, aiAnswers]);
 
   const updateDay = useCallback((dayIndex: number, upd: Partial<SchemaDay>) => {
     setDays((prev) =>
@@ -749,35 +842,104 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
             placeholder="Bijv. Push Pull Legs"
           />
 
-          {!schema.isFormule7Template && (
-            <Box
-              sx={{
-                p: 2,
-                mb: 2,
-                borderRadius: 2,
-                backgroundColor: 'rgba(0,0,0,0.03)',
-                border: '1px solid rgba(0,0,0,0.08)',
-              }}
-            >
+          <Box
+            sx={{
+              p: 2,
+              mb: 2,
+              borderRadius: 2,
+              backgroundColor: 'rgba(0,0,0,0.03)',
+              border: '1px solid rgba(0,0,0,0.08)',
+            }}
+          >
               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                Genereer workout met AI
+                {schema.isFormule7Template
+                  ? 'Genereer Formule 7-routekaart met AI'
+                  : 'Genereer workout met AI'}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                Beschrijf doel, niveau, aantal dagen, beschikbare apparatuur en eventuele blessures.
+                {schema.isFormule7Template
+                  ? 'Beschrijf cliënt/casus, doelen, mover-type, frequentie per week, duur sessie, hartfrequentie-indicaties en beperkingen. De AI vult routekaart én trainingsdagen in.'
+                  : 'Beschrijf doel, niveau, aantal dagen, beschikbare apparatuur en eventuele blessures.'}
               </Typography>
               <TextField
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder="Bijv. 3-daags schema voor spieropbouw, beginner, vooral dumbbells en kabels, geen squats i.v.m. knie."
+                placeholder={
+                  schema.isFormule7Template
+                    ? 'Bijv. Man 42, casus obesitas, low mover, route GS, 3× per week, 45 min, rust-HF 75, max-HF 185, knie minder diep buigen, thuisgym met dumbbells en weerstandsband.'
+                    : 'Bijv. 3-daags schema voor spieropbouw, beginner, vooral dumbbells en kabels, geen squats i.v.m. knie.'
+                }
                 multiline
                 minRows={3}
                 fullWidth
                 disabled={aiGenerating}
               />
+              {schema.isFormule7Template && (
+                <Box sx={{ mt: 1.25, display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button
+                    variant="outlined"
+                    onClick={handleGetFollowUpQuestions}
+                    disabled={aiGenerating || aiQuestionsLoading || aiPrompt.trim().length < 10}
+                    startIcon={
+                      aiQuestionsLoading ? (
+                        <CircularProgress size={16} color="inherit" />
+                      ) : undefined
+                    }
+                  >
+                    {aiQuestionsLoading
+                      ? 'Vragen ophalen…'
+                      : 'Aanvullende vragen laten stellen'}
+                  </Button>
+                </Box>
+              )}
+              {schema.isFormule7Template && aiQuestions.length > 0 && (
+                <Box sx={{ mt: 1.5, display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                  <Alert severity="info">
+                    Beantwoord deze vragen zodat AI zoveel mogelijk Formule 7-velden kan invullen.
+                  </Alert>
+                  {aiQuestions.map((q, index) => (
+                    <TextField
+                      key={q.id}
+                      label={`Vraag ${index + 1}`}
+                      value={aiAnswers[q.id] ?? ''}
+                      onChange={(e) =>
+                        setAiAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
+                      }
+                      helperText={q.question}
+                      fullWidth
+                      multiline
+                      minRows={2}
+                      disabled={aiGenerating}
+                    />
+                  ))}
+                </Box>
+              )}
               {aiError && (
                 <Alert severity="error" sx={{ mt: 1.5 }}>
                   {aiError}
                 </Alert>
+              )}
+              {aiRationale?.overall && (
+                <Box sx={{ mt: 1.5 }}>
+                  <Alert severity="info" sx={{ mb: 1.25 }}>
+                    Waarom dit schema:
+                  </Alert>
+                  <Typography variant="body2" color="text.secondary">
+                    {aiRationale.overall}
+                  </Typography>
+                  {aiRationale.whyByDay?.length > 0 && (
+                    <Box sx={{ mt: 1 }}>
+                      {aiRationale.whyByDay
+                        .filter((x) => x.why && x.why.trim().length > 0)
+                        .slice(0, 7)
+                        .map((x) => (
+                          <Typography key={x.dayLabel} variant="body2" sx={{ mt: 0.75 }}>
+                            <strong>{x.dayLabel}:</strong> {x.why}
+                          </Typography>
+                        ))}
+                    </Box>
+                  )}
+                </Box>
               )}
               <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'flex-end' }}>
                 <Button
@@ -789,8 +951,7 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
                   {aiGenerating ? 'Genereren…' : 'Genereer met AI'}
                 </Button>
               </Box>
-            </Box>
-          )}
+          </Box>
 
           {sporters.length > 0 ? (
             <Autocomplete

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const NMT_TIP_STORAGE_KEY = 'liftlog.formule7NmtTipDismissed';
 import {
@@ -24,6 +24,7 @@ import type { Formule7Routekaart, Formule7Stretch, SchemaDay, Profile } from '..
 import {
   FORMULE7_GOAL_OPTIONS,
   FORMULE7_MOVER_OPTIONS,
+  FORMULE7_MOVER_LEVELS_HELP,
   FORMULE7_ORGANISATION_OPTIONS,
   FORMULE7_COOLDOWN_ORGANISATION_OPTIONS,
   FORMULE7_STRENGTH_GOAL_OPTIONS,
@@ -33,6 +34,9 @@ import {
   CARDIO_ORGANISATION_BY_MOVER_TYPE,
   CARDIO_TRAINING_METHOD_OPTIONS_BY_MOVER,
   CARDIO_ZONE_HR_PERCENT,
+  collectCardioOrganisationsUsed,
+  pickWarmupOrganisationAvoidingCardio,
+  getFormule7MoverLabel,
 } from '../utils/formule7Defaults';
 import type { Formule7StrengthGoal } from '../types';
 import { getMuscleGroupsFromExerciseNames } from '../utils/stretchingSuggestions';
@@ -181,6 +185,7 @@ export function Formule7RoutekaartForm({
   const setEffectiveCardio = isPerDay && updateDay
     ? (upd: Partial<Formule7Routekaart['cardio']>) => updateDay(selectedDayIndex, { cardio: { ...(selDay?.cardio ?? formule7.cardio), ...upd } })
     : setCardio;
+
   const effectiveCooldown = isPerDay && selDay ? (selDay.cooldown ?? formule7.cooldown) : formule7.cooldown;
   const setEffectiveCooldown = isPerDay && updateDay
     ? (upd: Partial<Formule7Routekaart['cooldown']>) => updateDay(selectedDayIndex, { cooldown: { ...(selDay?.cooldown ?? formule7.cooldown), ...upd } })
@@ -224,6 +229,24 @@ export function Formule7RoutekaartForm({
     const next = stretchingRows.map((s, i) => (i === index ? { ...s, ...upd } : s));
     setEffectiveStretching(next);
   };
+
+  /** Warming-up opties: toegestaan voor activiteit, en niet dezelfde organisatie als cardio (hoofd/zones). */
+  const warmupOrganisationChoices = useMemo(() => {
+    if (!formule7.moverType) return FORMULE7_ORGANISATION_OPTIONS;
+    const allowed = new Set(WARMUP_BY_MOVER_TYPE[formule7.moverType].organisations);
+    const used = collectCardioOrganisationsUsed(effectiveCardio);
+    const filtered = FORMULE7_ORGANISATION_OPTIONS.filter(
+      (o) => allowed.has(o.value) && !used.has(o.value)
+    );
+    if (filtered.length > 0) return filtered;
+    return FORMULE7_ORGANISATION_OPTIONS.filter((o) => allowed.has(o.value));
+  }, [
+    formule7.moverType,
+    effectiveCardio.organisation,
+    effectiveCardio.zones[0]?.organisation,
+    effectiveCardio.zones[1]?.organisation,
+    effectiveCardio.zones[2]?.organisation,
+  ]);
 
   const addStretchRow = () => {
     setEffectiveStretching([...stretchingRows, { muscleGroup: '', stretchDurationSeconds: null, repetitions: null }]);
@@ -288,7 +311,11 @@ export function Formule7RoutekaartForm({
     const preset = WARMUP_BY_MOVER_TYPE[moverType];
     const allowed = preset.organisations;
     const currentOrg = formule7.warmup.organisation;
-    const organisation = currentOrg && allowed.includes(currentOrg) ? currentOrg : allowed[0];
+    const baseOrg = currentOrg && allowed.includes(currentOrg) ? currentOrg : allowed[0];
+    const organisation =
+      pickWarmupOrganisationAvoidingCardio(moverType, formule7.cardio, baseOrg) ??
+      allowed.find((o) => !collectCardioOrganisationsUsed(formule7.cardio).has(o)) ??
+      allowed[0];
     const currentIntensity = formule7.warmup.intensityPercentOfMaxHr;
     const clampedIntensity =
       currentIntensity != null
@@ -320,7 +347,46 @@ export function Formule7RoutekaartForm({
       durationMinutes: preset.durationMinutes,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formule7.moverType, formule7.warmup.intensityPercentOfMaxHr, formule7.warmup.durationMinutes]);
+  }, [
+    formule7.moverType,
+    formule7.warmup.intensityPercentOfMaxHr,
+    formule7.warmup.durationMinutes,
+    formule7.cardio.organisation,
+    formule7.cardio.zones[0]?.organisation,
+    formule7.cardio.zones[1]?.organisation,
+    formule7.cardio.zones[2]?.organisation,
+  ]);
+
+  // Warming-up organisatie mag niet gelijk zijn aan cardio (hoofd of zone); cooling-down vrij.
+  useEffect(() => {
+    const moverType = formule7.moverType;
+    if (!moverType) return;
+    const cardio = effectiveCardio;
+    const warmup = effectiveWarmup;
+    const wOrg = warmup.organisation;
+    if (!wOrg) return;
+    if (!collectCardioOrganisationsUsed(cardio).has(wOrg)) return;
+    const alt =
+      pickWarmupOrganisationAvoidingCardio(moverType, cardio, null) ??
+      WARMUP_BY_MOVER_TYPE[moverType].organisations.find((o) => !collectCardioOrganisationsUsed(cardio).has(o)) ??
+      null;
+    if (!alt || alt === wOrg) return;
+    if (isPerDay && updateDay) {
+      updateDay(selectedDayIndex, { warmup: { ...warmup, organisation: alt } });
+    } else {
+      setWarmup({ organisation: alt });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    formule7.moverType,
+    selectedDayIndex,
+    isPerDay,
+    effectiveCardio.organisation,
+    effectiveCardio.zones[0]?.organisation,
+    effectiveCardio.zones[1]?.organisation,
+    effectiveCardio.zones[2]?.organisation,
+    effectiveWarmup.organisation,
+  ]);
 
   const lastNmtGoal = useRef<Formule7StrengthGoal | null>(null);
 
@@ -492,7 +558,41 @@ export function Formule7RoutekaartForm({
             onChange={(_, v) => set({ moverType: v?.value ?? null })}
             getOptionLabel={(o) => o.label}
             renderInput={(params) => (
-              <TextField {...params} label="Mover type" size="small" fullWidth />
+              <TextField
+                {...params}
+                label="Activiteit / belastbaarheid"
+                size="small"
+                fullWidth
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {params.InputProps.endAdornment}
+                      <Tooltip
+                        title={FORMULE7_MOVER_LEVELS_HELP}
+                        placement="top"
+                        arrow
+                        componentsProps={{
+                          tooltip: {
+                            sx: {
+                              maxWidth: 320,
+                              whiteSpace: 'pre-line',
+                              textAlign: 'left',
+                            },
+                          },
+                        }}
+                      >
+                        <span
+                          style={{ display: 'inline-flex', cursor: 'help', marginRight: 4 }}
+                          aria-label="Uitleg activiteitsniveaus"
+                        >
+                          <InfoOutlinedIcon sx={{ fontSize: 20, opacity: 0.65 }} />
+                        </span>
+                      </Tooltip>
+                    </>
+                  ),
+                }}
+              />
             )}
             sx={{ width: '100%' }}
           />
@@ -670,26 +770,14 @@ export function Formule7RoutekaartForm({
         </AccordionSummary>
         <AccordionDetails sx={{ py: 1.5, px: 0, minWidth: 0 }}>
         <HelperText>
-          Op basis van het gekozen mover type worden organisatie, intensiteit en duur automatisch ingevuld.
-          Alleen toegestane oefenvormen zijn beschikbaar. Trainingshartfrequentie volgt uit leeftijd en rusthartslag.
+          Op basis van de gekozen activiteit worden organisatie, intensiteit en duur automatisch ingevuld.
+          De warming-up mag niet dezelfde organisatie (oefenvorm) hebben als de cardiotraining — die opties worden
+          daarom uitgesloten. Trainingshartfrequentie volgt uit leeftijd en rusthartslag.
         </HelperText>
         <Box sx={FORM_ROW}>
           <Autocomplete
-            options={
-              formule7.moverType
-                ? FORMULE7_ORGANISATION_OPTIONS.filter((o) =>
-                    WARMUP_BY_MOVER_TYPE[formule7.moverType!].organisations.includes(o.value)
-                  )
-                : FORMULE7_ORGANISATION_OPTIONS
-            }
-            value={
-              (formule7.moverType
-                ? FORMULE7_ORGANISATION_OPTIONS.filter((o) =>
-                    WARMUP_BY_MOVER_TYPE[formule7.moverType!].organisations.includes(o.value)
-                  )
-                : FORMULE7_ORGANISATION_OPTIONS
-              ).find((o) => o.value === effectiveWarmup.organisation) ?? null
-            }
+            options={warmupOrganisationChoices}
+            value={warmupOrganisationChoices.find((o) => o.value === effectiveWarmup.organisation) ?? null}
             onChange={(_, v) => setEffectiveWarmup({ organisation: v?.value ?? null })}
             getOptionLabel={(o) => o.label}
             renderInput={(params) => (
@@ -698,7 +786,7 @@ export function Formule7RoutekaartForm({
                 label="Organisatie"
                 size="small"
                 fullWidth
-                placeholder={formule7.moverType ? undefined : 'Kies eerst mover type'}
+                placeholder={formule7.moverType ? undefined : 'Kies eerst activiteit (sectie 1)'}
               />
             )}
             sx={{ width: '100%' }}
@@ -857,7 +945,7 @@ export function Formule7RoutekaartForm({
         </AccordionDetails>
       </Accordion>
 
-      {/* --- Neuromusculair trainen --- */}
+      {/* --- Krachttraining (neuromusculair) --- */}
       <Accordion
         disableGutters
         expanded={expandedSections.includes('3')}
@@ -872,12 +960,14 @@ export function Formule7RoutekaartForm({
       >
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Typography variant="subtitle1" fontWeight={600}>
-            3. Neuromusculair trainen
+            3. Krachttraining
           </Typography>
         </AccordionSummary>
         <AccordionDetails sx={{ py: 1.5, px: 0, minWidth: 0 }}>
         <HelperText>
-          Kies eerst het mover type (sectie 1); alleen doelen die bij die belastbaarheid horen zijn beschikbaar. Bij keuze van een doel worden sets, reps, % 1RM, rusttijd en aantal oefeningen automatisch ingevuld.
+          Neuromusculair trainen (Formule 7). Kies eerst de activiteit in sectie 1; alleen doelen die bij die
+          belastbaarheid horen zijn beschikbaar. Bij keuze van een doel worden sets, reps, % 1RM, rusttijd en aantal
+          oefeningen automatisch ingevuld.
         </HelperText>
         <Box sx={{ ...FORM_ROW, mt: 0.5, mb: 2 }}>
           <Autocomplete
@@ -908,7 +998,7 @@ export function Formule7RoutekaartForm({
                 label="Doel (S1–S4.3)"
                 size="small"
                 fullWidth
-                placeholder={formule7.moverType ? undefined : 'Kies eerst mover type (sectie 1)'}
+                placeholder={formule7.moverType ? undefined : 'Kies eerst activiteit (sectie 1)'}
                 InputProps={{
                   ...params.InputProps,
                   endAdornment: (
@@ -917,8 +1007,8 @@ export function Formule7RoutekaartForm({
                       <Tooltip
                         title={
                           formule7.moverType
-                            ? `Toegestaan voor ${formule7.moverType}-mover: ${ALLOWED_NMT_GOALS_BY_MOVER_TYPE[formule7.moverType].join(', ')}`
-                            : 'Alle doelen; kies mover type voor beperkte keuze op belastbaarheid.'
+                            ? `Toegestaan bij "${getFormule7MoverLabel(formule7.moverType)}": ${ALLOWED_NMT_GOALS_BY_MOVER_TYPE[formule7.moverType].join(', ')}`
+                            : 'Alle doelen; kies activiteit voor beperkte keuze op belastbaarheid.'
                         }
                         placement="top"
                         arrow
@@ -1020,7 +1110,7 @@ export function Formule7RoutekaartForm({
         </AccordionDetails>
       </Accordion>
 
-      {/* --- Cardiovasculair trainen (Tabel 8, Formule 2) --- */}
+      {/* --- Cardiotraining (cardiovasculair) --- */}
       <Accordion
         disableGutters
         expanded={expandedSections.includes('4')}
@@ -1035,16 +1125,18 @@ export function Formule7RoutekaartForm({
       >
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Typography variant="subtitle1" fontWeight={600}>
-            4. Cardiovasculair trainen
+            4. Cardiotraining
           </Typography>
         </AccordionSummary>
         <AccordionDetails sx={{ py: 1.5, px: 0, minWidth: 0 }}>
         <HelperText>
-          Trainingsmethode, organisatie en per zone: trainingshartslag en duur (min). Organisatie en methode volgen uit mover type. Trainingshartslag: 220 − leeftijd = max HF.
+          Cardiovasculair trainen (Tabel 8, Formule 2): trainingsmethode, organisatie en per zone met
+          trainingshartslag en duur (min). Organisatie en methode volgen uit de gekozen activiteit. Max. HF: 220 −
+          leeftijd. De warming-up gebruikt een andere organisatie dan deze cardio.
         </HelperText>
         {!formule7.moverType && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Vul eerst sectie 1 (mover type) in voor toegestane organisatie en trainingsmethodes.
+            Vul eerst sectie 1 (activiteit / belastbaarheid) in voor toegestane organisatie en trainingsmethodes.
           </Typography>
         )}
         <Box sx={{ ...FORM_ROW, mb: 2 }}>
@@ -1068,7 +1160,7 @@ export function Formule7RoutekaartForm({
                 label="Trainingsmethode"
                 size="small"
                 fullWidth
-                placeholder={formule7.moverType ? 'Kies of typ' : 'Kies eerst mover type'}
+                placeholder={formule7.moverType ? 'Kies of typ' : 'Kies eerst activiteit (sectie 1)'}
               />
             )}
             sx={{ minWidth: 0 }}
@@ -1096,7 +1188,7 @@ export function Formule7RoutekaartForm({
                 label="Organisatie"
                 size="small"
                 fullWidth
-                placeholder={formule7.moverType ? undefined : 'Kies eerst mover type'}
+                placeholder={formule7.moverType ? undefined : 'Kies eerst activiteit (sectie 1)'}
               />
             )}
             sx={{ minWidth: 0 }}
@@ -1143,7 +1235,7 @@ export function Formule7RoutekaartForm({
                       label="Organisatie"
                       size="small"
                       fullWidth
-                      placeholder={formule7.moverType ? undefined : 'Kies eerst mover type'}
+                      placeholder={formule7.moverType ? undefined : 'Kies eerst activiteit (sectie 1)'}
                     />
                   )}
                   sx={{ minWidth: 0 }}

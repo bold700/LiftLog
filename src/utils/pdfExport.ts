@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import type { Schema } from '../types';
+import { getFormule7MoverDetail, getFormule7MoverLabel } from './formule7Defaults';
 
 const MARGIN_X = 16;
 const MARGIN_Y = 20;
@@ -74,7 +75,13 @@ export async function exportSchemaToPdf(schema: Schema, options?: PdfExportOptio
     if (f.casus) intakeLines.push(`Casus: ${f.casus}`);
     if (typeof f.ageYears === 'number') intakeLines.push(`Leeftijd: ${f.ageYears} jaar`);
     if (f.gender) intakeLines.push(`Geslacht: ${f.gender}`);
-    if (f.moverType) intakeLines.push(`Mover type: ${String(f.moverType)}`);
+    if (f.moverType) {
+      const actLabel = getFormule7MoverLabel(f.moverType);
+      const actDetail = getFormule7MoverDetail(f.moverType);
+      intakeLines.push(
+        actDetail ? `Activiteit: ${actLabel} (${actDetail})` : `Activiteit: ${actLabel}`
+      );
+    }
     if (f.goal) intakeLines.push(`Doelstelling (Formule 7): ${String(f.goal)}`);
     if (f.sessionsPerWeek) intakeLines.push(`Sessies per week: ${f.sessionsPerWeek}`);
     if (f.sessionDurationCategory)

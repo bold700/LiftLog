@@ -65,11 +65,40 @@ export const FORMULE7_GOAL_OPTIONS: { value: Formule7Goal; label: string }[] = [
   { value: 'GUS', label: 'Route GUS – Combinatieroute (G + U + S)' },
 ];
 
-export const FORMULE7_MOVER_OPTIONS: { value: Formule7MoverType; label: string }[] = [
-  { value: 'Non', label: 'Non-mover (geen beweging)' },
-  { value: 'Low', label: 'Low mover (weinig beweging)' },
-  { value: 'High', label: 'High mover (veel beweging)' },
+/** Optie in UI: korte label in dropdown; uitgebreide uitleg in info-tooltip. */
+export type Formule7MoverOption = {
+  value: Formule7MoverType;
+  label: string;
+  /** Korte toelichting (ook per niveau in gecombineerde help). */
+  detail: string;
+};
+
+/**
+ * Technische codes (Non/Low/High) blijven voor data & Formule 7-tabellen;
+ * korte labels in het formulier; details achter het (i)-icoon.
+ */
+export const FORMULE7_MOVER_OPTIONS: Formule7MoverOption[] = [
+  { value: 'Non', label: 'Niet tot weinig', detail: 'Langer dan een jaar niet' },
+  { value: 'Low', label: 'Soms', detail: 'Af en toe' },
+  { value: 'High', label: 'Vaak', detail: 'Regelmatig minimaal 1 in de week' },
 ];
+
+/** Tekst voor info-icoon bij activiteit / belastbaarheid. */
+export const FORMULE7_MOVER_LEVELS_HELP = [
+  'Niet tot weinig — langer dan een jaar niet',
+  'Soms — af en toe',
+  'Vaak — regelmatig minimaal 1 in de week',
+].join('\n');
+
+export function getFormule7MoverLabel(mover: Formule7MoverType | null | undefined): string {
+  if (mover == null) return '';
+  return FORMULE7_MOVER_OPTIONS.find((o) => o.value === mover)?.label ?? String(mover);
+}
+
+export function getFormule7MoverDetail(mover: Formule7MoverType | null | undefined): string {
+  if (mover == null) return '';
+  return FORMULE7_MOVER_OPTIONS.find((o) => o.value === mover)?.detail ?? '';
+}
 
 export const FORMULE7_ORGANISATION_OPTIONS: { value: Formule7Organisation; label: string }[] = [
   { value: 'FIETSEN', label: 'Fietsen' },
@@ -145,6 +174,32 @@ export const WARMUP_BY_MOVER_TYPE: Record<
     durationMax: 10,
   },
 };
+
+/** Organisaties die al voor cardio gekozen zijn (hoofd + zones). Warming-up mag daar niet mee overlappen. */
+export function collectCardioOrganisationsUsed(
+  cardio: Formule7Routekaart['cardio']
+): Set<Formule7Organisation> {
+  const used = new Set<Formule7Organisation>();
+  if (cardio.organisation) used.add(cardio.organisation);
+  for (const z of cardio.zones) {
+    if (z.organisation) used.add(z.organisation);
+  }
+  return used;
+}
+
+/**
+ * Warming-up-organisatie: toegestaan voor mover-type én niet dezelfde als cardio (hoofd of zone).
+ */
+export function pickWarmupOrganisationAvoidingCardio(
+  moverType: Formule7MoverType,
+  cardio: Formule7Routekaart['cardio'],
+  preferred: Formule7Organisation | null
+): Formule7Organisation | null {
+  const allowed = WARMUP_BY_MOVER_TYPE[moverType].organisations;
+  const used = collectCardioOrganisationsUsed(cardio);
+  if (preferred && allowed.includes(preferred) && !used.has(preferred)) return preferred;
+  return allowed.find((o) => !used.has(o)) ?? null;
+}
 
 /** Toegestane cardio-organisatie per mover type (Tabel 8). Non: fietsen, lopen. Low: + roeien. High: + crosstrainer, anders. */
 export const CARDIO_ORGANISATION_BY_MOVER_TYPE: Record<Formule7MoverType, Formule7Organisation[]> = {
