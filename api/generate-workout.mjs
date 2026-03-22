@@ -249,7 +249,88 @@ function normalizeFormule7(raw) {
     stretching,
     notes: typeof f.notes === 'string' ? f.notes.trim().slice(0, 2000) : '',
   };
-  return fixWarmupVsCardio(normalized);
+  return fixWarmupVsCardio(deriveMissingHeartRatesAndOrgs(normalized));
+}
+
+/** Tabel 9 middenwaarden – zelfde als client CARDIO_ZONE_HR_PERCENT.defaultPercent */
+const ZONE_DEFAULT_PERCENT = { 1: 55, 2: 65, 3: 75 };
+
+function resolveMaxHrForZones(f7) {
+  if (f7.theoreticalMaxHr != null && f7.theoreticalMaxHr > 0) return Number(f7.theoreticalMaxHr);
+  if (f7.ageYears != null && f7.ageYears > 0) return 220 - Number(f7.ageYears);
+  return null;
+}
+
+/** Spiegelt Formule7RoutekaartForm computeTrainingHr: voor reserve-formule voorkeur 220 − leeftijd. */
+function resolveMaxHrForReserve(f7) {
+  if (f7.ageYears != null && f7.ageYears > 0) return 220 - Number(f7.ageYears);
+  if (f7.theoreticalMaxHr != null && f7.theoreticalMaxHr > 0) return Number(f7.theoreticalMaxHr);
+  return null;
+}
+
+function trainingHrFromReservePercent(percentOfMax, maxHr, restingHr) {
+  if (percentOfMax == null || maxHr == null || maxHr <= 0) return null;
+  const resting = restingHr != null && restingHr > 0 ? Number(restingHr) : 60;
+  const p = Number(percentOfMax) / 100;
+  if (!Number.isFinite(p) || p <= 0) return null;
+  const v = (maxHr - resting) * p + resting;
+  if (!Number.isFinite(v)) return null;
+  return Math.round(Math.min(220, Math.max(40, v)));
+}
+
+/**
+ * Vult ontbrekende trainingshartslagen (warming-up, cooling-down, cardio-zones) en zone-/hoofdorganisatie
+ * wanneer de modeloutput alleen duur of % gaf.
+ */
+function deriveMissingHeartRatesAndOrgs(f7) {
+  const maxZone = resolveMaxHrForZones(f7);
+  const maxReserve = resolveMaxHrForReserve(f7);
+  const resting = f7.restingHr != null && f7.restingHr > 0 ? f7.restingHr : 60;
+
+  let wu = { ...f7.warmup };
+  if (wu.trainingHr == null && wu.intensityPercentOfMaxHr != null && maxReserve) {
+    wu.trainingHr = trainingHrFromReservePercent(wu.intensityPercentOfMaxHr, maxReserve, resting);
+  }
+
+  let cd = { ...f7.cooldown };
+  if (cd.trainingHr == null && cd.intensityPercentOfMaxHr != null && maxReserve) {
+    cd.trainingHr = trainingHrFromReservePercent(cd.intensityPercentOfMaxHr, maxReserve, resting);
+  }
+
+  const mainOrg = f7.cardio?.organisation;
+  let zones = (f7.cardio?.zones ?? []).map((z, i) => {
+    const zoneNum = z.zone === 2 ? 2 : z.zone === 3 ? 3 : 1;
+    const pct = ZONE_DEFAULT_PERCENT[zoneNum] ?? 55;
+    let org = z.organisation;
+    const hasDuration = z.durationMinutes != null && Number(z.durationMinutes) > 0;
+    if (org == null && hasDuration && mainOrg) org = mainOrg;
+    let thr = z.trainingHr;
+    if (thr == null && hasDuration && maxZone != null) {
+      thr = Math.round((maxZone * pct) / 100);
+    }
+    return { ...z, organisation: org, trainingHr: thr };
+  });
+
+  let cardioOrg = f7.cardio?.organisation;
+  const anyZoneActivity = zones.some((z) => z.durationMinutes != null && Number(z.durationMinutes) > 0);
+  if (cardioOrg == null && anyZoneActivity) {
+    cardioOrg = 'LOPEN';
+    zones = zones.map((z) => ({
+      ...z,
+      organisation: z.organisation ?? cardioOrg,
+    }));
+  }
+
+  return {
+    ...f7,
+    warmup: wu,
+    cooldown: cd,
+    cardio: {
+      ...f7.cardio,
+      organisation: cardioOrg ?? f7.cardio.organisation,
+      zones,
+    },
+  };
 }
 
 /** Warming-up mag niet dezelfde organisatie hebben als cardio (hoofd of zone). */
@@ -295,18 +376,57 @@ function hasAny(text, words) {
   return words.some((w) => text.includes(w));
 }
 
+/** Robuust: "M", "V", man/vrouw, geslacht: M, ik ben een man, … */
+function mentionsGender(fullText, existingAnswers) {
+  const t = fullText.toLowerCase();
+  const gAns = existingAnswersLookup(existingAnswers, 'gender').toLowerCase().trim();
+  if (/^(m|v)([\s\.,]|$)/.test(gAns) || /^(man|vrouw)([\s\.,]|$)/.test(gAns)) return true;
+  if (/\bgeslacht\s*[:\-]?\s*(m|v|man|vrouw)\b/i.test(fullText)) return true;
+  if (/\b(ik\s+ben\s+)?(een\s+)?(man|vrouw)\b/.test(t)) return true;
+  if (/\b(male|female|mannetje|vrouwtje)\b/.test(t)) return true;
+  if (/\bcli[eë]nt\s+is\s+(een\s+)?(man|vrouw|m|v)\b/.test(t)) return true;
+  if (/\bantwoord:\s*m\b/i.test(fullText) || /\bantwoord:\s*v\b/i.test(fullText)) return true;
+  return false;
+}
+
+function existingAnswersLookup(existingAnswers, key) {
+  const ea = existingAnswers && typeof existingAnswers === 'object' ? existingAnswers : {};
+  const v = ea[key];
+  return v != null ? String(v) : '';
+}
+
+/** Datum genoemd (ISO of NL) of startdatum besproken */
+function mentionsPeriodStart(fullText, existingAnswers) {
+  const combined = `${fullText} ${Object.values(existingAnswers ?? {}).join(' ')}`;
+  if (/\d{4}-\d{2}-\d{2}\b/.test(combined)) return true;
+  if (/\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b/.test(combined)) return true;
+  if (/\bstartdatum\b|\bstart\s+datum\b|\bvanaf\s+(de\s+)?\d/.test(combined.toLowerCase())) return true;
+  if (/\b(eerste\s+)?trainingsdag\b.*\d{4}/.test(combined.toLowerCase())) return true;
+  return false;
+}
+
 function buildFormule7FollowUpQuestions(prompt, existingAnswers) {
   const existingText = Object.values(existingAnswers ?? {})
     .map((v) => String(v ?? '').toLowerCase())
     .join(' ');
   const text = `${String(prompt ?? '').toLowerCase()} ${existingText}`;
+  const fullText = `${String(prompt ?? '')}\n${Object.entries(existingAnswers ?? {})
+    .map(([k, v]) => `${k}: ${v}`)
+    .join('\n')}`;
   const questions = [];
   const pushQ = (id, fieldKey, question) => {
     questions.push({ id, fieldKey, question });
   };
 
-  if (!hasAny(text, ['man', 'vrouw', 'm ', ' v '])) {
-    pushQ('gender', 'gender', 'Wat is het geslacht van de cliënt? (M of V)');
+  if (!mentionsGender(fullText, existingAnswers)) {
+    pushQ('gender', 'gender', 'Wat is het geslacht van de cliënt? Antwoord met M (man) of V (vrouw).');
+  }
+  if (!mentionsPeriodStart(fullText, existingAnswers)) {
+    pushQ(
+      'periodStart',
+      'periodStartDate',
+      'Wat is de startdatum van dit trainingsperiodiek/schema? Geef één datum als JJJJ-MM-DD (bijv. 2025-04-01).'
+    );
   }
   if (!hasAny(text, ['route g', 'route u', 'route s', 'route gu', 'route gs', 'route us', 'route gus'])) {
     pushQ('goal', 'goal', 'Welke Formule 7-route wil je volgen? (G, U, S, GU, GS, US of GUS)');
@@ -316,6 +436,7 @@ function buildFormule7FollowUpQuestions(prompt, existingAnswers) {
       'non mover',
       'low mover',
       'high mover',
+      'niet tot weinig',
       'lang niet',
       'jaar niet',
       'nauwelijks',
@@ -333,7 +454,7 @@ function buildFormule7FollowUpQuestions(prompt, existingAnswers) {
     pushQ(
       'moverType',
       'moverType',
-      'Hoe actief is de cliënt? Kies: (A) lang niet gesport – langer dan een jaar niet of nauwelijks bewogen, (B) soms sport – af en toe, (C) vaak sport – regelmatig. Antwoord met Non, Low of High als je de codes wilt gebruiken.'
+      'Hoe actief is de cliënt? Kies: niet tot weinig (langer dan een jaar niet), soms (af en toe), of vaak (regelmatig minimaal 1× per week). Je mag ook Non, Low of High antwoorden.'
     );
   }
   if (!hasAny(text, ['keer per week', 'x per week', 'sessie', 'trainingen per week'])) {
@@ -358,7 +479,7 @@ function buildFormule7FollowUpQuestions(prompt, existingAnswers) {
     pushQ('experience', 'notes', 'Wat is het trainingsniveau? (beginner/intermediate/gevorderd)');
   }
 
-  return questions.slice(0, 10);
+  return questions.slice(0, 12);
 }
 
 const SYSTEM_FREE =
@@ -370,7 +491,7 @@ const SYSTEM_FREE =
 
 const SYSTEM_FORMULE7 =
   'Je bent een opleidingsconforme fitnesscoach (Formule 7 / AALO). Geef ALLEEN geldige JSON terug, zonder markdown. ' +
-  'Output schema: {"name":"string","rationale":{"overall":"string","whyByDay":[{"dayLabel":"string","why":"string"}]},"formule7":{' +
+  'Output schema: {"name":"string","periodStartDate":"YYYY-MM-DD"|null,"rationale":{"overall":"string","whyByDay":[{"dayLabel":"string","why":"string"}]},"formule7":{' +
   '"clientName":"string","casus":"string","gender":"M"|"V"|null,"ageYears":number|null,' +
   '"moverType":"Non"|"Low"|"High"|null,"goal":"G"|"U"|"S"|"GU"|"GS"|"US"|"GUS"|null,' +
   '"sessionsPerWeek":1-7,"sessionDurationCategory":"<30"|"30-60"|">60"|null,' +
@@ -385,12 +506,28 @@ const SYSTEM_FORMULE7 =
   '"stretching":[{"muscleGroup":"string","stretchDurationSeconds":number|null,"repetitions":number|null}],' +
   '"notes":"string"' +
   '},"days":[{"dayLabel":"string","exercises":[{"exerciseName":"string","setsTarget":number,"repsTarget":number,"restSeconds":number,"notes":"string","intensityPercent1RM":number|null,"estimated1RMKg":number|null,"targetWeight":number|null}]}]}. ' +
+  'periodStartDate = eerste dag van het schema / trainingsblok (verplicht invullen als de gebruiker een startdatum geeft; anders null). ' +
+  'Zet gender altijd op "M" of "V" wanneer dat uit de prompt of aanvullende antwoorden blijkt; alleen null als echt onbekend. ' +
+  'Kies formule7.neuromuscular.goal (S1, S2, S3, S4, S4.1, S4.2 of S4.3) op basis van route (goal), moverType en casus: Non→voorkeur S1/S2; Low→tot S3/S4.2; High→alle doelen toegestaan. Licht toe in rationale.overall waarom dit doel past. ' +
+  'Cardio: vul cardio.organisation (hoofd: FIETSEN/LOPEN/ROEIEN/CROSSTRAINEN/ANDERS) en per zone met duur>0 ook zones[i].organisation (zelfde als hoofd tenzij logisch anders) én zones[i].trainingHr (sl/min): rond bpm = theoretischeMaxHr×(55/65/75%) voor zone 1/2/3 (of 220−leeftijd als max HF), tenzij je bewust afwijkt. ' +
+  'Cooling-down: vul cooldown.intensityPercentOfMaxHr én cooldown.trainingHr (Karvonen-achtig: (HFmax−rust)×%/100+rust; HFmax = 220−leeftijd als leeftijd bekend, anders theoretischeMaxHr) wanneer rusthartslag of defaults bekend zijn. Warming-up idem voor trainingHr bij gegeven %. ' +
   'Het aantal "days" moet exact gelijk zijn aan sessionsPerWeek (1-7). Maximaal 9 krachtoefeningen per dag. ' +
   'Vul per dag oefeningen in die passen bij die trainingsdag (split/total body). Gebruik Nederlandse labels waar logisch. Geen extra velden buiten dit schema. ' +
   'moverType (data): Non = lang niet gesport (≥ jaar niet of nauwelijks); Low = soms sport; High = vaak sport / regelmatig. ' +
   'warmup.organisation moet ALTIJD verschillen van cardio.organisation én van elke ingevulde cardio.zones[].organisation (andere oefenvorm voor warming-up kiezen). Cooling-down mag wél dezelfde organisatie hebben als cardio. ' +
   'days[].exercises[].exerciseName en formule7.neuromuscular.exercises[].name MOET exact overeenkomen met een naam uit de LiftLog-catalogus (zie onderaan); geen vrije oefennamen. ' +
   EXERCISE_CATALOG_APPEND;
+
+function parsePeriodStartDate(value) {
+  if (typeof value !== 'string') return null;
+  const s = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const [y, m, d] = s.split('-').map((x) => Number.parseInt(x, 10));
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+  return s;
+}
 
 async function callOpenAIRaw(systemInstruction, userPrompt, maxTokens) {
   const response = await fetch(OPENAI_API_URL, {
@@ -555,8 +692,9 @@ export default async function handler(req, res) {
 
       days = enrichFormule7Days(days, formule7);
       const rationale = buildRationale(days, rationaleOverall, whyByDayRaw);
+      const periodStartDate = parsePeriodStartDate(parsed?.periodStartDate);
 
-      return json(res, 200, { name, days, formule7, rationale });
+      return json(res, 200, { name, days, formule7, rationale, periodStartDate });
     }
 
     const daysRaw = Array.isArray(parsed?.days) ? parsed.days : [];

@@ -15,6 +15,9 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Stepper,
+  Step,
+  StepLabel,
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
@@ -149,6 +152,15 @@ function getDurationWeeksFromSchema(schema: Schema): DurationWeeks {
   return 6;
 }
 
+/** Genoeg ingevuld om de volledige editor te tonen i.p.v. alleen de AI-wizard. */
+function schemaHasMeaningfulF7Content(s: Schema): boolean {
+  const f7 = s.formule7;
+  if (s.days.some((d) => d.exercises.some((e) => e.exerciseName.trim().length > 0))) return true;
+  if (f7?.moverType != null || f7?.goal != null) return true;
+  if ((f7?.clientName?.trim().length ?? 0) > 0) return true;
+  return false;
+}
+
 export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: SchemaEditViewProps) => {
   const [name, setName] = useState(schema.name);
   const [clientId, setClientId] = useState<string | null>(schema.clientId ?? null);
@@ -172,6 +184,11 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
         whyByDay: { dayLabel: string; why: string }[];
       }
   >(null);
+  const [aiWizardStep, setAiWizardStep] = useState(0);
+  const [aiEditorUnlocked, setAiEditorUnlocked] = useState(() => {
+    if (!schema.isFormule7Template || schema.formule7AssistMode !== 'ai') return true;
+    return schemaHasMeaningfulF7Content(schema);
+  });
   const [formule7, setFormule7] = useState<Formule7Routekaart | null>(() =>
     schema.formule7 ?? (schema.isFormule7Template ? createEmptyFormule7() : null)
   );
@@ -205,6 +222,12 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
     setAiAnswers({});
     setAiError(null);
     setAiRationale(null);
+    setAiWizardStep(0);
+    setAiEditorUnlocked(
+      !schema.isFormule7Template || schema.formule7AssistMode !== 'ai'
+        ? true
+        : schemaHasMeaningfulF7Content(schema)
+    );
   }, [schema.id]);
 
   // Bij Formule 7: dagen aanmaken + per dag oefeningen met voorschrift (sets, reps, rust) voorinvullen
@@ -347,10 +370,14 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
         );
         setFormule7(f7);
         setDays(d);
+        if (generated.periodStartDate) {
+          setStartDate(generated.periodStartDate);
+        }
       } else {
         setDays(generated.days);
       }
       setAiRationale(generated.rationale ?? null);
+      if (mode === 'formule7') setAiEditorUnlocked(true);
     } catch (error) {
       setAiError(error instanceof Error ? error.message : 'Genereren mislukt. Probeer opnieuw.');
     } finally {
@@ -358,18 +385,20 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
     }
   }, [aiPrompt, aiGenerating, schema.isFormule7Template, aiQuestions, aiAnswers]);
 
-  const handleGetFollowUpQuestions = useCallback(async () => {
+  const handleGetFollowUpQuestions = useCallback(async (): Promise<boolean> => {
     const text = aiPrompt.trim();
-    if (!text || aiQuestionsLoading) return;
+    if (!text || aiQuestionsLoading) return false;
     setAiQuestionsLoading(true);
     setAiError(null);
     try {
       const questions = await getFormule7FollowUpQuestions(text, aiAnswers);
       setAiQuestions(questions);
+      return true;
     } catch (error) {
       setAiError(
         error instanceof Error ? error.message : 'Aanvullende vragen ophalen mislukt.'
       );
+      return false;
     } finally {
       setAiQuestionsLoading(false);
     }
@@ -821,6 +850,32 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
     </>
   );
 
+  const hideAiCompletely =
+    schema.isFormule7Template && schema.formule7AssistMode === 'manual';
+
+  const showFormule7AiWizard =
+    schema.isFormule7Template &&
+    schema.formule7AssistMode === 'ai' &&
+    !aiEditorUnlocked;
+
+  const showAiGenerationPanel =
+    !hideAiCompletely &&
+    !showFormule7AiWizard &&
+    (!schema.isFormule7Template ||
+      schema.formule7AssistMode === undefined ||
+      schema.formule7AssistMode === 'ai');
+
+  const showFormule7RoutekaartBlock =
+    schema.isFormule7Template && Boolean(formule7) && !showFormule7AiWizard;
+
+  const aiPanelShellSx = {
+    p: 2,
+    mb: 2,
+    borderRadius: 2,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    border: '1px solid rgba(0,0,0,0.08)',
+  } as const;
+
   return (
     <PageLayout>
       <ContentCard>
@@ -829,7 +884,7 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
               <ArrowBackIosNewIcon fontSize="small" />
             </IconButton>
             <Typography variant="h5" sx={{ fontWeight: 600 }}>
-              Workout bewerken
+              {showFormule7AiWizard ? 'Workout met AI (Formule 7)' : 'Workout bewerken'}
             </Typography>
           </Box>
 
@@ -842,23 +897,153 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
             placeholder="Bijv. Push Pull Legs"
           />
 
-          <Box
-            sx={{
-              p: 2,
-              mb: 2,
-              borderRadius: 2,
-              backgroundColor: 'rgba(0,0,0,0.03)',
-              border: '1px solid rgba(0,0,0,0.08)',
-            }}
-          >
+          {showFormule7AiWizard && (
+            <Box sx={aiPanelShellSx}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                Stappenplan
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Eerst je casus, daarna eventuele aanvullende vragen, daarna vult de AI de routekaart en
+                het weekschema in — hetzelfde als bij een handmatige routekaart, maar sneller.
+              </Typography>
+              <Stepper activeStep={aiWizardStep} sx={{ mb: 3 }}>
+                <Step>
+                  <StepLabel>Casus</StepLabel>
+                </Step>
+                <Step>
+                  <StepLabel>Vragen & genereren</StepLabel>
+                </Step>
+              </Stepper>
+
+              {aiWizardStep === 0 && (
+                <Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                    Beschrijf cliënt, doel, activiteit/belastbaarheid, route (G/U/S/…), frequentie per week,
+                    duur sessie, rust- en max-hartslag, beperkingen en materiaal. Minimaal 10 tekens.
+                  </Typography>
+                  <TextField
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    placeholder="Bijv. Man 42, casus obesitas, low mover, route GS, 3× per week, 45 min, rust-HF 75, max-HF 185, knie minder diep buigen, thuisgym met dumbbells en weerstandsband."
+                    multiline
+                    minRows={4}
+                    fullWidth
+                    disabled={aiGenerating}
+                    label="Casus voor de AI"
+                  />
+                  {aiError && (
+                    <Alert severity="error" sx={{ mt: 1.5 }}>
+                      {aiError}
+                    </Alert>
+                  )}
+                  <Box
+                    sx={{
+                      mt: 2,
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 1,
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Button variant="text" color="inherit" onClick={() => setAiEditorUnlocked(true)}>
+                      Overslaan — zelf routekaart invullen
+                    </Button>
+                    <Button
+                      variant="contained"
+                      disabled={aiGenerating || aiQuestionsLoading || aiPrompt.trim().length < 10}
+                      onClick={async () => {
+                        const ok = await handleGetFollowUpQuestions();
+                        if (ok) setAiWizardStep(1);
+                      }}
+                      startIcon={
+                        aiQuestionsLoading ? (
+                          <CircularProgress size={16} color="inherit" />
+                        ) : undefined
+                      }
+                    >
+                      {aiQuestionsLoading ? 'Vragen ophalen…' : 'Volgende: aanvullende vragen'}
+                    </Button>
+                  </Box>
+                </Box>
+              )}
+
+              {aiWizardStep === 1 && (
+                <Box>
+                  <Button size="small" onClick={() => setAiWizardStep(0)} sx={{ mb: 2 }}>
+                    ← Terug naar casus
+                  </Button>
+                  {aiQuestions.length > 0 ? (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, mb: 2 }}>
+                      <Alert severity="info">
+                        Beantwoord deze vragen; daarna wordt de routekaart zo compleet mogelijk ingevuld.
+                      </Alert>
+                      {aiQuestions.map((q) => (
+                        <Box key={q.id} sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                          <Typography
+                            variant="subtitle2"
+                            component="label"
+                            htmlFor={`ai-followup-${q.id}`}
+                            sx={{ fontWeight: 600, lineHeight: 1.45 }}
+                          >
+                            {q.question}
+                          </Typography>
+                          <TextField
+                            id={`ai-followup-${q.id}`}
+                            value={aiAnswers[q.id] ?? ''}
+                            onChange={(e) =>
+                              setAiAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
+                            }
+                            fullWidth
+                            multiline
+                            minRows={2}
+                            disabled={aiGenerating}
+                            placeholder="Typ je antwoord"
+                            inputProps={{ 'aria-label': q.question }}
+                          />
+                        </Box>
+                      ))}
+                    </Box>
+                  ) : (
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      Geen extra vragen nodig op basis van je casus. Je kunt direct genereren.
+                    </Alert>
+                  )}
+                  {aiError && (
+                    <Alert severity="error" sx={{ mt: 1.5 }}>
+                      {aiError}
+                    </Alert>
+                  )}
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'space-between' }}>
+                    <Button variant="text" color="inherit" onClick={() => setAiEditorUnlocked(true)}>
+                      Overslaan — zelf invullen
+                    </Button>
+                    <Button
+                      variant="contained"
+                      onClick={handleGenerateWithAi}
+                      disabled={aiGenerating || aiPrompt.trim().length < 10}
+                      startIcon={
+                        aiGenerating ? <CircularProgress size={16} color="inherit" /> : undefined
+                      }
+                    >
+                      {aiGenerating ? 'Genereren…' : 'Genereer routekaart & weekschema'}
+                    </Button>
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          )}
+
+          {showAiGenerationPanel && (
+            <Box sx={aiPanelShellSx}>
               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                 {schema.isFormule7Template
-                  ? 'Genereer Formule 7-routekaart met AI'
+                  ? 'Genereer opnieuw met AI (Formule 7)'
                   : 'Genereer workout met AI'}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                 {schema.isFormule7Template
-                  ? 'Beschrijf cliënt/casus, doelen, mover-type, frequentie per week, duur sessie, hartfrequentie-indicaties en beperkingen. De AI vult routekaart én trainingsdagen in.'
+                  ? 'Pas de casus of antwoorden aan en genereer opnieuw. De AI vult routekaart én trainingsdagen.'
                   : 'Beschrijf doel, niveau, aantal dagen, beschikbare apparatuur en eventuele blessures.'}
               </Typography>
               <TextField
@@ -878,7 +1063,9 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
                 <Box sx={{ mt: 1.25, display: 'flex', justifyContent: 'flex-end' }}>
                   <Button
                     variant="outlined"
-                    onClick={handleGetFollowUpQuestions}
+                    onClick={() => {
+                      void handleGetFollowUpQuestions();
+                    }}
                     disabled={aiGenerating || aiQuestionsLoading || aiPrompt.trim().length < 10}
                     startIcon={
                       aiQuestionsLoading ? (
@@ -897,20 +1084,30 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
                   <Alert severity="info">
                     Beantwoord deze vragen zodat AI zoveel mogelijk Formule 7-velden kan invullen.
                   </Alert>
-                  {aiQuestions.map((q, index) => (
-                    <TextField
-                      key={q.id}
-                      label={`Vraag ${index + 1}`}
-                      value={aiAnswers[q.id] ?? ''}
-                      onChange={(e) =>
-                        setAiAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
-                      }
-                      helperText={q.question}
-                      fullWidth
-                      multiline
-                      minRows={2}
-                      disabled={aiGenerating}
-                    />
+                  {aiQuestions.map((q) => (
+                    <Box key={q.id} sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                      <Typography
+                        variant="subtitle2"
+                        component="label"
+                        htmlFor={`ai-followup-panel-${q.id}`}
+                        sx={{ fontWeight: 600, lineHeight: 1.45 }}
+                      >
+                        {q.question}
+                      </Typography>
+                      <TextField
+                        id={`ai-followup-panel-${q.id}`}
+                        value={aiAnswers[q.id] ?? ''}
+                        onChange={(e) =>
+                          setAiAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
+                        }
+                        fullWidth
+                        multiline
+                        minRows={2}
+                        disabled={aiGenerating}
+                        placeholder="Typ je antwoord"
+                        inputProps={{ 'aria-label': q.question }}
+                      />
+                    </Box>
                   ))}
                 </Box>
               )}
@@ -951,9 +1148,10 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
                   {aiGenerating ? 'Genereren…' : 'Genereer met AI'}
                 </Button>
               </Box>
-          </Box>
+            </Box>
+          )}
 
-          {sporters.length > 0 ? (
+          {sporters.length > 0 && !showFormule7AiWizard ? (
             <Autocomplete
               options={sporters}
               value={sporters.find((s) => s.userId === clientId) ?? null}
@@ -971,7 +1169,7 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
             />
           ) : null}
 
-          {schema.isFormule7Template && formule7 && (
+          {showFormule7RoutekaartBlock && formule7 && (
             <Box sx={{ mb: 3 }}>
               <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
                 Formule 7-routekaart

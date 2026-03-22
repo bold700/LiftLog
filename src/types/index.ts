@@ -197,5 +197,10 @@ export interface Schema {
   formule7?: Formule7Routekaart | null;
   /** Flag om snel te zien of dit schema met het Formule 7 template is opgezet. */
   isFormule7Template?: boolean;
+  /**
+   * Alleen bij Formule 7: handmatige routekaart (geen AI-blok) of AI-begeleide flow (stappen + genereren).
+   * Ontbreekt: legacy-gedrag (AI-blok zichtbaar zoals vóór deze optie).
+   */
+  formule7AssistMode?: 'manual' | 'ai';
 }
 

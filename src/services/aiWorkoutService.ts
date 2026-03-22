@@ -11,6 +11,8 @@ export interface GeneratedWorkout {
   name: string;
   days: SchemaDay[];
   formule7?: Formule7Routekaart;
+  /** Eerste dag van het periodiek (Formule 7), alleen gezet als de API een geldige YYYY-MM-DD teruggeeft. */
+  periodStartDate?: string | null;
   rationale?: {
     overall?: string;
     whyByDay: { dayLabel: string; why: string }[];
@@ -86,10 +88,16 @@ export async function generateWorkoutFromPrompt(
     }
   }
 
+  const periodStartDate =
+    typeof payload?.periodStartDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(payload.periodStartDate.trim())
+      ? payload.periodStartDate.trim()
+      : null;
+
   return {
     name: payload.name,
     days: payload.days as SchemaDay[],
     formule7: mode === 'formule7' ? (payload.formule7 as Formule7Routekaart) : undefined,
+    periodStartDate: mode === 'formule7' ? periodStartDate : undefined,
     rationale:
       payload?.rationale && typeof payload.rationale === 'object'
         ? {

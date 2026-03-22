@@ -37,6 +37,10 @@ function toSchema(data: Record<string, unknown>, id: string): Schema {
     endDate: toDateStr(d.endDate) ?? null,
     formule7: (d.formule7 as Schema['formule7']) ?? null,
     isFormule7Template: Boolean(d.isFormule7Template),
+    formule7AssistMode:
+      d.formule7AssistMode === 'manual' || d.formule7AssistMode === 'ai'
+        ? d.formule7AssistMode
+        : undefined,
   };
 }
 

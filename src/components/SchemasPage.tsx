@@ -12,6 +12,7 @@ import {
   DialogActions,
   Menu,
   MenuItem,
+  Stack,
 } from '@mui/material';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
@@ -127,6 +128,22 @@ export const SchemasPage = () => {
     const schema: Schema = {
       ...base,
       isFormule7Template: true,
+      formule7AssistMode: 'manual',
+      formule7: createEmptyFormule7(),
+    };
+    await saveSchema(schema);
+    loadSchemas();
+    setSelectedSchemaId(schema.id);
+    setView('edit');
+    setOpenNewSchemaDialog(false);
+  }, [createEmptySchema, saveSchema, loadSchemas]);
+
+  const handleCreateAiFormule7Schema = useCallback(async () => {
+    const base = createEmptySchema('Formule 7 workout (AI)');
+    const schema: Schema = {
+      ...base,
+      isFormule7Template: true,
+      formule7AssistMode: 'ai',
       formule7: createEmptyFormule7(),
     };
     await saveSchema(schema);
@@ -156,6 +173,7 @@ export const SchemasPage = () => {
         startDate: null,
         endDate: null,
         isFormule7Template: schema.isFormule7Template,
+        formule7AssistMode: schema.formule7AssistMode,
       };
       await saveSchema(copy);
       loadSchemas();
@@ -751,6 +769,11 @@ export const SchemasPage = () => {
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
                       {schema.days.length} {schema.days.length === 1 ? 'dag' : 'dagen'}
                       {schema.clientId ? ` · Klant toegewezen` : ''}
+                      {schema.isFormule7Template
+                        ? schema.formule7AssistMode === 'ai'
+                          ? ' · Formule 7 · AI'
+                          : ' · Formule 7'
+                        : ' · Vrij'}
                     </Typography>
                   </CardContent>
                 </Card>
@@ -762,24 +785,29 @@ export const SchemasPage = () => {
       <Dialog
         open={openNewSchemaDialog}
         onClose={() => setOpenNewSchemaDialog(false)}
-        maxWidth="xs"
+        maxWidth="sm"
         fullWidth
       >
         <DialogTitle>Nieuwe workout aanmaken</DialogTitle>
         <DialogContent>
-          <Typography variant="body1" sx={{ mb: 1 }}>
-            Wil je voor deze workout gebruikmaken van de Formule 7-routekaart?
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Kies hoe je wilt starten. Formule 7-routekaart en AI gebruiken dezelfde routekaart; bij AI
+            stelt de app eerst vragen om alles te vullen.
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Kies &quot;Formule 7-template&quot; om een workout te starten met alle velden van de
-            routekaart, of &quot;Vrije workout&quot; voor een lege, flexibele workout.
-          </Typography>
+          <Stack spacing={1.25}>
+            <Button variant="outlined" fullWidth onClick={handleCreateFreeSchema} sx={{ py: 1.25 }}>
+              Vrij
+            </Button>
+            <Button variant="outlined" fullWidth onClick={handleCreateFormule7Schema} sx={{ py: 1.25 }}>
+              Routekaart
+            </Button>
+            <Button variant="contained" fullWidth onClick={handleCreateAiFormule7Schema} sx={{ py: 1.25 }}>
+              AI
+            </Button>
+          </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCreateFreeSchema}>Vrije workout</Button>
-          <Button variant="contained" onClick={handleCreateFormule7Schema}>
-            Formule 7-template
-          </Button>
+          <Button onClick={() => setOpenNewSchemaDialog(false)}>Annuleren</Button>
         </DialogActions>
       </Dialog>
     </PageLayout>

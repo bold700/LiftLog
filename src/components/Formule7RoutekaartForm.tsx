@@ -524,15 +524,18 @@ export function Formule7RoutekaartForm({
               fullWidth
             />
           )}
-          <TextField
-            label="Casus"
-            value={formule7.casus}
-            onChange={(e) => set({ casus: e.target.value })}
-            size="small"
-            fullWidth
-            placeholder="Korte omschrijving van de cliënt"
-          />
         </Box>
+        <TextField
+          label="Casus"
+          value={formule7.casus}
+          onChange={(e) => set({ casus: e.target.value })}
+          size="small"
+          fullWidth
+          multiline
+          minRows={4}
+          maxRows={12}
+          placeholder="Korte omschrijving van de cliënt"
+        />
         <Box sx={FORM_ROW}>
           <TextField
             label="Leeftijd (jaar)"
