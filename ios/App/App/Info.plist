@@ -45,5 +45,9 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSHealthShareUsageDescription</key>
+	<string>LiftLog leest relevante gegevens uit Apple Gezondheid (zoals hartslag van je Apple Watch en actieve energie) om je training te koppelen aan je workout.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>LiftLog kan optioneel een krachttraining-workout opslaan in Apple Gezondheid wanneer je dat aanzet bij het beëindigen van een sessie.</string>
 </dict>
 </plist>

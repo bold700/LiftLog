@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Card,
   CardContent,
@@ -29,6 +29,14 @@ import {
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { designTokens } from '../theme/designTokens';
 import { PageLayout, ContentCard } from './layout';
+import { AppleHealthWorkoutCard } from './AppleHealthWorkoutCard';
+import {
+  healthSummaryKeyForSchema,
+  getStoredHealthSummary,
+  setStoredHealthSummary,
+  clearStoredHealthSummary,
+} from '../utils/healthWorkoutStorage';
+import type { AppleHealthWorkoutSummary } from '../plugins/healthWorkout';
 import '@material/web/button/filled-button.js';
 import '@material/web/icon/icon.js';
 
@@ -65,6 +73,21 @@ export const TrainingSessionView = ({
     getLoggedExercisesForSchemaDayInLast12Hours(schema.id, dayIndex)
   );
   const [snackbarOpen, setSnackbarOpen] = useState(false);
+
+  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const healthStorageKey = useMemo(
+    () => healthSummaryKeyForSchema(today, schema.id, dayIndex),
+    [today, schema.id, dayIndex]
+  );
+  const [healthSummary, setHealthSummary] = useState<AppleHealthWorkoutSummary | null>(() =>
+    getStoredHealthSummary(
+      healthSummaryKeyForSchema(new Date().toISOString().split('T')[0], schema.id, dayIndex)
+    )
+  );
+
+  useEffect(() => {
+    setHealthSummary(getStoredHealthSummary(healthStorageKey));
+  }, [healthStorageKey]);
 
   const refreshLogged = useCallback(() => {
     setLoggedExercises(getLoggedExercisesForSchemaDayInLast12Hours(schema.id, dayIndex));
@@ -105,6 +128,19 @@ export const TrainingSessionView = ({
     onClearJustLogged();
   }, [onClearJustLogged]);
 
+  const onHealthSummarySaved = useCallback(
+    (summary: AppleHealthWorkoutSummary) => {
+      setStoredHealthSummary(healthStorageKey, summary);
+      setHealthSummary(summary);
+    },
+    [healthStorageKey]
+  );
+
+  const onHealthSummaryCleared = useCallback(() => {
+    clearStoredHealthSummary(healthStorageKey);
+    setHealthSummary(null);
+  }, [healthStorageKey]);
+
   const handleLogToevoegen = useCallback(
     (ex: SchemaExercise) => {
       if (!addFromSchema) return;
@@ -142,6 +178,11 @@ export const TrainingSessionView = ({
   return (
     <PageLayout>
       <ContentCard>
+          <AppleHealthWorkoutCard
+            storedSummary={healthSummary}
+            onSummarySaved={onHealthSummarySaved}
+            onSummaryCleared={onHealthSummaryCleared}
+          />
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 3, flexWrap: 'wrap' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
               <IconButton size="small" onClick={onBack} sx={{ p: 0.5 }} aria-label="Terug">

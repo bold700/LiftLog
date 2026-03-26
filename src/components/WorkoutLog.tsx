@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Card,
   CardContent,
@@ -17,6 +17,14 @@ import AddIcon from '@mui/icons-material/Add';
 import { addExercise, getWorkouts, getExerciseNames } from '../utils/storage';
 import { Exercise } from '../types';
 import { getExerciseNames as getDbExerciseNames } from '../data/exercises';
+import { AppleHealthWorkoutCard } from './AppleHealthWorkoutCard';
+import {
+  healthSummaryKeyForFreeDay,
+  getStoredHealthSummary,
+  setStoredHealthSummary,
+  clearStoredHealthSummary,
+} from '../utils/healthWorkoutStorage';
+import type { AppleHealthWorkoutSummary } from '../plugins/healthWorkout';
 
 // Import Material Web Components buttons
 import '@material/web/button/filled-button.js';
@@ -34,6 +42,16 @@ export const WorkoutLog = () => {
   const [openDialog, setOpenDialog] = useState(false);
   const cancelButtonRef = useRef<any>(null);
   const addButtonRef = useRef<any>(null);
+
+  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const healthStorageKey = useMemo(() => healthSummaryKeyForFreeDay(today), [today]);
+  const [healthSummary, setHealthSummary] = useState<AppleHealthWorkoutSummary | null>(() =>
+    getStoredHealthSummary(healthSummaryKeyForFreeDay(new Date().toISOString().split('T')[0]))
+  );
+
+  useEffect(() => {
+    setHealthSummary(getStoredHealthSummary(healthStorageKey));
+  }, [healthStorageKey]);
 
   const loadTodayExercises = useCallback(() => {
     const workouts = getWorkouts();
@@ -228,9 +246,21 @@ export const WorkoutLog = () => {
         </DialogActions>
       </Dialog>
 
-      <Typography variant="h5" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
+      <Typography variant="h5" gutterBottom sx={{ mb: 2, fontWeight: 600 }}>
         Log
       </Typography>
+
+      <AppleHealthWorkoutCard
+        storedSummary={healthSummary}
+        onSummarySaved={(summary) => {
+          setStoredHealthSummary(healthStorageKey, summary);
+          setHealthSummary(summary);
+        }}
+        onSummaryCleared={() => {
+          clearStoredHealthSummary(healthStorageKey);
+          setHealthSummary(null);
+        }}
+      />
 
       {todayExercises.length > 0 && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
