@@ -4,7 +4,8 @@
   "framework": "vite",
   "functions": {
     "api/generate-workout.mjs": {
-      "includeFiles": "src/data/mega_exercise_db.json"
+      "includeFiles": "src/data/mega_exercise_db.json",
+      "maxDuration": 60
     }
   },
   "rewrites": [

@@ -23,8 +23,22 @@ const EXERCISE_CATALOG_APPEND =
   '\n=== Einde catalogus ===\n';
 
 function json(res, status, body) {
-  res.status(status).setHeader('Content-Type', 'application/json');
-  res.end(JSON.stringify(body));
+  const payload = JSON.stringify(body);
+  const ct = { 'Content-Type': 'application/json; charset=utf-8' };
+  // Lokale testadapter (scripts/local-api-server) gebruikt .status().chain; rauwe Node: writeHead.
+  if (typeof res.writeHead === 'function' && typeof res.status !== 'function') {
+    res.writeHead(status, ct);
+    res.end(payload);
+    return;
+  }
+  if (typeof res.status === 'function') {
+    res.status(status).setHeader('Content-Type', ct['Content-Type']);
+    res.end(payload);
+    return;
+  }
+  res.statusCode = status;
+  res.setHeader('Content-Type', ct['Content-Type']);
+  res.end(payload);
 }
 
 function cleanText(value) {
