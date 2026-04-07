@@ -46,7 +46,9 @@ export default async function handler(req, res) {
     return json(res, 405, { error: 'Method not allowed' });
   }
 
-  const key = process.env.EXERCISEDB_RAPIDAPI_KEY;
+  const key = typeof process.env.EXERCISEDB_RAPIDAPI_KEY === 'string'
+    ? process.env.EXERCISEDB_RAPIDAPI_KEY.trim()
+    : '';
   if (!key) {
     return json(res, 503, {
       configured: false,
@@ -71,6 +73,7 @@ export default async function handler(req, res) {
   };
 
   let lastDetails = '';
+  let lastUpstreamStatus = 0;
 
   try {
     for (const candidate of tryNames) {
@@ -82,8 +85,30 @@ export default async function handler(req, res) {
         headers,
       });
 
+      lastUpstreamStatus = upstream.status;
+      lastDetails = await upstream.text().catch(() => '');
+
       if (!upstream.ok) {
-        lastDetails = await upstream.text().catch(() => '');
+        if (upstream.status === 401 || upstream.status === 403) {
+          return json(res, 200, {
+            configured: true,
+            found: false,
+            authIssue: true,
+            rapidApiStatus: upstream.status,
+            rapidApiMessage: lastDetails.slice(0, 500),
+            tried: tryNames,
+          });
+        }
+        if (upstream.status === 429) {
+          return json(res, 200, {
+            configured: true,
+            found: false,
+            rateLimited: true,
+            rapidApiStatus: 429,
+            rapidApiMessage: lastDetails.slice(0, 400),
+            tried: tryNames,
+          });
+        }
         if (upstream.status >= 500) {
           return json(res, 502, {
             found: false,
@@ -95,7 +120,12 @@ export default async function handler(req, res) {
         continue;
       }
 
-      const data = await upstream.json();
+      let data;
+      try {
+        data = JSON.parse(lastDetails);
+      } catch {
+        continue;
+      }
       const list = Array.isArray(data) ? data : data ? [data] : [];
       const first = list[0];
       const exerciseId = pickExerciseId(first);
@@ -119,11 +149,28 @@ export default async function handler(req, res) {
       });
     }
 
+    const authHint =
+      /not subscribed|not authorized|invalid api key|forbidden|wrong.*api/i.test(lastDetails) ||
+      lastUpstreamStatus === 401 ||
+      lastUpstreamStatus === 403;
+
+    const rateHint = lastUpstreamStatus === 429 || /too many requests|rate limit|quota/i.test(lastDetails);
+
     return json(res, 200, {
       configured: true,
       found: false,
       tried: tryNames,
       details: lastDetails.slice(0, 200),
+      rapidApiStatus: lastUpstreamStatus || undefined,
+      ...(rateHint && {
+        rateLimited: true,
+        rapidApiMessage: lastDetails.slice(0, 400),
+      }),
+      ...(authHint &&
+        !rateHint && {
+          authIssue: true,
+          rapidApiMessage: lastDetails.slice(0, 500),
+        }),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Box, Typography, Collapse, IconButton, Skeleton } from '@mui/material';
+import { Box, Typography, Collapse, IconButton, Skeleton, Link } from '@mui/material';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -14,6 +14,10 @@ type DemoState =
   | { status: 'devStaleApiServer' }
   /** 404 zonder JSON: Vite-proxy actief? Of verkeerde URL */
   | { status: 'devViteProxy' }
+  /** RapidAPI: niet geabonneerd, ongeldige key, of 401/403 */
+  | { status: 'rapidApiAuth'; detail?: string }
+  /** RapidAPI: te veel requests (Basic heeft lage limiet) */
+  | { status: 'rapidApiRate'; detail?: string }
   | { status: 'ready'; exerciseId: string; videoUrl: string | null; displayName: string };
 
 export type ExerciseDbDemoVariant = 'aside' | 'collapsible';
@@ -93,6 +97,20 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
           return;
         }
 
+        if (data && data.rateLimited === true) {
+          const detail =
+            typeof data.rapidApiMessage === 'string' ? data.rapidApiMessage.slice(0, 280) : undefined;
+          setState({ status: 'rapidApiRate', detail });
+          return;
+        }
+
+        if (data && data.authIssue === true) {
+          const detail =
+            typeof data.rapidApiMessage === 'string' ? data.rapidApiMessage.slice(0, 280) : undefined;
+          setState({ status: 'rapidApiAuth', detail });
+          return;
+        }
+
         setState({ status: 'empty' });
       } catch {
         if (!cancelled) setState({ status: 'empty' });
@@ -125,6 +143,111 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
           Stop Node op poort 3001 en start opnieuw in de LiftLog-map:{' '}
           <strong>node scripts/local-api-server.mjs</strong>
         </Typography>
+      </Box>
+    );
+  }
+
+  if (state.status === 'rapidApiRate') {
+    return (
+      <Box
+        sx={{
+          flexShrink: 0,
+          maxWidth: { xs: '100%', sm: 280 },
+          alignSelf: { xs: 'center', sm: 'flex-start' },
+          p: 1.25,
+          borderRadius: 1,
+          bgcolor: 'warning.light',
+          opacity: 0.95,
+        }}
+      >
+        <Typography variant="caption" component="div" sx={{ fontWeight: 700, color: 'warning.dark' }}>
+          RapidAPI-limiet bereikt
+        </Typography>
+        <Typography variant="caption" component="div" sx={{ mt: 0.75, display: 'block', color: 'text.primary' }}>
+          Basic-plannen hebben weinig requests per dag/uur. Wacht even of upgrade je RapidAPI-plan. Elke oefening in
+          LiftLog doet meerdere zoekpogingen; dat telt snel op.
+        </Typography>
+        {import.meta.env.DEV && state.detail ? (
+          <Typography
+            variant="caption"
+            component="pre"
+            sx={{
+              mt: 1,
+              p: 0.75,
+              borderRadius: 0.5,
+              bgcolor: 'rgba(0,0,0,0.06)',
+              fontSize: '0.65rem',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}
+          >
+            {state.detail}
+          </Typography>
+        ) : null}
+      </Box>
+    );
+  }
+
+  if (state.status === 'rapidApiAuth') {
+    return (
+      <Box
+        sx={{
+          flexShrink: 0,
+          maxWidth: { xs: '100%', sm: 280 },
+          alignSelf: { xs: 'center', sm: 'flex-start' },
+          p: 1.25,
+          borderRadius: 1,
+          bgcolor: 'error.light',
+          opacity: 0.95,
+        }}
+      >
+        <Typography variant="caption" component="div" sx={{ fontWeight: 700, color: 'error.dark' }}>
+          ExerciseDB / RapidAPI
+        </Typography>
+        <Typography variant="caption" component="div" sx={{ mt: 0.75, display: 'block', color: 'text.primary' }}>
+          Een <strong>Basic</strong>-abonnement is genoeg, maar de key moet bij <strong>deze exacte API</strong> horen
+          (host <strong>exercisedb.p.rapidapi.com</strong>). Elke RapidAPI-app heeft een eigen key — een key van een
+          andere fitness-API werkt niet. Zie de{' '}
+          <Link
+            href="https://edb-docs.up.railway.app/docs/authentication"
+            target="_blank"
+            rel="noopener noreferrer"
+            underline="hover"
+          >
+            authenticatie-docs
+          </Link>
+          .
+        </Typography>
+        <Link
+          href="https://rapidapi.com/justin-WFnsXH_t6/api/exercisedb"
+          target="_blank"
+          rel="noopener noreferrer"
+          variant="caption"
+          sx={{ mt: 1, fontWeight: 600, display: 'block' }}
+        >
+          Abonneren op ExerciseDB (RapidAPI)
+        </Link>
+        <Typography variant="caption" component="div" sx={{ mt: 1, display: 'block', color: 'text.secondary' }}>
+          Zet <strong>EXERCISEDB_RAPIDAPI_KEY</strong> in <strong>.env</strong> (LiftLog-map), zonder spaties aan begin/einde.
+          Herstart daarna <strong>node scripts/local-api-server.mjs</strong>.
+        </Typography>
+        {import.meta.env.DEV && state.detail ? (
+          <Typography
+            variant="caption"
+            component="pre"
+            sx={{
+              mt: 1,
+              p: 0.75,
+              borderRadius: 0.5,
+              bgcolor: 'rgba(0,0,0,0.06)',
+              fontSize: '0.65rem',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}
+          >
+            {state.detail}
+          </Typography>
+        ) : null}
       </Box>
     );
   }

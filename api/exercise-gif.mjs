@@ -50,7 +50,7 @@ function sendGif(res, buffer) {
 }
 
 function validExerciseId(id) {
-  return typeof id === 'string' && /^[a-zA-Z0-9_-]{4,64}$/.test(id);
+  return typeof id === 'string' && /^[a-zA-Z0-9_-]{4,96}$/.test(id);
 }
 
 export default async function handler(req, res) {
@@ -58,7 +58,10 @@ export default async function handler(req, res) {
     return json(res, 405, { error: 'Method not allowed' });
   }
 
-  const key = process.env.EXERCISEDB_RAPIDAPI_KEY;
+  const key =
+    typeof process.env.EXERCISEDB_RAPIDAPI_KEY === 'string'
+      ? process.env.EXERCISEDB_RAPIDAPI_KEY.trim()
+      : '';
   if (!key) {
     return json(res, 503, { error: 'EXERCISEDB_RAPIDAPI_KEY ontbreekt.' });
   }
