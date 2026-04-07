@@ -5,6 +5,8 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { apiUrl } from '../utils/apiOrigin';
 
+const SESSION_DEMO_PREFIX = 'liftlog:v2:exercise-demo:';
+
 type DemoState =
   | { status: 'idle' }
   | { status: 'loading' }
@@ -18,7 +20,34 @@ type DemoState =
   | { status: 'rapidApiAuth'; detail?: string }
   /** RapidAPI: te veel requests (Basic heeft lage limiet) */
   | { status: 'rapidApiRate'; detail?: string }
-  | { status: 'ready'; exerciseId: string; videoUrl: string | null; displayName: string };
+  | { status: 'ready'; exerciseId: string; videoUrl: string | null; displayName: string; gifUrl: string | null };
+
+function parseReadyPayload(
+  data: Record<string, unknown>,
+  fallbackName: string
+): Extract<DemoState, { status: 'ready' }> | null {
+  const exIdRaw = data.exerciseId;
+  const exerciseIdOk = typeof exIdRaw === 'string' && exIdRaw.trim() ? exIdRaw.trim() : null;
+  if (data.found !== true || !exerciseIdOk) return null;
+  const videoUrl =
+    typeof data.videoUrl === 'string' &&
+    (data.videoUrl.startsWith('https://') || data.videoUrl.startsWith('http://'))
+      ? data.videoUrl
+      : null;
+  const gifUrl =
+    typeof data.gifUrl === 'string' &&
+    (data.gifUrl.startsWith('https://') || data.gifUrl.startsWith('http://'))
+      ? data.gifUrl
+      : null;
+  const displayName = typeof data.displayName === 'string' ? data.displayName : fallbackName;
+  return {
+    status: 'ready',
+    exerciseId: exerciseIdOk,
+    videoUrl,
+    gifUrl,
+    displayName,
+  };
+}
 
 export type ExerciseDbDemoVariant = 'aside' | 'collapsible';
 
@@ -31,6 +60,10 @@ interface ExerciseDbDemoProps {
 export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDemoProps) {
   const [state, setState] = useState<DemoState>({ status: 'idle' });
   const [open, setOpen] = useState(false);
+  /** Directe RapidAPI-URL eerst; bij onError overschakelen naar lokale /api/exercise-gif-proxy. */
+  const [gifProxyFallback, setGifProxyFallback] = useState(false);
+  const [gifLoadFailed, setGifLoadFailed] = useState(false);
+  const [videoLoadFailed, setVideoLoadFailed] = useState(false);
 
   const nameKey = exerciseName.trim();
 
@@ -47,6 +80,23 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
     }
 
     let cancelled = false;
+
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const raw = sessionStorage.getItem(SESSION_DEMO_PREFIX + nameKey);
+        if (raw) {
+          const parsed = JSON.parse(raw) as Record<string, unknown>;
+          const ready = parseReadyPayload(parsed, nameKey);
+          if (ready) {
+            setState(ready);
+            return;
+          }
+        }
+      }
+    } catch {
+      // negeer corrupte cache
+    }
+
     setState({ status: 'loading' });
 
     (async () => {
@@ -77,24 +127,19 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
           return;
         }
 
-        const exIdRaw = data && typeof data === 'object' ? data.exerciseId : null;
-        const exerciseIdOk = typeof exIdRaw === 'string' && exIdRaw.trim() ? exIdRaw.trim() : null;
-
-        if (data && data.found === true && exerciseIdOk) {
-          const videoUrl =
-            typeof data.videoUrl === 'string' &&
-            (data.videoUrl.startsWith('https://') || data.videoUrl.startsWith('http://'))
-              ? data.videoUrl
-              : null;
-          const displayName = typeof data.displayName === 'string' ? data.displayName : nameKey;
-
-          setState({
-            status: 'ready',
-            exerciseId: exerciseIdOk,
-            videoUrl,
-            displayName,
-          });
-          return;
+        if (data && typeof data === 'object') {
+          const ready = parseReadyPayload(data, nameKey);
+          if (ready) {
+            try {
+              if (typeof sessionStorage !== 'undefined') {
+                sessionStorage.setItem(SESSION_DEMO_PREFIX + nameKey, JSON.stringify(data));
+              }
+            } catch {
+              // quota of private mode
+            }
+            setState(ready);
+            return;
+          }
         }
 
         if (data && data.rateLimited === true) {
@@ -121,6 +166,12 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
       cancelled = true;
     };
   }, [demoUrl, nameKey]);
+
+  useEffect(() => {
+    setGifProxyFallback(false);
+    setGifLoadFailed(false);
+    setVideoLoadFailed(false);
+  }, [demoUrl]);
 
   if (state.status === 'devStaleApiServer') {
     if (!import.meta.env.DEV) return null;
@@ -164,8 +215,9 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
           RapidAPI-limiet bereikt
         </Typography>
         <Typography variant="caption" component="div" sx={{ mt: 0.75, display: 'block', color: 'text.primary' }}>
-          Basic-plannen hebben weinig requests per dag/uur. Wacht even of upgrade je RapidAPI-plan. Elke oefening in
-          LiftLog doet meerdere zoekpogingen; dat telt snel op.
+          Je RapidAPI-quota voor deze periode is op (vaak reset per uur of per dag). Wacht even, of upgrade het
+          ExerciseDB-plan. LiftLog cachet nu zoekresultaten en GIF’s om minder calls te doen; na reset zou het weer
+          moeten werken zonder alles dubbel op te halen.
         </Typography>
         {import.meta.env.DEV && state.detail ? (
           <Typography
@@ -306,41 +358,70 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
   const gifSrc = apiUrl(
     `/api/exercise-gif?exerciseId=${encodeURIComponent(state.exerciseId)}&resolution=180`
   );
+  const effectiveGifSrc = state.gifUrl && !gifProxyFallback ? state.gifUrl : gifSrc;
+  const showVideo = Boolean(state.videoUrl) && !videoLoadFailed;
 
   const mediaBlock = (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'center' }}>
-      <Box
-        component="img"
-        src={gifSrc}
-        alt={`Animatie: ${state.displayName}`}
-        loading="lazy"
-        sx={{
-          width: '100%',
-          maxWidth: variant === 'aside' ? 140 : 360,
-          maxHeight: variant === 'aside' ? 120 : 'none',
-          height: 'auto',
-          objectFit: 'contain',
-          borderRadius: 1,
-          border: '1px solid',
-          borderColor: 'divider',
-          display: 'block',
-        }}
-      />
-      {state.videoUrl && (
+      {showVideo ? (
         <Box
           component="video"
-          controls
+          autoPlay
+          muted
+          loop
           playsInline
-          preload="metadata"
+          preload="auto"
+          onError={() => {
+            setVideoLoadFailed(true);
+            try {
+              if (typeof sessionStorage !== 'undefined') {
+                sessionStorage.removeItem(SESSION_DEMO_PREFIX + nameKey);
+              }
+            } catch {
+              // negeer storage-fouten
+            }
+          }}
           sx={{
             width: '100%',
             maxWidth: variant === 'aside' ? 200 : 480,
             borderRadius: 1,
           }}
         >
-          <source src={state.videoUrl} />
+          <source src={state.videoUrl || undefined} />
         </Box>
+      ) : (
+        <Box
+          component="img"
+          key={effectiveGifSrc}
+          src={effectiveGifSrc}
+          alt={`Animatie: ${state.displayName}`}
+          loading="lazy"
+          onError={() => {
+            if (state.gifUrl && !gifProxyFallback) {
+              setGifProxyFallback(true);
+              return;
+            }
+            setGifLoadFailed(true);
+          }}
+          sx={{
+            width: '100%',
+            maxWidth: variant === 'aside' ? 140 : 360,
+            maxHeight: variant === 'aside' ? 120 : 'none',
+            height: 'auto',
+            objectFit: 'contain',
+            borderRadius: 1,
+            border: '1px solid',
+            borderColor: 'divider',
+            display: 'block',
+          }}
+        />
       )}
+      {gifLoadFailed ? (
+        <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', maxWidth: 280 }}>
+          Animatie laadt niet (proxy of RapidAPI). Controleer het ExerciseDB-abonnement en herstart de lokale API-server
+          na een key-wijziging.
+        </Typography>
+      ) : null}
     </Box>
   );
 

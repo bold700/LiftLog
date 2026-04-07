@@ -88,7 +88,7 @@ function levenshtein(a, b) {
   return prev[b.length];
 }
 
-function normalizeExerciseKey(s) {
+export function normalizeExerciseKey(s) {
   return String(s || '')
     .toLowerCase()
     .normalize('NFD')
@@ -211,6 +211,13 @@ export function candidatesForExerciseDbLookup(raw) {
     seen.add(t);
     out.push(t);
   };
+  /** ExerciseDB /name/{name} is hoofdlettergevoelig; catalogus gebruikt Title Case. */
+  const addLowerIfDifferent = (s) => {
+    if (typeof s !== 'string' || !s.trim()) return;
+    const t = s.trim();
+    const lo = t.toLowerCase();
+    if (lo !== t) add(lo);
+  };
 
   const trimmed = typeof raw === 'string' ? raw.trim().slice(0, 200) : '';
   if (!trimmed) return [];
@@ -222,10 +229,14 @@ export function candidatesForExerciseDbLookup(raw) {
     add('Goblet Squat');
   }
 
-  add(trimmed);
-
+  /** Eerst catalogus-Engels: minder 404’s en minder RapidAPI-calls dan lange NL-titel eerst. */
   const resolved = resolve(trimmed);
-  if (resolved) add(resolved);
+  if (resolved) {
+    add(resolved);
+    addLowerIfDifferent(resolved);
+  }
+  add(trimmed);
+  addLowerIfDifferent(trimmed);
 
   for (const [aliasKey, target] of Object.entries(EXERCISE_ALIASES_RAW)) {
     if (!nameSet.has(target)) continue;

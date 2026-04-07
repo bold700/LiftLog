@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card,
   CardContent,
@@ -27,12 +27,8 @@ import type { Profile } from '../types';
 import { createEmptyFormule7, NMT_PRESETS_BY_GOAL } from '../utils/formule7Defaults';
 import type { Formule7StrengthGoal } from '../types';
 import { Formule7RoutekaartForm } from './Formule7RoutekaartForm';
-import { getExerciseNames } from '../utils/storage';
-import { getExerciseNamesByEquipment, type ExerciseEquipment } from '../data/exercises';
-import {
-  MUSCLE_GROUP_OPTIONS,
-  filterExerciseNamesByMuscleGroup,
-} from '../utils/exerciseMuscleFilter';
+import { useExerciseDbSearch, type ExerciseDbEquipmentFilter } from '../hooks/useExerciseDbSearch';
+import { MUSCLE_GROUP_OPTIONS } from '../utils/exerciseMuscleFilter';
 import { designTokens } from '../theme/designTokens';
 import { addWeeks, getWeeksBetween } from '../utils/format';
 import { PageLayout, ContentCard } from './layout';
@@ -70,7 +66,7 @@ const EXERCISE_PARAMS_ROW = {
   },
 };
 
-const EQUIPMENT_FILTER_OPTIONS: { value: ExerciseEquipment | 'all'; label: string }[] = [
+const EQUIPMENT_FILTER_OPTIONS: { value: ExerciseDbEquipmentFilter; label: string }[] = [
   { value: 'all', label: 'Alle oefeningen' },
   { value: 'machine', label: 'Alleen machines' },
   { value: 'free_weight', label: 'Alleen vrije gewichten' },
@@ -135,7 +131,7 @@ function postProcessFormule7Ai(
 
 interface SchemaEditViewProps {
   schema: Schema;
-  onSave: (schema: Schema) => void;
+  onSave: (schema: Schema) => Promise<void> | void;
   onCancel: () => void;
   /** Lijst sporters (alleen voor trainers) om workout aan toe te wijzen. */
   sporters?: Profile[];
@@ -192,13 +188,17 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
   const [formule7, setFormule7] = useState<Formule7Routekaart | null>(() =>
     schema.formule7 ?? (schema.isFormule7Template ? createEmptyFormule7() : null)
   );
-  const [equipmentFilter, setEquipmentFilter] = useState<ExerciseEquipment | 'all'>('all');
+  const [equipmentFilter, setEquipmentFilter] = useState<ExerciseDbEquipmentFilter>('all');
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<string | null>(null);
-  const exerciseOptions = useMemo(() => {
-    const userNames = getExerciseNames();
-    const byEquipment = getExerciseNamesByEquipment(equipmentFilter, userNames);
-    return filterExerciseNamesByMuscleGroup(byEquipment, selectedMuscleGroup);
-  }, [equipmentFilter, selectedMuscleGroup]);
+  const [exerciseSearchTerm, setExerciseSearchTerm] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const exerciseOptions = useExerciseDbSearch(
+    exerciseSearchTerm,
+    10000,
+    equipmentFilter,
+    selectedMuscleGroup
+  );
   const saveButtonRef = useRef<HTMLElement | null>(null);
   const cancelButtonRef = useRef<HTMLElement | null>(null);
 
@@ -301,7 +301,10 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
     formule7?.neuromuscular?.desiredExerciseCount,
   ]);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
+    if (saving) return;
+    setSaveError(null);
+    setSaving(true);
     const trimmedName = name.trim() || 'Nieuw schema';
     const cleanedDays: SchemaDay[] = days
       .filter((d) => d.dayLabel.trim() !== '' || d.exercises.length > 0)
@@ -329,8 +332,20 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
       days: cleanedDays,
       formule7: formule7 ?? null,
     };
-    onSave(updated);
-  }, [schema, name, clientId, startDate, durationWeeks, days, formule7, onSave]);
+    try {
+      await Promise.resolve(onSave(updated));
+    } catch (e) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : typeof e === 'string'
+            ? e
+            : 'Opslaan mislukt. Controleer internet/Firestore en probeer opnieuw.';
+      setSaveError(msg.slice(0, 300));
+    } finally {
+      setSaving(false);
+    }
+  }, [saving, schema, name, clientId, startDate, durationWeeks, days, formule7, onSave]);
 
   const addDay = useCallback(() => {
     setDays((prev) => [...prev, { dayLabel: `Dag ${prev.length + 1}`, exercises: [] }]);
@@ -455,11 +470,20 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
   useEffect(() => {
     const saveEl = saveButtonRef.current;
     if (saveEl) {
-      const h = () => handleSave();
+      const h = () => {
+        void handleSave();
+      };
       saveEl.addEventListener('click', h);
       return () => saveEl.removeEventListener('click', h);
     }
   }, [handleSave]);
+
+  useEffect(() => {
+    const saveEl = saveButtonRef.current as any;
+    if (!saveEl) return;
+    if (saving) saveEl.setAttribute?.('disabled', '');
+    else saveEl.removeAttribute?.('disabled');
+  }, [saving]);
 
   useEffect(() => {
     const el = cancelButtonRef.current;
@@ -529,11 +553,18 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
                 {filtersRow}
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1.5, minWidth: 0, width: '100%' }}>
                   <Autocomplete
-                    freeSolo
+                    freeSolo={false}
                     options={exerciseOptions}
+                    groupBy={(option) => (option && option[0] ? option[0].toUpperCase() : '#')}
+                    autoHighlight
+                    selectOnFocus
+                    openOnFocus
+                    forcePopupIcon
+                    clearOnBlur={false}
                     value={ex.exerciseName}
                     onChange={(_, v) => {
                       const n = typeof v === 'string' ? v : v ?? '';
+                      setExerciseSearchTerm(n);
                       if (n === '') {
                         removeExerciseFromDay(dayIndex, exIndex);
                       } else {
@@ -544,14 +575,20 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
                       }
                     }}
                     onInputChange={(_, v) =>
-                      updateExerciseInDay(dayIndex, exIndex, {
-                        exerciseId: v,
-                        exerciseName: v,
-                      })
+                      {
+                        setExerciseSearchTerm(v || '');
+                        updateExerciseInDay(dayIndex, exIndex, {
+                          exerciseId: v,
+                          exerciseName: v,
+                        });
+                      }
                     }
                     renderInput={(params) => (
                       <TextField {...params} label="Oefening" size="small" fullWidth />
                     )}
+                    ListboxProps={{
+                      style: { maxHeight: 380 },
+                    }}
                     sx={{ flex: 1, minWidth: 0 }}
                   />
                 </Box>
@@ -792,7 +829,7 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
           labelId="equipment-filter-label"
           value={equipmentFilter}
           label="Oefeningen tonen"
-          onChange={(e) => setEquipmentFilter(e.target.value as ExerciseEquipment | 'all')}
+          onChange={(e) => setEquipmentFilter(e.target.value as ExerciseDbEquipmentFilter)}
         >
           {EQUIPMENT_FILTER_OPTIONS.map((opt) => (
             <MenuItem key={opt.value} value={opt.value}>
@@ -1221,13 +1258,19 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
 
           {!schema.isFormule7Template && schemaDaysBlock}
 
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+          {saveError ? (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {saveError}
+            </Alert>
+          ) : null}
+
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 2 }}>
             {/* @ts-ignore */}
             <md-text-button ref={cancelButtonRef}>Annuleren</md-text-button>
             {/* @ts-ignore */}
             <md-filled-button ref={saveButtonRef}>
-              <md-icon slot="start">save</md-icon>
-              Opslaan
+              <md-icon slot="start">{saving ? 'sync' : 'save'}</md-icon>
+              {saving ? 'Opslaan…' : 'Opslaan'}
             </md-filled-button>
           </Box>
       </ContentCard>

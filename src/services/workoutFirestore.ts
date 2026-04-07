@@ -19,6 +19,36 @@ import type { ProfileRole } from '../types';
 
 const COLLECTION = 'workouts';
 
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  if (!v || typeof v !== 'object') return false;
+  const proto = Object.getPrototypeOf(v);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Firestore accepteert geen `undefined` in documenten.
+ * We verwijderen `undefined` velden diep (maar laten niet-plain objects zoals Firestore FieldValue ongemoeid).
+ */
+function omitUndefinedDeep<T>(value: T): T {
+  if (value === undefined) return undefined as unknown as T;
+  if (Array.isArray(value)) {
+    return value
+      .map((x) => omitUndefinedDeep(x))
+      .filter((x) => x !== undefined) as unknown as T;
+  }
+  if (isPlainObject(value)) {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (v === undefined) continue;
+      const cleaned = omitUndefinedDeep(v);
+      if (cleaned === undefined) continue;
+      out[k] = cleaned;
+    }
+    return out as unknown as T;
+  }
+  return value;
+}
+
 function toSchema(data: Record<string, unknown>, id: string): Schema {
   const d = data as Record<string, unknown>;
   const toStr = (v: unknown) => (v == null ? null : String(v));
@@ -59,7 +89,8 @@ export async function saveWorkoutToFirestore(schema: Schema): Promise<void> {
     ...schema,
     updatedAt: serverTimestamp(),
   };
-  await setDoc(ref, toStore, { merge: true });
+  const cleaned = omitUndefinedDeep(toStore);
+  await setDoc(ref, cleaned, { merge: true });
 }
 
 export async function deleteWorkoutFromFirestore(id: string): Promise<void> {

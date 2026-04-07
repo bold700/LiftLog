@@ -14,10 +14,10 @@ import {
   DialogContent,
 } from '@mui/material';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
-import { addExercise, getExerciseNames, getAllExercisesByName } from '../utils/storage';
+import { addExercise, getAllExercisesByName } from '../utils/storage';
 import { Exercise } from '../types';
-import { getExerciseNames as getDbExerciseNames } from '../data/exercises';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
+import { useExerciseDbSearch } from '../hooks/useExerciseDbSearch';
 import exerciseMuscleMapping from '../data/exerciseMuscleMapping.json';
 import { findExerciseMetadata } from '../data/exerciseMetadata';
 import { PageLayout, ContentCard, PageTitle } from './layout';
@@ -37,25 +37,6 @@ interface AddPageProps {
   /** Als true: toon als dialog (zoals Training log). Als false: fullscreen overlay. */
   useDialog?: boolean;
 }
-
-// Mapping van spiergroep display namen naar mapping namen
-const muscleDisplayToMapping: Record<string, string[]> = {
-  'Borst': ['Chest Primary', 'Chest Secondary'],
-  'Biceps': ['Biceps Primary', 'Biceps Secondary'],
-  'Triceps': ['Triceps Primary', 'Triceps Secondary', 'Body Back Tricpes Primary', 'Body Back Tricpes Secondary'],
-  'Schouders': ['Shoulders Primary', 'Shoulders Secondary', 'Body Back Shoulders Primary', 'Body Back Shoulders Secondary'],
-  'Traps': ['Traps Primary', 'Traps Secondary', 'Body Back Traps Primary', 'Body Back Traps Secondary'],
-  'Lats': ['Body Back Lats Primary', 'Body Back Lats Secondary'],
-  'Upper Back': ['Body Back Upper Back Primary', 'Body Back Upper Back Secondary'],
-  'Lower Back': ['Body Back Lower Back Primary', 'Body Back Lower Back Secondary'],
-  'Buikspieren': ['Abs Primary', 'Abs Secondary'],
-  'Obliques': ['Obliques Primary', 'Obliques Secondary', 'Body Back Obliques Primary', 'Body Back Obliques Secondary'],
-  'Quadriceps': ['Quads Primary', 'Quads Secondary', 'Body Back Quads Primary', 'Body Back Quads Secondary'],
-  'Kuiten': ['Calves Primary', 'Calves Secondary', 'Body Back Calves Primary', 'Body Back Calves Secondary'],
-  'Hamstrings': ['Body Back Hamstrings Primary', 'Body Back Hamstrings Secondary'],
-  'Gluteals': ['Body Back Gluteals Primary', 'Body Back Gluteals Secondary'],
-  'Underarms': ['Underarms Primary', 'Underarms Secondary', 'Body Back Underarm Primary', 'Body Back Underarm Secondary'],
-};
 
 // Mapping van spiergroep namen naar Level 1 SVG imports (voorkant)
 import ChestLevel1 from '../assets/body/levels/front levels/Chest Primary Level 1.svg';
@@ -245,6 +226,7 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
   const [notes, setNotes] = useState('');
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<string | null>(null);
   const [exerciseMuscleGroups, setExerciseMuscleGroups] = useState<string[]>([]);
+  const exerciseDbOptions = useExerciseDbSearch(exerciseName, 10000, 'all', selectedMuscleGroup);
   const cancelButtonRef = useRef<any>(null);
   const addButtonRef = useRef<any>(null);
 
@@ -280,54 +262,8 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
 
   // Filter oefeningen op basis van geselecteerde spiergroep
   const filteredExercises = useMemo(() => {
-    // Haal altijd alle oefeningen op (zowel uit database als user exercises)
-    const allExercises = getDbExerciseNames();
-    const userExercises = getExerciseNames();
-    const allExerciseNames = [...new Set([...allExercises, ...userExercises])].sort();
-
-    if (!selectedMuscleGroup) {
-      return allExerciseNames;
-    }
-
-    const mappingNames = muscleDisplayToMapping[selectedMuscleGroup] || [];
-    const mappingData = exerciseMuscleMapping as Record<string, { primary: string[]; secondary: string[] }>;
-    
-    return allExerciseNames.filter(exerciseName => {
-      // Gebruik metadata om de echte naam te vinden
-      const metadata = findExerciseMetadata(exerciseName);
-      const actualExerciseName = metadata ? metadata.name : exerciseName;
-      
-      // Zoek mapping
-      let mapping = mappingData[actualExerciseName];
-      
-      // Probeer case-insensitive match
-      if (!mapping) {
-        const exerciseNameLower = actualExerciseName.toLowerCase();
-        for (const key in mappingData) {
-          if (key.toLowerCase() === exerciseNameLower) {
-            mapping = mappingData[key];
-            break;
-          }
-        }
-      }
-      
-      if (!mapping) {
-        mapping = mappingData[exerciseName];
-      }
-      
-      if (!mapping) return false;
-      
-      // Check of de oefening deze spiergroep heeft (primary of secondary)
-      const allMuscles = [...(mapping.primary || []), ...(mapping.secondary || [])];
-      return mappingNames.some(mappingName => {
-        const baseName = mappingName.replace(' Primary', '').replace(' Secondary', '');
-        return allMuscles.some(muscle => {
-          const muscleBase = muscle.replace(' Primary', '').replace(' Secondary', '');
-          return muscleBase === baseName || muscle.includes(baseName);
-        });
-      });
-    });
-  }, [selectedMuscleGroup]);
+    return [...new Set(exerciseDbOptions)].sort();
+  }, [exerciseDbOptions]);
 
   // Exercise suggestions worden nu dynamisch berekend via filteredExercises
   // Deze state wordt niet meer gebruikt maar houden we voor compatibiliteit
@@ -453,8 +389,14 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
     <>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Autocomplete
-              freeSolo={!selectedMuscleGroup}
+              freeSolo={false}
               options={filteredExercises}
+              groupBy={(option) => (option && option[0] ? option[0].toUpperCase() : '#')}
+              autoHighlight
+              selectOnFocus
+              openOnFocus
+              forcePopupIcon
+              clearOnBlur={false}
               value={exerciseName}
               onChange={(_, newValue) => {
                 if (!newValue || typeof newValue !== 'string') {
@@ -528,6 +470,9 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
                   autoFocus
                 />
               )}
+              ListboxProps={{
+                style: { maxHeight: 380 },
+              }}
             />
 
             {/* Dropdown voor spiergroep selectie */}
