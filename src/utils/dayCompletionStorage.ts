@@ -6,6 +6,15 @@ export interface DayCompletion {
   completedAt: string; // ISO
 }
 
+/** Kalenderdatums (YYYY-MM-DD) waarop minstens één schema-dag als voltooid is gemarkeerd. */
+export function getCompletionCalendarDates(): string[] {
+  const out = new Set<string>();
+  for (const c of getCompletions()) {
+    out.add(new Date(c.completedAt).toISOString().slice(0, 10));
+  }
+  return [...out];
+}
+
 function getCompletions(): DayCompletion[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);

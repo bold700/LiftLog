@@ -169,6 +169,9 @@ export interface Formule7Routekaart {
 // --- Profiel (sporter / trainer / beheerder) ---
 export type ProfileRole = 'sporter' | 'trainer' | 'admin';
 
+/** Zichtbaarheid op de gedeelde ranglijst (alleen geaggregeerde totalen worden gedeeld). */
+export type LeaderboardVisibility = 'hidden' | 'anonymous' | 'named';
+
 export interface Profile {
   userId: string;
   role: ProfileRole;
@@ -178,6 +181,10 @@ export interface Profile {
   trainerId: string | null;
   /** True als deze gebruiker als trainer wil en op goedkeuring wacht. */
   trainerRequested?: boolean;
+  /**
+   * Ranglijst: standaard `named` (profielnaam). `anonymous` = alleen “Anoniem”. `hidden` = uit.
+   */
+  leaderboardVisibility?: LeaderboardVisibility;
   createdAt: string;
   updatedAt: string;
 }

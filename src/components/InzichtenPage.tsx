@@ -3,11 +3,13 @@ import { Box, Tab, Tabs } from '@mui/material';
 import { SpiergroepenPage } from './SpiergroepenPage';
 import { OefeningenPage } from './OefeningenPage';
 import { LogsPage } from './LogsPage';
+import { LeaderboardPage } from './LeaderboardPage';
 
 export const INZICHTEN_SUB = {
   INZICHTEN: 0,
   OEFENINGEN: 1,
   LOGS: 2,
+  LEADERBOARD: 3,
 } as const;
 
 export interface InzichtenPageProps {
@@ -28,7 +30,7 @@ export const InzichtenPage = ({
   const [subTab, setSubTab] = useState(0);
 
   useEffect(() => {
-    if (initialSubTab !== null && initialSubTab >= 0 && initialSubTab <= 2) {
+    if (initialSubTab !== null && initialSubTab >= 0 && initialSubTab <= 3) {
       setSubTab(initialSubTab);
       onConsumeInitialSubTab?.();
     }
@@ -43,8 +45,14 @@ export const InzichtenPage = ({
         sx={{
           minHeight: 48,
           mb: 2,
+          width: '100%',
+          '& .MuiTabs-flexContainer': {
+            width: '100%',
+          },
           '& .MuiTab-root': {
             minHeight: 48,
+            flex: 1,
+            maxWidth: 'none',
             textTransform: 'none',
             fontWeight: 600,
             transition: 'color 0.2s ease',
@@ -59,6 +67,7 @@ export const InzichtenPage = ({
         <Tab label="Inzichten" id="inzichten-tab-0" aria-controls="inzichten-panel-0" />
         <Tab label="Oefeningen" id="inzichten-tab-1" aria-controls="inzichten-panel-1" />
         <Tab label="Logs" id="inzichten-tab-2" aria-controls="inzichten-panel-2" />
+        <Tab label="Ranglijst" id="inzichten-tab-3" aria-controls="inzichten-panel-3" />
       </Tabs>
       <Box role="tabpanel" id="inzichten-panel-0" hidden={subTab !== 0} sx={{ flex: 1, minHeight: 0 }}>
         {subTab === 0 && <SpiergroepenPage />}
@@ -73,6 +82,9 @@ export const InzichtenPage = ({
             onConsumeOpenSessionLogDialog={onConsumeInitialOpenSessionLogDialog}
           />
         )}
+      </Box>
+      <Box role="tabpanel" id="inzichten-panel-3" hidden={subTab !== 3} sx={{ flex: 1, minHeight: 0 }}>
+        {subTab === 3 && <LeaderboardPage />}
       </Box>
     </Box>
   );

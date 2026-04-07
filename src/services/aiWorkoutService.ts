@@ -1,4 +1,5 @@
 import type { Formule7Routekaart, SchemaDay } from '../types';
+import { apiUrl } from '../utils/apiOrigin';
 
 export type AiWorkoutMode = 'free' | 'formule7';
 export interface Formule7FollowUpQuestion {
@@ -23,7 +24,7 @@ export async function getFormule7FollowUpQuestions(
   prompt: string,
   existingAnswers: Record<string, string> = {}
 ): Promise<Formule7FollowUpQuestion[]> {
-  const response = await fetch('/api/generate-workout', {
+  const response = await fetch(apiUrl('/api/generate-workout'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -58,7 +59,7 @@ export async function generateWorkoutFromPrompt(
   options?: { mode?: AiWorkoutMode }
 ): Promise<GeneratedWorkout> {
   const mode = options?.mode ?? 'free';
-  const response = await fetch('/api/generate-workout', {
+  const response = await fetch(apiUrl('/api/generate-workout'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt, mode }),

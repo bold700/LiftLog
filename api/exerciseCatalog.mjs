@@ -194,3 +194,62 @@ export function getExerciseCatalog() {
   }
   return _cached;
 }
+
+/**
+ * Opeenvolgende zoektermen voor ExerciseDB (Engels), afgeleid uit vrije / NL schematekst.
+ */
+export function candidatesForExerciseDbLookup(raw) {
+  const cat = getExerciseCatalog();
+  const { resolve, names } = cat;
+  const nameSet = new Set(names);
+  const seen = new Set();
+  const out = [];
+  const add = (s) => {
+    if (typeof s !== 'string' || !s.trim()) return;
+    const t = s.trim();
+    if (seen.has(t)) return;
+    seen.add(t);
+    out.push(t);
+  };
+
+  const trimmed = typeof raw === 'string' ? raw.trim().slice(0, 200) : '';
+  if (!trimmed) return [];
+
+  const nk = normalizeExerciseKey(trimmed);
+
+  if (nk.includes('squat') && (nk.includes('lichaam') || nk.includes('bodyweight') || nk.includes('eigen'))) {
+    add('Bodyweight Squat');
+    add('Goblet Squat');
+  }
+
+  add(trimmed);
+
+  const resolved = resolve(trimmed);
+  if (resolved) add(resolved);
+
+  for (const [aliasKey, target] of Object.entries(EXERCISE_ALIASES_RAW)) {
+    if (!nameSet.has(target)) continue;
+    const ak = normalizeExerciseKey(aliasKey);
+    if (ak.length >= 3 && nk.includes(ak)) add(target);
+  }
+
+  if (nk.includes('glute') && nk.includes('bridge')) {
+    add('Glute Bridge');
+  }
+
+  if (
+    (nk.includes('dumbbell') && nk.includes('row')) ||
+    (nk.includes('bent') && nk.includes('row')) ||
+    (nk.includes('roeien') && nk.includes('dumbbell'))
+  ) {
+    add('Dumbbell Bent-Over Row');
+    add('Barbell Bent-Over Row');
+  }
+
+  for (const tok of nk.split(/\s+/).filter((w) => w.length >= 3)) {
+    const target = EXERCISE_ALIASES_RAW[tok];
+    if (target && nameSet.has(target)) add(target);
+  }
+
+  return out;
+}

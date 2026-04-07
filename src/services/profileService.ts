@@ -17,7 +17,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
-import type { Profile, ProfileRole } from '../types';
+import type { Profile, ProfileRole, LeaderboardVisibility } from '../types';
 
 const COLLECTION = 'profiles';
 
@@ -26,6 +26,9 @@ function toProfile(data: Record<string, unknown>, userId: string): Profile {
   const ts = (v: unknown) => (v && typeof (v as Timestamp).toDate === 'function' ? (v as Timestamp).toDate().toISOString() : new Date().toISOString());
   const rawRole = data.role != null ? String(data.role).toLowerCase().trim() : '';
   const role = rawRole === 'admin' || rawRole === 'trainer' || rawRole === 'sporter' ? rawRole : 'sporter';
+  const rawVis = data.leaderboardVisibility;
+  const leaderboardVisibility: LeaderboardVisibility =
+    rawVis === 'anonymous' || rawVis === 'named' || rawVis === 'hidden' ? rawVis : 'named';
   return {
     userId,
     role: role as ProfileRole,
@@ -33,6 +36,7 @@ function toProfile(data: Record<string, unknown>, userId: string): Profile {
     displayName: toStr(data.displayName),
     trainerId: toStr(data.trainerId),
     trainerRequested: data.trainerRequested === true,
+    leaderboardVisibility,
     createdAt: ts(data.createdAt),
     updatedAt: ts(data.updatedAt),
   };
@@ -55,6 +59,7 @@ export async function createProfile(
     displayName: displayName ?? null,
     trainerId: null,
     trainerRequested: trainerRequested ?? false,
+    leaderboardVisibility: 'named',
     createdAt: now,
     updatedAt: now,
   };
@@ -84,7 +89,9 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 
 export async function updateProfile(
   userId: string,
-  data: Partial<Pick<Profile, 'role' | 'displayName' | 'trainerId' | 'trainerRequested'>>
+  data: Partial<
+    Pick<Profile, 'role' | 'displayName' | 'trainerId' | 'trainerRequested' | 'leaderboardVisibility'>
+  >
 ): Promise<void> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
   const ref = doc(db, COLLECTION, userId);

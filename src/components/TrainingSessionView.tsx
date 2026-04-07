@@ -30,6 +30,7 @@ import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { designTokens } from '../theme/designTokens';
 import { PageLayout, ContentCard } from './layout';
 import { AppleHealthWorkoutCard } from './AppleHealthWorkoutCard';
+import { ExerciseDbDemo } from './ExerciseDbDemo';
 import {
   healthSummaryKeyForSchema,
   getStoredHealthSummary,
@@ -345,7 +346,7 @@ export const TrainingSessionView = ({
                         flexDirection: { xs: 'column', sm: 'row' },
                       }}
                     >
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Box sx={{ flex: 1, minWidth: { xs: '100%', sm: 160 } }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                           <Typography variant="subtitle1" fontWeight={600}>
                             {ex.exerciseName}
@@ -385,7 +386,8 @@ export const TrainingSessionView = ({
                           </Typography>
                         )}
                       </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                      <ExerciseDbDemo exerciseName={ex.exerciseName} variant="aside" />
+                      <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0, alignSelf: { xs: 'stretch', sm: 'center' } }}>
                         <Box
                           sx={{ cursor: 'pointer', display: 'inline-block' }}
                           onClick={() => handleLogToevoegen(ex)}

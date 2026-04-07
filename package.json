@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:ai": "LOCAL_AI_API_SERVER=true npm run dev",
+    "dev:ai": "npm run dev",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "cap:sync": "npm run build && npx cap sync",
@@ -15,7 +15,8 @@
     "cap:run:ios": "npm run cap:sync && npx cap open ios",
     "cap:run:android": "npm run cap:sync && npx cap open android",
     "build:ios": "npm run build && cp -r dist/* \"Van As Personal Training Logs/Van As Personal Training Logs/public/\" && echo \"✅ Build voltooid en bestanden gekopieerd naar iOS project!\"",
-    "delete-all-accounts": "node scripts/delete-all-accounts.cjs"
+    "delete-all-accounts": "node scripts/delete-all-accounts.cjs",
+    "deploy:firestore": "npx --yes firebase-tools@13 deploy --only firestore:rules"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",

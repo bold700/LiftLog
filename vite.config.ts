@@ -84,13 +84,13 @@ export default defineConfig({
     })
   ],
   server: {
-    // Tijdens lokale test: proxy alle /api requests naar onze lokale API server.
-    proxy:
-      process.env.LOCAL_AI_API_SERVER === 'true'
-        ? {
-            '/api': 'http://localhost:3001',
-          }
-        : undefined,
+    // Alle /api → lokale Node-server (exercise-demo, generate-workout). Start: node scripts/local-api-server.mjs
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+    },
   },
 })
 

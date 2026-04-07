@@ -15,6 +15,7 @@ import { AddPage } from './components/AddPage';
 import { SchemasPage } from './components/SchemasPage';
 import { BeheerPage } from './components/BeheerPage';
 import { ProfielPage } from './components/ProfielPage';
+import { LeaderboardAutoSync } from './components/LeaderboardAutoSync';
 import { AddFromSchemaProvider } from './context/AddFromSchemaContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProfileProvider, useProfile } from './context/ProfileContext';
@@ -170,6 +171,7 @@ function AppContent() {
     <ThemeProvider theme={lightTheme}>
       <CssBaseline />
       <ProfileProvider>
+      <LeaderboardAutoSync />
       <AddFromSchemaProvider
         onSwitchToAddTab={openAdd}
         onSwitchToSchemasTab={switchToSchemasTab}

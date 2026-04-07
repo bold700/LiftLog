@@ -72,6 +72,9 @@ In het project staat een bestand **`firestore.rules`** in de projectroot. Die re
 |-----------|--------|-----------|
 | **profiles** | Eigen profiel, sporters van jouw trainer, trainers (opzoeken op e-mail), of beheerder (o.a. lijst trainer-aanvragen) | Eigen profiel aanmaken/bewerken; trainers en beheerders mogen ook andere profielen bewerken (rol, trainerId, trainerRequested) |
 | **workouts** | Alleen workouts waar jij `trainerId` of `clientId` bent | Alleen aanmaken/bewerken/verwijderen als jij de trainer bent |
+| **leaderboardPublic** | Iedere ingelogde gebruiker (ranglijst) | Alleen je eigen document (`userId` = jouw uid): sync van geaggregeerde ranglijstdata |
+
+Zonder het blok `match /leaderboardPublic/{userId}` in de gepubliceerde regels krijg je *Missing or insufficient permissions* op de ranglijst. Zorg dat je de **volledige** inhoud van `firestore.rules` uit deze repo publiceert, of deploy met `npm run deploy:firestore` (na `firebase login` en gekozen project).
 
 **Regels in Firebase zetten:**
 

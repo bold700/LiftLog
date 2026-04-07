@@ -6,6 +6,9 @@
     "api/generate-workout.mjs": {
       "includeFiles": "src/data/mega_exercise_db.json",
       "maxDuration": 60
+    },
+    "api/exercise-demo.mjs": {
+      "includeFiles": "src/data/mega_exercise_db.json"
     }
   },
   "rewrites": [
