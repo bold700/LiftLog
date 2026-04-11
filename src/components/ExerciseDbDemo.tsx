@@ -5,7 +5,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { apiUrl } from '../utils/apiOrigin';
 
-const SESSION_DEMO_PREFIX = 'liftlog:v2:exercise-demo:';
+const SESSION_DEMO_PREFIX = 'liftlog:v3:exercise-demo:';
 
 type DemoState =
   | { status: 'idle' }

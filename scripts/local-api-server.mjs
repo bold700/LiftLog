@@ -23,7 +23,8 @@ function loadDotEnvIfMissing() {
       if (eq === -1) continue;
       const key = trimmed.slice(0, eq).trim();
       const value = trimmed.slice(eq + 1).trim();
-      if (!process.env[key]) process.env[key] = value;
+      const shouldForceFromDotEnv = key.startsWith('EXERCISEDB_');
+      if (shouldForceFromDotEnv || !process.env[key]) process.env[key] = value;
     }
   } catch {
     // Ignore: lokale server kan draaien met al ingezette env vars.

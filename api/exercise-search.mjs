@@ -1,10 +1,16 @@
-const RAPID_HOST =
-  (typeof process.env.EXERCISEDB_RAPIDAPI_HOST === 'string' && process.env.EXERCISEDB_RAPIDAPI_HOST.trim()) ||
-  'edb-with-videos-and-images-by-ascendapi.p.rapidapi.com';
-const RAPID_BASE = `https://${RAPID_HOST}`;
-const API_KIND = (typeof process.env.EXERCISEDB_API_KIND === 'string' ? process.env.EXERCISEDB_API_KIND : 'v2')
-  .trim()
-  .toLowerCase();
+function getRapidHost() {
+  const envHost =
+    typeof process.env.EXERCISEDB_RAPIDAPI_HOST === 'string'
+      ? process.env.EXERCISEDB_RAPIDAPI_HOST.trim()
+      : '';
+  return envHost || 'edb-with-videos-and-images-by-ascendapi.p.rapidapi.com';
+}
+
+function getApiKind() {
+  return (typeof process.env.EXERCISEDB_API_KIND === 'string' ? process.env.EXERCISEDB_API_KIND : 'v2')
+    .trim()
+    .toLowerCase();
+}
 
 const SEARCH_CACHE = new Map();
 const SEARCH_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
@@ -95,7 +101,7 @@ function withSearchSynonyms(term) {
   return [term, ...extras];
 }
 
-async function loadFullIndex(headers) {
+async function loadFullIndex(headers, rapidBase, apiKind) {
   const now = Date.now();
   if (EXERCISE_INDEX && now - INDEX_LOADED_AT < INDEX_TTL_MS) return EXERCISE_INDEX;
 
@@ -108,34 +114,34 @@ async function loadFullIndex(headers) {
   while (guard < 900) {
     guard += 1;
     const p = new URLSearchParams({ limit: String(pageSize) });
-    if (API_KIND === 'v1') {
+    if (apiKind === 'v1') {
       p.set('offset', String(offset));
     } else if (after) {
       p.set('after', after);
     }
-    const url = API_KIND === 'v1' ? `${RAPID_BASE}/exercises?${p.toString()}` : `${RAPID_BASE}/api/v1/exercises?${p.toString()}`;
+    const url = apiKind === 'v1' ? `${rapidBase}/exercises?${p.toString()}` : `${rapidBase}/api/v1/exercises?${p.toString()}`;
     const r = await fetch(url, { method: 'GET', headers });
     if (!r.ok) break;
     const j = await r.json().catch(() => null);
-    const arr = API_KIND === 'v1' ? (Array.isArray(j) ? j : []) : Array.isArray(j?.data) ? j.data : [];
+    const arr = apiKind === 'v1' ? (Array.isArray(j) ? j : []) : Array.isArray(j?.data) ? j.data : [];
     for (const item of arr) {
       const name = normalizeName(item?.name);
       if (!name) continue;
       const key = normalizeKey(name);
       if (seen.has(key)) continue;
       seen.add(key);
-      const target = API_KIND === 'v1'
+      const target = apiKind === 'v1'
         ? [item?.target].filter((x) => typeof x === 'string' && x.trim())
         : Array.isArray(item?.targetMuscles)
           ? item.targetMuscles
           : [];
       const secondary = Array.isArray(item?.secondaryMuscles) ? item.secondaryMuscles : [];
-      const bodyParts = API_KIND === 'v1'
+      const bodyParts = apiKind === 'v1'
         ? [item?.bodyPart].filter((x) => typeof x === 'string' && x.trim())
         : Array.isArray(item?.bodyParts)
           ? item.bodyParts
           : [];
-      const equipments = API_KIND === 'v1'
+      const equipments = apiKind === 'v1'
         ? [item?.equipment].filter((x) => typeof x === 'string' && x.trim())
         : item?.equipments;
       rows.push({
@@ -144,7 +150,7 @@ async function loadFullIndex(headers) {
         equipmentBucket: inferEquipmentBucket(equipments),
       });
     }
-    if (API_KIND === 'v1') {
+    if (apiKind === 'v1') {
       if (arr.length === 0) break;
       offset += arr.length;
       continue;
@@ -176,10 +182,13 @@ export default async function handler(req, res) {
   const cached = fromCache(cacheKey);
   if (cached) return json(res, 200, cached);
 
-  const headers = { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': RAPID_HOST };
+  const rapidHost = getRapidHost();
+  const rapidBase = `https://${rapidHost}`;
+  const apiKind = getApiKind();
+  const headers = { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': rapidHost };
 
   try {
-    const allRows = await loadFullIndex(headers);
+    const allRows = await loadFullIndex(headers, rapidBase, apiKind);
     let filtered = allRows;
     if (equipment && equipment !== 'all') {
       filtered = filtered.filter((r) => r.equipmentBucket === equipment);

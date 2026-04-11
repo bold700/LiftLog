@@ -17,11 +17,13 @@ const API_KIND =
 const DEMO_SUCCESS_CACHE = new Map();
 const DEMO_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const DEMO_CACHE_MAX = 1500;
+/** Verhogen na zoek-/filterlogica-wijziging zodat oude mis-matches niet uit cache komen. */
+const DEMO_CACHE_KEY_VERSION = 'v2';
 /** Max. zoekpogingen per request (Basic-quota). */
 const MAX_NAME_LOOKUPS = 8;
 
 function demoCacheGet(rawName) {
-  const k = normalizeExerciseKey(rawName);
+  const k = `${DEMO_CACHE_KEY_VERSION}:${normalizeExerciseKey(rawName)}`;
   const e = DEMO_SUCCESS_CACHE.get(k);
   if (!e) return null;
   if (Date.now() - e.at > DEMO_CACHE_TTL_MS) {
@@ -32,7 +34,7 @@ function demoCacheGet(rawName) {
 }
 
 function demoCacheSetSuccess(rawName, payload) {
-  const k = normalizeExerciseKey(rawName);
+  const k = `${DEMO_CACHE_KEY_VERSION}:${normalizeExerciseKey(rawName)}`;
   if (DEMO_SUCCESS_CACHE.size >= DEMO_CACHE_MAX) {
     const first = DEMO_SUCCESS_CACHE.keys().next().value;
     DEMO_SUCCESS_CACHE.delete(first);
@@ -118,11 +120,18 @@ function pickBestExercise(parsed, candidateName) {
     if (n === cand) score += 100;
     if (cand && n.includes(cand)) score += 25;
     if (cand && cand.includes(n)) score += 20;
+    const nCompact = n.replace(/\s+/g, '');
+    const candCompact = cand.replace(/\s+/g, '');
+    if (candCompact.length >= 5 && nCompact.includes(candCompact)) score += 18;
+    if (candCompact.length >= 5 && candCompact.includes(nCompact) && nCompact.length >= 6) score += 14;
     const nTokens = new Set(n.split(' ').filter((t) => t.length >= 3));
     let overlap = 0;
     for (const t of candTokens) {
       if (nTokens.has(t)) {
         score += 3;
+        overlap += 1;
+      } else if (t.length >= 4 && n.includes(t)) {
+        score += 2;
         overlap += 1;
       }
     }
@@ -131,9 +140,65 @@ function pickBestExercise(parsed, candidateName) {
       bestScore = score;
       bestOverlapRatio = overlapRatio;
       best = item;
+    } else if (score === bestScore && overlapRatio > bestOverlapRatio) {
+      bestOverlapRatio = overlapRatio;
+      best = item;
     }
   }
   return { item: best, score: bestScore, overlapRatio: bestOverlapRatio };
+}
+
+/** Ascend search: token-match op "pulldown"/"curl" geeft vaak towel/floor- of compound-oefeningen. */
+function isAscendSearchJunkMatch(userInput, apiExerciseName) {
+  const u = normalizeName(userInput);
+  const r = normalizeName(apiExerciseName);
+  if (!u || !r) return false;
+
+  if ((u.includes('pulldown') || (u.includes('lat') && u.includes('pull'))) && !u.includes('towel') && !u.includes('floor')) {
+    if (/sliding|floor|towel|wrist|punching|neck extension|neck flexion/i.test(r) && /pulldown|pullover/i.test(r)) {
+      return true;
+    }
+    if (u.includes('pulldown') && !u.includes('pullover') && /pullover/i.test(r) && !/pulldown/i.test(r)) {
+      return true;
+    }
+  }
+
+  if (u.includes('dumbbell') && u.includes('bicep') && u.includes('curl')) {
+    if (!/(curl|hammer)/i.test(r)) return true;
+    if (
+      /(squat|deadlift|skull|clean and press|fly|side bend|burpee|calf raise|jumping|one arm bent|bent-over row|rear delt)/i.test(
+        r
+      )
+    ) {
+      return true;
+    }
+  }
+
+  if (
+    !u.includes('towel') &&
+    /\btowel\b/i.test(r) &&
+    /(curl|hammer|bicep)/i.test(r) &&
+    /(bicep|curl|hammer|dumbbell|barbell|arm)/i.test(u)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function pickAcceptableExercise(parsed, candidateName, userInput) {
+  const arr = toExerciseArray(parsed).filter((item) => {
+    const n = typeof item?.name === 'string' ? item.name : '';
+    if (!n.trim()) return false;
+    const ctx = `${userInput} ${candidateName}`;
+    return !isAscendSearchJunkMatch(ctx, n);
+  });
+  if (!arr.length) return null;
+  const wrapped = arr.length === toExerciseArray(parsed).length ? parsed : { data: arr };
+  const { item, score, overlapRatio } = pickBestExercise(wrapped, candidateName);
+  if (!item || typeof item.name !== 'string') return null;
+  if (isAscendSearchJunkMatch(`${userInput} ${candidateName}`, item.name)) return null;
+  return { item, score, overlapRatio };
 }
 
 function pickFirstExercise(parsed) {
@@ -274,8 +339,11 @@ export default async function handler(req, res) {
       } catch {
         continue;
       }
-      const best = pickBestExercise(parsed, candidate);
-      let first = best.item || pickFirstExercise(parsed);
+      const best = pickAcceptableExercise(parsed, candidate, name);
+      if (!best?.item) {
+        continue;
+      }
+      let first = best.item;
       const isUnsafeFuzzy =
         API_KIND === 'v2' &&
         best.item &&

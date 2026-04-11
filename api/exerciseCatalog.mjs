@@ -224,6 +224,46 @@ export function candidatesForExerciseDbLookup(raw) {
 
   const nk = normalizeExerciseKey(trimmed);
 
+  /**
+   * Ascend `/exercises/search` matcht vaak token-gedeeltelijk (bijv. "pulldown" → "Sliding Floor Pulldown on Towel").
+   * Betrouwbare demo-zoektermen eerst = juiste video vóór misleidende hits.
+   */
+  const priorityFirst = [];
+  const prioritySeen = new Set();
+  const addPriority = (s) => {
+    if (typeof s !== 'string' || !s.trim()) return;
+    const t = s.trim();
+    if (prioritySeen.has(t)) return;
+    prioritySeen.add(t);
+    priorityFirst.push(t);
+    const lo = t.toLowerCase();
+    if (lo !== t && !prioritySeen.has(lo)) {
+      prioritySeen.add(lo);
+      priorityFirst.push(lo);
+    }
+  };
+
+  if (nk.includes('dumbbell') && nk.includes('bicep') && nk.includes('curl')) {
+    addPriority('Hammer Curl');
+    addPriority('Cross Body Hammer Curl');
+  }
+  if (nk.includes('barbell') && nk.includes('bicep') && nk.includes('curl')) {
+    addPriority('Hammer Curl');
+  }
+  if (nk.includes('cable') && nk.includes('bicep') && nk.includes('curl')) {
+    addPriority('Hammer Curl');
+  }
+  if (nk.includes('bicep') && nk.includes('curl') && nk.includes('machine')) {
+    addPriority('Hammer Curl');
+  }
+  if (
+    (nk.includes('lat') && nk.includes('pulldown')) ||
+    (nk.includes('cable') && nk.includes('lat') && nk.includes('pulldown'))
+  ) {
+    addPriority('Wide Grip Pull-Up');
+    addPriority('Pull-up');
+  }
+
   if (nk.includes('squat') && (nk.includes('lichaam') || nk.includes('bodyweight') || nk.includes('eigen'))) {
     add('Bodyweight Squat');
     add('Goblet Squat');
@@ -262,5 +302,12 @@ export function candidatesForExerciseDbLookup(raw) {
     if (target && nameSet.has(target)) add(target);
   }
 
-  return out;
+  const merged = [];
+  const seenMerged = new Set();
+  for (const t of [...priorityFirst, ...out]) {
+    if (seenMerged.has(t)) continue;
+    seenMerged.add(t);
+    merged.push(t);
+  }
+  return merged;
 }
