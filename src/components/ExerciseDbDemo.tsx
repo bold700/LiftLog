@@ -199,12 +199,13 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
         <Box
           sx={{
             flexShrink: 0,
+            order: { xs: -1, sm: 0 },
             width: { xs: '100%', sm: 132 },
-            maxWidth: { xs: 160, sm: 132 },
+            maxWidth: { xs: '100%', sm: 132 },
             alignSelf: { xs: 'center', sm: 'flex-start' },
           }}
         >
-          <Skeleton variant="rounded" height={120} sx={{ borderRadius: 1 }} />
+          <Skeleton variant="rounded" height={120} sx={{ borderRadius: 2.5 }} />
         </Box>
       );
     }
@@ -229,8 +230,8 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
         onError={() => setGifLoadFailed(true)}
         sx={{
           width: '100%',
-          maxWidth: variant === 'aside' ? 160 : 360,
-          maxHeight: variant === 'aside' ? 130 : 'none',
+          maxWidth: variant === 'aside' ? { xs: '100%', sm: 160 } : 360,
+          maxHeight: variant === 'aside' ? { xs: 'none', sm: 130 } : 'none',
           height: 'auto',
           objectFit: 'contain',
           borderRadius: 2.5,
@@ -245,9 +246,10 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
       <Box
         sx={{
           flexShrink: 0,
+          order: { xs: -1, sm: 0 },
           width: { xs: '100%', sm: 'auto' },
           minWidth: { sm: 120 },
-          maxWidth: { xs: 200, sm: 200 },
+          maxWidth: { xs: '100%', sm: 200 },
           alignSelf: 'center',
         }}
       >
