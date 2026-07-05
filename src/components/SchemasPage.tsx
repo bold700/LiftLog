@@ -123,21 +123,6 @@ export const SchemasPage = () => {
     setOpenNewSchemaDialog(false);
   }, [createEmptySchema, saveSchema, loadSchemas]);
 
-  const handleCreateFormule7Schema = useCallback(async () => {
-    const base = createEmptySchema('Formule 7 workout');
-    const schema: Schema = {
-      ...base,
-      isFormule7Template: true,
-      formule7AssistMode: 'manual',
-      formule7: createEmptyFormule7(),
-    };
-    await saveSchema(schema);
-    loadSchemas();
-    setSelectedSchemaId(schema.id);
-    setView('edit');
-    setOpenNewSchemaDialog(false);
-  }, [createEmptySchema, saveSchema, loadSchemas]);
-
   const handleCreateAiFormule7Schema = useCallback(async () => {
     const base = createEmptySchema('Formule 7 workout (AI)');
     const schema: Schema = {
@@ -791,15 +776,11 @@ export const SchemasPage = () => {
         <DialogTitle>Nieuwe workout aanmaken</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Kies hoe je wilt starten. Formule 7-routekaart en AI gebruiken dezelfde routekaart; bij AI
-            stelt de app eerst vragen om alles te vullen.
+            Kies hoe je wilt starten. Bij AI stelt de app eerst vragen om alles te vullen.
           </Typography>
           <Stack spacing={1.25}>
             <Button variant="outlined" fullWidth onClick={handleCreateFreeSchema} sx={{ py: 1.25 }}>
               Vrij
-            </Button>
-            <Button variant="outlined" fullWidth onClick={handleCreateFormule7Schema} sx={{ py: 1.25 }}>
-              Routekaart
             </Button>
             <Button variant="contained" fullWidth onClick={handleCreateAiFormule7Schema} sx={{ py: 1.25 }}>
               AI
