@@ -1,7 +1,7 @@
 /**
  * Pagina om eigen profielgegevens te beheren (naam, e-mail tonen).
  */
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -17,11 +17,14 @@ import {
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import EmailRoundedIcon from '@mui/icons-material/EmailRounded';
 import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
+import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
 import { useProfile } from '../context/ProfileContext';
 import { useAuth } from '../context/AuthContext';
 import { updateProfile } from '../services/profileService';
+import { uploadAvatar, deleteAvatar } from '../services/avatarService';
 import type { LeaderboardVisibility } from '../types';
 import { PageLayout, ContentCard } from './layout';
+import { UserAvatar } from './UserAvatar';
 
 export function ProfielPage() {
   const profile = useProfile();
@@ -29,10 +32,55 @@ export function ProfielPage() {
   const [displayName, setDisplayName] = useState('');
   const [leaderboardVisibility, setLeaderboardVisibility] = useState<LeaderboardVisibility>('named');
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const p = profile?.profile;
   const uid = auth?.user?.uid ?? p?.userId;
+
+  const handlePhotoSelected = useCallback(
+    async (file: File | null) => {
+      if (!file || !uid || !profile) return;
+      if (!file.type.startsWith('image/')) {
+        setMessage({ type: 'error', text: 'Kies een afbeelding.' });
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        setMessage({ type: 'error', text: 'Foto is te groot (max 5 MB).' });
+        return;
+      }
+      setUploadingPhoto(true);
+      setMessage(null);
+      try {
+        const url = await uploadAvatar(uid, file);
+        await updateProfile(uid, { photoURL: url });
+        await profile.refreshProfile();
+        setMessage({ type: 'success', text: 'Profielfoto bijgewerkt.' });
+      } catch (e) {
+        setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Uploaden mislukt.' });
+      } finally {
+        setUploadingPhoto(false);
+      }
+    },
+    [uid, profile]
+  );
+
+  const handleRemovePhoto = useCallback(async () => {
+    if (!uid || !profile) return;
+    setUploadingPhoto(true);
+    setMessage(null);
+    try {
+      await deleteAvatar(uid);
+      await updateProfile(uid, { photoURL: null });
+      await profile.refreshProfile();
+      setMessage({ type: 'success', text: 'Profielfoto verwijderd.' });
+    } catch (e) {
+      setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Verwijderen mislukt.' });
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }, [uid, profile]);
 
   useEffect(() => {
     if (p?.displayName != null) setDisplayName(p.displayName);
@@ -72,6 +120,41 @@ export function ProfielPage() {
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
           Beheer je gegevens. Je naam wordt gebruikt in de app en in beheeroverzichten.
         </Typography>
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+          <UserAvatar name={displayName || p?.displayName} photoURL={p?.photoURL} size={72} />
+          <Box>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                handlePhotoSelected(e.target.files?.[0] ?? null);
+                e.target.value = '';
+              }}
+            />
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<PhotoCameraRoundedIcon />}
+                disabled={uploadingPhoto}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {uploadingPhoto ? 'Bezig…' : p?.photoURL ? 'Foto wijzigen' : 'Foto toevoegen'}
+              </Button>
+              {p?.photoURL && (
+                <Button variant="text" size="small" color="inherit" disabled={uploadingPhoto} onClick={handleRemovePhoto}>
+                  Verwijderen
+                </Button>
+              )}
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              Zichtbaar op de ranglijst. Zonder foto tonen we je initialen. (max 5 MB)
+            </Typography>
+          </Box>
+        </Box>
 
         <FormControl component="fieldset" sx={{ mb: 3, width: '100%' }}>
           <FormLabel component="legend" sx={{ fontWeight: 600, color: 'text.primary', mb: 1 }}>

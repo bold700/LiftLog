@@ -26,6 +26,8 @@ export interface PublicLeaderboardEntry {
   userId: string;
   displayLabel: string;
   visibility: 'anonymous' | 'named';
+  /** Profielfoto-URL (leeg bij anoniem). */
+  photoURL: string | null;
   /** Legacy: zwaarste enkele log (blijft gesynchroniseerd voor oude clients). */
   exerciseName7d: string;
   weightKg7d: number;
@@ -53,6 +55,7 @@ export async function syncMyLeaderboardPublic(opts: {
   uid: string;
   leaderboardVisibility: LeaderboardVisibility | undefined;
   displayName: string | null;
+  photoURL?: string | null;
 }): Promise<void> {
   if (!isFirebaseConfigured() || !db) return;
   const visibility = opts.leaderboardVisibility ?? 'named';
@@ -76,6 +79,8 @@ export async function syncMyLeaderboardPublic(opts: {
       userId: opts.uid,
       displayLabel: labelInfo.label,
       visibility: labelInfo.visibility,
+      // Foto alleen bij 'named' delen (bij anoniem geen herkenbare foto)
+      photoURL: labelInfo.visibility === 'named' ? opts.photoURL ?? '' : '',
       exerciseName7d: metrics.best7d?.exerciseName ?? '',
       weightKg7d: metrics.best7d?.weightKg ?? 0,
       exerciseName30d: metrics.best30d?.exerciseName ?? '',
@@ -146,6 +151,7 @@ export async function fetchPublicLeaderboard(): Promise<PublicLeaderboardEntry[]
       userId: d.id,
       displayLabel: String(data.displayLabel ?? 'Sporter'),
       visibility: vis,
+      photoURL: data.photoURL ? String(data.photoURL) : null,
       exerciseName7d: ex7,
       weightKg7d: Number.isFinite(wt7) ? wt7 : 0,
       exerciseName30d: ex30,

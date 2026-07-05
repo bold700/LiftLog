@@ -219,6 +219,8 @@ export interface Profile {
   role: ProfileRole;
   email: string | null;
   displayName: string | null;
+  /** Profielfoto (download-URL uit Firebase Storage). */
+  photoURL?: string | null;
   /** Alleen bij sporters: uid van de trainer die hen beheert. */
   trainerId: string | null;
   /** True als deze gebruiker als trainer wil en op goedkeuring wacht. */

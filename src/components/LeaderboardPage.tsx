@@ -7,6 +7,7 @@ import {
   List,
   ListItem,
   ListItemText,
+  ListItemAvatar,
   Alert,
   Chip,
   IconButton,
@@ -15,6 +16,7 @@ import {
 import EmojiEventsRoundedIcon from '@mui/icons-material/EmojiEventsRounded';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { PageLayout, ContentCard } from './layout';
+import { UserAvatar } from './UserAvatar';
 import type { BestLift } from '../utils/leaderboardLocalStats';
 import {
   fetchPublicLeaderboard,
@@ -240,6 +242,13 @@ export function LeaderboardPage() {
                     bgcolor: isYou ? 'action.selected' : 'transparent',
                   }}
                 >
+                  <ListItemAvatar sx={{ minWidth: 52 }}>
+                    <UserAvatar
+                      name={r.visibility === 'named' ? r.displayLabel : 'Anoniem'}
+                      photoURL={r.visibility === 'named' ? r.photoURL : null}
+                      size={40}
+                    />
+                  </ListItemAvatar>
                   <ListItemText
                     primary={
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>

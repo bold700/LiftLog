@@ -34,6 +34,7 @@ function toProfile(data: Record<string, unknown>, userId: string): Profile {
     role: role as ProfileRole,
     email: toStr(data.email),
     displayName: toStr(data.displayName),
+    photoURL: toStr(data.photoURL),
     trainerId: toStr(data.trainerId),
     trainerRequested: data.trainerRequested === true,
     leaderboardVisibility,
@@ -90,7 +91,7 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 export async function updateProfile(
   userId: string,
   data: Partial<
-    Pick<Profile, 'role' | 'displayName' | 'trainerId' | 'trainerRequested' | 'leaderboardVisibility'>
+    Pick<Profile, 'role' | 'displayName' | 'photoURL' | 'trainerId' | 'trainerRequested' | 'leaderboardVisibility'>
   >
 ): Promise<void> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');

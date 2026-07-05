@@ -22,6 +22,7 @@ export function LeaderboardAutoSync() {
       uid,
       leaderboardVisibility: p.leaderboardVisibility,
       displayName: p.displayName,
+      photoURL: p.photoURL,
     });
   }, [auth?.user?.uid, profileCtx?.profile]);
 
@@ -31,6 +32,7 @@ export function LeaderboardAutoSync() {
     runSync,
     profileCtx?.profile?.leaderboardVisibility,
     profileCtx?.profile?.displayName,
+    profileCtx?.profile?.photoURL,
   ]);
 
   useEffect(() => {

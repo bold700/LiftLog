@@ -8,6 +8,7 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getStorage, type FirebaseStorage } from 'firebase/storage';
 
 const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
 const authDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
@@ -25,6 +26,7 @@ const hasConfig =
 let app: FirebaseApp | null = null;
 let authInstance: Auth | null = null;
 let firestore: Firestore | null = null;
+let storageInstance: FirebaseStorage | null = null;
 
 if (hasConfig) {
   app = initializeApp({
@@ -37,11 +39,13 @@ if (hasConfig) {
   });
   authInstance = getAuth(app);
   firestore = getFirestore(app);
+  storageInstance = getStorage(app);
 }
 
 export const firebaseApp = app;
 export const auth = authInstance;
 export const db = firestore;
+export const storage = storageInstance;
 
 /** Of Firebase is geconfigureerd (alleen dan zijn app en db beschikbaar). */
 export const isFirebaseConfigured = (): boolean => hasConfig;
