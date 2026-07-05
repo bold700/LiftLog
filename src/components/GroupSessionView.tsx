@@ -13,6 +13,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingFlatIcon from '@mui/icons-material/TrendingFlat';
 import { PageLayout, ContentCard } from './layout';
+import { ExerciseDbDemo } from './ExerciseDbDemo';
 import type { ExerciseLog, GroupSession, Profile, Schema } from '../types';
 import { getLogsForSession, getLogsForUser, saveExerciseLog } from '../services/logService';
 
@@ -175,13 +176,39 @@ export function GroupSessionView({ schema, session, participants, currentUserId,
                 sx={{ backgroundColor: 'transparent', border: '1px solid', borderColor: 'divider', boxShadow: 'none', borderRadius: 2 }}
               >
                 <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                  <Typography variant="subtitle1" fontWeight={600}>
-                    {ex.exerciseName}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block' }}>
-                    Doel: {ex.setsTarget} × {ex.repsTarget} reps
-                    {ex.targetWeight != null ? ` · ${ex.targetWeight} kg` : ''}
-                  </Typography>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      gap: 2,
+                      flexWrap: 'wrap',
+                      flexDirection: { xs: 'column', sm: 'row' },
+                      alignItems: 'flex-start',
+                      mb: 1.5,
+                    }}
+                  >
+                    <Box sx={{ flex: 1, minWidth: { xs: '100%', sm: 160 } }}>
+                      <Typography variant="subtitle1" fontWeight={600}>
+                        {ex.exerciseName}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Doel: {ex.setsTarget} × {ex.repsTarget} reps
+                        {ex.restSeconds != null && ex.restSeconds > 0 ? ` · ${ex.restSeconds}s rust` : ''}
+                        {ex.targetWeight != null ? ` · ${ex.targetWeight} kg` : ''}
+                      </Typography>
+                      {ex.notes ? (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          display="block"
+                          fontStyle="italic"
+                          sx={{ mt: 0.5 }}
+                        >
+                          {ex.notes}
+                        </Typography>
+                      ) : null}
+                    </Box>
+                    <ExerciseDbDemo exerciseName={ex.exerciseName} variant="aside" />
+                  </Box>
 
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                     {participants.map((p) => {
