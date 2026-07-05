@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 
 import generateHandler from '../api/generate-workout.mjs';
 import exerciseDemoHandler from '../api/exercise-demo.mjs';
-import exerciseGifHandler from '../api/exercise-gif.mjs';
 import exerciseSearchHandler from '../api/exercise-search.mjs';
 
 function loadDotEnvIfMissing() {
@@ -23,8 +22,7 @@ function loadDotEnvIfMissing() {
       if (eq === -1) continue;
       const key = trimmed.slice(0, eq).trim();
       const value = trimmed.slice(eq + 1).trim();
-      const shouldForceFromDotEnv = key.startsWith('EXERCISEDB_');
-      if (shouldForceFromDotEnv || !process.env[key]) process.env[key] = value;
+      if (!process.env[key]) process.env[key] = value;
     }
   } catch {
     // Ignore: lokale server kan draaien met al ingezette env vars.
@@ -98,13 +96,6 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (pathname === '/api/exercise-gif' && req.method === 'GET') {
-    const reqAdapter = { method: req.method, query };
-    const resAdapter = new ServerResponseAdapter(res);
-    await exerciseGifHandler(reqAdapter, resAdapter);
-    return;
-  }
-
   if (pathname === '/api/exercise-search' && req.method === 'GET') {
     const reqAdapter = { method: req.method, query };
     const resAdapter = new ServerResponseAdapter(res);
@@ -133,7 +124,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(
-    `[local-api-server] Luistert op http://localhost:${PORT} — /api/generate-workout, /api/exercise-demo, /api/exercise-gif, /api/exercise-search`
+    `[local-api-server] Luistert op http://localhost:${PORT} — /api/generate-workout, /api/exercise-demo, /api/exercise-search`
   );
 });
 
