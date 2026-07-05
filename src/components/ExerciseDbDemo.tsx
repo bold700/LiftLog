@@ -233,7 +233,7 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
           maxHeight: variant === 'aside' ? 130 : 'none',
           height: 'auto',
           objectFit: 'contain',
-          borderRadius: 1,
+          borderRadius: 2.5,
           display: 'block',
         }}
       />

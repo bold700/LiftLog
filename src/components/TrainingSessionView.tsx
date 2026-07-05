@@ -385,11 +385,8 @@ export const TrainingSessionView = ({
                             {ex.notes}
                           </Typography>
                         )}
-                      </Box>
-                      <ExerciseDbDemo exerciseName={ex.exerciseName} variant="aside" />
-                      <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0, alignSelf: { xs: 'stretch', sm: 'center' } }}>
                         <Box
-                          sx={{ cursor: 'pointer', display: 'inline-block' }}
+                          sx={{ cursor: 'pointer', display: 'inline-block', mt: 1.5 }}
                           onClick={() => handleLogToevoegen(ex)}
                           role="button"
                           tabIndex={0}
@@ -402,6 +399,7 @@ export const TrainingSessionView = ({
                           </md-filled-button>
                         </Box>
                       </Box>
+                      <ExerciseDbDemo exerciseName={ex.exerciseName} variant="aside" />
                     </Box>
                   </CardContent>
                 </Card>
