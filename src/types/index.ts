@@ -231,11 +231,24 @@ export interface Profile {
   updatedAt: string;
 }
 
+/**
+ * Voor wie een workout bedoeld is (bepaald bij aanmaken):
+ * - single: één klant (clientId)
+ * - multiple: meerdere klanten (participantIds)
+ * - open: beschikbaar voor iedereen
+ * - group: groepsles met vaste deelnemers (participantIds) → per-account loggen
+ */
+export type SchemaAudience = 'single' | 'multiple' | 'open' | 'group';
+
 export interface Schema {
   id: string;
   name: string;
   trainerId: string;
   clientId: string | null;
+  /** Type/doelgroep van de workout. Ontbreekt = legacy 'single'. */
+  audience?: SchemaAudience;
+  /** Toegewezen accounts bij 'multiple' en de deelnemers bij 'group'. */
+  participantIds?: string[];
   createdAt: string; // ISO date string
   days: SchemaDay[];
   /** Start van de schema-periode (YYYY-MM-DD). Optioneel. */

@@ -56,11 +56,17 @@ function toSchema(data: Record<string, unknown>, id: string): Schema {
     v && typeof (v as Timestamp).toDate === 'function'
       ? (v as Timestamp).toDate().toISOString().slice(0, 10)
       : v != null ? String(v).slice(0, 10) : null;
+  const audience =
+    d.audience === 'multiple' || d.audience === 'open' || d.audience === 'group' || d.audience === 'single'
+      ? d.audience
+      : undefined;
   return {
     id,
     name: String(d.name ?? ''),
     trainerId: String(d.trainerId ?? ''),
     clientId: toStr(d.clientId),
+    audience,
+    participantIds: Array.isArray(d.participantIds) ? d.participantIds.map((x) => String(x)) : undefined,
     createdAt: typeof d.createdAt === 'string' ? d.createdAt : new Date().toISOString(),
     days: Array.isArray(d.days) ? (d.days as Schema['days']) : [],
     startDate: toDateStr(d.startDate) ?? null,
@@ -76,10 +82,24 @@ function toSchema(data: Record<string, unknown>, id: string): Schema {
 
 export async function getWorkoutsForUser(uid: string, role: ProfileRole): Promise<Schema[]> {
   if (!isFirebaseConfigured() || !db) return [];
-  const field = role === 'trainer' || role === 'admin' ? 'trainerId' : 'clientId';
-  const q = query(collection(db, COLLECTION), where(field, '==', uid));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => toSchema(d.data(), d.id)).sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
+  if (role === 'trainer' || role === 'admin') {
+    const q = query(collection(db, COLLECTION), where('trainerId', '==', uid));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => toSchema(d.data(), d.id)).sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
+  }
+  // Sporter: eigen (clientId), deelnemer aan een groepsles/meerdere-klanten (participantIds), of open voor iedereen.
+  const queries = [
+    query(collection(db, COLLECTION), where('clientId', '==', uid)),
+    query(collection(db, COLLECTION), where('participantIds', 'array-contains', uid)),
+    query(collection(db, COLLECTION), where('audience', '==', 'open')),
+  ];
+  const snaps = await Promise.all(queries.map((q) => getDocs(q).catch(() => null)));
+  const byId = new Map<string, Schema>();
+  for (const snap of snaps) {
+    if (!snap) continue;
+    for (const d of snap.docs) byId.set(d.id, toSchema(d.data(), d.id));
+  }
+  return Array.from(byId.values()).sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
 }
 
 export async function saveWorkoutToFirestore(schema: Schema): Promise<void> {

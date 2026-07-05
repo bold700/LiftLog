@@ -217,9 +217,18 @@ export const SchemasPage = () => {
     setView('detail');
   }, []);
 
-  const handleOpenGroupSetup = useCallback((dayIndex: number) => {
-    setGroupSetup({ open: true, dayIndex, date: todayIso(), participantIds: [], starting: false });
-  }, []);
+  const handleOpenGroupSetup = useCallback(
+    (dayIndex: number) => {
+      setGroupSetup({
+        open: true,
+        dayIndex,
+        date: todayIso(),
+        participantIds: selectedSchema?.participantIds ?? [],
+        starting: false,
+      });
+    },
+    [selectedSchema]
+  );
 
   const handleCloseGroupSetup = useCallback(() => {
     setGroupSetup((s) => ({ ...s, open: false }));
@@ -569,7 +578,7 @@ export const SchemasPage = () => {
                           {day.dayLabel}
                         </Typography>
                         <Stack direction="row" spacing={1} sx={{ flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                          {isTrainer && (
+                          {isTrainer && selectedSchema.audience === 'group' && (
                             <Button
                               variant="outlined"
                               size="small"
@@ -854,7 +863,15 @@ export const SchemasPage = () => {
                     </Box>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
                       {schema.days.length} {schema.days.length === 1 ? 'dag' : 'dagen'}
-                      {schema.clientId ? ` · Klant toegewezen` : ''}
+                      {schema.audience === 'group'
+                        ? ` · Groepsles (${schema.participantIds?.length ?? 0})`
+                        : schema.audience === 'multiple'
+                          ? ` · ${schema.participantIds?.length ?? 0} klanten`
+                          : schema.audience === 'open'
+                            ? ' · Open'
+                            : schema.clientId
+                              ? ' · Klant toegewezen'
+                              : ''}
                       {schema.isFormule7Template
                         ? schema.formule7AssistMode === 'ai'
                           ? ' · Formule 7 · AI'
@@ -911,28 +928,36 @@ export const SchemasPage = () => {
             sx={{ mb: 2 }}
           />
           <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            Deelnemers ({groupSetup.participantIds.length})
+            Aanwezig vandaag ({groupSetup.participantIds.length})
           </Typography>
-          {(profile?.allSporters ?? []).length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              Nog geen sporters. Voeg eerst klanten toe via Beheer.
-            </Typography>
-          ) : (
-            <FormGroup sx={{ maxHeight: 320, overflow: 'auto' }}>
-              {(profile?.allSporters ?? []).map((sp) => (
-                <FormControlLabel
-                  key={sp.userId}
-                  control={
-                    <Checkbox
-                      checked={groupSetup.participantIds.includes(sp.userId)}
-                      onChange={() => toggleGroupParticipant(sp.userId)}
-                    />
-                  }
-                  label={sp.displayName?.trim() || sp.email || sp.userId}
-                />
-              ))}
-            </FormGroup>
-          )}
+          {(() => {
+            const roster = (profile?.allSporters ?? []).filter((p) =>
+              (selectedSchema?.participantIds ?? []).includes(p.userId)
+            );
+            if (roster.length === 0) {
+              return (
+                <Typography variant="body2" color="text.secondary">
+                  Deze groepsles heeft nog geen deelnemers. Voeg ze toe via Bewerken → "Voor wie is deze workout?".
+                </Typography>
+              );
+            }
+            return (
+              <FormGroup sx={{ maxHeight: 320, overflow: 'auto' }}>
+                {roster.map((sp) => (
+                  <FormControlLabel
+                    key={sp.userId}
+                    control={
+                      <Checkbox
+                        checked={groupSetup.participantIds.includes(sp.userId)}
+                        onChange={() => toggleGroupParticipant(sp.userId)}
+                      />
+                    }
+                    label={sp.displayName?.trim() || sp.email || sp.userId}
+                  />
+                ))}
+              </FormGroup>
+            );
+          })()}
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseGroupSetup}>Annuleren</Button>

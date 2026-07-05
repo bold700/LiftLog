@@ -23,7 +23,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { Schema, SchemaDay, SchemaExercise, Formule7Routekaart } from '../types';
-import type { Profile } from '../types';
+import type { Profile, SchemaAudience } from '../types';
 import { createEmptyFormule7, NMT_PRESETS_BY_GOAL } from '../utils/formule7Defaults';
 import type { Formule7StrengthGoal } from '../types';
 import { Formule7RoutekaartForm } from './Formule7RoutekaartForm';
@@ -160,6 +160,8 @@ function schemaHasMeaningfulF7Content(s: Schema): boolean {
 export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: SchemaEditViewProps) => {
   const [name, setName] = useState(schema.name);
   const [clientId, setClientId] = useState<string | null>(schema.clientId ?? null);
+  const [audience, setAudience] = useState<SchemaAudience>(schema.audience ?? 'single');
+  const [participantIds, setParticipantIds] = useState<string[]>(schema.participantIds ?? []);
   const [startDate, setStartDate] = useState(schema.startDate ?? '');
   const [durationWeeks, setDurationWeeks] = useState<DurationWeeks>(() =>
     getDurationWeeksFromSchema(schema)
@@ -206,6 +208,8 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
   useEffect(() => {
     setName(schema.name);
     setClientId(schema.clientId ?? null);
+    setAudience(schema.audience ?? 'single');
+    setParticipantIds(schema.participantIds ?? []);
     setStartDate(schema.startDate ?? '');
     setDurationWeeks(getDurationWeeksFromSchema(schema));
     setFormule7(
@@ -326,7 +330,9 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
     const updated: Schema = {
       ...schema,
       name: trimmedName,
-      clientId: clientId || null,
+      clientId: audience === 'single' ? clientId || null : null,
+      audience,
+      participantIds: audience === 'multiple' || audience === 'group' ? participantIds : [],
       startDate: start,
       endDate: endDateValue,
       days: cleanedDays,
@@ -345,7 +351,7 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
     } finally {
       setSaving(false);
     }
-  }, [saving, schema, name, clientId, startDate, durationWeeks, days, formule7, onSave]);
+  }, [saving, schema, name, clientId, audience, participantIds, startDate, durationWeeks, days, formule7, onSave]);
 
   const addDay = useCallback(() => {
     setDays((prev) => [...prev, { dayLabel: `Dag ${prev.length + 1}`, exercises: [] }]);
@@ -1189,21 +1195,59 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
           )}
 
           {sporters.length > 0 && !showFormule7AiWizard ? (
-            <Autocomplete
-              options={sporters}
-              value={sporters.find((s) => s.userId === clientId) ?? null}
-              onChange={(_, profile) => setClientId(profile?.userId ?? null)}
-              getOptionLabel={(p) => p.displayName || p.email || p.userId}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Toewijzen aan sporter"
-                  size="small"
-                  placeholder="Niet toegewezen"
+            <Box sx={{ mb: 2 }}>
+              <TextField
+                select
+                fullWidth
+                size="small"
+                label="Voor wie is deze workout?"
+                value={audience}
+                onChange={(e) => setAudience(e.target.value as SchemaAudience)}
+                sx={{ mb: audience === 'open' ? 0 : 2 }}
+              >
+                <MenuItem value="single">Eén klant</MenuItem>
+                <MenuItem value="multiple">Meerdere klanten</MenuItem>
+                <MenuItem value="open">Open voor iedereen</MenuItem>
+                <MenuItem value="group">Groepsles</MenuItem>
+              </TextField>
+
+              {audience === 'single' && (
+                <Autocomplete
+                  options={sporters}
+                  value={sporters.find((s) => s.userId === clientId) ?? null}
+                  onChange={(_, profile) => setClientId(profile?.userId ?? null)}
+                  getOptionLabel={(p) => p.displayName || p.email || p.userId}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Toewijzen aan klant" size="small" placeholder="Niet toegewezen" />
+                  )}
                 />
               )}
-              sx={{ mb: 2 }}
-            />
+
+              {(audience === 'multiple' || audience === 'group') && (
+                <Autocomplete
+                  multiple
+                  options={sporters}
+                  value={sporters.filter((s) => participantIds.includes(s.userId))}
+                  onChange={(_, profiles) => setParticipantIds(profiles.map((p) => p.userId))}
+                  getOptionLabel={(p) => p.displayName || p.email || p.userId}
+                  isOptionEqualToValue={(a, b) => a.userId === b.userId}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label={audience === 'group' ? 'Deelnemers groepsles' : 'Toegewezen klanten'}
+                      size="small"
+                      placeholder="Kies accounts"
+                    />
+                  )}
+                />
+              )}
+
+              {audience === 'open' && (
+                <Typography variant="caption" color="text.secondary">
+                  Deze workout is beschikbaar voor iedereen.
+                </Typography>
+              )}
+            </Box>
           ) : null}
 
           {showFormule7RoutekaartBlock && formule7 && (
