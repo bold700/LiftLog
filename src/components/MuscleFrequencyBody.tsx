@@ -1,9 +1,8 @@
 import { useMemo, useEffect, useState } from 'react';
 import { Box } from '@mui/material';
 import { getAllExercises } from '../utils/storage';
-import { findExerciseMetadata } from '../data/exerciseMetadata';
+import { getExerciseMuscleMapping } from '../utils/muscleMappingResolver';
 import { normalizeMuscleName } from '../utils/muscleNames';
-import exerciseMuscleMapping from '../data/exerciseMuscleMapping.json';
 
 // Import Level SVG bestanden - Level 1 (lichtste) tot Level 5 (donkerste)
 // Voorkant levels vanuit front levels folder
@@ -281,8 +280,7 @@ export const MuscleFrequencyBody = () => {
 
   const { frontFrequencies, backFrequencies, frontSvgMap, backSvgMap } = useMemo(() => {
     const exercises = getAllExercises();
-    const mappingData = exerciseMuscleMapping as Record<string, { primary: string[]; secondary: string[] }>;
-    
+
     const frontFreq: Record<string, number> = {};
     const backFreq: Record<string, number> = {};
     
@@ -291,29 +289,9 @@ export const MuscleFrequencyBody = () => {
       // Sla oefeningen zonder naam over (alleen notities)
       if (!exercise.name) return;
       
-      // Gebruik metadata om de echte naam te vinden (voor alternatieve namen)
-      const metadata = findExerciseMetadata(exercise.name);
-      const actualExerciseName = metadata ? metadata.name : exercise.name;
-      
-      // Zoek mapping in exerciseMuscleMapping.json
-      let mapping = mappingData[actualExerciseName];
-      
-      // Als geen exacte match, probeer case-insensitive
-      if (!mapping) {
-        const exerciseNameLower = actualExerciseName.toLowerCase();
-        for (const key in mappingData) {
-          if (key.toLowerCase() === exerciseNameLower) {
-            mapping = mappingData[key];
-            break;
-          }
-        }
-      }
-      
-      // Als nog steeds geen match, probeer met originele naam
-      if (!mapping) {
-        mapping = mappingData[exercise.name];
-      }
-      
+      // Handmatige mapping of dataset-fallback (target + secondaryMuscles)
+      const mapping = getExerciseMuscleMapping(exercise.name);
+
       if (mapping && mapping.primary) {
         mapping.primary.forEach(muscle => {
           // Bepaal of spier voorkant, achterkant, of beide is
