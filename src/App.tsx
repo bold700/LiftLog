@@ -282,7 +282,7 @@ function AppContent() {
                 </MenuItem>
                 <MenuItem onClick={handleAddTrainingLogFromFab}>
                   <EventNoteRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
-                  Training log toevoegen
+                  Training loggen
                 </MenuItem>
               </Menu>
             </>
