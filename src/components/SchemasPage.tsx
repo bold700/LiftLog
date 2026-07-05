@@ -18,7 +18,6 @@ import {
   FormGroup,
   TextField,
 } from '@mui/material';
-import GroupsRoundedIcon from '@mui/icons-material/GroupsRounded';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
@@ -331,19 +330,22 @@ export const SchemasPage = () => {
     );
   }
 
-  if (view === 'groupSession' && selectedSchema && activeGroupSession) {
-    const participants = (profile?.allSporters ?? []).filter((p) =>
-      activeGroupSession.participantIds.includes(p.userId)
-    );
-    return (
-      <GroupSessionView
-        schema={selectedSchema}
-        session={activeGroupSession}
-        participants={participants}
-        currentUserId={profile?.profile?.userId ?? ''}
-        onBack={handleBackFromGroupSession}
-      />
-    );
+  if (view === 'groupSession' && activeGroupSession) {
+    const schemaForSession = selectedSchema ?? getSchemaById(activeGroupSession.schemaId);
+    if (schemaForSession) {
+      const participants = (profile?.allSporters ?? []).filter((p) =>
+        activeGroupSession.participantIds.includes(p.userId)
+      );
+      return (
+        <GroupSessionView
+          schema={schemaForSession}
+          session={activeGroupSession}
+          participants={participants}
+          currentUserId={profile?.profile?.userId ?? ''}
+          onBack={handleBackFromGroupSession}
+        />
+      );
+    }
   }
 
   if (view === 'detail' && selectedSchema) {
@@ -577,51 +579,28 @@ export const SchemasPage = () => {
                         <Typography variant="subtitle1" fontWeight={600}>
                           {day.dayLabel}
                         </Typography>
-                        <Stack direction="row" spacing={1} sx={{ flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                          {isTrainer && selectedSchema.audience === 'group' && (
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              startIcon={<GroupsRoundedIcon />}
-                              onClick={() => handleOpenGroupSetup(dayIndex)}
-                              disabled={day.exercises.length === 0}
-                              aria-label={`Groepsles starten voor ${day.dayLabel}`}
-                              sx={{
-                                borderColor: '#000000',
-                                color: '#000000',
-                                borderRadius: '20px',
-                                px: 2,
-                                py: 1,
-                                textTransform: 'none',
-                                fontWeight: 500,
-                                '&:hover': { borderColor: '#1a1a1a', bgcolor: 'rgba(0,0,0,0.04)' },
-                              }}
-                            >
-                              Groepsles
-                            </Button>
-                          )}
-                          <Button
-                            variant="contained"
-                            size="small"
-                            startIcon={<PlayArrowRoundedIcon />}
-                            onClick={() => handleStartTraining(dayIndex)}
-                            disabled={day.exercises.length === 0}
-                            aria-label={`Training starten voor ${day.dayLabel}`}
-                            sx={{
-                              bgcolor: '#000000',
-                              color: '#F2E4D3',
-                              borderRadius: '20px',
-                              px: 2,
-                              py: 1,
-                              textTransform: 'none',
-                              fontWeight: 500,
-                              '&:hover': { bgcolor: '#1a1a1a' },
-                              '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.12)', color: 'rgba(29,27,26,0.38)' },
-                            }}
-                          >
-                            Training starten
-                          </Button>
-                        </Stack>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          startIcon={<PlayArrowRoundedIcon />}
+                          onClick={() => (isTrainer ? handleOpenGroupSetup(dayIndex) : handleStartTraining(dayIndex))}
+                          disabled={day.exercises.length === 0}
+                          aria-label={`Training starten voor ${day.dayLabel}`}
+                          sx={{
+                            bgcolor: '#000000',
+                            color: '#F2E4D3',
+                            borderRadius: '20px',
+                            px: 2,
+                            py: 1,
+                            textTransform: 'none',
+                            fontWeight: 500,
+                            flexShrink: 0,
+                            '&:hover': { bgcolor: '#1a1a1a' },
+                            '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.12)', color: 'rgba(29,27,26,0.38)' },
+                          }}
+                        >
+                          Training starten
+                        </Button>
                       </Box>
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 0 }}>
                         {formatWarmupSummary(day.warmup ?? selectedSchema.formule7?.warmup) && (
@@ -911,11 +890,12 @@ export const SchemasPage = () => {
       </Dialog>
 
       <Dialog open={groupSetup.open} onClose={handleCloseGroupSetup} maxWidth="sm" fullWidth>
-        <DialogTitle>Groepsles starten</DialogTitle>
+        <DialogTitle>Wie trainen er mee?</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {selectedSchema?.days[groupSetup.dayIndex]?.dayLabel ?? `Dag ${groupSetup.dayIndex + 1}`}. Kies de datum en
-            vink aan wie er vandaag meedoen. Per deelnemer zie je straks wat ze vorige keer deden.
+            vink aan wie er vandaag meetrainen. Per deelnemer zie je straks wat ze vorige keer deden, zodat je progressie
+            kunt loggen.
           </Typography>
           <TextField
             type="date"
@@ -974,7 +954,7 @@ export const SchemasPage = () => {
             disabled={groupSetup.participantIds.length === 0 || groupSetup.starting}
             sx={{ bgcolor: '#000000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}
           >
-            {groupSetup.starting ? 'Bezig…' : 'Les starten'}
+            {groupSetup.starting ? 'Bezig…' : 'Training starten'}
           </Button>
         </DialogActions>
       </Dialog>

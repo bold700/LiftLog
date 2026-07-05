@@ -86,6 +86,8 @@ export function GroupSessionView({ schema, session, participants, currentUserId,
         setCurrent(cur);
         setPrevious(prev);
         setDrafts(initDrafts);
+      } catch {
+        // Leesfout (bv. rechten): toon de oefeningen alsnog, zonder vorige-keer-data.
       } finally {
         if (!cancelled) setLoading(false);
       }
