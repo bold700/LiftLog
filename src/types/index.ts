@@ -18,6 +18,48 @@ export interface Workout {
   exercises: Exercise[];
 }
 
+/**
+ * Cloud-log per persoon per oefening (Firestore-collectie `logs`).
+ * Basis voor groepsles-loggen en per-klant progressie/overload.
+ */
+export interface ExerciseLog {
+  id: string;
+  /** Voor wie de log is (de sporter/deelnemer). */
+  userId: string;
+  /** Wie de log invoerde: trainer-uid of de sporter zelf. */
+  loggedBy: string;
+  /** Trainer die de sporter beheert (voor rules/queries). */
+  trainerId: string | null;
+  exerciseName: string;
+  exerciseId?: string | null;
+  weight: number | null;
+  sets: number | null;
+  reps: number | null;
+  notes?: string | null;
+  date: string; // ISO date-time string
+  schemaId?: string | null;
+  schemaDayIndex?: number | null;
+  /** Koppeling aan een groepssessie (optioneel). */
+  sessionId?: string | null;
+  createdAt: string;
+}
+
+/**
+ * Een groepsles-instantie: één workout-dag op een datum met de aanwezige deelnemers.
+ * Firestore-collectie `sessions`.
+ */
+export interface GroupSession {
+  id: string;
+  trainerId: string;
+  schemaId: string;
+  schemaName: string;
+  dayIndex: number;
+  date: string; // YYYY-MM-DD
+  participantIds: string[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
 /** Log voor een hele trainingssessie (één schema-dag op een datum), met optionele notitie. */
 export interface TrainingSessionLog {
   id: string;

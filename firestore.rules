@@ -31,5 +31,40 @@ service cloud.firestore {
       allow create, update: if request.auth != null && request.auth.uid == userId;
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
+
+    function isTrainerOrAdmin() {
+      return request.auth != null
+        && (get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'trainer'
+            || get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    // Per-persoon oefening-logs (groepsles + individueel). Eigen logs of via je trainer/admin.
+    match /logs/{logId} {
+      allow read: if request.auth != null
+        && (resource.data.userId == request.auth.uid
+            || resource.data.trainerId == request.auth.uid
+            || isTrainerOrAdmin());
+      allow create: if request.auth != null
+        && (request.resource.data.userId == request.auth.uid
+            || request.resource.data.loggedBy == request.auth.uid
+            || isTrainerOrAdmin());
+      allow update, delete: if request.auth != null
+        && (resource.data.userId == request.auth.uid
+            || resource.data.loggedBy == request.auth.uid
+            || isTrainerOrAdmin());
+    }
+
+    // Groepsles-sessies. Trainer beheert; deelnemers mogen hun sessie lezen.
+    match /sessions/{sessionId} {
+      allow read: if request.auth != null
+        && (resource.data.trainerId == request.auth.uid
+            || request.auth.uid in resource.data.participantIds
+            || isTrainerOrAdmin());
+      allow create: if request.auth != null
+        && request.resource.data.trainerId == request.auth.uid;
+      allow update, delete: if request.auth != null
+        && (resource.data.trainerId == request.auth.uid
+            || isTrainerOrAdmin());
+    }
   }
 }

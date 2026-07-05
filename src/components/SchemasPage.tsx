@@ -13,7 +13,12 @@ import {
   Menu,
   MenuItem,
   Stack,
+  Checkbox,
+  FormControlLabel,
+  FormGroup,
+  TextField,
 } from '@mui/material';
+import GroupsRoundedIcon from '@mui/icons-material/GroupsRounded';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
@@ -32,9 +37,12 @@ import {
   formatStretchingSummary,
 } from '../utils/format';
 import { Schema } from '../types';
+import type { GroupSession } from '../types';
 import { createEmptyFormule7 } from '../utils/formule7Defaults';
 import { SchemaEditView } from './SchemaEditView';
 import { TrainingSessionView } from './TrainingSessionView';
+import { GroupSessionView } from './GroupSessionView';
+import { createGroupSession } from '../services/groupSessionService';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { useProfile } from '../context/ProfileContext';
 import { designTokens } from '../theme/designTokens';
@@ -44,7 +52,12 @@ import '@material/web/button/filled-button.js';
 import '@material/web/button/text-button.js';
 import '@material/web/icon/icon.js';
 
-type View = 'list' | 'detail' | 'edit' | 'session';
+type View = 'list' | 'detail' | 'edit' | 'session' | 'groupSession';
+
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 export const SchemasPage = () => {
   const addFromSchema = useAddFromSchema();
@@ -70,6 +83,14 @@ export const SchemasPage = () => {
   const deleteCancelButtonRef = useRef<any>(null);
   const deleteConfirmButtonRef = useRef<any>(null);
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
+  const [activeGroupSession, setActiveGroupSession] = useState<GroupSession | null>(null);
+  const [groupSetup, setGroupSetup] = useState<{
+    open: boolean;
+    dayIndex: number;
+    date: string;
+    participantIds: string[];
+    starting: boolean;
+  }>({ open: false, dayIndex: 0, date: todayIso(), participantIds: [], starting: false });
 
   // Na het opslaan van een log vanuit Toevoegen: terug naar deze trainingssessie + snackbar
   useEffect(() => {
@@ -196,6 +217,48 @@ export const SchemasPage = () => {
     setView('detail');
   }, []);
 
+  const handleOpenGroupSetup = useCallback((dayIndex: number) => {
+    setGroupSetup({ open: true, dayIndex, date: todayIso(), participantIds: [], starting: false });
+  }, []);
+
+  const handleCloseGroupSetup = useCallback(() => {
+    setGroupSetup((s) => ({ ...s, open: false }));
+  }, []);
+
+  const toggleGroupParticipant = useCallback((userId: string) => {
+    setGroupSetup((s) => ({
+      ...s,
+      participantIds: s.participantIds.includes(userId)
+        ? s.participantIds.filter((id) => id !== userId)
+        : [...s.participantIds, userId],
+    }));
+  }, []);
+
+  const handleConfirmGroupStart = useCallback(async () => {
+    if (!selectedSchema || !profile?.profile || groupSetup.participantIds.length === 0) return;
+    setGroupSetup((s) => ({ ...s, starting: true }));
+    try {
+      const session = await createGroupSession({
+        trainerId: profile.profile.userId,
+        schemaId: selectedSchema.id,
+        schemaName: selectedSchema.name,
+        dayIndex: groupSetup.dayIndex,
+        date: groupSetup.date,
+        participantIds: groupSetup.participantIds,
+      });
+      setActiveGroupSession(session);
+      setGroupSetup((s) => ({ ...s, open: false, starting: false }));
+      setView('groupSession');
+    } catch {
+      setGroupSetup((s) => ({ ...s, starting: false }));
+    }
+  }, [selectedSchema, profile, groupSetup]);
+
+  const handleBackFromGroupSession = useCallback(() => {
+    setActiveGroupSession(null);
+    setView('detail');
+  }, []);
+
   const handleNextDay = useCallback(() => {
     if (!selectedSchema) return;
     const next = (sessionDayIndex + 1) % selectedSchema.days.length;
@@ -255,6 +318,21 @@ export const SchemasPage = () => {
         onNextDay={handleNextDay}
         justLoggedExerciseId={justLoggedExerciseId}
         onClearJustLogged={() => setJustLoggedExerciseId(null)}
+      />
+    );
+  }
+
+  if (view === 'groupSession' && selectedSchema && activeGroupSession) {
+    const participants = (profile?.allSporters ?? []).filter((p) =>
+      activeGroupSession.participantIds.includes(p.userId)
+    );
+    return (
+      <GroupSessionView
+        schema={selectedSchema}
+        session={activeGroupSession}
+        participants={participants}
+        currentUserId={profile?.profile?.userId ?? ''}
+        onBack={handleBackFromGroupSession}
       />
     );
   }
@@ -490,28 +568,51 @@ export const SchemasPage = () => {
                         <Typography variant="subtitle1" fontWeight={600}>
                           {day.dayLabel}
                         </Typography>
-                        <Button
-                          variant="contained"
-                          size="small"
-                          startIcon={<PlayArrowRoundedIcon />}
-                          onClick={() => handleStartTraining(dayIndex)}
-                          disabled={day.exercises.length === 0}
-                          aria-label={`Training starten voor ${day.dayLabel}`}
-                          sx={{
-                            bgcolor: '#000000',
-                            color: '#F2E4D3',
-                            borderRadius: '20px',
-                            px: 2,
-                            py: 1,
-                            textTransform: 'none',
-                            fontWeight: 500,
-                            flexShrink: 0,
-                            '&:hover': { bgcolor: '#1a1a1a' },
-                            '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.12)', color: 'rgba(29,27,26,0.38)' },
-                          }}
-                        >
-                          Training starten
-                        </Button>
+                        <Stack direction="row" spacing={1} sx={{ flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                          {isTrainer && (
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              startIcon={<GroupsRoundedIcon />}
+                              onClick={() => handleOpenGroupSetup(dayIndex)}
+                              disabled={day.exercises.length === 0}
+                              aria-label={`Groepsles starten voor ${day.dayLabel}`}
+                              sx={{
+                                borderColor: '#000000',
+                                color: '#000000',
+                                borderRadius: '20px',
+                                px: 2,
+                                py: 1,
+                                textTransform: 'none',
+                                fontWeight: 500,
+                                '&:hover': { borderColor: '#1a1a1a', bgcolor: 'rgba(0,0,0,0.04)' },
+                              }}
+                            >
+                              Groepsles
+                            </Button>
+                          )}
+                          <Button
+                            variant="contained"
+                            size="small"
+                            startIcon={<PlayArrowRoundedIcon />}
+                            onClick={() => handleStartTraining(dayIndex)}
+                            disabled={day.exercises.length === 0}
+                            aria-label={`Training starten voor ${day.dayLabel}`}
+                            sx={{
+                              bgcolor: '#000000',
+                              color: '#F2E4D3',
+                              borderRadius: '20px',
+                              px: 2,
+                              py: 1,
+                              textTransform: 'none',
+                              fontWeight: 500,
+                              '&:hover': { bgcolor: '#1a1a1a' },
+                              '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.12)', color: 'rgba(29,27,26,0.38)' },
+                            }}
+                          >
+                            Training starten
+                          </Button>
+                        </Stack>
                       </Box>
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 0 }}>
                         {formatWarmupSummary(day.warmup ?? selectedSchema.formule7?.warmup) && (
@@ -789,6 +890,60 @@ export const SchemasPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenNewSchemaDialog(false)}>Annuleren</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={groupSetup.open} onClose={handleCloseGroupSetup} maxWidth="sm" fullWidth>
+        <DialogTitle>Groepsles starten</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {selectedSchema?.days[groupSetup.dayIndex]?.dayLabel ?? `Dag ${groupSetup.dayIndex + 1}`}. Kies de datum en
+            vink aan wie er vandaag meedoen. Per deelnemer zie je straks wat ze vorige keer deden.
+          </Typography>
+          <TextField
+            type="date"
+            label="Datum"
+            value={groupSetup.date}
+            onChange={(e) => setGroupSetup((s) => ({ ...s, date: e.target.value }))}
+            fullWidth
+            size="small"
+            InputLabelProps={{ shrink: true }}
+            sx={{ mb: 2 }}
+          />
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            Deelnemers ({groupSetup.participantIds.length})
+          </Typography>
+          {(profile?.allSporters ?? []).length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              Nog geen sporters. Voeg eerst klanten toe via Beheer.
+            </Typography>
+          ) : (
+            <FormGroup sx={{ maxHeight: 320, overflow: 'auto' }}>
+              {(profile?.allSporters ?? []).map((sp) => (
+                <FormControlLabel
+                  key={sp.userId}
+                  control={
+                    <Checkbox
+                      checked={groupSetup.participantIds.includes(sp.userId)}
+                      onChange={() => toggleGroupParticipant(sp.userId)}
+                    />
+                  }
+                  label={sp.displayName?.trim() || sp.email || sp.userId}
+                />
+              ))}
+            </FormGroup>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseGroupSetup}>Annuleren</Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmGroupStart}
+            disabled={groupSetup.participantIds.length === 0 || groupSetup.starting}
+            sx={{ bgcolor: '#000000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}
+          >
+            {groupSetup.starting ? 'Bezig…' : 'Les starten'}
+          </Button>
         </DialogActions>
       </Dialog>
     </PageLayout>
