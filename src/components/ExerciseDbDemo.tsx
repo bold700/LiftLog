@@ -229,13 +229,11 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
         onError={() => setGifLoadFailed(true)}
         sx={{
           width: '100%',
-          maxWidth: variant === 'aside' ? 140 : 360,
-          maxHeight: variant === 'aside' ? 120 : 'none',
+          maxWidth: variant === 'aside' ? 160 : 360,
+          maxHeight: variant === 'aside' ? 130 : 'none',
           height: 'auto',
           objectFit: 'contain',
           borderRadius: 1,
-          border: '1px solid',
-          borderColor: 'divider',
           display: 'block',
         }}
       />
@@ -250,18 +248,9 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
           width: { xs: '100%', sm: 'auto' },
           minWidth: { sm: 120 },
           maxWidth: { xs: 200, sm: 200 },
-          alignSelf: { xs: 'center', sm: 'flex-start' },
-          pt: { xs: 0, sm: 0.25 },
+          alignSelf: 'center',
         }}
       >
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          fontWeight={600}
-          sx={{ display: 'block', textAlign: { xs: 'center', sm: 'left' }, mb: 0.75 }}
-        >
-          Uitvoering
-        </Typography>
         {mediaBlock}
       </Box>
     );
