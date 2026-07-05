@@ -376,7 +376,7 @@ export const TrainingSessionView = ({
                             </Box>
                           )}
                         </Box>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" color="text.secondary" display="block">
                           Voorgeschreven: {ex.setsTarget} × {ex.repsTarget} reps
                           {ex.restSeconds != null && ex.restSeconds > 0 && ` · ${ex.restSeconds}s rust`}
                         </Typography>

@@ -567,6 +567,7 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
                     openOnFocus
                     forcePopupIcon
                     clearOnBlur={false}
+                    onOpen={() => setExerciseSearchTerm('')}
                     value={ex.exerciseName}
                     onChange={(_, v) => {
                       const n = typeof v === 'string' ? v : v ?? '';
