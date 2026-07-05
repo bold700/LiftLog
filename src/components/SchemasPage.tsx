@@ -931,19 +931,26 @@ export const SchemasPage = () => {
             Aanwezig vandaag ({groupSetup.participantIds.length})
           </Typography>
           {(() => {
-            const roster = (profile?.allSporters ?? []).filter((p) =>
-              (selectedSchema?.participantIds ?? []).includes(p.userId)
-            );
+            const roster = profile?.allSporters ?? [];
             if (roster.length === 0) {
               return (
                 <Typography variant="body2" color="text.secondary">
-                  Deze groepsles heeft nog geen deelnemers. Voeg ze toe via Bewerken → "Voor wie is deze workout?".
+                  Nog geen sporter-accounts. Voeg eerst klanten toe via Menu → Beheer (of laat ze een account aanmaken en
+                  wijs ze de rol "sporter" toe).
                 </Typography>
               );
             }
+            const assigned = new Set(selectedSchema?.participantIds ?? []);
+            // Toegewezen deelnemers bovenaan, daarna de rest.
+            const sorted = [...roster].sort((a, b) => {
+              const aa = assigned.has(a.userId) ? 0 : 1;
+              const bb = assigned.has(b.userId) ? 0 : 1;
+              if (aa !== bb) return aa - bb;
+              return (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '');
+            });
             return (
               <FormGroup sx={{ maxHeight: 320, overflow: 'auto' }}>
-                {roster.map((sp) => (
+                {sorted.map((sp) => (
                   <FormControlLabel
                     key={sp.userId}
                     control={
@@ -952,7 +959,7 @@ export const SchemasPage = () => {
                         onChange={() => toggleGroupParticipant(sp.userId)}
                       />
                     }
-                    label={sp.displayName?.trim() || sp.email || sp.userId}
+                    label={`${sp.displayName?.trim() || sp.email || sp.userId}${assigned.has(sp.userId) ? ' · vast' : ''}`}
                   />
                 ))}
               </FormGroup>
