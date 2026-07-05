@@ -39,7 +39,7 @@ function parseReadyPayload(
   };
 }
 
-export type ExerciseDbDemoVariant = 'aside' | 'collapsible';
+export type ExerciseDbDemoVariant = 'aside' | 'collapsible' | 'thumb';
 
 interface ExerciseDbDemoProps {
   exerciseName: string;
@@ -194,6 +194,9 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
   }
 
   if (state.status === 'loading') {
+    if (variant === 'thumb') {
+      return <Skeleton variant="rounded" width={52} height={52} sx={{ borderRadius: 1.5, flexShrink: 0 }} />;
+    }
     if (variant === 'aside') {
       return (
         <Box
@@ -218,6 +221,27 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
 
   if (gifLoadFailed) {
     return null;
+  }
+
+  if (variant === 'thumb') {
+    return (
+      <Box
+        component="img"
+        src={state.gifUrl}
+        alt={state.displayName}
+        loading="lazy"
+        onError={() => setGifLoadFailed(true)}
+        sx={{
+          width: 52,
+          height: 52,
+          flexShrink: 0,
+          objectFit: 'cover',
+          borderRadius: 1.5,
+          display: 'block',
+          bgcolor: '#fff',
+        }}
+      />
+    );
   }
 
   const mediaBlock = (

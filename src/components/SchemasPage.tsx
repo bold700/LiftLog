@@ -41,6 +41,7 @@ import { createEmptyFormule7 } from '../utils/formule7Defaults';
 import { SchemaEditView } from './SchemaEditView';
 import { TrainingSessionView } from './TrainingSessionView';
 import { GroupSessionView } from './GroupSessionView';
+import { ExerciseDbDemo } from './ExerciseDbDemo';
 import { createGroupSession } from '../services/groupSessionService';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { useProfile } from '../context/ProfileContext';
@@ -678,12 +679,14 @@ export const SchemasPage = () => {
                                 key={exIndex}
                                 sx={{
                                   display: 'flex',
-                                  flexDirection: 'column',
-                                  gap: 0.25,
+                                  gap: 1.5,
+                                  alignItems: 'flex-start',
                                   py: 1,
                                   borderBottom: exIndex < day.exercises.length - 1 ? '1px solid rgba(0,0,0,0.06)' : 'none',
                                 }}
                               >
+                                <ExerciseDbDemo exerciseName={ex.exerciseName} variant="thumb" />
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, flex: 1, minWidth: 0 }}>
                                 <Typography variant="body2" fontWeight={500}>
                                   {ex.exerciseName}
                                 </Typography>
@@ -726,6 +729,7 @@ export const SchemasPage = () => {
                                     )}
                                   </Box>
                                 )}
+                                </Box>
                               </Box>
                             );
                           })}
