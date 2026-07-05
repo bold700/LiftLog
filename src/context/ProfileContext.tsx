@@ -14,6 +14,7 @@ import {
   createProfile,
 } from '../services/profileService';
 import type { Profile, ProfileRole } from '../types';
+import { setCloudSync, hydrateFromCloud } from '../utils/storage';
 
 type ProfileState = {
   profile: Profile | null;
@@ -87,6 +88,17 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refreshProfile();
   }, [refreshProfile]);
+
+  // Cloud-sync voor logs: zodra het profiel bekend is, spiegelen we schrijven naar de
+  // cloud en halen we bestaande cloud-logs (incl. wat de trainer voor je logde) op.
+  useEffect(() => {
+    if (profile?.userId) {
+      setCloudSync({ uid: profile.userId, trainerId: profile.trainerId ?? null });
+      void hydrateFromCloud();
+    } else {
+      setCloudSync(null);
+    }
+  }, [profile?.userId, profile?.trainerId]);
 
   const ensureProfile = useCallback(
     async (role: ProfileRole, email: string | null, displayName?: string | null): Promise<Profile> => {
