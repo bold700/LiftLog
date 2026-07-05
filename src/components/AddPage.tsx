@@ -18,8 +18,7 @@ import { addExercise, getAllExercisesByName } from '../utils/storage';
 import { Exercise } from '../types';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { useExerciseDbSearch } from '../hooks/useExerciseDbSearch';
-import exerciseMuscleMapping from '../data/exerciseMuscleMapping.json';
-import { findExerciseMetadata } from '../data/exerciseMetadata';
+import { getExerciseMuscleMapping } from '../utils/muscleMappingResolver';
 import { PageLayout, ContentCard, PageTitle } from './layout';
 
 // Import body SVG's
@@ -145,32 +144,9 @@ const mappingNameToDisplayName = (mappingName: string): string | null => {
 
 // Helper functie om spiergroepen uit een oefening te halen
 const getMuscleGroupsFromExercise = (exerciseName: string): string[] => {
-  const mappingData = exerciseMuscleMapping as Record<string, { primary: string[]; secondary: string[] }>;
-  
-  // Gebruik metadata om de echte naam te vinden
-  const metadata = findExerciseMetadata(exerciseName);
-  const actualExerciseName = metadata ? metadata.name : exerciseName;
-  
-  // Zoek mapping
-  let mapping = mappingData[actualExerciseName];
-  
-  // Probeer case-insensitive match
-  if (!mapping) {
-    const exerciseNameLower = actualExerciseName.toLowerCase();
-    for (const key in mappingData) {
-      if (key.toLowerCase() === exerciseNameLower) {
-        mapping = mappingData[key];
-        break;
-      }
-    }
-  }
-  
-  if (!mapping) {
-    mapping = mappingData[exerciseName];
-  }
-  
+  const mapping = getExerciseMuscleMapping(exerciseName);
   if (!mapping) return [];
-  
+
   // Combineer primary en secondary muscles
   const allMuscles = [...(mapping.primary || []), ...(mapping.secondary || [])];
   
@@ -184,30 +160,7 @@ const getMuscleGroupsFromExercise = (exerciseName: string): string[] => {
 
 // Helper functie om de primaire spiergroep uit een oefening te halen (voor automatische filter)
 const getPrimaryMuscleGroupFromExercise = (exerciseName: string): string | null => {
-  const mappingData = exerciseMuscleMapping as Record<string, { primary: string[]; secondary: string[] }>;
-  
-  // Gebruik metadata om de echte naam te vinden
-  const metadata = findExerciseMetadata(exerciseName);
-  const actualExerciseName = metadata ? metadata.name : exerciseName;
-  
-  // Zoek mapping
-  let mapping = mappingData[actualExerciseName];
-  
-  // Probeer case-insensitive match
-  if (!mapping) {
-    const exerciseNameLower = actualExerciseName.toLowerCase();
-    for (const key in mappingData) {
-      if (key.toLowerCase() === exerciseNameLower) {
-        mapping = mappingData[key];
-        break;
-      }
-    }
-  }
-  
-  if (!mapping) {
-    mapping = mappingData[exerciseName];
-  }
-  
+  const mapping = getExerciseMuscleMapping(exerciseName);
   if (!mapping || !mapping.primary || mapping.primary.length === 0) return null;
   
   // Neem de eerste primaire spiergroep
