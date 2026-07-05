@@ -278,7 +278,7 @@ function AppContent() {
               >
                 <MenuItem onClick={handleAddExerciseFromFab}>
                   <FitnessCenterRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
-                  Oefening toevoegen
+                  Oefening loggen
                 </MenuItem>
                 <MenuItem onClick={handleAddTrainingLogFromFab}>
                   <EventNoteRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
