@@ -583,7 +583,11 @@ export const SchemasPage = () => {
                           variant="contained"
                           size="small"
                           startIcon={<PlayArrowRoundedIcon />}
-                          onClick={() => (isTrainer ? handleOpenGroupSetup(dayIndex) : handleStartTraining(dayIndex))}
+                          onClick={() =>
+                            isTrainer && selectedSchema.audience === 'group'
+                              ? handleOpenGroupSetup(dayIndex)
+                              : handleStartTraining(dayIndex)
+                          }
                           disabled={day.exercises.length === 0}
                           aria-label={`Training starten voor ${day.dayLabel}`}
                           sx={{
@@ -776,6 +780,75 @@ export const SchemasPage = () => {
           </DialogActions>
         </Dialog>
       </ContentCard>
+
+      <Dialog open={groupSetup.open} onClose={handleCloseGroupSetup} maxWidth="sm" fullWidth>
+        <DialogTitle>Wie trainen er mee?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {selectedSchema?.days[groupSetup.dayIndex]?.dayLabel ?? `Dag ${groupSetup.dayIndex + 1}`}. Kies de datum en
+            vink aan wie er vandaag meetrainen. Per deelnemer zie je straks wat ze vorige keer deden, zodat je progressie
+            kunt loggen.
+          </Typography>
+          <TextField
+            type="date"
+            label="Datum"
+            value={groupSetup.date}
+            onChange={(e) => setGroupSetup((s) => ({ ...s, date: e.target.value }))}
+            fullWidth
+            size="small"
+            InputLabelProps={{ shrink: true }}
+            sx={{ mb: 2 }}
+          />
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            Aanwezig vandaag ({groupSetup.participantIds.length})
+          </Typography>
+          {(() => {
+            const roster = profile?.allSporters ?? [];
+            if (roster.length === 0) {
+              return (
+                <Typography variant="body2" color="text.secondary">
+                  Nog geen sporter-accounts. Voeg eerst klanten toe via Menu → Beheer (of laat ze een account aanmaken en
+                  wijs ze de rol "sporter" toe).
+                </Typography>
+              );
+            }
+            const assigned = new Set(selectedSchema?.participantIds ?? []);
+            const sorted = [...roster].sort((a, b) => {
+              const aa = assigned.has(a.userId) ? 0 : 1;
+              const bb = assigned.has(b.userId) ? 0 : 1;
+              if (aa !== bb) return aa - bb;
+              return (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '');
+            });
+            return (
+              <FormGroup sx={{ maxHeight: 320, overflow: 'auto' }}>
+                {sorted.map((sp) => (
+                  <FormControlLabel
+                    key={sp.userId}
+                    control={
+                      <Checkbox
+                        checked={groupSetup.participantIds.includes(sp.userId)}
+                        onChange={() => toggleGroupParticipant(sp.userId)}
+                      />
+                    }
+                    label={`${sp.displayName?.trim() || sp.email || sp.userId}${assigned.has(sp.userId) ? ' · vast' : ''}`}
+                  />
+                ))}
+              </FormGroup>
+            );
+          })()}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseGroupSetup}>Annuleren</Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmGroupStart}
+            disabled={groupSetup.participantIds.length === 0 || groupSetup.starting}
+            sx={{ bgcolor: '#000000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}
+          >
+            {groupSetup.starting ? 'Bezig…' : 'Training starten'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </PageLayout>
     );
   }
@@ -886,76 +959,6 @@ export const SchemasPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenNewSchemaDialog(false)}>Annuleren</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={groupSetup.open} onClose={handleCloseGroupSetup} maxWidth="sm" fullWidth>
-        <DialogTitle>Wie trainen er mee?</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {selectedSchema?.days[groupSetup.dayIndex]?.dayLabel ?? `Dag ${groupSetup.dayIndex + 1}`}. Kies de datum en
-            vink aan wie er vandaag meetrainen. Per deelnemer zie je straks wat ze vorige keer deden, zodat je progressie
-            kunt loggen.
-          </Typography>
-          <TextField
-            type="date"
-            label="Datum"
-            value={groupSetup.date}
-            onChange={(e) => setGroupSetup((s) => ({ ...s, date: e.target.value }))}
-            fullWidth
-            size="small"
-            InputLabelProps={{ shrink: true }}
-            sx={{ mb: 2 }}
-          />
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            Aanwezig vandaag ({groupSetup.participantIds.length})
-          </Typography>
-          {(() => {
-            const roster = profile?.allSporters ?? [];
-            if (roster.length === 0) {
-              return (
-                <Typography variant="body2" color="text.secondary">
-                  Nog geen sporter-accounts. Voeg eerst klanten toe via Menu → Beheer (of laat ze een account aanmaken en
-                  wijs ze de rol "sporter" toe).
-                </Typography>
-              );
-            }
-            const assigned = new Set(selectedSchema?.participantIds ?? []);
-            // Toegewezen deelnemers bovenaan, daarna de rest.
-            const sorted = [...roster].sort((a, b) => {
-              const aa = assigned.has(a.userId) ? 0 : 1;
-              const bb = assigned.has(b.userId) ? 0 : 1;
-              if (aa !== bb) return aa - bb;
-              return (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '');
-            });
-            return (
-              <FormGroup sx={{ maxHeight: 320, overflow: 'auto' }}>
-                {sorted.map((sp) => (
-                  <FormControlLabel
-                    key={sp.userId}
-                    control={
-                      <Checkbox
-                        checked={groupSetup.participantIds.includes(sp.userId)}
-                        onChange={() => toggleGroupParticipant(sp.userId)}
-                      />
-                    }
-                    label={`${sp.displayName?.trim() || sp.email || sp.userId}${assigned.has(sp.userId) ? ' · vast' : ''}`}
-                  />
-                ))}
-              </FormGroup>
-            );
-          })()}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseGroupSetup}>Annuleren</Button>
-          <Button
-            variant="contained"
-            onClick={handleConfirmGroupStart}
-            disabled={groupSetup.participantIds.length === 0 || groupSetup.starting}
-            sx={{ bgcolor: '#000000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}
-          >
-            {groupSetup.starting ? 'Bezig…' : 'Training starten'}
-          </Button>
         </DialogActions>
       </Dialog>
     </PageLayout>
