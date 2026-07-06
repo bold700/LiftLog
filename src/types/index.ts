@@ -214,6 +214,14 @@ export type ProfileRole = 'sporter' | 'trainer' | 'admin';
 /** Zichtbaarheid op de gedeelde ranglijst (alleen geaggregeerde totalen worden gedeeld). */
 export type LeaderboardVisibility = 'hidden' | 'anonymous' | 'named';
 
+/** Dagelijks voedingsdoel (kcal + macro's in gram). */
+export interface NutritionGoal {
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
 export interface Profile {
   userId: string;
   role: ProfileRole;
@@ -221,6 +229,8 @@ export interface Profile {
   displayName: string | null;
   /** Profielfoto (download-URL uit Firebase Storage). */
   photoURL?: string | null;
+  /** Dagelijks voedingsdoel (optioneel). */
+  nutritionGoal?: NutritionGoal | null;
   /** Alleen bij sporters: uid van de trainer die hen beheert. */
   trainerId: string | null;
   /** True als deze gebruiker als trainer wil en op goedkeuring wacht. */

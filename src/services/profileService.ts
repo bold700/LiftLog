@@ -21,6 +21,14 @@ import type { Profile, ProfileRole, LeaderboardVisibility } from '../types';
 
 const COLLECTION = 'profiles';
 
+function parseGoal(v: unknown): Profile['nutritionGoal'] {
+  if (!v || typeof v !== 'object') return null;
+  const g = v as Record<string, unknown>;
+  const n = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : Number(x) || 0);
+  const goal = { kcal: n(g.kcal), protein: n(g.protein), carbs: n(g.carbs), fat: n(g.fat) };
+  return goal.kcal || goal.protein || goal.carbs || goal.fat ? goal : null;
+}
+
 function toProfile(data: Record<string, unknown>, userId: string): Profile {
   const toStr = (v: unknown) => (v == null ? null : String(v));
   const ts = (v: unknown) => (v && typeof (v as Timestamp).toDate === 'function' ? (v as Timestamp).toDate().toISOString() : new Date().toISOString());
@@ -35,6 +43,7 @@ function toProfile(data: Record<string, unknown>, userId: string): Profile {
     email: toStr(data.email),
     displayName: toStr(data.displayName),
     photoURL: toStr(data.photoURL),
+    nutritionGoal: parseGoal(data.nutritionGoal),
     trainerId: toStr(data.trainerId),
     trainerRequested: data.trainerRequested === true,
     leaderboardVisibility,
@@ -91,7 +100,7 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 export async function updateProfile(
   userId: string,
   data: Partial<
-    Pick<Profile, 'role' | 'displayName' | 'photoURL' | 'trainerId' | 'trainerRequested' | 'leaderboardVisibility'>
+    Pick<Profile, 'role' | 'displayName' | 'photoURL' | 'nutritionGoal' | 'trainerId' | 'trainerRequested' | 'leaderboardVisibility'>
   >
 ): Promise<void> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');

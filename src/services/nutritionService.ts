@@ -157,3 +157,11 @@ export async function getNutritionLogsForDay(userId: string, date: string): Prom
   const snap = await getDocs(q);
   return snap.docs.map((d) => toLog(d.data(), d.id)).sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
 }
+
+/** Alle voedingslogs van een persoon (voor dag/week/maand-inzicht). */
+export async function getNutritionLogsForUser(userId: string): Promise<NutritionLog[]> {
+  if (!isFirebaseConfigured() || !db) return [];
+  const q = query(collection(db, COLLECTION), where('userId', '==', userId));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => toLog(d.data(), d.id));
+}
