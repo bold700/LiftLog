@@ -193,12 +193,12 @@ export const TrainingSessionView = ({
                 {schema.name} – {day.dayLabel}
               </Typography>
             </Box>
-            {isDayComplete && (
+            {isDayComplete && hasMultipleDays && (
               <Button
                 variant="contained"
                 endIcon={<ArrowForwardIosIcon sx={{ fontSize: 16 }} />}
-                onClick={hasMultipleDays ? onNextDay : onBack}
-                aria-label={hasMultipleDays ? 'Volgende dag' : 'Terug naar workout'}
+                onClick={onNextDay}
+                aria-label="Volgende dag"
                 sx={{
                   bgcolor: '#000000',
                   color: '#F2E4D3',
