@@ -7,6 +7,7 @@ import MenuRoundedIcon from '@mui/icons-material/MenuRounded';
 import DonutLargeRoundedIcon from '@mui/icons-material/DonutLargeRounded';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
+import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
 import { lightTheme } from './theme';
 import { NavigationBar } from './components/NavigationBar';
 import { FullscreenMenu } from './components/FullscreenMenu';
@@ -15,6 +16,7 @@ import { AddPage } from './components/AddPage';
 import { SchemasPage } from './components/SchemasPage';
 import { BeheerPage } from './components/BeheerPage';
 import { ProfielPage } from './components/ProfielPage';
+import { NutritionPage } from './components/NutritionPage';
 import { LeaderboardAutoSync } from './components/LeaderboardAutoSync';
 import { AddFromSchemaProvider } from './context/AddFromSchemaContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -31,6 +33,7 @@ const TAB_INZICHTEN = 1;
 const TAB_SCHEMAS = 2;
 const TAB_PROFIEL = 3;
 const TAB_BEHEER = 4;
+const TAB_VOEDING = 5;
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState(TAB_INZICHTEN);
@@ -120,6 +123,7 @@ function AppContent() {
             navItems={[
               { label: 'Inzichten', tabIndex: TAB_INZICHTEN, icon: <DonutLargeRoundedIcon fontSize="small" /> },
               { label: 'Workouts', tabIndex: TAB_SCHEMAS, icon: <CalendarMonthRoundedIcon fontSize="small" /> },
+              { label: 'Voeding', tabIndex: TAB_VOEDING, icon: <RestaurantRoundedIcon fontSize="small" /> },
               { label: 'Profiel', tabIndex: TAB_PROFIEL, icon: <PersonRoundedIcon fontSize="small" /> },
             ]}
             onNavigateToTab={setActiveTab}
@@ -141,6 +145,8 @@ function AppContent() {
         return <BeheerPage />;
       case TAB_PROFIEL:
         return <ProfielPage />;
+      case TAB_VOEDING:
+        return <NutritionPage />;
       default:
         return (
           <InzichtenPage

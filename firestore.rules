@@ -56,6 +56,22 @@ service cloud.firestore {
             || isTrainerOrAdmin());
     }
 
+    // Voeding-logs per persoon (Open Food Facts). Eigen logs of via je trainer/admin.
+    match /nutritionLogs/{logId} {
+      allow read: if request.auth != null
+        && (resource.data.userId == request.auth.uid
+            || resource.data.trainerId == request.auth.uid
+            || isTrainerOrAdmin());
+      allow create: if request.auth != null
+        && (request.resource.data.userId == request.auth.uid
+            || request.resource.data.loggedBy == request.auth.uid
+            || isTrainerOrAdmin());
+      allow update, delete: if request.auth != null
+        && (resource.data.userId == request.auth.uid
+            || resource.data.loggedBy == request.auth.uid
+            || isTrainerOrAdmin());
+    }
+
     // Groepsles-sessies. Trainer beheert; deelnemers mogen hun sessie lezen.
     match /sessions/{sessionId} {
       allow read: if request.auth != null
