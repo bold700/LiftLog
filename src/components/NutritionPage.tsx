@@ -17,12 +17,15 @@ import {
   ListItem,
   ListItemButton,
   ListItemText,
+  ListItemAvatar,
+  Avatar,
   ToggleButton,
   ToggleButtonGroup,
   LinearProgress,
 } from '@mui/material';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
+import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
 import { PageLayout, ContentCard } from './layout';
 import { useProfile } from '../context/ProfileContext';
 import { updateProfile } from '../services/profileService';
@@ -330,6 +333,11 @@ export function NutritionPage() {
               <List dense sx={{ maxHeight: 260, overflow: 'auto', mb: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
                 {results.map((p) => (
                   <ListItemButton key={p.code || p.name} onClick={() => openAdd(p)}>
+                    <ListItemAvatar sx={{ minWidth: 52 }}>
+                      <Avatar src={p.imageUrl || undefined} variant="rounded" sx={{ width: 40, height: 40, bgcolor: 'rgba(0,0,0,0.06)', color: 'text.secondary' }}>
+                        <RestaurantRoundedIcon fontSize="small" />
+                      </Avatar>
+                    </ListItemAvatar>
                     <ListItemText
                       primary={p.name}
                       secondary={`${p.brand ? p.brand + ' · ' : ''}${p.per100g.kcal} kcal / 100g · E ${p.per100g.protein} · K ${p.per100g.carbs} · V ${p.per100g.fat}`}

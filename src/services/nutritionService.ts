@@ -56,10 +56,71 @@ function parseServingGrams(s: unknown): number | null {
   return Number.isFinite(g) && g > 0 ? g : null;
 }
 
-/** Zoek producten op naam via Open Food Facts. */
+/**
+ * Curated basisproducten (vers/onbewerkt) met betrouwbare waarden per 100 g.
+ * Verschijnen bovenaan, want zulke items zijn in Open Food Facts lastig te vinden.
+ */
+interface CuratedFood {
+  name: string;
+  aliases: string[];
+  per100g: FoodProduct['per100g'];
+  servingGrams?: number | null;
+}
+const CURATED_FOODS: CuratedFood[] = [
+  { name: 'Banaan', aliases: ['banaan', 'banana'], per100g: { kcal: 89, protein: 1.1, carbs: 23, fat: 0.3 }, servingGrams: 120 },
+  { name: 'Appel', aliases: ['appel', 'apple'], per100g: { kcal: 52, protein: 0.3, carbs: 14, fat: 0.2 }, servingGrams: 150 },
+  { name: 'Sinaasappel', aliases: ['sinaasappel', 'orange'], per100g: { kcal: 47, protein: 0.9, carbs: 12, fat: 0.1 }, servingGrams: 130 },
+  { name: 'Ei (gekookt)', aliases: ['ei', 'egg', 'eieren'], per100g: { kcal: 143, protein: 13, carbs: 0.7, fat: 10 }, servingGrams: 55 },
+  { name: 'Kipfilet (rauw)', aliases: ['kip', 'kipfilet', 'chicken breast', 'chicken'], per100g: { kcal: 120, protein: 22.5, carbs: 0, fat: 2.6 }, servingGrams: 120 },
+  { name: 'Magere kwark', aliases: ['kwark', 'magere kwark', 'quark'], per100g: { kcal: 57, protein: 10, carbs: 3.4, fat: 0.2 }, servingGrams: 250 },
+  { name: 'Havermout', aliases: ['havermout', 'oats', 'oatmeal'], per100g: { kcal: 379, protein: 13, carbs: 67, fat: 7 }, servingGrams: 40 },
+  { name: 'Witte rijst (gekookt)', aliases: ['rijst', 'rice', 'witte rijst'], per100g: { kcal: 130, protein: 2.7, carbs: 28, fat: 0.3 }, servingGrams: 150 },
+  { name: 'Volkorenbrood', aliases: ['brood', 'volkorenbrood', 'bread', 'volkoren'], per100g: { kcal: 247, protein: 9, carbs: 41, fat: 3.4 }, servingGrams: 35 },
+  { name: 'Aardappel (gekookt)', aliases: ['aardappel', 'aardappelen', 'potato'], per100g: { kcal: 87, protein: 2, carbs: 20, fat: 0.1 }, servingGrams: 150 },
+  { name: 'Broccoli', aliases: ['broccoli'], per100g: { kcal: 34, protein: 2.8, carbs: 7, fat: 0.4 }, servingGrams: 100 },
+  { name: 'Amandelen', aliases: ['amandelen', 'almonds'], per100g: { kcal: 579, protein: 21, carbs: 22, fat: 50 }, servingGrams: 30 },
+  { name: 'Pindakaas', aliases: ['pindakaas', 'peanut butter'], per100g: { kcal: 588, protein: 25, carbs: 20, fat: 50 }, servingGrams: 15 },
+  { name: 'Halfvolle melk', aliases: ['melk', 'milk', 'halfvolle melk'], per100g: { kcal: 47, protein: 3.5, carbs: 4.8, fat: 1.5 }, servingGrams: 200 },
+  { name: 'Rundergehakt (rauw)', aliases: ['gehakt', 'rundergehakt', 'beef'], per100g: { kcal: 250, protein: 18, carbs: 0, fat: 20 }, servingGrams: 100 },
+  { name: 'Zalm (rauw)', aliases: ['zalm', 'salmon'], per100g: { kcal: 208, protein: 20, carbs: 0, fat: 13 }, servingGrams: 125 },
+  { name: 'Tonijn in water', aliases: ['tonijn', 'tuna'], per100g: { kcal: 116, protein: 26, carbs: 0, fat: 1 }, servingGrams: 100 },
+  { name: 'Volkoren pasta (gekookt)', aliases: ['pasta', 'volkoren pasta', 'spaghetti'], per100g: { kcal: 124, protein: 5, carbs: 25, fat: 1.1 }, servingGrams: 150 },
+  { name: 'Avocado', aliases: ['avocado'], per100g: { kcal: 160, protein: 2, carbs: 9, fat: 15 }, servingGrams: 100 },
+  { name: 'Griekse yoghurt', aliases: ['yoghurt', 'griekse yoghurt', 'yogurt'], per100g: { kcal: 97, protein: 9, carbs: 4, fat: 5 }, servingGrams: 150 },
+];
+
+function norm(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').trim();
+}
+
+function curatedMatches(term: string): FoodProduct[] {
+  const q = norm(term);
+  return CURATED_FOODS.filter((f) => f.aliases.some((a) => norm(a).includes(q) || q.includes(norm(a)))).map((f) => ({
+    code: `common:${f.name}`,
+    name: f.name,
+    brand: 'Vers',
+    imageUrl: null,
+    per100g: f.per100g,
+    servingGrams: f.servingGrams ?? null,
+  }));
+}
+
+/** Naam-relevantie t.o.v. de zoekterm (hoger = beter). */
+function nameScore(name: string, q: string): number {
+  const n = norm(name);
+  if (n === q) return 100;
+  const words = n.split(/\s+/);
+  if (words.includes(q)) return 60;
+  if (n.startsWith(q)) return 40;
+  if (n.includes(q)) return 20;
+  return 0;
+}
+
+/** Zoek producten: eerst curated basisproducten, daarna Open Food Facts (op relevantie). */
 export async function searchFoods(term: string): Promise<FoodProduct[]> {
   const q = term.trim();
   if (!q) return [];
+  const curated = curatedMatches(q);
   const url =
     'https://world.openfoodfacts.org/cgi/search.pl?' +
     new URLSearchParams({
@@ -96,8 +157,21 @@ export async function searchFoods(term: string): Promise<FoodProduct[]> {
       servingGrams: parseServingGrams(p?.serving_size),
     });
   }
-  // Producten zonder enige voedingswaarde onderaan
-  return out.sort((a, b) => (b.per100g.kcal > 0 ? 1 : 0) - (a.per100g.kcal > 0 ? 1 : 0));
+  const nq = norm(q);
+  out.sort((a, b) => {
+    const sb = (b.per100g.kcal > 0 ? 30 : 0) + nameScore(b.name, nq);
+    const sa = (a.per100g.kcal > 0 ? 30 : 0) + nameScore(a.name, nq);
+    return sb - sa;
+  });
+  // Curated basisproducten bovenaan; dedup op naam (curated wint)
+  const seen = new Set(curated.map((c) => norm(c.name)));
+  const merged = [...curated];
+  for (const p of out) {
+    if (seen.has(norm(p.name))) continue;
+    seen.add(norm(p.name));
+    merged.push(p);
+  }
+  return merged;
 }
 
 /** Bereken de macro's voor een hoeveelheid gram op basis van per-100g-waarden. */
