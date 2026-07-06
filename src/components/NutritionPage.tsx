@@ -401,9 +401,9 @@ export function NutritionPage() {
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                 kcal per dag
               </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: period === 'week' ? 1 : 0.4, height: 120 }}>
+              <Box sx={{ display: 'flex', alignItems: 'stretch', gap: period === 'week' ? 1 : 0.4, height: 120 }}>
                 {perDay.map((p) => (
-                  <Box key={p.date} sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                  <Box key={p.date} sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', gap: 0.5, minWidth: 0, height: '100%' }}>
                     <Box
                       title={`${p.date}: ${p.kcal} kcal`}
                       sx={{

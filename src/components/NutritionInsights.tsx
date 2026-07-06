@@ -221,9 +221,9 @@ export function NutritionInsights() {
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
               kcal per dag (14 dagen)
             </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 0.5, height: 110 }}>
+            <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 0.5, height: 110 }}>
               {stats.trend.map((t) => (
-                <Box key={t.date} sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                <Box key={t.date} sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', gap: 0.5, minWidth: 0, height: '100%' }}>
                   <Box
                     title={`${t.date}: ${t.kcal} kcal`}
                     sx={{

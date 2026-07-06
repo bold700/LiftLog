@@ -231,6 +231,8 @@ export interface Profile {
   photoURL?: string | null;
   /** Dagelijks voedingsdoel (optioneel). */
   nutritionGoal?: NutritionGoal | null;
+  /** Doelgewicht in kg (optioneel). */
+  weightGoalKg?: number | null;
   /** Alleen bij sporters: uid van de trainer die hen beheert. */
   trainerId: string | null;
   /** True als deze gebruiker als trainer wil en op goedkeuring wacht. */

@@ -15,8 +15,10 @@ import {
 } from '@mui/material';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
+import { LinearProgress, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { PageLayout, ContentCard } from './layout';
 import { useProfile } from '../context/ProfileContext';
+import { updateProfile } from '../services/profileService';
 import {
   saveMeasurement,
   deleteMeasurement,
@@ -46,6 +48,8 @@ export function MetingenPage() {
   const [bodyFat, setBodyFat] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [goalOpen, setGoalOpen] = useState(false);
+  const [goalInput, setGoalInput] = useState('');
 
   const effectiveUserId = targetId || selfUid;
   const effectiveTrainerId = targetId ? sporters.find((s) => s.userId === targetId)?.trainerId ?? null : selfTrainerId;
@@ -127,12 +131,45 @@ export function MetingenPage() {
   const wMax = weightPoints.length ? Math.max(...weightPoints.map((p) => p.weightKg)) : 1;
   const wRange = wMax - wMin;
 
+  const goalWeight = targetId
+    ? sporters.find((s) => s.userId === targetId)?.weightGoalKg ?? null
+    : profileCtx?.profile?.weightGoalKg ?? null;
+  const toGoal = goalWeight != null && latestWeight != null ? Math.round((latestWeight - goalWeight) * 10) / 10 : null;
+  const firstDate = weightPoints.length ? weightPoints[0].date : null;
+  const lastDate = weightPoints.length ? weightPoints[weightPoints.length - 1].date : null;
+  const spanDays = firstDate && lastDate ? Math.max(1, (Date.parse(lastDate) - Date.parse(firstDate)) / 86400000) : 0;
+  const perWeek = weightDelta != null && spanDays >= 1 ? Math.round((weightDelta / (spanDays / 7)) * 10) / 10 : null;
+  const goalProgress =
+    goalWeight != null && firstWeight != null && latestWeight != null && firstWeight !== goalWeight
+      ? Math.max(0, Math.min(100, ((firstWeight - latestWeight) / (firstWeight - goalWeight)) * 100))
+      : null;
+
+  const handleSaveGoal = async () => {
+    if (!effectiveUserId) return;
+    const g = goalInput.trim() !== '' ? Number(goalInput) : null;
+    await updateProfile(effectiveUserId, { weightGoalKg: g && g > 0 ? g : null }).catch(() => {});
+    await profileCtx?.refreshProfile();
+    setGoalOpen(false);
+  };
+
   return (
     <PageLayout>
       <ContentCard>
-        <Typography variant="h5" fontWeight={600} sx={{ mb: 0.5 }}>
-          Metingen
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+          <Typography variant="h5" fontWeight={600}>
+            Metingen
+          </Typography>
+          <Button
+            size="small"
+            variant="text"
+            onClick={() => {
+              setGoalInput(goalWeight != null ? String(goalWeight) : '');
+              setGoalOpen(true);
+            }}
+          >
+            {goalWeight != null ? `Doel: ${goalWeight} kg` : 'Doelgewicht instellen'}
+          </Button>
+        </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Houd je gewicht en vetpercentage bij en volg je voortgang.
         </Typography>
@@ -170,6 +207,34 @@ export function MetingenPage() {
           </CardContent>
         </Card>
 
+        {/* Voortgang naar doel + tempo */}
+        {(goalWeight != null || perWeek != null) && (
+          <Card sx={{ backgroundColor: 'transparent', border: '1px solid', borderColor: 'divider', boxShadow: 'none', borderRadius: 2, mb: 2 }}>
+            <CardContent sx={{ '&:last-child': { pb: 2 } }}>
+              {goalWeight != null && (
+                <>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Naar doel ({goalWeight} kg)
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {toGoal != null ? (Math.abs(toGoal) < 0.05 ? 'behaald 🎉' : `nog ${Math.abs(toGoal)} kg`) : ''}
+                    </Typography>
+                  </Box>
+                  {goalProgress != null && (
+                    <LinearProgress variant="determinate" value={goalProgress} sx={{ height: 8, borderRadius: 1, mb: perWeek != null ? 1.5 : 0 }} />
+                  )}
+                </>
+              )}
+              {perWeek != null && (
+                <Typography variant="caption" color="text.secondary">
+                  Gemiddeld {perWeek > 0 ? '+' : ''}{perWeek} kg per week
+                </Typography>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Gewicht-trend */}
         {weightPoints.length >= 2 && (
           <Card sx={{ backgroundColor: 'transparent', border: '1px solid', borderColor: 'divider', boxShadow: 'none', borderRadius: 2, mb: 2 }}>
@@ -177,9 +242,9 @@ export function MetingenPage() {
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                 Gewicht ({wMin}–{wMax} kg)
               </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 0.5, height: 110 }}>
+              <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 0.5, height: 110 }}>
                 {weightPoints.slice(-16).map((p) => (
-                  <Box key={p.id} sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}>
+                  <Box key={p.id} sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', minWidth: 0, height: '100%' }}>
                     <Box
                       title={`${p.date}: ${p.weightKg} kg`}
                       sx={{
@@ -250,6 +315,31 @@ export function MetingenPage() {
           </List>
         )}
       </ContentCard>
+
+      <Dialog open={goalOpen} onClose={() => setGoalOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Doelgewicht</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Vul je streefgewicht in. Laat leeg om geen doel te gebruiken.
+          </Typography>
+          <TextField
+            type="number"
+            size="small"
+            label="Doelgewicht (kg)"
+            value={goalInput}
+            onChange={(e) => setGoalInput(e.target.value)}
+            fullWidth
+            inputProps={{ step: 0.1, min: 0 }}
+            autoFocus
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setGoalOpen(false)}>Annuleren</Button>
+          <Button variant="contained" onClick={handleSaveGoal} sx={{ bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}>
+            Opslaan
+          </Button>
+        </DialogActions>
+      </Dialog>
     </PageLayout>
   );
 }
