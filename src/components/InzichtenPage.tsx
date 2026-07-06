@@ -4,12 +4,14 @@ import { SpiergroepenPage } from './SpiergroepenPage';
 import { OefeningenPage } from './OefeningenPage';
 import { LogsPage } from './LogsPage';
 import { LeaderboardPage } from './LeaderboardPage';
+import { NutritionInsights } from './NutritionInsights';
 
 export const INZICHTEN_SUB = {
   INZICHTEN: 0,
   OEFENINGEN: 1,
   LOGS: 2,
   LEADERBOARD: 3,
+  VOEDING: 4,
 } as const;
 
 export interface InzichtenPageProps {
@@ -30,7 +32,7 @@ export const InzichtenPage = ({
   const [subTab, setSubTab] = useState(0);
 
   useEffect(() => {
-    if (initialSubTab !== null && initialSubTab >= 0 && initialSubTab <= 3) {
+    if (initialSubTab !== null && initialSubTab >= 0 && initialSubTab <= 4) {
       setSubTab(initialSubTab);
       onConsumeInitialSubTab?.();
     }
@@ -64,10 +66,11 @@ export const InzichtenPage = ({
           },
         }}
       >
-        <Tab label="Inzichten" id="inzichten-tab-0" aria-controls="inzichten-panel-0" />
-        <Tab label="Oefeningen" id="inzichten-tab-1" aria-controls="inzichten-panel-1" />
-        <Tab label="Logs" id="inzichten-tab-2" aria-controls="inzichten-panel-2" />
-        <Tab label="Ranglijst" id="inzichten-tab-3" aria-controls="inzichten-panel-3" />
+        <Tab value={0} label="Spieren" id="inzichten-tab-0" aria-controls="inzichten-panel-0" />
+        <Tab value={1} label="Oefeningen" id="inzichten-tab-1" aria-controls="inzichten-panel-1" />
+        <Tab value={4} label="Voeding" id="inzichten-tab-4" aria-controls="inzichten-panel-4" />
+        <Tab value={2} label="Logs" id="inzichten-tab-2" aria-controls="inzichten-panel-2" />
+        <Tab value={3} label="Ranglijst" id="inzichten-tab-3" aria-controls="inzichten-panel-3" />
       </Tabs>
       <Box role="tabpanel" id="inzichten-panel-0" hidden={subTab !== 0} sx={{ flex: 1, minHeight: 0 }}>
         {subTab === 0 && <SpiergroepenPage />}
@@ -85,6 +88,9 @@ export const InzichtenPage = ({
       </Box>
       <Box role="tabpanel" id="inzichten-panel-3" hidden={subTab !== 3} sx={{ flex: 1, minHeight: 0 }}>
         {subTab === 3 && <LeaderboardPage />}
+      </Box>
+      <Box role="tabpanel" id="inzichten-panel-4" hidden={subTab !== 4} sx={{ flex: 1, minHeight: 0 }}>
+        {subTab === 4 && <NutritionInsights />}
       </Box>
     </Box>
   );
