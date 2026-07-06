@@ -43,18 +43,17 @@ export const InzichtenPage = ({
       <Tabs
         value={subTab}
         onChange={(_, v: number) => setSubTab(v)}
-        variant="fullWidth"
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
         sx={{
           minHeight: 48,
           mb: 2,
           width: '100%',
-          '& .MuiTabs-flexContainer': {
-            width: '100%',
-          },
           '& .MuiTab-root': {
             minHeight: 48,
-            flex: 1,
-            maxWidth: 'none',
+            minWidth: 'auto',
+            px: 2,
             textTransform: 'none',
             fontWeight: 600,
             transition: 'color 0.2s ease',

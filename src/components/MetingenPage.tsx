@@ -129,7 +129,6 @@ export function MetingenPage() {
 
   const wMin = weightPoints.length ? Math.min(...weightPoints.map((p) => p.weightKg)) : 0;
   const wMax = weightPoints.length ? Math.max(...weightPoints.map((p) => p.weightKg)) : 1;
-  const wRange = wMax - wMin;
 
   const goalWeight = targetId
     ? sporters.find((s) => s.userId === targetId)?.weightGoalKg ?? null
@@ -151,6 +150,20 @@ export function MetingenPage() {
     await profileCtx?.refreshProfile();
     setGoalOpen(false);
   };
+
+  // Lijngrafiek-geometrie voor het gewicht
+  const chartPts = weightPoints.slice(-20);
+  const CW = 320;
+  const CH = 110;
+  const cpad = 14;
+  // Schaal met wat marge zodat de lijn niet tegen de randen plakt
+  const cMin = Math.min(wMin, goalWeight ?? wMin);
+  const cMax = Math.max(wMax, goalWeight ?? wMax);
+  const cRange = cMax - cMin || 1;
+  const cx = (i: number) => (chartPts.length > 1 ? (i * (CW - 2 * cpad)) / (chartPts.length - 1) : (CW - 2 * cpad) / 2) + cpad;
+  const cy = (w: number) => CH - cpad - ((w - cMin) / cRange) * (CH - 2 * cpad);
+  const linePoints = chartPts.map((p, i) => `${cx(i)},${cy(p.weightKg)}`).join(' ');
+  const goalY = goalWeight != null ? cy(goalWeight) : null;
 
   return (
     <PageLayout>
@@ -242,19 +255,20 @@ export function MetingenPage() {
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                 Gewicht ({wMin}–{wMax} kg)
               </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 0.5, height: 110 }}>
-                {weightPoints.slice(-16).map((p) => (
-                  <Box key={p.id} sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', minWidth: 0, height: '100%' }}>
-                    <Box
-                      title={`${p.date}: ${p.weightKg} kg`}
-                      sx={{
-                        width: '78%',
-                        height: `${wRange > 0 ? Math.round(((p.weightKg - wMin) / wRange) * 78) + 22 : 60}%`,
-                        bgcolor: 'primary.main',
-                        borderRadius: 1,
-                      }}
-                    />
-                  </Box>
+              <Box
+                component="svg"
+                viewBox={`0 0 ${CW} ${CH}`}
+                preserveAspectRatio="none"
+                sx={{ width: '100%', height: 130, display: 'block', color: 'primary.main' }}
+              >
+                {goalY != null && (
+                  <line x1={0} y1={goalY} x2={CW} y2={goalY} stroke="#9e9e9e" strokeWidth={1} strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
+                )}
+                <polyline points={linePoints} fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+                {chartPts.map((p, i) => (
+                  <circle key={p.id} cx={cx(i)} cy={cy(p.weightKg)} r={2.5} fill="currentColor" vectorEffect="non-scaling-stroke">
+                    <title>{`${p.date}: ${p.weightKg} kg`}</title>
+                  </circle>
                 ))}
               </Box>
             </CardContent>
