@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Typography,
@@ -26,6 +26,7 @@ import {
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
+import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
 import { PageLayout, ContentCard } from './layout';
 import { useProfile } from '../context/ProfileContext';
 import { updateProfile } from '../services/profileService';
@@ -36,11 +37,28 @@ import {
   saveNutritionLog,
   deleteNutritionLog,
   getNutritionLogsForUser,
+  recognizeFoodPhoto,
   type FoodProduct,
   type NutritionLog,
+  type RecognizedFood,
 } from '../services/nutritionService';
 
 type Period = 'day' | 'week' | 'month';
+
+/** Verklein een foto tot een data-URL (scheelt kosten/bandbreedte bij AI-herkenning). */
+async function fileToDataUrl(file: File, max = 768, quality = 0.8): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+  const w = Math.max(1, Math.round(bitmap.width * scale));
+  const h = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas niet beschikbaar');
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  return canvas.toDataURL('image/jpeg', quality);
+}
 
 function isoDay(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -102,6 +120,44 @@ export function NutritionPage() {
   const [saving, setSaving] = useState(false);
 
   const [goalOpen, setGoalOpen] = useState(false);
+
+  // AI-fotoherkenning
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [recognizing, setRecognizing] = useState(false);
+  const [suggestions, setSuggestions] = useState<RecognizedFood[] | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  const handlePhoto = async (file: File | null) => {
+    if (!file) return;
+    setRecognizing(true);
+    setPhotoError(null);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const items = await recognizeFoodPhoto(dataUrl);
+      if (items.length === 0) {
+        setPhotoError('Geen voeding herkend. Probeer een duidelijkere foto.');
+      } else {
+        setSuggestions(items);
+      }
+    } catch (e) {
+      setPhotoError(e instanceof Error ? e.message : 'Herkenning mislukt.');
+    } finally {
+      setRecognizing(false);
+    }
+  };
+
+  const pickSuggestion = (s: RecognizedFood) => {
+    setSuggestions(null);
+    setSelected({
+      code: `ai:${s.name}`,
+      name: s.name,
+      brand: 'AI-schatting',
+      imageUrl: null,
+      per100g: s.per100g,
+      servingGrams: s.grams,
+    });
+    setGrams(String(s.grams));
+  };
 
   const effectiveUserId = targetId || selfUid;
   const effectiveTrainerId = targetId ? sporters.find((s) => s.userId === targetId)?.trainerId ?? null : selfTrainerId;
@@ -315,6 +371,32 @@ export function NutritionPage() {
         {/* Dag-modus: zoeken + loggen */}
         {period === 'day' && (
           <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              hidden
+              onChange={(e) => {
+                handlePhoto(e.target.files?.[0] ?? null);
+                e.target.value = '';
+              }}
+            />
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<PhotoCameraRoundedIcon />}
+              disabled={recognizing}
+              onClick={() => fileInputRef.current?.click()}
+              sx={{ mb: 1 }}
+            >
+              {recognizing ? 'Herkennen…' : 'Foto herkennen (AI)'}
+            </Button>
+            {photoError && (
+              <Typography variant="caption" color="error" sx={{ display: 'block', mb: 1 }}>
+                {photoError}
+              </Typography>
+            )}
             <TextField
               fullWidth
               size="small"
@@ -377,6 +459,33 @@ export function NutritionPage() {
           </>
         )}
       </ContentCard>
+
+      <Dialog open={suggestions != null} onClose={() => setSuggestions(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ pb: 0.5 }}>Herkend op de foto</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Kies een item. De waarden zijn een AI-schatting, pas de gram gerust aan.
+          </Typography>
+          <List dense>
+            {(suggestions ?? []).map((s, i) => (
+              <ListItemButton key={i} onClick={() => pickSuggestion(s)}>
+                <ListItemAvatar sx={{ minWidth: 52 }}>
+                  <Avatar variant="rounded" sx={{ width: 40, height: 40, bgcolor: 'rgba(0,0,0,0.06)', color: 'text.secondary' }}>
+                    <RestaurantRoundedIcon fontSize="small" />
+                  </Avatar>
+                </ListItemAvatar>
+                <ListItemText
+                  primary={`${s.name} · ~${s.grams} g`}
+                  secondary={`${s.per100g.kcal} kcal / 100g · E ${s.per100g.protein} · K ${s.per100g.carbs} · V ${s.per100g.fat}`}
+                />
+              </ListItemButton>
+            ))}
+          </List>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSuggestions(null)}>Sluiten</Button>
+        </DialogActions>
+      </Dialog>
 
       <AddDialog selected={selected} grams={grams} setGrams={setGrams} preview={preview} saving={saving} onClose={() => setSelected(null)} onSave={handleSave} />
       <GoalDialog

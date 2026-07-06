@@ -12,6 +12,9 @@
     },
     "api/exercise-search.mjs": {
       "includeFiles": "src/data/*.json"
+    },
+    "api/food-photo.mjs": {
+      "maxDuration": 30
     }
   },
   "rewrites": [

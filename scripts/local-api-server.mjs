@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import generateHandler from '../api/generate-workout.mjs';
 import exerciseDemoHandler from '../api/exercise-demo.mjs';
 import exerciseSearchHandler from '../api/exercise-search.mjs';
+import foodPhotoHandler from '../api/food-photo.mjs';
 
 function loadDotEnvIfMissing() {
   // Simple .env loader voor lokale dev/test (zonder extra dependencies).
@@ -111,6 +112,14 @@ const server = http.createServer(async (req, res) => {
     };
     const resAdapter = new ServerResponseAdapter(res);
     await generateHandler(reqAdapter, resAdapter);
+    return;
+  }
+
+  if (pathname === '/api/food-photo') {
+    const body = await readJsonBody(req);
+    const reqAdapter = { method: req.method, body };
+    const resAdapter = new ServerResponseAdapter(res);
+    await foodPhotoHandler(reqAdapter, resAdapter);
     return;
   }
 

@@ -15,6 +15,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
+import { apiUrl } from '../utils/apiOrigin';
 
 export interface FoodProduct {
   code: string;
@@ -172,6 +173,24 @@ export async function searchFoods(term: string): Promise<FoodProduct[]> {
     merged.push(p);
   }
   return merged;
+}
+
+export interface RecognizedFood {
+  name: string;
+  grams: number;
+  per100g: FoodProduct['per100g'];
+}
+
+/** Herken voeding op een foto (data-URL) via het vision-endpoint. */
+export async function recognizeFoodPhoto(image: string): Promise<RecognizedFood[]> {
+  const res = await fetch(apiUrl('/api/food-photo'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || 'Fotoherkenning mislukt');
+  return Array.isArray(data?.items) ? data.items : [];
 }
 
 /** Bereken de macro's voor een hoeveelheid gram op basis van per-100g-waarden. */
