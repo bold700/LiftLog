@@ -27,6 +27,8 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
+import QrCodeScannerRoundedIcon from '@mui/icons-material/QrCodeScannerRounded';
+import { BarcodeScannerDialog } from './BarcodeScannerDialog';
 import { PageLayout, ContentCard } from './layout';
 import { useProfile } from '../context/ProfileContext';
 import { updateProfile } from '../services/profileService';
@@ -38,6 +40,7 @@ import {
   deleteNutritionLog,
   getNutritionLogsForUser,
   recognizeFoodPhoto,
+  getProductByBarcode,
   type FoodProduct,
   type NutritionLog,
   type RecognizedFood,
@@ -126,6 +129,29 @@ export function NutritionPage() {
   const [recognizing, setRecognizing] = useState(false);
   const [suggestions, setSuggestions] = useState<RecognizedFood[] | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+
+  // Barcode scannen
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [lookingUp, setLookingUp] = useState(false);
+
+  const handleBarcode = useCallback(async (code: string) => {
+    setScannerOpen(false);
+    setLookingUp(true);
+    setPhotoError(null);
+    try {
+      const p = await getProductByBarcode(code);
+      if (p) {
+        setSelected(p);
+        setGrams(p.servingGrams != null ? String(p.servingGrams) : '100');
+      } else {
+        setPhotoError(`Geen product gevonden voor barcode ${code}.`);
+      }
+    } catch {
+      setPhotoError('Opzoeken van de barcode mislukte.');
+    } finally {
+      setLookingUp(false);
+    }
+  }, []);
 
   const handlePhoto = async (file: File | null) => {
     if (!file) return;
@@ -382,16 +408,26 @@ export function NutritionPage() {
                 e.target.value = '';
               }}
             />
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<PhotoCameraRoundedIcon />}
-              disabled={recognizing}
-              onClick={() => fileInputRef.current?.click()}
-              sx={{ mb: 1 }}
-            >
-              {recognizing ? 'Herkennen…' : 'Foto herkennen (AI)'}
-            </Button>
+            <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap' }}>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<PhotoCameraRoundedIcon />}
+                disabled={recognizing}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {recognizing ? 'Herkennen…' : 'Foto herkennen (AI)'}
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<QrCodeScannerRoundedIcon />}
+                disabled={lookingUp}
+                onClick={() => setScannerOpen(true)}
+              >
+                {lookingUp ? 'Opzoeken…' : 'Scan barcode'}
+              </Button>
+            </Box>
             {photoError && (
               <Typography variant="caption" color="error" sx={{ display: 'block', mb: 1 }}>
                 {photoError}
@@ -486,6 +522,8 @@ export function NutritionPage() {
           <Button onClick={() => setSuggestions(null)}>Sluiten</Button>
         </DialogActions>
       </Dialog>
+
+      <BarcodeScannerDialog open={scannerOpen} onClose={() => setScannerOpen(false)} onDetected={handleBarcode} />
 
       <AddDialog selected={selected} grams={grams} setGrams={setGrams} preview={preview} saving={saving} onClose={() => setSelected(null)} onSave={handleSave} />
       <GoalDialog

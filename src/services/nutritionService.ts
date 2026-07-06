@@ -175,6 +175,36 @@ export async function searchFoods(term: string): Promise<FoodProduct[]> {
   return merged;
 }
 
+/** Zoek een product op barcode (EAN) via Open Food Facts. Null als niet gevonden. */
+export async function getProductByBarcode(code: string): Promise<FoodProduct | null> {
+  const c = code.trim();
+  if (!c) return null;
+  const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(c)}.json?fields=code,product_name,brands,nutriments,serving_size,image_small_url`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => null);
+  const p = data?.product;
+  if (!data || data.status !== 1 || !p) return null;
+  const name = String(p.product_name ?? '').trim();
+  if (!name) return null;
+  const n = p.nutriments ?? {};
+  let kcal = num(n['energy-kcal_100g']);
+  if (!kcal && n['energy_100g']) kcal = Math.round(num(n['energy_100g']) / 4.184);
+  return {
+    code: String(p.code ?? c),
+    name,
+    brand: String(p.brands ?? '').split(',')[0].trim(),
+    imageUrl: typeof p.image_small_url === 'string' ? p.image_small_url : null,
+    per100g: {
+      kcal: Math.round(kcal),
+      protein: Math.round(num(n['proteins_100g']) * 10) / 10,
+      carbs: Math.round(num(n['carbohydrates_100g']) * 10) / 10,
+      fat: Math.round(num(n['fat_100g']) * 10) / 10,
+    },
+    servingGrams: parseServingGrams(p.serving_size),
+  };
+}
+
 export interface RecognizedFood {
   name: string;
   grams: number;
