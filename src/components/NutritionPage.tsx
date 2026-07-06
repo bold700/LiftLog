@@ -24,6 +24,7 @@ import {
   LinearProgress,
 } from '@mui/material';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
@@ -83,6 +84,17 @@ function rangeDays(endIso: string, count: number): string[] {
   return out;
 }
 
+/** Reconstrueer de waarden per 100 g uit een gelogd item (voor bewerken). */
+function per100gFromLog(l: NutritionLog): FoodProduct['per100g'] {
+  const f = l.grams > 0 ? 100 / l.grams : 1;
+  return {
+    kcal: Math.round(l.kcal * f),
+    protein: Math.round(l.protein * f * 10) / 10,
+    carbs: Math.round(l.carbs * f * 10) / 10,
+    fat: Math.round(l.fat * f * 10) / 10,
+  };
+}
+
 const EMPTY_TOTALS = { kcal: 0, protein: 0, carbs: 0, fat: 0 };
 function sumLogs(logs: NutritionLog[]) {
   return logs.reduce(
@@ -120,6 +132,7 @@ export function NutritionPage() {
   const [results, setResults] = useState<FoodProduct[]>([]);
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<FoodProduct | null>(null);
+  const [editingLog, setEditingLog] = useState<NutritionLog | null>(null);
   const [grams, setGrams] = useState('100');
   const [saving, setSaving] = useState(false);
 
@@ -262,6 +275,17 @@ export function NutritionPage() {
     setGrams(p.servingGrams != null ? String(p.servingGrams) : '100');
   };
 
+  const openEdit = (l: NutritionLog) => {
+    setEditingLog(l);
+    setSelected({ code: `edit:${l.id}`, name: l.productName, brand: l.brand, imageUrl: null, per100g: per100gFromLog(l), servingGrams: l.grams });
+    setGrams(String(l.grams));
+  };
+
+  const closeDialog = () => {
+    setSelected(null);
+    setEditingLog(null);
+  };
+
   const handleSave = async () => {
     if (!selected || !effectiveUserId) return;
     const g = Number(grams);
@@ -269,11 +293,14 @@ export function NutritionPage() {
     setSaving(true);
     try {
       const m = macrosForGrams(selected.per100g, g);
+      const editing = editingLog;
       await saveNutritionLog({
-        userId: effectiveUserId,
-        loggedBy: selfUid || effectiveUserId,
-        trainerId: effectiveTrainerId,
-        date,
+        id: editing?.id,
+        createdAt: editing?.createdAt,
+        userId: editing?.userId || effectiveUserId,
+        loggedBy: editing?.loggedBy || selfUid || effectiveUserId,
+        trainerId: editing ? editing.trainerId : effectiveTrainerId,
+        date: editing ? editing.date : date,
         productName: selected.name,
         brand: selected.brand,
         grams: g,
@@ -282,7 +309,7 @@ export function NutritionPage() {
         carbs: m.carbs,
         fat: m.fat,
       });
-      setSelected(null);
+      closeDialog();
       setTerm('');
       setResults([]);
       await loadLogs();
@@ -488,9 +515,14 @@ export function NutritionPage() {
                   <ListItem
                     key={l.id}
                     secondaryAction={
-                      <IconButton edge="end" size="small" onClick={() => handleDelete(l.id)} aria-label="Verwijderen">
-                        <DeleteOutlineRoundedIcon fontSize="small" />
-                      </IconButton>
+                      <Box>
+                        <IconButton edge="end" size="small" onClick={() => openEdit(l)} aria-label="Bewerken" sx={{ mr: 0.5 }}>
+                          <EditRoundedIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton edge="end" size="small" onClick={() => handleDelete(l.id)} aria-label="Verwijderen">
+                          <DeleteOutlineRoundedIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
                     }
                   >
                     <ListItemText primary={`${l.productName} · ${l.grams} g`} secondary={`${l.kcal} kcal · E ${l.protein} · K ${l.carbs} · V ${l.fat}`} />
@@ -532,7 +564,7 @@ export function NutritionPage() {
 
       <BarcodeScannerDialog open={scannerOpen} onClose={() => setScannerOpen(false)} onDetected={handleBarcode} />
 
-      <AddDialog selected={selected} grams={grams} setGrams={setGrams} preview={preview} saving={saving} onClose={() => setSelected(null)} onSave={handleSave} />
+      <AddDialog selected={selected} grams={grams} setGrams={setGrams} preview={preview} saving={saving} isEditing={editingLog != null} onClose={closeDialog} onSave={handleSave} />
       <GoalDialog
         open={goalOpen}
         initial={goal}
@@ -556,6 +588,7 @@ function AddDialog({
   setGrams,
   preview,
   saving,
+  isEditing,
   onClose,
   onSave,
 }: {
@@ -564,12 +597,13 @@ function AddDialog({
   setGrams: (v: string) => void;
   preview: { kcal: number; protein: number; carbs: number; fat: number } | null;
   saving: boolean;
+  isEditing: boolean;
   onClose: () => void;
   onSave: () => void;
 }) {
   return (
     <Dialog open={selected != null} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ pb: 0.5 }}>Toevoegen</DialogTitle>
+      <DialogTitle sx={{ pb: 0.5 }}>{isEditing ? 'Bewerken' : 'Toevoegen'}</DialogTitle>
       <DialogContent>
         {selected && (
           <>
@@ -606,7 +640,7 @@ function AddDialog({
       <DialogActions>
         <Button onClick={onClose}>Annuleren</Button>
         <Button variant="contained" onClick={onSave} disabled={saving} sx={{ bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}>
-          {saving ? 'Bezig…' : 'Toevoegen'}
+          {saving ? 'Bezig…' : isEditing ? 'Opslaan' : 'Toevoegen'}
         </Button>
       </DialogActions>
     </Dialog>

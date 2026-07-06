@@ -88,6 +88,11 @@ function AppContent() {
     setRequestedOpenSessionLogDialog(true);
   }, [handleFabMenuClose]);
 
+  const handleAddNutritionFromFab = useCallback(() => {
+    handleFabMenuClose();
+    setActiveTab(TAB_VOEDING);
+  }, [handleFabMenuClose]);
+
   useEffect(() => {
     document.title = 'Van As Personal Training Logs';
   }, []);
@@ -289,6 +294,10 @@ function AppContent() {
                 <MenuItem onClick={handleAddTrainingLogFromFab}>
                   <EventNoteRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
                   Training loggen
+                </MenuItem>
+                <MenuItem onClick={handleAddNutritionFromFab}>
+                  <RestaurantRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
+                  Voeding loggen
                 </MenuItem>
               </Menu>
             </>
