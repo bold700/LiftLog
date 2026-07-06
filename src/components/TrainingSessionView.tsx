@@ -260,7 +260,7 @@ export const TrainingSessionView = ({
               <Typography variant="body2" fontWeight={500}>
                 {dayMarkedComplete && !allExercisesLogged
                   ? 'Training voltooid (in één keer gemarkeerd).'
-                  : 'Dag voltooid – alle oefeningen zijn gelogd. &quot;Gelogd&quot; verdwijnt na 12 uur; klik erop om de log te bekijken of bewerken.'}
+                  : 'Dag voltooid – alle oefeningen zijn gelogd. "Gelogd" verdwijnt na 12 uur; klik erop om de log te bekijken of bewerken.'}
               </Typography>
               {dayMarkedComplete && !allExercisesLogged && (
                 <Button

@@ -576,37 +576,9 @@ export const SchemasPage = () => {
                     }}
                   >
                     <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 1.5, flexWrap: 'wrap' }}>
-                        <Typography variant="subtitle1" fontWeight={600}>
-                          {day.dayLabel}
-                        </Typography>
-                        <Button
-                          variant="contained"
-                          size="small"
-                          startIcon={<PlayArrowRoundedIcon />}
-                          onClick={() =>
-                            isTrainer && selectedSchema.audience === 'group'
-                              ? handleOpenGroupSetup(dayIndex)
-                              : handleStartTraining(dayIndex)
-                          }
-                          disabled={day.exercises.length === 0}
-                          aria-label={`Training starten voor ${day.dayLabel}`}
-                          sx={{
-                            bgcolor: '#000000',
-                            color: '#F2E4D3',
-                            borderRadius: '20px',
-                            px: 2,
-                            py: 1,
-                            textTransform: 'none',
-                            fontWeight: 500,
-                            flexShrink: 0,
-                            '&:hover': { bgcolor: '#1a1a1a' },
-                            '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.12)', color: 'rgba(29,27,26,0.38)' },
-                          }}
-                        >
-                          Training starten
-                        </Button>
-                      </Box>
+                      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1.5 }}>
+                        {day.dayLabel}
+                      </Typography>
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 0 }}>
                         {formatWarmupSummary(day.warmup ?? selectedSchema.formule7?.warmup) && (
                           <Box sx={{ py: 0.5, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
@@ -756,6 +728,31 @@ export const SchemasPage = () => {
                           </Box>
                         )}
                       </Box>
+                      <Button
+                        fullWidth
+                        variant="contained"
+                        startIcon={<PlayArrowRoundedIcon />}
+                        onClick={() =>
+                          isTrainer && selectedSchema.audience === 'group'
+                            ? handleOpenGroupSetup(dayIndex)
+                            : handleStartTraining(dayIndex)
+                        }
+                        disabled={day.exercises.length === 0}
+                        aria-label={`Training starten voor ${day.dayLabel}`}
+                        sx={{
+                          mt: 2,
+                          bgcolor: '#000000',
+                          color: '#F2E4D3',
+                          borderRadius: '24px',
+                          py: 1.25,
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          '&:hover': { bgcolor: '#1a1a1a' },
+                          '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.12)', color: 'rgba(29,27,26,0.38)' },
+                        }}
+                      >
+                        Training starten
+                      </Button>
                     </CardContent>
                   </Card>
                   );

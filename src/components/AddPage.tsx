@@ -17,6 +17,8 @@ import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import { addExercise, getAllExercisesByName } from '../utils/storage';
 import { Exercise } from '../types';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
+import { useProfile } from '../context/ProfileContext';
+import { saveExerciseLog, getLastLogForUserExercise } from '../services/logService';
 import { useExerciseDbSearch } from '../hooks/useExerciseDbSearch';
 import { getExerciseMuscleMapping } from '../utils/muscleMappingResolver';
 import { PageLayout, ContentCard, PageTitle } from './layout';
@@ -172,6 +174,14 @@ const getPrimaryMuscleGroupFromExercise = (exerciseName: string): string | null 
 
 export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPageProps) => {
   const addFromSchema = useAddFromSchema();
+  const profileCtx = useProfile();
+  const isTrainer = profileCtx?.isTrainer ?? false;
+  const sporters = profileCtx?.allSporters ?? [];
+  const selfUid = profileCtx?.profile?.userId ?? null;
+  /** '' = voor mijzelf; anders userId van de sporter. */
+  const [logTargetId, setLogTargetId] = useState('');
+  /** True wanneer de oefening al is voorgevuld vanuit een training (dan geen auto-open dropdown). */
+  const [prefilledFromSchema, setPrefilledFromSchema] = useState(false);
   const [exerciseName, setExerciseName] = useState('');
   const [weight, setWeight] = useState('');
   const [sets, setSets] = useState('');
@@ -192,8 +202,26 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
       if (addFromSchema.prefill.targetWeight != null && addFromSchema.prefill.targetWeight > 0) {
         setWeight(String(addFromSchema.prefill.targetWeight));
       }
+      setPrefilledFromSchema(true);
     }
   }, [addFromSchema?.prefill]);
+
+  // Als de trainer voor een sporter logt: vul diens vorige keer voor deze oefening in.
+  useEffect(() => {
+    if (!isTrainer || !logTargetId || !exerciseName.trim()) return;
+    let cancelled = false;
+    getLastLogForUserExercise(logTargetId, exerciseName.trim())
+      .then((last) => {
+        if (cancelled || !last) return;
+        if (last.weight != null) setWeight(String(last.weight));
+        if (last.sets != null) setSets(String(last.sets));
+        if (last.reps != null) setReps(String(last.reps));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isTrainer, logTargetId, exerciseName]);
   
   // Bepaal welke spiergroepen getoond moeten worden (handmatig geselecteerd OF automatisch van oefening)
   const displayedMuscleGroups = useMemo(() => {
@@ -249,7 +277,28 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
       addFromSchema.clearAddFromSchema();
     }
 
-    addExercise(exercise);
+    const target = isTrainer && logTargetId ? sporters.find((s) => s.userId === logTargetId) : null;
+    if (target) {
+      // Log onder het account van de sporter (cloud), niet lokaal bij de trainer
+      await saveExerciseLog({
+        id: exercise.id,
+        userId: target.userId,
+        loggedBy: selfUid ?? target.userId,
+        trainerId: target.trainerId ?? null,
+        exerciseName: exercise.name ?? '',
+        exerciseId: exercise.name ?? null,
+        weight: exercise.weight ?? null,
+        sets: exercise.sets ?? null,
+        reps: exercise.reps ?? null,
+        notes: exercise.notes ?? null,
+        date: exercise.date,
+        schemaId: exercise.schemaId ?? null,
+        schemaDayIndex: exercise.schemaDayIndex ?? null,
+        sessionId: null,
+      }).catch(() => {});
+    } else {
+      addExercise(exercise);
+    }
 
     setExerciseName('');
     setWeight('');
@@ -257,13 +306,14 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
     setReps('');
     setNotes('');
     setSelectedMuscleGroup(null);
+    // logTargetId bewust laten staan: makkelijk meerdere oefeningen voor dezelfde sporter loggen
 
     if (wasFromSchema && addFromSchema?.setReturnToSession) {
       addFromSchema.setReturnToSession(exercise.schemaId!, exercise.schemaDayIndex!, exercise.id);
-    } else if (onExerciseAdded) {
-      onExerciseAdded();
     }
-  }, [exerciseName, weight, sets, reps, notes, onExerciseAdded, addFromSchema]);
+    // Sluit altijd het log-venster (terug naar de sessie of het overzicht)
+    onExerciseAdded?.();
+  }, [exerciseName, weight, sets, reps, notes, onExerciseAdded, addFromSchema, isTrainer, logTargetId, sporters, selfUid]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -341,6 +391,23 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
   const formContent = (
     <>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {isTrainer && !prefilledFromSchema && sporters.length > 0 && (
+              <TextField
+                select
+                fullWidth
+                label="Voor wie loggen?"
+                value={logTargetId}
+                onChange={(e) => setLogTargetId(e.target.value)}
+                helperText={logTargetId ? 'Log gaat onder het account van deze sporter.' : "Laat op 'Mijzelf' voor je eigen account."}
+              >
+                <MenuItem value="">Mijzelf</MenuItem>
+                {sporters.map((s) => (
+                  <MenuItem key={s.userId} value={s.userId}>
+                    {s.displayName?.trim() || s.email || s.userId}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
             <Autocomplete
               freeSolo={false}
               options={filteredExercises}
@@ -420,7 +487,7 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
                   label="Oefening"
                   placeholder={selectedMuscleGroup ? `Filter: ${selectedMuscleGroup}` : "Bijv. Bench Press"}
                   onKeyPress={handleKeyPress}
-                  autoFocus
+                  autoFocus={!prefilledFromSchema}
                 />
               )}
               ListboxProps={{
@@ -462,6 +529,7 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
                 value={weight}
                 onChange={(e) => setWeight(e.target.value)}
                 onKeyPress={handleKeyPress}
+                autoFocus={prefilledFromSchema}
                 sx={{ flex: 1 }}
                 inputProps={{ min: 0, step: 0.5 }}
               />
