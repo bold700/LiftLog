@@ -69,13 +69,33 @@ export function BarcodeScannerDialog({ open, onClose, onDetected }: BarcodeScann
           </Typography>
         ) : (
           <Box sx={{ position: 'relative' }}>
-            <Box
-              component="video"
+            <video
               ref={videoRef}
               autoPlay
               muted
               playsInline
-              sx={{ width: '100%', borderRadius: 1, bgcolor: '#000', display: 'block' }}
+              style={{
+                width: '100%',
+                height: 280,
+                objectFit: 'cover',
+                borderRadius: 8,
+                background: '#000',
+                display: 'block',
+              }}
+            />
+            {/* Richtkader */}
+            <Box
+              sx={{
+                position: 'absolute',
+                top: '50%',
+                left: '10%',
+                right: '10%',
+                height: 2,
+                bgcolor: 'error.main',
+                opacity: 0.7,
+                transform: 'translateY(-50%)',
+                pointerEvents: 'none',
+              }}
             />
             {starting && (
               <CircularProgress size={24} sx={{ position: 'absolute', top: '50%', left: '50%', mt: '-12px', ml: '-12px', color: '#fff' }} />

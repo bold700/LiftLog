@@ -28,6 +28,7 @@ import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
 import QrCodeScannerRoundedIcon from '@mui/icons-material/QrCodeScannerRounded';
+import AddCircleRoundedIcon from '@mui/icons-material/AddCircleRounded';
 import { BarcodeScannerDialog } from './BarcodeScannerDialog';
 import { PageLayout, ContentCard } from './layout';
 import { useProfile } from '../context/ProfileContext';
@@ -162,6 +163,11 @@ export function NutritionPage() {
       const items = await recognizeFoodPhoto(dataUrl);
       if (items.length === 0) {
         setPhotoError('Geen voeding herkend. Probeer een duidelijkere foto.');
+      } else if (items.length === 1) {
+        // Direct naar het toevoeg-venster als er maar één item is
+        const s = items[0];
+        setSelected({ code: `ai:${s.name}`, name: s.name, brand: 'AI-schatting', imageUrl: null, per100g: s.per100g, servingGrams: s.grams });
+        setGrams(String(s.grams));
       } else {
         setSuggestions(items);
       }
@@ -500,7 +506,7 @@ export function NutritionPage() {
         <DialogTitle sx={{ pb: 0.5 }}>Herkend op de foto</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Kies een item. De waarden zijn een AI-schatting, pas de gram gerust aan.
+            Tik op een item om toe te voegen. De waarden zijn een AI-schatting, pas de gram gerust aan.
           </Typography>
           <List dense>
             {(suggestions ?? []).map((s, i) => (
@@ -514,6 +520,7 @@ export function NutritionPage() {
                   primary={`${s.name} · ~${s.grams} g`}
                   secondary={`${s.per100g.kcal} kcal / 100g · E ${s.per100g.protein} · K ${s.per100g.carbs} · V ${s.per100g.fat}`}
                 />
+                <AddCircleRoundedIcon sx={{ color: 'text.primary', ml: 1 }} />
               </ListItemButton>
             ))}
           </List>
