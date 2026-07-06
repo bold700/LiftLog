@@ -43,6 +43,7 @@ import { TrainingSessionView } from './TrainingSessionView';
 import { GroupSessionView } from './GroupSessionView';
 import { ExerciseDbDemo } from './ExerciseDbDemo';
 import { createGroupSession } from '../services/groupSessionService';
+import { createWorkoutRequest, getMyPendingRequest } from '../services/workoutRequestService';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { useProfile } from '../context/ProfileContext';
 import { designTokens } from '../theme/designTokens';
@@ -83,6 +84,10 @@ export const SchemasPage = () => {
   const deleteCancelButtonRef = useRef<any>(null);
   const deleteConfirmButtonRef = useRef<any>(null);
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [requestNote, setRequestNote] = useState('');
+  const [requestSending, setRequestSending] = useState(false);
+  const [hasPendingRequest, setHasPendingRequest] = useState(false);
   const [activeGroupSession, setActiveGroupSession] = useState<GroupSession | null>(null);
   const [groupSetup, setGroupSetup] = useState<{
     open: boolean;
@@ -267,6 +272,36 @@ export const SchemasPage = () => {
     setActiveGroupSession(null);
     setView('detail');
   }, []);
+
+  // Sporter: check of er al een openstaande workout-aanvraag is
+  useEffect(() => {
+    if (isTrainer || !profile?.profile?.userId) return;
+    getMyPendingRequest(profile.profile.userId)
+      .then((r) => setHasPendingRequest(!!r))
+      .catch(() => {});
+  }, [isTrainer, profile?.profile?.userId]);
+
+  const handleSendRequest = useCallback(async () => {
+    const p = profile?.profile;
+    if (!p) return;
+    setRequestSending(true);
+    try {
+      await createWorkoutRequest({
+        userId: p.userId,
+        displayName: p.displayName,
+        email: p.email,
+        trainerId: p.trainerId ?? null,
+        note: requestNote.trim(),
+      });
+      setHasPendingRequest(true);
+      setRequestOpen(false);
+      setRequestNote('');
+    } catch {
+      /* ignore */
+    } finally {
+      setRequestSending(false);
+    }
+  }, [profile, requestNote]);
 
   const handleNextDay = useCallback(() => {
     if (!selectedSchema) return;
@@ -882,9 +917,28 @@ export const SchemasPage = () => {
           <Typography color="text.secondary">Workouts laden…</Typography>
         ) : schemas.length === 0 ? (
           <EmptyState>
-            {canCreateWorkouts
-              ? 'Nog geen workouts. Maak er een aan om te beginnen.'
-              : 'Nog geen workouts toegewezen. Je trainer wijst je workouts toe via Beheer.'}
+            {canCreateWorkouts ? (
+              'Nog geen workouts. Maak er een aan om te beginnen.'
+            ) : (
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Nog geen workouts voor jou. Vraag je trainer om een schema, of wacht op een openbare workout.
+                </Typography>
+                {hasPendingRequest ? (
+                  <Typography variant="body2" color="success.main" fontWeight={600}>
+                    Aanvraag verstuurd ✓ Je trainer neemt contact op.
+                  </Typography>
+                ) : (
+                  <Button
+                    variant="contained"
+                    onClick={() => setRequestOpen(true)}
+                    sx={{ bgcolor: '#000', color: '#F2E4D3', borderRadius: '20px', textTransform: 'none', '&:hover': { bgcolor: '#1a1a1a' } }}
+                  >
+                    Workout aanvragen
+                  </Button>
+                )}
+              </Box>
+            )}
           </EmptyState>
         ) : (
             <Box className="stagger-children" sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -960,6 +1014,35 @@ export const SchemasPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenNewSchemaDialog(false)}>Annuleren</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={requestOpen} onClose={() => setRequestOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Workout aanvragen</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Je trainer krijgt je aanvraag te zien. Vertel eventueel wat je wilt trainen of je doel.
+          </Typography>
+          <TextField
+            label="Toelichting (optioneel)"
+            value={requestNote}
+            onChange={(e) => setRequestNote(e.target.value)}
+            fullWidth
+            multiline
+            minRows={3}
+            placeholder="Bijv. focus op kracht bovenlichaam, 3x per week"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRequestOpen(false)}>Annuleren</Button>
+          <Button
+            variant="contained"
+            onClick={handleSendRequest}
+            disabled={requestSending}
+            sx={{ bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}
+          >
+            {requestSending ? 'Versturen…' : 'Aanvraag versturen'}
+          </Button>
         </DialogActions>
       </Dialog>
     </PageLayout>

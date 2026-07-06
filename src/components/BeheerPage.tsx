@@ -24,6 +24,7 @@ import { useProfile } from '../context/ProfileContext';
 import { getProfileByEmail, assignTrainerToSporter, updateProfile, getAllProfiles } from '../services/profileService';
 import type { Profile, ProfileRole } from '../types';
 import { PageLayout, ContentCard } from './layout';
+import { getPendingWorkoutRequests, resolveWorkoutRequest, type WorkoutRequest } from '../services/workoutRequestService';
 
 export function BeheerPage() {
   const profile = useProfile();
@@ -33,6 +34,18 @@ export function BeheerPage() {
   const [adding, setAdding] = useState(false);
   const [updatingRoleFor, setUpdatingRoleFor] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [requests, setRequests] = useState<WorkoutRequest[]>([]);
+
+  useEffect(() => {
+    getPendingWorkoutRequests()
+      .then(setRequests)
+      .catch(() => {});
+  }, []);
+
+  const handleResolveRequest = useCallback(async (id: string) => {
+    await resolveWorkoutRequest(id).catch(() => {});
+    setRequests((r) => r.filter((x) => x.id !== id));
+  }, []);
 
   const loadAllAccounts = useCallback(async () => {
     setAccountsLoading(true);
@@ -140,6 +153,34 @@ export function BeheerPage() {
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Overzicht van alle accounts. Je kunt rollen wijzigen (sporter, trainer, beheerder).
         </Typography>
+
+        {requests.length > 0 && (
+          <Box sx={{ mb: 3, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'rgba(0,0,0,0.02)' }}>
+            <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 0.5 }}>
+              Workout-aanvragen ({requests.length})
+            </Typography>
+            {requests.map((r) => (
+              <Box
+                key={r.id}
+                sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1, py: 1, borderTop: '1px solid', borderColor: 'divider' }}
+              >
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="body2" fontWeight={600}>
+                    {r.displayName || r.email || r.userId}
+                  </Typography>
+                  {r.note && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                      {r.note}
+                    </Typography>
+                  )}
+                </Box>
+                <Button size="small" onClick={() => handleResolveRequest(r.id)} sx={{ flexShrink: 0 }}>
+                  Afgehandeld
+                </Button>
+              </Box>
+            ))}
+          </Box>
+        )}
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
           <Typography variant="subtitle2" color="text.secondary">
