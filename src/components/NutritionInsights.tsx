@@ -3,6 +3,7 @@ import { Box, Typography, Card, CardContent, CircularProgress } from '@mui/mater
 import { PageLayout, ContentCard } from './layout';
 import { useProfile } from '../context/ProfileContext';
 import { getNutritionLogsForUser, type NutritionLog } from '../services/nutritionService';
+import { getMeasurementsForUser, latestWeight } from '../services/measurementService';
 
 function isoDay(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -24,14 +25,21 @@ export function NutritionInsights() {
   const goal = profileCtx?.profile?.nutritionGoal ?? null;
 
   const [logs, setLogs] = useState<NutritionLog[]>([]);
+  const [weightKg, setWeightKg] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!uid) return;
     setLoading(true);
-    getNutritionLogsForUser(uid)
-      .then(setLogs)
-      .catch(() => setLogs([]))
+    Promise.all([getNutritionLogsForUser(uid), getMeasurementsForUser(uid)])
+      .then(([l, m]) => {
+        setLogs(l);
+        setWeightKg(latestWeight(m));
+      })
+      .catch(() => {
+        setLogs([]);
+        setWeightKg(null);
+      })
       .finally(() => setLoading(false));
   }, [uid]);
 
@@ -161,6 +169,11 @@ export function NutritionInsights() {
                 </Box>
               ))}
             </Box>
+            {weightKg ? (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1.5 }}>
+                ≈ {Math.round((stats.avg.protein / weightKg) * 10) / 10} g eiwit per kg lichaamsgewicht ({weightKg} kg)
+              </Typography>
+            ) : null}
           </CardContent>
         </Card>
 

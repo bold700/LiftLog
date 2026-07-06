@@ -8,6 +8,7 @@ import DonutLargeRoundedIcon from '@mui/icons-material/DonutLargeRounded';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
+import MonitorWeightRoundedIcon from '@mui/icons-material/MonitorWeightRounded';
 import { lightTheme } from './theme';
 import { NavigationBar } from './components/NavigationBar';
 import { FullscreenMenu } from './components/FullscreenMenu';
@@ -17,6 +18,7 @@ import { SchemasPage } from './components/SchemasPage';
 import { BeheerPage } from './components/BeheerPage';
 import { ProfielPage } from './components/ProfielPage';
 import { NutritionPage } from './components/NutritionPage';
+import { MetingenPage } from './components/MetingenPage';
 import { LeaderboardAutoSync } from './components/LeaderboardAutoSync';
 import { AddFromSchemaProvider } from './context/AddFromSchemaContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -34,6 +36,7 @@ const TAB_SCHEMAS = 2;
 const TAB_PROFIEL = 3;
 const TAB_BEHEER = 4;
 const TAB_VOEDING = 5;
+const TAB_METINGEN = 6;
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState(TAB_INZICHTEN);
@@ -93,6 +96,11 @@ function AppContent() {
     setActiveTab(TAB_VOEDING);
   }, [handleFabMenuClose]);
 
+  const handleAddMeasurementFromFab = useCallback(() => {
+    handleFabMenuClose();
+    setActiveTab(TAB_METINGEN);
+  }, [handleFabMenuClose]);
+
   useEffect(() => {
     document.title = 'Van As Personal Training Logs';
   }, []);
@@ -129,6 +137,7 @@ function AppContent() {
               { label: 'Inzichten', tabIndex: TAB_INZICHTEN, icon: <DonutLargeRoundedIcon fontSize="small" /> },
               { label: 'Workouts', tabIndex: TAB_SCHEMAS, icon: <CalendarMonthRoundedIcon fontSize="small" /> },
               { label: 'Voeding', tabIndex: TAB_VOEDING, icon: <RestaurantRoundedIcon fontSize="small" /> },
+              { label: 'Metingen', tabIndex: TAB_METINGEN, icon: <MonitorWeightRoundedIcon fontSize="small" /> },
               { label: 'Profiel', tabIndex: TAB_PROFIEL, icon: <PersonRoundedIcon fontSize="small" /> },
             ]}
             onNavigateToTab={setActiveTab}
@@ -152,6 +161,8 @@ function AppContent() {
         return <ProfielPage />;
       case TAB_VOEDING:
         return <NutritionPage />;
+      case TAB_METINGEN:
+        return <MetingenPage />;
       default:
         return (
           <InzichtenPage
@@ -298,6 +309,10 @@ function AppContent() {
                 <MenuItem onClick={handleAddNutritionFromFab}>
                   <RestaurantRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
                   Voeding loggen
+                </MenuItem>
+                <MenuItem onClick={handleAddMeasurementFromFab}>
+                  <MonitorWeightRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
+                  Meting loggen
                 </MenuItem>
               </Menu>
             </>

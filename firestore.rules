@@ -72,6 +72,22 @@ service cloud.firestore {
             || isTrainerOrAdmin());
     }
 
+    // Lichaamsmetingen (gewicht, vet%) per persoon. Eigen data of via je trainer/admin.
+    match /measurements/{mId} {
+      allow read: if request.auth != null
+        && (resource.data.userId == request.auth.uid
+            || resource.data.trainerId == request.auth.uid
+            || isTrainerOrAdmin());
+      allow create: if request.auth != null
+        && (request.resource.data.userId == request.auth.uid
+            || request.resource.data.loggedBy == request.auth.uid
+            || isTrainerOrAdmin());
+      allow update, delete: if request.auth != null
+        && (resource.data.userId == request.auth.uid
+            || resource.data.loggedBy == request.auth.uid
+            || isTrainerOrAdmin());
+    }
+
     // Workout-aanvragen: sporter maakt eigen aanvraag; trainer/admin ziet en handelt af.
     match /workoutRequests/{reqId} {
       allow read: if request.auth != null
