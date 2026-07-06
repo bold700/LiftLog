@@ -15,8 +15,18 @@ import { db, isFirebaseConfigured } from '../firebase/config';
 import type { LeaderboardVisibility } from '../types';
 import {
   computeLocalLeaderboardMetrics,
+  computePointsForPeriod,
   type BestLift,
+  type PointsBreakdown,
 } from '../utils/leaderboardLocalStats';
+
+const EMPTY_PTS: PointsBreakdown = { points: 0, frequency: 0, volume: 0, progressionKg: 0 };
+function parsePts(v: unknown): PointsBreakdown {
+  if (!v || typeof v !== 'object') return { ...EMPTY_PTS };
+  const o = v as Record<string, unknown>;
+  const n = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : Number(x) || 0);
+  return { points: n(o.points), frequency: n(o.frequency), volume: n(o.volume), progressionKg: n(o.progressionKg) };
+}
 
 export const LEADERBOARD_PUBLIC_SYNCED_EVENT = 'leaderboardPublicSynced';
 
@@ -36,6 +46,9 @@ export interface PublicLeaderboardEntry {
   /** Alle logs met gewicht in de periode, hoog → laag. */
   lifts7d: BestLift[];
   lifts30d: BestLift[];
+  /** Puntensysteem (frequentie + volume + progressie). */
+  pts7d: PointsBreakdown;
+  pts30d: PointsBreakdown;
   updatedAt: string;
 }
 
@@ -87,6 +100,8 @@ export async function syncMyLeaderboardPublic(opts: {
       weightKg30d: metrics.best30d?.weightKg ?? 0,
       lifts7d: metrics.lifts7d,
       lifts30d: metrics.lifts30d,
+      pts7d: computePointsForPeriod(7),
+      pts30d: computePointsForPeriod(30),
       updatedAt: serverTimestamp(),
     },
     { merge: true }
@@ -158,6 +173,8 @@ export async function fetchPublicLeaderboard(): Promise<PublicLeaderboardEntry[]
       weightKg30d: Number.isFinite(wt30) ? wt30 : 0,
       lifts7d,
       lifts30d,
+      pts7d: parsePts(data.pts7d),
+      pts30d: parsePts(data.pts30d),
       updatedAt: tsToIso(data.updatedAt),
     });
   }

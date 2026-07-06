@@ -17,7 +17,6 @@ import EmojiEventsRoundedIcon from '@mui/icons-material/EmojiEventsRounded';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { PageLayout, ContentCard } from './layout';
 import { UserAvatar } from './UserAvatar';
-import type { BestLift } from '../utils/leaderboardLocalStats';
 import {
   fetchPublicLeaderboard,
   LEADERBOARD_PUBLIC_SYNCED_EVENT,
@@ -35,23 +34,8 @@ function medalForRank(i: number): string | null {
   return null;
 }
 
-function pickLift(r: PublicLeaderboardEntry, period: Period): { name: string; kg: number } {
-  if (period === '7d') {
-    return { name: r.exerciseName7d, kg: r.weightKg7d };
-  }
-  return { name: r.exerciseName30d, kg: r.weightKg30d };
-}
-
-function liftsForPeriod(r: PublicLeaderboardEntry, period: Period): BestLift[] {
-  return period === '7d' ? r.lifts7d : r.lifts30d;
-}
-
-/** Sortering tussen personen: op zwaarste lift in de periode. */
-function topKgForSort(r: PublicLeaderboardEntry, period: Period): number {
-  const lifts = liftsForPeriod(r, period);
-  if (lifts.length > 0) return lifts[0].weightKg;
-  const p = pickLift(r, period);
-  return p.kg > 0 && p.name ? p.kg : -1;
+function ptsForPeriod(r: PublicLeaderboardEntry, period: Period) {
+  return period === '7d' ? r.pts7d : r.pts30d;
 }
 
 export function LeaderboardPage() {
@@ -125,9 +109,9 @@ export function LeaderboardPage() {
   const sorted = useMemo(() => {
     const copy = [...rows];
     copy.sort((a, b) => {
-      const wa = topKgForSort(a, period);
-      const wb = topKgForSort(b, period);
-      if (wb !== wa) return wb - wa;
+      const pa = ptsForPeriod(a, period).points;
+      const pb = ptsForPeriod(b, period).points;
+      if (pb !== pa) return pb - pa;
       return a.displayLabel.localeCompare(b.displayLabel, 'nl', { sensitivity: 'base' });
     });
     return copy;
@@ -168,9 +152,13 @@ export function LeaderboardPage() {
             }}
           >
             <Typography variant="body2" color="text.secondary" component="div">
-              Per deelnemer zie je <strong>alle oefeningen met gewicht</strong> uit de gekozen periode (zwaar bovenaan).
-              De <strong>plek in de ranglijst</strong> is gebaseerd op je zwaarste lift. Profielnaam of Anoniem, aanpassen
-              onder <strong>Profiel</strong>.
+              Je <strong>score</strong> combineert drie dingen in de gekozen periode:
+              <br />• <strong>Frequentie</strong> — 10 punten per trainingsdag
+              <br />• <strong>Volume</strong> — 1 punt per gelogde set
+              <br />• <strong>Progressie</strong> — 5 punten per kg dat je zwaarder tilt dan je eerste log
+              <br />
+              Zo tellen consistentie en vooruitgang mee, niet alleen brute kracht. Naam of Anoniem: aanpassen onder{' '}
+              <strong>Profiel</strong>.
             </Typography>
           </Popover>
         </Box>
@@ -212,26 +200,13 @@ export function LeaderboardPage() {
         ) : (
           <List disablePadding>
             {sorted.map((r, i) => {
-              const lifts = liftsForPeriod(r, period);
+              const pts = ptsForPeriod(r, period);
               const medal = medalForRank(i);
               const isYou = uid != null && r.userId === uid;
               const secondary =
-                lifts.length > 0 ? (
-                  <Box component="span" sx={{ display: 'flex', flexDirection: 'column', gap: 0.35, mt: 0.25 }}>
-                    {lifts.map((lift, li) => (
-                      <Typography
-                        key={`${lift.exerciseName}-${lift.weightKg}-${li}`}
-                        component="span"
-                        variant="body2"
-                        color="text.secondary"
-                      >
-                        {lift.exerciseName} · {lift.weightKg.toLocaleString('nl-NL')} kg
-                      </Typography>
-                    ))}
-                  </Box>
-                ) : (
-                  'Nog geen oefening met gewicht in deze periode'
-                );
+                pts.points > 0
+                  ? `${pts.frequency} ${pts.frequency === 1 ? 'training' : 'trainingen'} · ${pts.volume} sets${pts.progressionKg > 0 ? ` · +${pts.progressionKg.toLocaleString('nl-NL')} kg progressie` : ''}`
+                  : 'Nog niet getraind in deze periode';
               return (
                 <ListItem
                   key={r.userId}
@@ -251,12 +226,17 @@ export function LeaderboardPage() {
                   </ListItemAvatar>
                   <ListItemText
                     primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                        <Typography component="span" variant="body1" fontWeight={600}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap' }}>
+                        <Typography component="span" variant="body1" fontWeight={600} sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {medal ? `${medal} ` : `${i + 1}. `}
                           {r.displayLabel}
                         </Typography>
                         {isYou && <Chip size="small" label="Jij" color="primary" variant="outlined" />}
+                        <Box sx={{ ml: 'auto', flexShrink: 0 }}>
+                          <Typography component="span" variant="body1" fontWeight={700}>
+                            {pts.points} pt
+                          </Typography>
+                        </Box>
                       </Box>
                     }
                     secondary={secondary}

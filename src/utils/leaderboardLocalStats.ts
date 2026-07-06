@@ -109,3 +109,56 @@ export function computeLocalLeaderboardMetrics(): LeaderboardLocalMetrics {
     lifts30d: listAllLiftsInPeriod(30),
   };
 }
+
+// --- Puntensysteem: frequentie + volume + progressie ---
+
+export interface PointsBreakdown {
+  points: number;
+  /** Aantal trainingsdagen in de periode. */
+  frequency: number;
+  /** Totaal aantal gelogde sets (proxy voor duur/omvang). */
+  volume: number;
+  /** Totale gewichtstoename (kg) over oefeningen die vooruitgingen. */
+  progressionKg: number;
+}
+
+const PTS_PER_TRAINING_DAY = 10;
+const PTS_PER_SET = 1;
+const PTS_PER_KG_PROGRESS = 5;
+
+export function computePointsForPeriod(nDays: number): PointsBreakdown {
+  const workouts = getWorkouts();
+  const days = new Set<string>();
+  let volume = 0;
+  const exLogs: Record<string, { day: number; weight: number }[]> = {};
+
+  for (const w of workouts) {
+    for (const ex of w.exercises) {
+      const raw = ex.date || w.date;
+      const ymd = raw ? toLocalYmd(String(raw)) : null;
+      if (!ymd || !isDateWithinLastNDays(ymd, nDays)) continue;
+      const name = ex.name?.trim();
+      if (!name) continue;
+      days.add(ymd);
+      const sets = typeof ex.sets === 'number' && ex.sets > 0 ? ex.sets : 1;
+      volume += sets;
+      const weight = ex.weight;
+      if (weight != null && !Number.isNaN(weight) && weight > 0) {
+        (exLogs[name] ??= []).push({ day: parseYmd(ymd), weight: Math.round(weight * 10) / 10 });
+      }
+    }
+  }
+
+  let progressionKg = 0;
+  for (const name in exLogs) {
+    const list = exLogs[name].sort((a, b) => a.day - b.day);
+    if (list.length < 2) continue;
+    const gain = list[list.length - 1].weight - list[0].weight;
+    if (gain > 0) progressionKg += gain;
+  }
+  progressionKg = Math.round(progressionKg * 10) / 10;
+
+  const frequency = days.size;
+  const points = Math.round(frequency * PTS_PER_TRAINING_DAY + volume * PTS_PER_SET + progressionKg * PTS_PER_KG_PROGRESS);
+  return { points, frequency, volume, progressionKg };
+}
