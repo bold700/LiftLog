@@ -13,6 +13,7 @@ import {
   RadioGroup,
   FormControlLabel,
   Radio,
+  MenuItem,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -35,6 +36,10 @@ export function ProfielPage() {
   const auth = useAuth();
   const [displayName, setDisplayName] = useState('');
   const [leaderboardVisibility, setLeaderboardVisibility] = useState<LeaderboardVisibility>('named');
+  const [heightCm, setHeightCm] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [gender, setGender] = useState<'man' | 'vrouw' | 'anders' | ''>('');
+  const [restingHr, setRestingHr] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -123,7 +128,11 @@ export function ProfielPage() {
     if (p?.displayName != null) setDisplayName(p.displayName);
     else if (p !== undefined) setDisplayName('');
     setLeaderboardVisibility(p?.leaderboardVisibility ?? 'named');
-  }, [p?.displayName, p?.leaderboardVisibility, p]);
+    setHeightCm(p?.heightCm != null ? String(p.heightCm) : '');
+    setBirthDate(p?.birthDate ?? '');
+    setGender(p?.gender ?? '');
+    setRestingHr(p?.restingHrBpm != null ? String(p.restingHrBpm) : '');
+  }, [p?.displayName, p?.leaderboardVisibility, p?.heightCm, p?.birthDate, p?.gender, p?.restingHrBpm, p]);
 
   const handleSave = useCallback(async () => {
     if (!uid || !profile) return;
@@ -133,6 +142,10 @@ export function ProfielPage() {
       await updateProfile(uid, {
         displayName: displayName.trim() || null,
         leaderboardVisibility,
+        heightCm: heightCm.trim() ? Number(heightCm) : null,
+        birthDate: birthDate || null,
+        gender: gender || null,
+        restingHrBpm: restingHr.trim() ? Number(restingHr) : null,
       });
       await profile.refreshProfile();
       setMessage({ type: 'success', text: 'Profiel opgeslagen.' });
@@ -144,7 +157,7 @@ export function ProfielPage() {
     } finally {
       setSaving(false);
     }
-  }, [uid, profile, displayName, leaderboardVisibility]);
+  }, [uid, profile, displayName, leaderboardVisibility, heightCm, birthDate, gender, restingHr]);
 
   const email = auth?.user?.email ?? p?.email ?? '';
 
@@ -247,6 +260,26 @@ export function ProfielPage() {
               startAdornment: <PersonRoundedIcon sx={{ mr: 1, color: 'action.active' }} fontSize="small" />,
             }}
           />
+
+          <Typography variant="subtitle2" sx={{ mt: 1 }}>
+            Persoonlijke gegevens
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: -1.5 }}>
+            Wordt gebruikt om de AI-routekaart alvast in te vullen (leeftijd, geslacht, e.d.).
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
+            <TextField label="Lengte (cm)" type="number" size="small" value={heightCm} onChange={(e) => setHeightCm(e.target.value)} sx={{ flex: 1 }} inputProps={{ min: 0 }} />
+            <TextField label="Geboortedatum" type="date" size="small" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ flex: 1 }} />
+          </Box>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
+            <TextField select label="Geslacht" size="small" value={gender} onChange={(e) => setGender(e.target.value as typeof gender)} sx={{ flex: 1 }}>
+              <MenuItem value="">Niet opgegeven</MenuItem>
+              <MenuItem value="man">Man</MenuItem>
+              <MenuItem value="vrouw">Vrouw</MenuItem>
+              <MenuItem value="anders">Anders</MenuItem>
+            </TextField>
+            <TextField label="Rusthartslag (bpm)" type="number" size="small" value={restingHr} onChange={(e) => setRestingHr(e.target.value)} sx={{ flex: 1 }} inputProps={{ min: 0 }} />
+          </Box>
           <TextField
             label="E-mail"
             value={email}

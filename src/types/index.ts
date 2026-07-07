@@ -233,6 +233,14 @@ export interface Profile {
   nutritionGoal?: NutritionGoal | null;
   /** Doelgewicht in kg (optioneel). */
   weightGoalKg?: number | null;
+  /** Lengte in cm (voor o.a. AI-routekaart). */
+  heightCm?: number | null;
+  /** Geboortedatum (YYYY-MM-DD) om leeftijd te berekenen. */
+  birthDate?: string | null;
+  /** Geslacht. */
+  gender?: 'man' | 'vrouw' | 'anders' | null;
+  /** Rusthartslag in bpm. */
+  restingHrBpm?: number | null;
   /** Alleen bij sporters: uid van de trainer die hen beheert. */
   trainerId: string | null;
   /** True als deze gebruiker als trainer wil en op goedkeuring wacht. */

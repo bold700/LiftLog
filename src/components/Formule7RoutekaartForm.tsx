@@ -137,6 +137,17 @@ interface Formule7RoutekaartFormProps {
 
 const ROUTEKAART_SECTION_IDS = ['1', '2', '3', '4', '5', '6', '7'] as const;
 
+/** Leeftijd in jaren uit een geboortedatum (YYYY-MM-DD). */
+function ageFromBirthDate(iso?: string | null): number | null {
+  if (!iso) return null;
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const now = new Date();
+  let age = now.getFullYear() - y;
+  if (now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d)) age--;
+  return age >= 0 && age < 130 ? age : null;
+}
+
 export function Formule7RoutekaartForm({
   formule7,
   setFormule7,
@@ -502,7 +513,15 @@ export function Formule7RoutekaartForm({
               value={sporters.find((s) => s.userId === selectedClientId) ?? null}
               onChange={(_, profile) => {
                 if (profile) {
-                  set({ clientName: profile.displayName || profile.email || '' });
+                  // Vul de anamnese alvast met bekende profielgegevens
+                  const age = ageFromBirthDate(profile.birthDate);
+                  const genderVal = profile.gender === 'man' ? 'M' : profile.gender === 'vrouw' ? 'V' : null;
+                  set({
+                    clientName: profile.displayName || profile.email || '',
+                    ...(genderVal ? { gender: genderVal } : {}),
+                    ...(age != null ? { ageYears: age, theoreticalMaxHr: 220 - age } : {}),
+                    ...(profile.restingHrBpm != null ? { restingHr: profile.restingHrBpm } : {}),
+                  });
                   onClientIdChange?.(profile.userId);
                 } else {
                   set({ clientName: '' });
