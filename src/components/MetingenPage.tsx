@@ -200,7 +200,7 @@ export function MetingenPage() {
         </Typography>
 
         {isTrainer && sporters.length > 0 && (
-          <TextField select size="small" label="Voor wie?" value={targetId} onChange={(e) => setTargetId(e.target.value)} sx={{ minWidth: 160, mb: 2 }}>
+          <TextField select size="small" label="Voor wie?" value={targetId} onChange={(e) => setTargetId(e.target.value)} sx={{ minWidth: 160, mb: 2 }} SelectProps={{ displayEmpty: true }} InputLabelProps={{ shrink: true }}>
             <MenuItem value="">Mijzelf</MenuItem>
             {sporters.map((s) => (
               <MenuItem key={s.userId} value={s.userId}>

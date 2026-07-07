@@ -40,6 +40,36 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+/** Vertaalt Firebase-auth-foutcodes naar begrijpelijke meldingen. */
+function friendlyAuthError(e: unknown, fallback: string): string {
+  const code = e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : '';
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'E-mailadres of wachtwoord klopt niet.';
+    case 'auth/invalid-email':
+      return 'Vul een geldig e-mailadres in.';
+    case 'auth/email-already-in-use':
+      return 'Er bestaat al een account met dit e-mailadres.';
+    case 'auth/weak-password':
+      return 'Kies een sterker wachtwoord (minstens 6 tekens).';
+    case 'auth/too-many-requests':
+      return 'Te veel pogingen. Probeer het later opnieuw.';
+    case 'auth/network-request-failed':
+      return 'Geen internetverbinding. Controleer je verbinding en probeer opnieuw.';
+    case 'auth/user-disabled':
+      return 'Dit account is uitgeschakeld. Neem contact op met je trainer.';
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+      return 'Inloggen geannuleerd.';
+    case 'auth/requires-recent-login':
+      return 'Log opnieuw in om deze wijziging te bevestigen.';
+    default:
+      return fallback;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Inloggen mislukt';
+      const msg = friendlyAuthError(e, 'Inloggen mislukt.');
       setError(msg);
       throw e;
     }
@@ -88,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Registreren mislukt';
+      const msg = friendlyAuthError(e, 'Registreren mislukt.');
       setError(msg);
       throw e;
     }
@@ -100,7 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await signInWithPopup(auth, new GoogleAuthProvider());
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Google inloggen mislukt';
+      const msg = friendlyAuthError(e, 'Google inloggen mislukt.');
       setError(msg);
       throw e;
     }

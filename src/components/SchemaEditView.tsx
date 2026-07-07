@@ -24,6 +24,7 @@ import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { Schema, SchemaDay, SchemaExercise, Formule7Routekaart } from '../types';
 import type { Profile, SchemaAudience } from '../types';
+import { useProfile } from '../context/ProfileContext';
 import { createEmptyFormule7, NMT_PRESETS_BY_GOAL } from '../utils/formule7Defaults';
 import type { Formule7StrengthGoal } from '../types';
 import { Formule7RoutekaartForm } from './Formule7RoutekaartForm';
@@ -158,6 +159,10 @@ function schemaHasMeaningfulF7Content(s: Schema): boolean {
 }
 
 export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: SchemaEditViewProps) => {
+  const me = useProfile()?.profile ?? null;
+  // Trainer kan ook aan zichzelf toewijzen
+  const assignOptions = me ? [me, ...sporters.filter((s) => s.userId !== me.userId)] : sporters;
+  const optionLabel = (p: Profile) => (me && p.userId === me.userId ? `Mijzelf (${p.displayName || p.email || ''})` : p.displayName || p.email || p.userId);
   const [name, setName] = useState(schema.name);
   const [clientId, setClientId] = useState<string | null>(schema.clientId ?? null);
   const [audience, setAudience] = useState<SchemaAudience>(schema.audience ?? 'single');
@@ -1214,10 +1219,11 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
 
               {audience === 'single' && (
                 <Autocomplete
-                  options={sporters}
-                  value={sporters.find((s) => s.userId === clientId) ?? null}
+                  options={assignOptions}
+                  value={assignOptions.find((s) => s.userId === clientId) ?? null}
                   onChange={(_, profile) => setClientId(profile?.userId ?? null)}
-                  getOptionLabel={(p) => p.displayName || p.email || p.userId}
+                  getOptionLabel={optionLabel}
+                  isOptionEqualToValue={(a, b) => a.userId === b.userId}
                   renderInput={(params) => (
                     <TextField {...params} label="Toewijzen aan klant" size="small" placeholder="Niet toegewezen" />
                   )}
@@ -1227,10 +1233,10 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
               {(audience === 'multiple' || audience === 'group') && (
                 <Autocomplete
                   multiple
-                  options={sporters}
-                  value={sporters.filter((s) => participantIds.includes(s.userId))}
+                  options={assignOptions}
+                  value={assignOptions.filter((s) => participantIds.includes(s.userId))}
                   onChange={(_, profiles) => setParticipantIds(profiles.map((p) => p.userId))}
-                  getOptionLabel={(p) => p.displayName || p.email || p.userId}
+                  getOptionLabel={optionLabel}
                   isOptionEqualToValue={(a, b) => a.userId === b.userId}
                   renderInput={(params) => (
                     <TextField

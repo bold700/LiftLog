@@ -398,6 +398,8 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
                 label="Voor wie loggen?"
                 value={logTargetId}
                 onChange={(e) => setLogTargetId(e.target.value)}
+                SelectProps={{ displayEmpty: true }}
+                InputLabelProps={{ shrink: true }}
                 helperText={logTargetId ? 'Log gaat onder het account van deze sporter.' : "Laat op 'Mijzelf' voor je eigen account."}
               >
                 <MenuItem value="">Mijzelf</MenuItem>

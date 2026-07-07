@@ -352,7 +352,7 @@ export function NutritionPage() {
             <ToggleButton value="month">Maand</ToggleButton>
           </ToggleButtonGroup>
           {isTrainer && sporters.length > 0 && (
-            <TextField select size="small" label="Voor wie?" value={targetId} onChange={(e) => setTargetId(e.target.value)} sx={{ minWidth: 150 }}>
+            <TextField select size="small" label="Voor wie?" value={targetId} onChange={(e) => setTargetId(e.target.value)} sx={{ minWidth: 150 }} SelectProps={{ displayEmpty: true }} InputLabelProps={{ shrink: true }}>
               <MenuItem value="">Mijzelf</MenuItem>
               {sporters.map((s) => (
                 <MenuItem key={s.userId} value={s.userId}>
