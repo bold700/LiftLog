@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Box, Tab, Tabs } from '@mui/material';
+import { Box, Tab, Tabs, useMediaQuery, useTheme } from '@mui/material';
 import { SpiergroepenPage } from './SpiergroepenPage';
 import { OefeningenPage } from './OefeningenPage';
 import { LogsPage } from './LogsPage';
@@ -30,6 +30,8 @@ export const InzichtenPage = ({
   onConsumeInitialOpenSessionLogDialog,
 }: InzichtenPageProps) => {
   const [subTab, setSubTab] = useState(0);
+  const theme = useTheme();
+  const wide = useMediaQuery(theme.breakpoints.up('sm'));
 
   useEffect(() => {
     if (initialSubTab !== null && initialSubTab >= 0 && initialSubTab <= 4) {
@@ -43,7 +45,7 @@ export const InzichtenPage = ({
       <Tabs
         value={subTab}
         onChange={(_, v: number) => setSubTab(v)}
-        variant="scrollable"
+        variant={wide ? 'fullWidth' : 'scrollable'}
         scrollButtons="auto"
         allowScrollButtonsMobile
         sx={{
