@@ -25,6 +25,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProfileProvider, useProfile } from './context/ProfileContext';
 import { INZICHTEN_SUB } from './components/InzichtenPage';
 import { LoginPage } from './components/LoginPage';
+import { VerifyEmailScreen } from './components/VerifyEmailScreen';
 import { isFirebaseConfigured } from './firebase/config';
 import { updateProfile } from './services/profileService';
 import './styles/material-web-theme.css';
@@ -185,6 +186,22 @@ function AppContent() {
         <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
           <LoginPage />
         </Box>
+      </ThemeProvider>
+    );
+  }
+
+  // E-mail/wachtwoord-accounts moeten hun e-mail bevestigen voordat ze de app in mogen
+  const needsVerification =
+    firebaseConfigured &&
+    auth?.user &&
+    auth.user.providerData.some((pr) => pr.providerId === 'password') &&
+    !auth.user.emailVerified;
+
+  if (needsVerification) {
+    return (
+      <ThemeProvider theme={lightTheme}>
+        <CssBaseline />
+        <VerifyEmailScreen />
       </ThemeProvider>
     );
   }

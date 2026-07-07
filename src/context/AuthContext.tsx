@@ -18,6 +18,8 @@ import {
   EmailAuthProvider,
   reauthenticateWithCredential,
   verifyBeforeUpdateEmail,
+  updatePassword,
+  sendEmailVerification,
   type User,
 } from 'firebase/auth';
 import { auth, isFirebaseConfigured } from '../firebase/config';
@@ -35,6 +37,9 @@ type AuthState = {
   deleteAccount: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   changeEmail: (currentPassword: string, newEmail: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  resendVerification: () => Promise<void>;
+  reloadUser: () => Promise<void>;
   clearError: () => void;
 };
 
@@ -104,6 +109,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!auth) throw new Error('Firebase Auth niet geconfigureerd');
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
+      // Verstuur verificatiemail zodat het e-mailadres bevestigd moet worden
+      try {
+        await sendEmailVerification(cred.user);
+      } catch {
+        /* niet-blokkerend */
+      }
       if (isFirebaseConfigured()) {
         try {
           const name = (displayName?.trim() || cred.user.displayName) ?? null;
@@ -171,6 +182,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await verifyBeforeUpdateEmail(auth.currentUser, newEmail);
   }, []);
 
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    setError(null);
+    if (!auth?.currentUser?.email) throw new Error('Niet ingelogd met e-mail/wachtwoord');
+    const cred = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+    await reauthenticateWithCredential(auth.currentUser, cred);
+    await updatePassword(auth.currentUser, newPassword);
+  }, []);
+
+  const resendVerification = useCallback(async () => {
+    if (!auth?.currentUser) return;
+    await sendEmailVerification(auth.currentUser);
+  }, []);
+
+  const reloadUser = useCallback(async () => {
+    if (!auth?.currentUser) return;
+    await auth.currentUser.reload();
+    setUser({ ...auth.currentUser } as User);
+  }, []);
+
   const clearError = useCallback(() => setError(null), []);
 
   const value: AuthState = {
@@ -184,6 +214,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     deleteAccount,
     resetPassword,
     changeEmail,
+    changePassword,
+    resendVerification,
+    reloadUser,
     clearError,
   };
 

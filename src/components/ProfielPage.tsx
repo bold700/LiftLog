@@ -49,7 +49,37 @@ export function ProfielPage() {
   const [newEmail, setNewEmail] = useState('');
   const [currentPwd, setCurrentPwd] = useState('');
   const [emailSaving, setEmailSaving] = useState(false);
+  const [pwdDialogOpen, setPwdDialogOpen] = useState(false);
+  const [pwdCurrent, setPwdCurrent] = useState('');
+  const [pwdNew, setPwdNew] = useState('');
+  const [pwdSaving, setPwdSaving] = useState(false);
   const isPasswordAccount = auth?.user?.providerData?.some((pr) => pr.providerId === 'password') ?? false;
+
+  const handleChangePassword = useCallback(async () => {
+    if (!auth) return;
+    if (pwdNew.length < 6) {
+      setMessage({ type: 'error', text: 'Nieuw wachtwoord moet minstens 6 tekens zijn.' });
+      return;
+    }
+    if (!pwdCurrent) {
+      setMessage({ type: 'error', text: 'Vul je huidige wachtwoord in.' });
+      return;
+    }
+    setPwdSaving(true);
+    setMessage(null);
+    try {
+      await auth.changePassword(pwdCurrent, pwdNew);
+      setPwdDialogOpen(false);
+      setPwdCurrent('');
+      setPwdNew('');
+      setMessage({ type: 'success', text: 'Wachtwoord gewijzigd.' });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Wachtwoord wijzigen mislukt.';
+      setMessage({ type: 'error', text: msg.includes('wrong-password') || msg.includes('invalid-credential') ? 'Onjuist huidig wachtwoord.' : msg });
+    } finally {
+      setPwdSaving(false);
+    }
+  }, [auth, pwdCurrent, pwdNew]);
 
   const handleChangeEmail = useCallback(async () => {
     if (!auth) return;
@@ -206,42 +236,6 @@ export function ProfielPage() {
           </Box>
         </Box>
 
-        <FormControl component="fieldset" sx={{ mb: 3, width: '100%' }}>
-          <FormLabel component="legend" sx={{ fontWeight: 600, color: 'text.primary', mb: 1 }}>
-            Ranglijst (privacy)
-          </FormLabel>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            Standaard tonen we je <strong>profielnaam</strong> op de ranglijst. Van dit apparaat delen we ook de{' '}
-            <strong>oefening</strong> met het <strong>zwaarste gelogde gewicht</strong> (7 en 30 dagen). Geen sets of
-            reps. Je kunt anoniem gaan of jezelf uitzetten via de opties hieronder.
-          </Typography>
-          <RadioGroup
-            value={leaderboardVisibility}
-            onChange={(e) => setLeaderboardVisibility(e.target.value as LeaderboardVisibility)}
-          >
-            <FormControlLabel
-              value="named"
-              control={<Radio />}
-              label="Met mijn profielnaam op de ranglijst (standaard)"
-            />
-            <FormControlLabel
-              value="anonymous"
-              control={<Radio />}
-              label="Anoniem op de ranglijst"
-            />
-            <FormControlLabel
-              value="hidden"
-              control={<Radio />}
-              label={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <VisibilityOffRoundedIcon fontSize="small" color="action" />
-                  <span>Niet op de ranglijst</span>
-                </Box>
-              }
-            />
-          </RadioGroup>
-        </FormControl>
-
         {message && (
           <Alert severity={message.type} sx={{ mb: 2 }} onClose={() => setMessage(null)}>
             {message.text}
@@ -292,10 +286,39 @@ export function ProfielPage() {
             }}
           />
           {isPasswordAccount && (
-            <Button variant="outlined" size="small" onClick={() => setEmailDialogOpen(true)} sx={{ alignSelf: 'flex-start' }}>
-              E-mail wijzigen
-            </Button>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Button variant="outlined" size="small" onClick={() => setEmailDialogOpen(true)}>
+                E-mail wijzigen
+              </Button>
+              <Button variant="outlined" size="small" onClick={() => setPwdDialogOpen(true)}>
+                Wachtwoord wijzigen
+              </Button>
+            </Box>
           )}
+
+          <FormControl component="fieldset" sx={{ width: '100%', mt: 1 }}>
+            <FormLabel component="legend" sx={{ fontWeight: 600, color: 'text.primary', mb: 1 }}>
+              Ranglijst (privacy)
+            </FormLabel>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              Standaard tonen we je <strong>profielnaam</strong> op de ranglijst. Je kunt anoniem gaan of jezelf uitzetten.
+            </Typography>
+            <RadioGroup value={leaderboardVisibility} onChange={(e) => setLeaderboardVisibility(e.target.value as LeaderboardVisibility)}>
+              <FormControlLabel value="named" control={<Radio />} label="Met mijn profielnaam op de ranglijst (standaard)" />
+              <FormControlLabel value="anonymous" control={<Radio />} label="Anoniem op de ranglijst" />
+              <FormControlLabel
+                value="hidden"
+                control={<Radio />}
+                label={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    <VisibilityOffRoundedIcon fontSize="small" color="action" />
+                    <span>Niet op de ranglijst</span>
+                  </Box>
+                }
+              />
+            </RadioGroup>
+          </FormControl>
+
           <Button
             variant="contained"
             onClick={handleSave}
@@ -322,6 +345,22 @@ export function ProfielPage() {
           <Button onClick={() => setEmailDialogOpen(false)}>Annuleren</Button>
           <Button variant="contained" onClick={handleChangeEmail} disabled={emailSaving}>
             {emailSaving ? 'Bezig…' : 'Verzenden'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={pwdDialogOpen} onClose={() => setPwdDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Wachtwoord wijzigen</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 0.5 }}>
+            <TextField label="Huidig wachtwoord" type="password" size="small" value={pwdCurrent} onChange={(e) => setPwdCurrent(e.target.value)} autoComplete="current-password" />
+            <TextField label="Nieuw wachtwoord" type="password" size="small" value={pwdNew} onChange={(e) => setPwdNew(e.target.value)} autoComplete="new-password" helperText="Minstens 6 tekens." />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPwdDialogOpen(false)}>Annuleren</Button>
+          <Button variant="contained" onClick={handleChangePassword} disabled={pwdSaving}>
+            {pwdSaving ? 'Bezig…' : 'Opslaan'}
           </Button>
         </DialogActions>
       </Dialog>
