@@ -13,6 +13,10 @@ import {
   RadioGroup,
   FormControlLabel,
   Radio,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import EmailRoundedIcon from '@mui/icons-material/EmailRounded';
@@ -35,6 +39,39 @@ export function ProfielPage() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [currentPwd, setCurrentPwd] = useState('');
+  const [emailSaving, setEmailSaving] = useState(false);
+  const isPasswordAccount = auth?.user?.providerData?.some((pr) => pr.providerId === 'password') ?? false;
+
+  const handleChangeEmail = useCallback(async () => {
+    if (!auth) return;
+    const target = newEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target)) {
+      setMessage({ type: 'error', text: 'Vul een geldig nieuw e-mailadres in.' });
+      return;
+    }
+    if (!currentPwd) {
+      setMessage({ type: 'error', text: 'Vul je huidige wachtwoord in.' });
+      return;
+    }
+    setEmailSaving(true);
+    setMessage(null);
+    try {
+      await auth.changeEmail(currentPwd, target);
+      setEmailDialogOpen(false);
+      setNewEmail('');
+      setCurrentPwd('');
+      setMessage({ type: 'success', text: `Verificatiemail verstuurd naar ${target}. Klik de link om je e-mail te wijzigen.` });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'E-mail wijzigen mislukt.';
+      setMessage({ type: 'error', text: msg.includes('wrong-password') || msg.includes('invalid-credential') ? 'Onjuist wachtwoord.' : msg });
+    } finally {
+      setEmailSaving(false);
+    }
+  }, [auth, newEmail, currentPwd]);
 
   const p = profile?.profile;
   const uid = auth?.user?.uid ?? p?.userId;
@@ -216,11 +253,16 @@ export function ProfielPage() {
             disabled
             size="medium"
             fullWidth
-            helperText="E-mail wijzigen kan via je accountinstellingen bij de aanbieder (Google, etc.)."
+            helperText={isPasswordAccount ? 'Klik op "E-mail wijzigen" om je e-mailadres te veranderen.' : 'E-mail wordt beheerd via je aanbieder (Google, etc.).'}
             InputProps={{
               startAdornment: <EmailRoundedIcon sx={{ mr: 1, color: 'action.disabled' }} fontSize="small" />,
             }}
           />
+          {isPasswordAccount && (
+            <Button variant="outlined" size="small" onClick={() => setEmailDialogOpen(true)} sx={{ alignSelf: 'flex-start' }}>
+              E-mail wijzigen
+            </Button>
+          )}
           <Button
             variant="contained"
             onClick={handleSave}
@@ -231,6 +273,25 @@ export function ProfielPage() {
           </Button>
         </Box>
       </ContentCard>
+
+      <Dialog open={emailDialogOpen} onClose={() => setEmailDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>E-mail wijzigen</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Je krijgt een verificatiemail op het nieuwe adres. Je e-mail wijzigt pas nadat je die link hebt bevestigd.
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField label="Nieuw e-mailadres" type="email" size="small" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} autoComplete="email" />
+            <TextField label="Huidig wachtwoord" type="password" size="small" value={currentPwd} onChange={(e) => setCurrentPwd(e.target.value)} autoComplete="current-password" />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEmailDialogOpen(false)}>Annuleren</Button>
+          <Button variant="contained" onClick={handleChangeEmail} disabled={emailSaving}>
+            {emailSaving ? 'Bezig…' : 'Verzenden'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </PageLayout>
   );
 }

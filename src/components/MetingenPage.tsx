@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Typography,
@@ -151,10 +151,22 @@ export function MetingenPage() {
     setGoalOpen(false);
   };
 
-  // Lijngrafiek-geometrie voor het gewicht
+  // Lijngrafiek-geometrie voor het gewicht (viewBox = echte pixelbreedte, geen vervorming)
+  const chartRef = useRef<HTMLDivElement | null>(null);
+  const [chartW, setChartW] = useState(320);
+  useEffect(() => {
+    const el = chartRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w && w > 0) setChartW(Math.round(w));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const chartPts = weightPoints.slice(-20);
-  const CW = 320;
-  const CH = 110;
+  const CW = chartW;
+  const CH = 130;
   const cpad = 14;
   // Schaal met wat marge zodat de lijn niet tegen de randen plakt
   const cMin = Math.min(wMin, goalWeight ?? wMin);
@@ -255,21 +267,22 @@ export function MetingenPage() {
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                 Gewicht ({wMin}–{wMax} kg)
               </Typography>
-              <Box
-                component="svg"
-                viewBox={`0 0 ${CW} ${CH}`}
-                preserveAspectRatio="none"
-                sx={{ width: '100%', height: 130, display: 'block', color: 'primary.main' }}
-              >
-                {goalY != null && (
-                  <line x1={0} y1={goalY} x2={CW} y2={goalY} stroke="#9e9e9e" strokeWidth={1} strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />
-                )}
-                <polyline points={linePoints} fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-                {chartPts.map((p, i) => (
-                  <circle key={p.id} cx={cx(i)} cy={cy(p.weightKg)} r={2.5} fill="currentColor" vectorEffect="non-scaling-stroke">
-                    <title>{`${p.date}: ${p.weightKg} kg`}</title>
-                  </circle>
-                ))}
+              <Box ref={chartRef} sx={{ width: '100%' }}>
+                <Box
+                  component="svg"
+                  viewBox={`0 0 ${CW} ${CH}`}
+                  sx={{ width: '100%', height: CH, display: 'block', color: 'primary.main' }}
+                >
+                  {goalY != null && (
+                    <line x1={0} y1={goalY} x2={CW} y2={goalY} stroke="#9e9e9e" strokeWidth={1} strokeDasharray="4 4" />
+                  )}
+                  <polyline points={linePoints} fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+                  {chartPts.map((p, i) => (
+                    <circle key={p.id} cx={cx(i)} cy={cy(p.weightKg)} r={3} fill="currentColor">
+                      <title>{`${p.date}: ${p.weightKg} kg`}</title>
+                    </circle>
+                  ))}
+                </Box>
               </Box>
             </CardContent>
           </Card>
@@ -279,10 +292,10 @@ export function MetingenPage() {
         <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
           {editingId ? 'Meting bewerken' : 'Nieuwe meting'}
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
-          <TextField type="date" size="small" label="Datum" value={date} onChange={(e) => setDate(e.target.value)} InputLabelProps={{ shrink: true }} />
-          <TextField type="number" size="small" label="Gewicht (kg)" value={weight} onChange={(e) => setWeight(e.target.value)} sx={{ width: 130 }} inputProps={{ step: 0.1, min: 0 }} />
-          <TextField type="number" size="small" label="Vet (%)" value={bodyFat} onChange={(e) => setBodyFat(e.target.value)} sx={{ width: 110 }} inputProps={{ step: 0.1, min: 0 }} />
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, mb: 1 }}>
+          <TextField type="date" size="small" label="Datum" value={date} onChange={(e) => setDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ flex: 1 }} />
+          <TextField type="number" size="small" label="Gewicht (kg)" value={weight} onChange={(e) => setWeight(e.target.value)} sx={{ flex: 1 }} inputProps={{ step: 0.1, min: 0 }} />
+          <TextField type="number" size="small" label="Vet (%)" value={bodyFat} onChange={(e) => setBodyFat(e.target.value)} sx={{ flex: 1 }} inputProps={{ step: 0.1, min: 0 }} />
         </Box>
         <TextField size="small" label="Notitie (optioneel)" value={note} onChange={(e) => setNote(e.target.value)} fullWidth sx={{ mb: 1 }} />
         <Box sx={{ display: 'flex', gap: 1 }}>

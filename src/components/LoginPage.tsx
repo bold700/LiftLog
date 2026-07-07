@@ -25,18 +25,32 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [resetMsg, setResetMsg] = useState<string | null>(null);
+
+  const emailValid = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
       if (!auth) return;
+      setLocalError(null);
+      setResetMsg(null);
+      if (!emailValid(email)) {
+        setLocalError('Vul een geldig e-mailadres in.');
+        return;
+      }
+      if (password.length < 6) {
+        setLocalError('Wachtwoord moet minstens 6 tekens zijn.');
+        return;
+      }
       setSubmitting(true);
       auth.clearError();
       try {
         if (isRegister) {
-          await auth.register(email, password, 'sporter', displayName || null);
+          await auth.register(email.trim(), password, 'sporter', displayName || null);
         } else {
-          await auth.login(email, password);
+          await auth.login(email.trim(), password);
         }
       } catch {
         // error staat in auth.error
@@ -46,6 +60,23 @@ export function LoginPage() {
     },
     [auth, email, password, displayName, isRegister]
   );
+
+  const handleForgotPassword = useCallback(async () => {
+    if (!auth) return;
+    setLocalError(null);
+    setResetMsg(null);
+    auth.clearError();
+    if (!emailValid(email)) {
+      setLocalError('Vul eerst je e-mailadres in om je wachtwoord te resetten.');
+      return;
+    }
+    try {
+      await auth.resetPassword(email.trim());
+      setResetMsg('Reset-link verstuurd. Check je e-mail (ook je spam-map).');
+    } catch {
+      setLocalError('Reset-mail versturen mislukt. Controleer het e-mailadres.');
+    }
+  }, [auth, email]);
 
   const handleGoogle = useCallback(async () => {
     if (!auth) return;
@@ -120,9 +151,14 @@ export function LoginPage() {
             Van As Personal Training Logs
           </Typography>
 
-          {auth.error && (
-            <Alert severity="error" sx={{ mb: 2 }} onClose={auth.clearError}>
-              {auth.error}
+          {(auth.error || localError) && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => { auth.clearError(); setLocalError(null); }}>
+              {localError || auth.error}
+            </Alert>
+          )}
+          {resetMsg && (
+            <Alert severity="success" sx={{ mb: 2 }} onClose={() => setResetMsg(null)}>
+              {resetMsg}
             </Alert>
           )}
 
@@ -203,6 +239,16 @@ export function LoginPage() {
             >
               {submitting ? 'Even geduld…' : isRegister ? 'Account aanmaken' : 'Inloggen'}
             </Button>
+            {!isRegister && (
+              <Button
+                variant="text"
+                size="small"
+                onClick={handleForgotPassword}
+                sx={{ color: 'rgba(242, 228, 211, 0.7)', alignSelf: 'center', textTransform: 'none' }}
+              >
+                Wachtwoord vergeten?
+              </Button>
+            )}
           </Box>
 
           <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'rgba(242, 228, 211, 0.12)' }}>

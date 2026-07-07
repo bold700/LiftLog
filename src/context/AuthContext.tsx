@@ -14,6 +14,10 @@ import {
   signInWithPopup,
   deleteUser,
   GoogleAuthProvider,
+  sendPasswordResetEmail,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  verifyBeforeUpdateEmail,
   type User,
 } from 'firebase/auth';
 import { auth, isFirebaseConfigured } from '../firebase/config';
@@ -29,6 +33,8 @@ type AuthState = {
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  changeEmail: (currentPassword: string, newEmail: string) => Promise<void>;
   clearError: () => void;
 };
 
@@ -120,6 +126,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const resetPassword = useCallback(async (email: string) => {
+    setError(null);
+    if (!auth) throw new Error('Firebase Auth niet geconfigureerd');
+    await sendPasswordResetEmail(auth, email);
+  }, []);
+
+  const changeEmail = useCallback(async (currentPassword: string, newEmail: string) => {
+    setError(null);
+    if (!auth?.currentUser?.email) throw new Error('Niet ingelogd met e-mail/wachtwoord');
+    const cred = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+    await reauthenticateWithCredential(auth.currentUser, cred);
+    // Stuurt een verificatiemail naar het nieuwe adres; e-mail wijzigt pas na bevestiging.
+    await verifyBeforeUpdateEmail(auth.currentUser, newEmail);
+  }, []);
+
   const clearError = useCallback(() => setError(null), []);
 
   const value: AuthState = {
@@ -131,6 +152,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signInWithGoogle,
     logout,
     deleteAccount,
+    resetPassword,
+    changeEmail,
     clearError,
   };
 
