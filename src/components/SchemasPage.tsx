@@ -23,7 +23,7 @@ import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { useWorkouts } from '../hooks/useWorkouts';
-import { getSortedDayIndices } from '../utils/schemaSessionUtils';
+import { getSortedDayIndices, getLastSessionDateForDay } from '../utils/schemaSessionUtils';
 import {
   getCompletedSessionsInPeriod,
   getExerciseProgressInPeriod,
@@ -611,9 +611,19 @@ export const SchemasPage = () => {
                     }}
                   >
                     <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1.5 }}>
+                      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 0.25 }}>
                         {day.dayLabel}
                       </Typography>
+                      {(() => {
+                        const last = getLastSessionDateForDay(selectedSchema.id, dayIndex);
+                        return (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                            {last
+                              ? `Laatst getraind: ${new Date(last).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                              : 'Nog niet getraind'}
+                          </Typography>
+                        );
+                      })()}
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 0 }}>
                         {formatWarmupSummary(day.warmup ?? selectedSchema.formule7?.warmup) && (
                           <Box sx={{ py: 0.5, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>

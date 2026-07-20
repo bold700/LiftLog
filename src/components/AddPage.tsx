@@ -33,7 +33,7 @@ import '@material/web/button/text-button.js';
 import '@material/web/icon/icon.js';
 
 interface AddPageProps {
-  onExerciseAdded?: () => void;
+  onExerciseAdded?: (opts?: { returnToSchema?: boolean }) => void;
   onClose?: () => void;
   /** Als true: toon als dialog (zoals Training log). Als false: fullscreen overlay. */
   useDialog?: boolean;
@@ -312,7 +312,7 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
       addFromSchema.setReturnToSession(exercise.schemaId!, exercise.schemaDayIndex!, exercise.id);
     }
     // Sluit altijd het log-venster (terug naar de sessie of het overzicht)
-    onExerciseAdded?.();
+    onExerciseAdded?.({ returnToSchema: wasFromSchema });
   }, [exerciseName, weight, sets, reps, notes, onExerciseAdded, addFromSchema, isTrainer, logTargetId, sporters, selfUid]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -416,7 +416,6 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
               groupBy={(option) => (option && option[0] ? option[0].toUpperCase() : '#')}
               autoHighlight
               selectOnFocus
-              openOnFocus
               forcePopupIcon
               clearOnBlur={false}
               value={exerciseName}

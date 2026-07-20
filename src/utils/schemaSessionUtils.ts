@@ -23,6 +23,19 @@ export function isWithinLast12Hours(dateStr: string): boolean {
 /**
  * Oefeningen die vandaag voor deze schema-dag zijn gelogd én binnen de laatste 12 uur.
  */
+/** Laatste datum (YYYY-MM-DD) waarop deze schema-dag is getraind, of null. */
+export function getLastSessionDateForDay(schemaId: string, schemaDayIndex: number): string | null {
+  const all = getAllExercises();
+  let last: string | null = null;
+  for (const ex of all) {
+    if (ex.schemaId === schemaId && ex.schemaDayIndex === schemaDayIndex && ex.date && ex.name) {
+      const d = ex.date.slice(0, 10);
+      if (!last || d > last) last = d;
+    }
+  }
+  return last;
+}
+
 export function getLoggedExercisesForSchemaDayInLast12Hours(
   schemaId: string,
   schemaDayIndex: number

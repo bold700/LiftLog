@@ -66,10 +66,10 @@ export function VerifyEmailScreen() {
           >
             Ik heb mijn e-mail bevestigd
           </Button>
-          <Button fullWidth variant="outlined" disabled={busy} onClick={handleResend} sx={{ color: '#F2E4D3', borderColor: 'rgba(242,228,211,0.4)', mb: 1.5, '&:hover': { borderColor: '#F2E4D3' } }}>
+          <Button fullWidth variant="outlined" disabled={busy} onClick={handleResend} sx={{ color: '#F2E4D3', borderColor: 'rgba(242,228,211,0.4)', py: 1.25, mb: 1.5, '&:hover': { borderColor: '#F2E4D3' } }}>
             Verstuur opnieuw
           </Button>
-          <Button fullWidth size="small" onClick={() => auth?.logout()} sx={{ color: 'rgba(242,228,211,0.7)' }}>
+          <Button fullWidth onClick={() => auth?.logout()} sx={{ color: 'rgba(242,228,211,0.7)', py: 1.25 }}>
             Uitloggen
           </Button>
         </CardContent>

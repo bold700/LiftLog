@@ -19,12 +19,17 @@ import { LinearProgress, Dialog, DialogTitle, DialogContent, DialogActions } fro
 import { PageLayout, ContentCard } from './layout';
 import { useProfile } from '../context/ProfileContext';
 import { updateProfile } from '../services/profileService';
+import { Collapse } from '@mui/material';
 import {
   saveMeasurement,
   deleteMeasurement,
   getMeasurementsForUser,
+  CIRCUMFERENCE_FIELDS,
   type Measurement,
+  type CircumferenceKey,
 } from '../services/measurementService';
+
+const EMPTY_CIRC = Object.fromEntries(CIRCUMFERENCE_FIELDS.map((f) => [f.key, ''])) as Record<CircumferenceKey, string>;
 
 function todayIso(): string {
   const d = new Date();
@@ -47,6 +52,8 @@ export function MetingenPage() {
   const [weight, setWeight] = useState('');
   const [bodyFat, setBodyFat] = useState('');
   const [note, setNote] = useState('');
+  const [circ, setCirc] = useState<Record<CircumferenceKey, string>>(EMPTY_CIRC);
+  const [showCirc, setShowCirc] = useState(false);
   const [saving, setSaving] = useState(false);
   const [goalOpen, setGoalOpen] = useState(false);
   const [goalInput, setGoalInput] = useState('');
@@ -76,13 +83,26 @@ export function MetingenPage() {
     setWeight('');
     setBodyFat('');
     setNote('');
+    setCirc(EMPTY_CIRC);
+    setShowCirc(false);
+  };
+
+  const circNumbers = (): Record<CircumferenceKey, number | null> => {
+    const o = {} as Record<CircumferenceKey, number | null>;
+    for (const f of CIRCUMFERENCE_FIELDS) {
+      const v = circ[f.key].trim();
+      o[f.key] = v !== '' ? Number(v) : null;
+    }
+    return o;
   };
 
   const handleSave = async () => {
     if (!effectiveUserId) return;
     const w = weight.trim() !== '' ? Number(weight) : null;
     const bf = bodyFat.trim() !== '' ? Number(bodyFat) : null;
-    if (w == null && bf == null) return;
+    const cn = circNumbers();
+    const hasCirc = CIRCUMFERENCE_FIELDS.some((f) => cn[f.key] != null);
+    if (w == null && bf == null && !hasCirc) return;
     setSaving(true);
     try {
       const editing = items.find((m) => m.id === editingId);
@@ -95,6 +115,7 @@ export function MetingenPage() {
         date,
         weightKg: w,
         bodyFatPct: bf,
+        ...cn,
         note: note.trim(),
       });
       resetForm();
@@ -112,6 +133,15 @@ export function MetingenPage() {
     setWeight(m.weightKg != null ? String(m.weightKg) : '');
     setBodyFat(m.bodyFatPct != null ? String(m.bodyFatPct) : '');
     setNote(m.note);
+    const c = {} as Record<CircumferenceKey, string>;
+    let any = false;
+    for (const f of CIRCUMFERENCE_FIELDS) {
+      const v = m[f.key];
+      c[f.key] = v != null ? String(v) : '';
+      if (v != null) any = true;
+    }
+    setCirc(c);
+    setShowCirc(any);
   };
 
   const handleDelete = async (id: string) => {
@@ -196,7 +226,7 @@ export function MetingenPage() {
           </Button>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Houd je gewicht en vetpercentage bij en volg je voortgang.
+          Houd je gewicht, vetpercentage en omtrekmaten bij en volg je voortgang.
         </Typography>
 
         {isTrainer && sporters.length > 0 && (
@@ -297,6 +327,37 @@ export function MetingenPage() {
           <TextField type="number" size="small" label="Gewicht (kg)" value={weight} onChange={(e) => setWeight(e.target.value)} sx={{ flex: 1 }} inputProps={{ step: 0.1, min: 0 }} />
           <TextField type="number" size="small" label="Vet (%)" value={bodyFat} onChange={(e) => setBodyFat(e.target.value)} sx={{ flex: 1 }} inputProps={{ step: 0.1, min: 0 }} />
         </Box>
+        {/* Omtrekken (cm) — uitklapbaar */}
+        <Button
+          size="small"
+          variant="text"
+          onClick={() => setShowCirc((v) => !v)}
+          sx={{ mb: showCirc ? 1 : 1, px: 0, minWidth: 0 }}
+        >
+          {showCirc ? 'Omtrekken verbergen' : 'Omtrekken toevoegen (cm)'}
+        </Button>
+        <Collapse in={showCirc} unmountOnExit>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' },
+              gap: 1,
+              mb: 1,
+            }}
+          >
+            {CIRCUMFERENCE_FIELDS.map((f) => (
+              <TextField
+                key={f.key}
+                type="number"
+                size="small"
+                label={f.label}
+                value={circ[f.key]}
+                onChange={(e) => setCirc((c) => ({ ...c, [f.key]: e.target.value }))}
+                inputProps={{ step: 0.5, min: 0 }}
+              />
+            ))}
+          </Box>
+        </Collapse>
         <TextField size="small" label="Notitie (optioneel)" value={note} onChange={(e) => setNote(e.target.value)} fullWidth sx={{ mb: 1 }} />
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button variant="contained" onClick={handleSave} disabled={saving} sx={{ bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}>
@@ -335,7 +396,16 @@ export function MetingenPage() {
               >
                 <ListItemText
                   primary={`${m.date} · ${m.weightKg != null ? `${m.weightKg} kg` : ''}${m.weightKg != null && m.bodyFatPct != null ? ' · ' : ''}${m.bodyFatPct != null ? `${m.bodyFatPct}%` : ''}`}
-                  secondary={m.note || undefined}
+                  secondary={
+                    [
+                      CIRCUMFERENCE_FIELDS.filter((f) => m[f.key] != null)
+                        .map((f) => `${f.label} ${m[f.key]}`)
+                        .join(' · ') || null,
+                      m.note || null,
+                    ]
+                      .filter(Boolean)
+                      .join(' — ') || undefined
+                  }
                 />
               </ListItem>
             ))}

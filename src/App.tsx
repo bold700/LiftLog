@@ -106,8 +106,13 @@ function AppContent() {
     document.title = 'Van As Personal Training Logs';
   }, []);
 
-  const handleExerciseAdded = useCallback(() => {
+  const handleExerciseAdded = useCallback((opts?: { returnToSchema?: boolean }) => {
     setAddOpen(false);
+    if (opts?.returnToSchema) {
+      // Log kwam uit een lopende workout: blijf in de Workouts-tab (sessie heropent zichzelf)
+      setActiveTab(TAB_SCHEMAS);
+      return;
+    }
     setActiveTab(TAB_INZICHTEN);
     setRequestedInsightsSubTab(INZICHTEN_SUB.LOGS);
   }, []);
