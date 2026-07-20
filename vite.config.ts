@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { fileURLToPath } from 'node:url'
 
 const isGitHubPages = process.env.GITHUB_PAGES === 'true';
 
@@ -8,6 +9,11 @@ export default defineConfig({
   // Default voor app / Play Store builds: root ('/')
   // Voor GitHub Pages: build met GITHUB_PAGES=true npm run build
   base: isGitHubPages ? '/LiftLog/' : '/',
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
   plugins: [
     react(),
     VitePWA({

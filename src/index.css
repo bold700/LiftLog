@@ -1,5 +1,82 @@
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* shadcn/ui design-tokens — Van As huisstijl (cream / zwart / groen).
+   Componenten gebruiken deze tokens (bg-background, text-foreground, ...),
+   nooit hardcoded hex-waarden. */
+@layer base {
+  :root {
+    --background: 33 55% 89%;
+    --foreground: 0 0% 10%;
+
+    --card: 33 46% 93%;
+    --card-foreground: 0 0% 10%;
+
+    --popover: 33 46% 93%;
+    --popover-foreground: 0 0% 10%;
+
+    --primary: 0 0% 0%;
+    --primary-foreground: 33 55% 89%;
+
+    --secondary: 33 30% 82%;
+    --secondary-foreground: 0 0% 12%;
+
+    --muted: 33 28% 85%;
+    --muted-foreground: 30 8% 38%;
+
+    --accent: 33 32% 86%;
+    --accent-foreground: 0 0% 12%;
+
+    --success: 160 100% 41%;
+    --success-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 33 24% 78%;
+    --input: 33 24% 78%;
+    --ring: 160 84% 39%;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 0 0% 5%;
+    --foreground: 33 55% 89%;
+
+    --card: 0 0% 10%;
+    --card-foreground: 33 55% 89%;
+
+    --popover: 0 0% 10%;
+    --popover-foreground: 33 55% 89%;
+
+    --primary: 33 55% 89%;
+    --primary-foreground: 0 0% 4%;
+
+    --secondary: 0 0% 16%;
+    --secondary-foreground: 33 55% 89%;
+
+    --muted: 0 0% 16%;
+    --muted-foreground: 33 18% 68%;
+
+    --accent: 0 0% 18%;
+    --accent-foreground: 33 55% 89%;
+
+    --success: 160 100% 41%;
+    --success-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 46%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 20%;
+    --input: 0 0% 22%;
+    --ring: 33 55% 80%;
+  }
+}
+
 * {
   margin: 0;
   padding: 0;
