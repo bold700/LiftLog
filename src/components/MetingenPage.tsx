@@ -317,14 +317,12 @@ export function MetingenPage() {
             </div>
           </div>
 
-          {/* Omtrekken (cm) — altijd zichtbaar, optioneel */}
-          <div className="mb-1 mt-1 text-sm font-medium text-muted-foreground">Omtrekken (cm) — optioneel</div>
-          <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {/* Omtrekken (cm) — altijd zichtbaar, optioneel, onder elkaar */}
+          <div className="mb-2 mt-1 text-sm font-medium text-muted-foreground">Omtrekken (cm) — optioneel</div>
+          <div className="mb-2 flex flex-col gap-2">
             {CIRCUMFERENCE_FIELDS.map((f) => (
               <div key={f.key} className="space-y-1.5">
-                <Label htmlFor={`circ-${f.key}`} className="text-xs">
-                  {f.label}
-                </Label>
+                <Label htmlFor={`circ-${f.key}`}>{f.label}</Label>
                 <Input
                   id={`circ-${f.key}`}
                   type="number"
