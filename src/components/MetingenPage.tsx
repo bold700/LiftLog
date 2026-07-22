@@ -55,7 +55,6 @@ export function MetingenPage() {
   const [bodyFat, setBodyFat] = useState('');
   const [note, setNote] = useState('');
   const [circ, setCirc] = useState<Record<CircumferenceKey, string>>(EMPTY_CIRC);
-  const [showCirc, setShowCirc] = useState(false);
   const [saving, setSaving] = useState(false);
   const [goalOpen, setGoalOpen] = useState(false);
   const [goalInput, setGoalInput] = useState('');
@@ -86,7 +85,6 @@ export function MetingenPage() {
     setBodyFat('');
     setNote('');
     setCirc(EMPTY_CIRC);
-    setShowCirc(false);
   };
 
   const circNumbers = (): Record<CircumferenceKey, number | null> => {
@@ -136,14 +134,11 @@ export function MetingenPage() {
     setBodyFat(m.bodyFatPct != null ? String(m.bodyFatPct) : '');
     setNote(m.note);
     const c = {} as Record<CircumferenceKey, string>;
-    let any = false;
     for (const f of CIRCUMFERENCE_FIELDS) {
       const v = m[f.key];
       c[f.key] = v != null ? String(v) : '';
-      if (v != null) any = true;
     }
     setCirc(c);
-    setShowCirc(any);
   };
 
   const handleDelete = async (id: string) => {
@@ -322,29 +317,25 @@ export function MetingenPage() {
             </div>
           </div>
 
-          {/* Omtrekken (cm) — uitklapbaar */}
-          <Button variant="ghost" size="sm" onClick={() => setShowCirc((v) => !v)} className="mb-2 h-auto px-0 py-1 font-normal text-muted-foreground hover:bg-transparent hover:text-foreground">
-            {showCirc ? 'Omtrekken verbergen' : 'Omtrekken toevoegen (cm)'}
-          </Button>
-          {showCirc && (
-            <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {CIRCUMFERENCE_FIELDS.map((f) => (
-                <div key={f.key} className="space-y-1.5">
-                  <Label htmlFor={`circ-${f.key}`} className="text-xs">
-                    {f.label}
-                  </Label>
-                  <Input
-                    id={`circ-${f.key}`}
-                    type="number"
-                    step={0.5}
-                    min={0}
-                    value={circ[f.key]}
-                    onChange={(e) => setCirc((c) => ({ ...c, [f.key]: e.target.value }))}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
+          {/* Omtrekken (cm) — altijd zichtbaar, optioneel */}
+          <div className="mb-1 mt-1 text-sm font-medium text-muted-foreground">Omtrekken (cm) — optioneel</div>
+          <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {CIRCUMFERENCE_FIELDS.map((f) => (
+              <div key={f.key} className="space-y-1.5">
+                <Label htmlFor={`circ-${f.key}`} className="text-xs">
+                  {f.label}
+                </Label>
+                <Input
+                  id={`circ-${f.key}`}
+                  type="number"
+                  step={0.5}
+                  min={0}
+                  value={circ[f.key]}
+                  onChange={(e) => setCirc((c) => ({ ...c, [f.key]: e.target.value }))}
+                />
+              </div>
+            ))}
+          </div>
 
           <div className="mb-2 space-y-1.5">
             <Label htmlFor="meting-note">Notitie (optioneel)</Label>
