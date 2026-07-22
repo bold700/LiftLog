@@ -23,6 +23,18 @@ const hasConfig =
   typeof projectId === 'string' &&
   projectId.length > 0;
 
+/** Ruwe config, o.a. voor een tijdelijke secundaire app (admin maakt account aan zonder uit te loggen). */
+export const firebaseConfig = hasConfig
+  ? {
+      apiKey,
+      authDomain: authDomain || undefined,
+      projectId,
+      storageBucket: storageBucket || undefined,
+      messagingSenderId: messagingSenderId || undefined,
+      appId: appId || undefined,
+    }
+  : null;
+
 let app: FirebaseApp | null = null;
 let authInstance: Auth | null = null;
 let firestore: Firestore | null = null;

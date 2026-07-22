@@ -6,6 +6,7 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
+import { initializeApp, deleteApp } from 'firebase/app';
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -13,6 +14,7 @@ import {
   signOut as firebaseSignOut,
   signInWithPopup,
   deleteUser,
+  getAuth,
   GoogleAuthProvider,
   sendPasswordResetEmail,
   EmailAuthProvider,
@@ -22,8 +24,9 @@ import {
   sendEmailVerification,
   type User,
 } from 'firebase/auth';
-import { auth, isFirebaseConfigured } from '../firebase/config';
-import { createProfile, deleteProfile } from '../services/profileService';
+import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, isFirebaseConfigured, firebaseConfig } from '../firebase/config';
+import { createProfile, deleteProfile, updateProfile } from '../services/profileService';
 import type { ProfileRole } from '../types';
 
 type AuthState = {
@@ -32,6 +35,8 @@ type AuthState = {
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, role?: ProfileRole, displayName?: string | null) => Promise<void>;
+  /** Beheerder maakt een account aan zonder uit te loggen en zonder e-mailverificatie. */
+  adminCreateAccount: (email: string, password: string, role: ProfileRole, displayName: string | null) => Promise<{ uid: string; email: string | null }>;
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -135,6 +140,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const adminCreateAccount = useCallback(
+    async (email: string, password: string, role: ProfileRole, displayName: string | null) => {
+      if (!firebaseConfig) throw new Error('Firebase niet geconfigureerd');
+      // Tweede app-instance: de nieuwe user wordt daar ingelogd, de admin blijft in de hoofd-app ingelogd.
+      const secondary = initializeApp(firebaseConfig, `admin-create-${Date.now()}`);
+      try {
+        const secAuth = getAuth(secondary);
+        const secDb = getFirestore(secondary);
+        let cred;
+        try {
+          cred = await createUserWithEmailAndPassword(secAuth, email.trim(), password);
+        } catch (e) {
+          throw new Error(friendlyAuthError(e, 'Account aanmaken mislukt.'));
+        }
+        const uid = cred.user.uid;
+        const name = displayName?.trim() || null;
+        // Profiel schrijven terwijl we als de nieuwe user zijn ingelogd (uid == doc): geen extra Firestore-rule nodig.
+        await setDoc(doc(secDb, 'profiles', uid), {
+          userId: uid,
+          role: 'sporter',
+          email: (cred.user.email ?? email).trim().toLowerCase(),
+          displayName: name,
+          trainerId: null,
+          trainerRequested: false,
+          leaderboardVisibility: 'named',
+          createdByAdmin: true,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        // Geen verificatiemail: account is meteen bruikbaar.
+        await firebaseSignOut(secAuth);
+        // Trainer-rol zetten via de admin-sessie (bestaand, toegestaan pad).
+        if (role === 'trainer') {
+          await updateProfile(uid, { role: 'trainer' }).catch(() => {});
+        }
+        return { uid, email: cred.user.email ?? email };
+      } finally {
+        await deleteApp(secondary).catch(() => {});
+      }
+    },
+    []
+  );
+
   const signInWithGoogle = useCallback(async () => {
     setError(null);
     if (!auth) throw new Error('Firebase Auth niet geconfigureerd');
@@ -209,6 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     error,
     login,
     register,
+    adminCreateAccount,
     signInWithGoogle,
     logout,
     deleteAccount,

@@ -195,26 +195,11 @@ function AppContent() {
     );
   }
 
-  // E-mail/wachtwoord-accounts moeten hun e-mail bevestigen voordat ze de app in mogen
-  const needsVerification =
-    firebaseConfigured &&
-    auth?.user &&
-    auth.user.providerData.some((pr) => pr.providerId === 'password') &&
-    !auth.user.emailVerified;
-
-  if (needsVerification) {
-    return (
-      <ThemeProvider theme={lightTheme}>
-        <CssBaseline />
-        <VerifyEmailScreen />
-      </ThemeProvider>
-    );
-  }
-
   return (
     <ThemeProvider theme={lightTheme}>
       <CssBaseline />
       <ProfileProvider>
+      <VerificationGate>
       <LeaderboardAutoSync />
       <AddFromSchemaProvider
         onSwitchToAddTab={openAdd}
@@ -351,9 +336,26 @@ function AppContent() {
           />
         )}
       </AddFromSchemaProvider>
+      </VerificationGate>
       </ProfileProvider>
     </ThemeProvider>
   );
+}
+
+/** Blokkeert de app tot een e-mail/wachtwoord-account is geverifieerd; admin-accounts slaan dit over. */
+function VerificationGate({ children }: { children: React.ReactNode }) {
+  const auth = useAuth();
+  const profile = useProfile();
+  const user = auth?.user;
+  const isPassword = user?.providerData.some((pr) => pr.providerId === 'password') ?? false;
+  if (user && isPassword && !user.emailVerified) {
+    // Wacht tot het profiel geladen is voordat we beslissen (admin-accounts hoeven niet te verifiëren).
+    if (profile?.loading && !profile.profile) return null;
+    if (!profile?.profile?.createdByAdmin) {
+      return <VerifyEmailScreen />;
+    }
+  }
+  return <>{children}</>;
 }
 
 function App() {

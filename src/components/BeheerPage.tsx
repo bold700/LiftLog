@@ -21,6 +21,7 @@ import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
 import EmailRoundedIcon from '@mui/icons-material/EmailRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import { useProfile } from '../context/ProfileContext';
+import { useAuth } from '../context/AuthContext';
 import { getProfileByEmail, assignTrainerToSporter, updateProfile, getAllProfiles } from '../services/profileService';
 import type { Profile, ProfileRole } from '../types';
 import { PageLayout, ContentCard } from './layout';
@@ -28,6 +29,7 @@ import { getPendingWorkoutRequests, resolveWorkoutRequest, type WorkoutRequest }
 
 export function BeheerPage() {
   const profile = useProfile();
+  const auth = useAuth();
   const [allAccounts, setAllAccounts] = useState<Profile[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [email, setEmail] = useState('');
@@ -35,6 +37,13 @@ export function BeheerPage() {
   const [updatingRoleFor, setUpdatingRoleFor] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [requests, setRequests] = useState<WorkoutRequest[]>([]);
+
+  // Nieuw account aanmaken (alleen beheerder)
+  const [newEmail, setNewEmail] = useState('');
+  const [newPwd, setNewPwd] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newRole, setNewRole] = useState<ProfileRole>('sporter');
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     getPendingWorkoutRequests()
@@ -131,6 +140,37 @@ export function BeheerPage() {
       setAdding(false);
     }
   }, [profile, email, loadAllAccounts]);
+
+  const handleCreateAccount = useCallback(async () => {
+    if (!auth) return;
+    const mail = newEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
+      setMessage({ type: 'error', text: 'Vul een geldig e-mailadres in.' });
+      return;
+    }
+    if (newPwd.length < 6) {
+      setMessage({ type: 'error', text: 'Tijdelijk wachtwoord moet minstens 6 tekens zijn.' });
+      return;
+    }
+    setCreating(true);
+    setMessage(null);
+    try {
+      await auth.adminCreateAccount(mail, newPwd, newRole, newName.trim() || null);
+      setMessage({
+        type: 'success',
+        text: `Account aangemaakt voor ${mail} (${newRole === 'trainer' ? 'trainer' : 'sporter'}). Tijdelijk wachtwoord: ${newPwd} — geef dit door; de gebruiker kan het later wijzigen.`,
+      });
+      setNewEmail('');
+      setNewPwd('');
+      setNewName('');
+      setNewRole('sporter');
+      await loadAllAccounts();
+    } catch (e) {
+      setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Account aanmaken mislukt.' });
+    } finally {
+      setCreating(false);
+    }
+  }, [auth, newEmail, newPwd, newName, newRole, loadAllAccounts]);
 
   if (!profile?.isTrainer) {
     return (
@@ -267,6 +307,59 @@ export function BeheerPage() {
             {adding ? 'Bezig…' : 'Sporter toevoegen'}
           </Button>
         </Box>
+
+        {isAdmin && (
+          <Box sx={{ mt: 4, pt: 3, borderTop: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+              Nieuw account aanmaken
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Maak direct een account aan met een tijdelijk wachtwoord. Geen e-mailverificatie nodig; geef het wachtwoord door aan de gebruiker.
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-start' }}>
+              <TextField
+                label="Naam"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                size="small"
+                sx={{ flex: '1 1 180px' }}
+                placeholder="Bijv. Jan Jansen"
+              />
+              <TextField
+                label="E-mail"
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                size="small"
+                sx={{ flex: '1 1 220px' }}
+                placeholder="klant@voorbeeld.nl"
+              />
+              <TextField
+                label="Tijdelijk wachtwoord"
+                value={newPwd}
+                onChange={(e) => setNewPwd(e.target.value)}
+                size="small"
+                sx={{ flex: '1 1 180px' }}
+                placeholder="min. 6 tekens"
+                helperText="Min. 6 tekens"
+              />
+              <FormControl size="small" sx={{ minWidth: 140 }}>
+                <Select value={newRole} onChange={(e) => setNewRole(e.target.value as ProfileRole)}>
+                  <MenuItem value="sporter">Sporter</MenuItem>
+                  <MenuItem value="trainer">Trainer</MenuItem>
+                </Select>
+              </FormControl>
+              <Button
+                variant="contained"
+                startIcon={<PersonAddRoundedIcon />}
+                onClick={handleCreateAccount}
+                disabled={creating}
+              >
+                {creating ? 'Bezig…' : 'Account aanmaken'}
+              </Button>
+            </Box>
+          </Box>
+        )}
       </ContentCard>
     </PageLayout>
   );

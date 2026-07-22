@@ -245,6 +245,8 @@ export interface Profile {
   trainerId: string | null;
   /** True als deze gebruiker als trainer wil en op goedkeuring wacht. */
   trainerRequested?: boolean;
+  /** True als het account door een beheerder is aangemaakt (slaat e-mailverificatie over). */
+  createdByAdmin?: boolean;
   /**
    * Ranglijst: standaard `named` (profielnaam). `anonymous` = alleen “Anoniem”. `hidden` = uit.
    */
