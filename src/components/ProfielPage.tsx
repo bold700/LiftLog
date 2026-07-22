@@ -2,33 +2,33 @@
  * Pagina om eigen profielgegevens te beheren (naam, e-mail tonen).
  */
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { User, Mail, EyeOff, Camera, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
-  Box,
-  Typography,
-  TextField,
-  Button,
-  Alert,
-  FormControl,
-  FormLabel,
-  RadioGroup,
-  FormControlLabel,
-  Radio,
-  MenuItem,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
-} from '@mui/material';
-import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
-import EmailRoundedIcon from '@mui/icons-material/EmailRounded';
-import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
-import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { useProfile } from '../context/ProfileContext';
 import { useAuth } from '../context/AuthContext';
 import { updateProfile } from '../services/profileService';
 import { uploadAvatar, deleteAvatar } from '../services/avatarService';
 import type { LeaderboardVisibility } from '../types';
-import { PageLayout, ContentCard } from './layout';
 import { UserAvatar } from './UserAvatar';
 
 export function ProfielPage() {
@@ -192,178 +192,214 @@ export function ProfielPage() {
   const email = auth?.user?.email ?? p?.email ?? '';
 
   return (
-    <PageLayout>
-      <ContentCard>
-        <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
-          Mijn profiel
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Beheer je gegevens. Je naam wordt gebruikt in de app en in beheeroverzichten.
-        </Typography>
+    <div className="animate-fade-in-up mx-auto w-full max-w-3xl pb-6">
+      <Card>
+        <CardContent className="p-5 sm:p-6">
+          <h1 className="mb-2 text-2xl font-semibold">Mijn profiel</h1>
+          <p className="mb-5 text-sm text-muted-foreground">
+            Beheer je gegevens. Je naam wordt gebruikt in de app en in beheeroverzichten.
+          </p>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-          <UserAvatar name={displayName || p?.displayName} photoURL={p?.photoURL} size={72} />
-          <Box>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(e) => {
-                handlePhotoSelected(e.target.files?.[0] ?? null);
-                e.target.value = '';
-              }}
-            />
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<PhotoCameraRoundedIcon />}
-                disabled={uploadingPhoto}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {uploadingPhoto ? 'Bezig…' : p?.photoURL ? 'Foto wijzigen' : 'Foto toevoegen'}
-              </Button>
-              {p?.photoURL && (
-                <Button variant="text" size="small" color="inherit" disabled={uploadingPhoto} onClick={handleRemovePhoto}>
-                  Verwijderen
+          <div className="mb-6 flex flex-wrap items-center gap-4">
+            <UserAvatar name={displayName || p?.displayName} photoURL={p?.photoURL} size={72} />
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(e) => {
+                  handlePhotoSelected(e.target.files?.[0] ?? null);
+                  e.target.value = '';
+                }}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" disabled={uploadingPhoto} onClick={() => fileInputRef.current?.click()} className="gap-2">
+                  <Camera className="h-4 w-4" />
+                  {uploadingPhoto ? 'Bezig…' : p?.photoURL ? 'Foto wijzigen' : 'Foto toevoegen'}
                 </Button>
+                {p?.photoURL && (
+                  <Button variant="ghost" size="sm" disabled={uploadingPhoto} onClick={handleRemovePhoto}>
+                    Verwijderen
+                  </Button>
+                )}
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Zichtbaar op de ranglijst. Zonder foto tonen we je initialen. (max 5 MB)
+              </p>
+            </div>
+          </div>
+
+          {message && (
+            <Alert variant={message.type === 'error' ? 'destructive' : 'default'} className="mb-4">
+              {message.type === 'success' ? (
+                <CheckCircle2 className="h-4 w-4 text-success" />
+              ) : (
+                <AlertCircle className="h-4 w-4" />
               )}
-            </Box>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-              Zichtbaar op de ranglijst. Zonder foto tonen we je initialen. (max 5 MB)
-            </Typography>
-          </Box>
-        </Box>
-
-        {message && (
-          <Alert severity={message.type} sx={{ mb: 2 }} onClose={() => setMessage(null)}>
-            {message.text}
-          </Alert>
-        )}
-
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%' }}>
-          <TextField
-            label="Profielnaam"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Bijv. Jan Jansen"
-            size="medium"
-            fullWidth
-            InputProps={{
-              startAdornment: <PersonRoundedIcon sx={{ mr: 1, color: 'action.active' }} fontSize="small" />,
-            }}
-          />
-
-          <Typography variant="subtitle2" sx={{ mt: 1 }}>
-            Persoonlijke gegevens
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ mt: -1.5 }}>
-            Wordt gebruikt om de AI-routekaart alvast in te vullen (leeftijd, geslacht, e.d.).
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
-            <TextField label="Lengte (cm)" type="number" size="small" value={heightCm} onChange={(e) => setHeightCm(e.target.value)} sx={{ flex: 1 }} inputProps={{ min: 0 }} />
-            <TextField label="Geboortedatum" type="date" size="small" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ flex: 1 }} />
-          </Box>
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
-            <TextField select label="Geslacht" size="small" value={gender} onChange={(e) => setGender(e.target.value as typeof gender)} sx={{ flex: 1 }}>
-              <MenuItem value="">Niet opgegeven</MenuItem>
-              <MenuItem value="man">Man</MenuItem>
-              <MenuItem value="vrouw">Vrouw</MenuItem>
-              <MenuItem value="anders">Anders</MenuItem>
-            </TextField>
-            <TextField label="Rusthartslag (bpm)" type="number" size="small" value={restingHr} onChange={(e) => setRestingHr(e.target.value)} sx={{ flex: 1 }} inputProps={{ min: 0 }} />
-          </Box>
-          <TextField
-            label="E-mail"
-            value={email}
-            disabled
-            size="medium"
-            fullWidth
-            helperText={isPasswordAccount ? 'Klik op "E-mail wijzigen" om je e-mailadres te veranderen.' : 'E-mail wordt beheerd via je aanbieder (Google, etc.).'}
-            InputProps={{
-              startAdornment: <EmailRoundedIcon sx={{ mr: 1, color: 'action.disabled' }} fontSize="small" />,
-            }}
-          />
-          {isPasswordAccount && (
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              <Button variant="outlined" size="small" onClick={() => setEmailDialogOpen(true)}>
-                E-mail wijzigen
-              </Button>
-              <Button variant="outlined" size="small" onClick={() => setPwdDialogOpen(true)}>
-                Wachtwoord wijzigen
-              </Button>
-            </Box>
+              <AlertDescription>{message.text}</AlertDescription>
+            </Alert>
           )}
 
-          <FormControl component="fieldset" sx={{ width: '100%', mt: 1 }}>
-            <FormLabel component="legend" sx={{ fontWeight: 600, color: 'text.primary', mb: 1 }}>
-              Ranglijst (privacy)
-            </FormLabel>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              Standaard tonen we je <strong>profielnaam</strong> op de ranglijst. Je kunt anoniem gaan of jezelf uitzetten.
-            </Typography>
-            <RadioGroup value={leaderboardVisibility} onChange={(e) => setLeaderboardVisibility(e.target.value as LeaderboardVisibility)}>
-              <FormControlLabel value="named" control={<Radio />} label="Met mijn profielnaam op de ranglijst (standaard)" />
-              <FormControlLabel value="anonymous" control={<Radio />} label="Anoniem op de ranglijst" />
-              <FormControlLabel
-                value="hidden"
-                control={<Radio />}
-                label={
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                    <VisibilityOffRoundedIcon fontSize="small" color="action" />
-                    <span>Niet op de ranglijst</span>
-                  </Box>
-                }
-              />
-            </RadioGroup>
-          </FormControl>
+          <div className="flex w-full flex-col gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="profile-name">Profielnaam</Label>
+              <div className="relative">
+                <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="profile-name"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Bijv. Jan Jansen"
+                  className="pl-9"
+                />
+              </div>
+            </div>
 
-          <Button
-            variant="contained"
-            onClick={handleSave}
-            disabled={saving}
-            sx={{ alignSelf: 'flex-start' }}
-          >
-            {saving ? 'Bezig…' : 'Opslaan'}
-          </Button>
-        </Box>
-      </ContentCard>
+            <div className="mt-1">
+              <h2 className="text-sm font-semibold">Persoonlijke gegevens</h2>
+              <p className="text-xs text-muted-foreground">
+                Wordt gebruikt om de AI-routekaart alvast in te vullen (leeftijd, geslacht, e.d.).
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="profile-height">Lengte (cm)</Label>
+                <Input id="profile-height" type="number" min={0} value={heightCm} onChange={(e) => setHeightCm(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="profile-birth">Geboortedatum</Label>
+                <Input id="profile-birth" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="profile-gender">Geslacht</Label>
+                <Select value={gender || 'none'} onValueChange={(v) => setGender(v === 'none' ? '' : (v as typeof gender))}>
+                  <SelectTrigger id="profile-gender">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Niet opgegeven</SelectItem>
+                    <SelectItem value="man">Man</SelectItem>
+                    <SelectItem value="vrouw">Vrouw</SelectItem>
+                    <SelectItem value="anders">Anders</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="profile-hr">Rusthartslag (bpm)</Label>
+                <Input id="profile-hr" type="number" min={0} value={restingHr} onChange={(e) => setRestingHr(e.target.value)} />
+              </div>
+            </div>
 
-      <Dialog open={emailDialogOpen} onClose={() => setEmailDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>E-mail wijzigen</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Je krijgt een verificatiemail op het nieuwe adres. Je e-mail wijzigt pas nadat je die link hebt bevestigd.
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <TextField label="Nieuw e-mailadres" type="email" size="small" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} autoComplete="email" />
-            <TextField label="Huidig wachtwoord" type="password" size="small" value={currentPwd} onChange={(e) => setCurrentPwd(e.target.value)} autoComplete="current-password" />
-          </Box>
+            <div className="space-y-1.5">
+              <Label htmlFor="profile-email">E-mail</Label>
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input id="profile-email" value={email} disabled className="pl-9" />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {isPasswordAccount
+                  ? 'Klik op "E-mail wijzigen" om je e-mailadres te veranderen.'
+                  : 'E-mail wordt beheerd via je aanbieder (Google, etc.).'}
+              </p>
+            </div>
+            {isPasswordAccount && (
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => setEmailDialogOpen(true)}>
+                  E-mail wijzigen
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setPwdDialogOpen(true)}>
+                  Wachtwoord wijzigen
+                </Button>
+              </div>
+            )}
+
+            <fieldset className="mt-1 w-full">
+              <legend className="mb-1 text-sm font-semibold">Ranglijst (privacy)</legend>
+              <p className="mb-3 text-sm text-muted-foreground">
+                Standaard tonen we je <strong>profielnaam</strong> op de ranglijst. Je kunt anoniem gaan of jezelf uitzetten.
+              </p>
+              <RadioGroup
+                value={leaderboardVisibility}
+                onValueChange={(v) => setLeaderboardVisibility(v as LeaderboardVisibility)}
+                className="gap-3"
+              >
+                <div className="flex items-center gap-2.5">
+                  <RadioGroupItem value="named" id="lb-named" />
+                  <Label htmlFor="lb-named" className="font-normal">Met mijn profielnaam op de ranglijst (standaard)</Label>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <RadioGroupItem value="anonymous" id="lb-anon" />
+                  <Label htmlFor="lb-anon" className="font-normal">Anoniem op de ranglijst</Label>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <RadioGroupItem value="hidden" id="lb-hidden" />
+                  <Label htmlFor="lb-hidden" className="flex items-center gap-1.5 font-normal">
+                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    Niet op de ranglijst
+                  </Label>
+                </div>
+              </RadioGroup>
+            </fieldset>
+
+            <Button onClick={handleSave} disabled={saving} className="self-start">
+              {saving ? 'Bezig…' : 'Opslaan'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>E-mail wijzigen</DialogTitle>
+            <DialogDescription>
+              Je krijgt een verificatiemail op het nieuwe adres. Je e-mail wijzigt pas nadat je die link hebt bevestigd.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="new-email">Nieuw e-mailadres</Label>
+              <Input id="new-email" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} autoComplete="email" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="email-current-pwd">Huidig wachtwoord</Label>
+              <Input id="email-current-pwd" type="password" value={currentPwd} onChange={(e) => setCurrentPwd(e.target.value)} autoComplete="current-password" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEmailDialogOpen(false)}>Annuleren</Button>
+            <Button onClick={handleChangeEmail} disabled={emailSaving}>
+              {emailSaving ? 'Bezig…' : 'Verzenden'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEmailDialogOpen(false)}>Annuleren</Button>
-          <Button variant="contained" onClick={handleChangeEmail} disabled={emailSaving}>
-            {emailSaving ? 'Bezig…' : 'Verzenden'}
-          </Button>
-        </DialogActions>
       </Dialog>
 
-      <Dialog open={pwdDialogOpen} onClose={() => setPwdDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Wachtwoord wijzigen</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 0.5 }}>
-            <TextField label="Huidig wachtwoord" type="password" size="small" value={pwdCurrent} onChange={(e) => setPwdCurrent(e.target.value)} autoComplete="current-password" />
-            <TextField label="Nieuw wachtwoord" type="password" size="small" value={pwdNew} onChange={(e) => setPwdNew(e.target.value)} autoComplete="new-password" helperText="Minstens 6 tekens." />
-          </Box>
+      <Dialog open={pwdDialogOpen} onOpenChange={setPwdDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Wachtwoord wijzigen</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="pwd-current">Huidig wachtwoord</Label>
+              <Input id="pwd-current" type="password" value={pwdCurrent} onChange={(e) => setPwdCurrent(e.target.value)} autoComplete="current-password" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="pwd-new">Nieuw wachtwoord</Label>
+              <Input id="pwd-new" type="password" value={pwdNew} onChange={(e) => setPwdNew(e.target.value)} autoComplete="new-password" />
+              <p className="text-xs text-muted-foreground">Minstens 6 tekens.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPwdDialogOpen(false)}>Annuleren</Button>
+            <Button onClick={handleChangePassword} disabled={pwdSaving}>
+              {pwdSaving ? 'Bezig…' : 'Opslaan'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPwdDialogOpen(false)}>Annuleren</Button>
-          <Button variant="contained" onClick={handleChangePassword} disabled={pwdSaving}>
-            {pwdSaving ? 'Bezig…' : 'Opslaan'}
-          </Button>
-        </DialogActions>
       </Dialog>
-    </PageLayout>
+    </div>
   );
 }

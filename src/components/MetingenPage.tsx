@@ -1,25 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import {
-  Box,
-  Typography,
-  TextField,
-  MenuItem,
-  Button,
-  Card,
-  CardContent,
-  CircularProgress,
-  IconButton,
-  List,
-  ListItem,
-  ListItemText,
-} from '@mui/material';
-import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
-import EditRoundedIcon from '@mui/icons-material/EditRounded';
-import { LinearProgress, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
-import { PageLayout, ContentCard } from './layout';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { useProfile } from '../context/ProfileContext';
 import { updateProfile } from '../services/profileService';
-import { Collapse } from '@mui/material';
 import {
   saveMeasurement,
   deleteMeasurement,
@@ -198,7 +200,6 @@ export function MetingenPage() {
   const CW = chartW;
   const CH = 130;
   const cpad = 14;
-  // Schaal met wat marge zodat de lijn niet tegen de randen plakt
   const cMin = Math.min(wMin, goalWeight ?? wMin);
   const cMax = Math.max(wMax, goalWeight ?? wMax);
   const cRange = cMax - cMin || 1;
@@ -208,101 +209,88 @@ export function MetingenPage() {
   const goalY = goalWeight != null ? cy(goalWeight) : null;
 
   return (
-    <PageLayout>
-      <ContentCard>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
-          <Typography variant="h5" fontWeight={600}>
-            Metingen
-          </Typography>
-          <Button
-            size="small"
-            variant="text"
-            onClick={() => {
-              setGoalInput(goalWeight != null ? String(goalWeight) : '');
-              setGoalOpen(true);
-            }}
-          >
-            {goalWeight != null ? `Doel: ${goalWeight} kg` : 'Doelgewicht instellen'}
-          </Button>
-        </Box>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Houd je gewicht, vetpercentage en omtrekmaten bij en volg je voortgang.
-        </Typography>
+    <div className="animate-fade-in-up mx-auto w-full max-w-3xl pb-6">
+      <Card>
+        <CardContent className="p-5 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h1 className="text-2xl font-semibold">Metingen</h1>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setGoalInput(goalWeight != null ? String(goalWeight) : '');
+                setGoalOpen(true);
+              }}
+            >
+              {goalWeight != null ? `Doel: ${goalWeight} kg` : 'Doelgewicht instellen'}
+            </Button>
+          </div>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Houd je gewicht, vetpercentage en omtrekmaten bij en volg je voortgang.
+          </p>
 
-        {isTrainer && sporters.length > 0 && (
-          <TextField select size="small" label="Voor wie?" value={targetId} onChange={(e) => setTargetId(e.target.value)} sx={{ minWidth: 160, mb: 2 }} SelectProps={{ displayEmpty: true }} InputLabelProps={{ shrink: true }}>
-            <MenuItem value="">Mijzelf</MenuItem>
-            {sporters.map((s) => (
-              <MenuItem key={s.userId} value={s.userId}>
-                {s.displayName?.trim() || s.email || s.userId}
-              </MenuItem>
-            ))}
-          </TextField>
-        )}
+          {isTrainer && sporters.length > 0 && (
+            <div className="mb-4 max-w-xs space-y-1.5">
+              <Label htmlFor="meting-target">Voor wie?</Label>
+              <Select value={targetId || 'self'} onValueChange={(v) => setTargetId(v === 'self' ? '' : v)}>
+                <SelectTrigger id="meting-target">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="self">Mijzelf</SelectItem>
+                  {sporters.map((s) => (
+                    <SelectItem key={s.userId} value={s.userId}>
+                      {s.displayName?.trim() || s.email || s.userId}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
-        {/* Huidige waarden */}
-        <Card sx={{ backgroundColor: 'transparent', border: '1px solid', borderColor: 'divider', boxShadow: 'none', borderRadius: 2, mb: 2 }}>
-          <CardContent sx={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', flexWrap: 'wrap', gap: 1, '&:last-child': { pb: 2 } }}>
-            <Box>
-              <Typography variant="h6" fontWeight={700}>
-                {latestWeight != null ? `${latestWeight} kg` : '—'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
+          {/* Huidige waarden */}
+          <div className="mb-4 flex flex-wrap justify-around gap-2 rounded-xl border border-border p-4 text-center">
+            <div>
+              <div className="text-lg font-bold">{latestWeight != null ? `${latestWeight} kg` : '—'}</div>
+              <div className="text-xs text-muted-foreground">
                 gewicht{weightDelta != null ? ` (${weightDelta > 0 ? '+' : ''}${weightDelta} kg)` : ''}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="h6" fontWeight={700}>
-                {latestBf != null ? `${latestBf}%` : '—'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                vetpercentage
-              </Typography>
-            </Box>
-          </CardContent>
-        </Card>
+              </div>
+            </div>
+            <div>
+              <div className="text-lg font-bold">{latestBf != null ? `${latestBf}%` : '—'}</div>
+              <div className="text-xs text-muted-foreground">vetpercentage</div>
+            </div>
+          </div>
 
-        {/* Voortgang naar doel + tempo */}
-        {(goalWeight != null || perWeek != null) && (
-          <Card sx={{ backgroundColor: 'transparent', border: '1px solid', borderColor: 'divider', boxShadow: 'none', borderRadius: 2, mb: 2 }}>
-            <CardContent sx={{ '&:last-child': { pb: 2 } }}>
+          {/* Voortgang naar doel + tempo */}
+          {(goalWeight != null || perWeek != null) && (
+            <div className="mb-4 rounded-xl border border-border p-4">
               {goalWeight != null && (
                 <>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      Naar doel ({goalWeight} kg)
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {toGoal != null ? (Math.abs(toGoal) < 0.05 ? 'behaald 🎉' : `nog ${Math.abs(toGoal)} kg`) : ''}
-                    </Typography>
-                  </Box>
-                  {goalProgress != null && (
-                    <LinearProgress variant="determinate" value={goalProgress} sx={{ height: 8, borderRadius: 1, mb: perWeek != null ? 1.5 : 0 }} />
-                  )}
+                  <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                    <span>Naar doel ({goalWeight} kg)</span>
+                    <span>{toGoal != null ? (Math.abs(toGoal) < 0.05 ? 'behaald 🎉' : `nog ${Math.abs(toGoal)} kg`) : ''}</span>
+                  </div>
+                  {goalProgress != null && <Progress value={goalProgress} className={perWeek != null ? 'mb-2 h-2' : 'h-2'} />}
                 </>
               )}
               {perWeek != null && (
-                <Typography variant="caption" color="text.secondary">
-                  Gemiddeld {perWeek > 0 ? '+' : ''}{perWeek} kg per week
-                </Typography>
+                <div className="text-xs text-muted-foreground">
+                  Gemiddeld {perWeek > 0 ? '+' : ''}
+                  {perWeek} kg per week
+                </div>
               )}
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          )}
 
-        {/* Gewicht-trend */}
-        {weightPoints.length >= 2 && (
-          <Card sx={{ backgroundColor: 'transparent', border: '1px solid', borderColor: 'divider', boxShadow: 'none', borderRadius: 2, mb: 2 }}>
-            <CardContent sx={{ '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+          {/* Gewicht-trend */}
+          {weightPoints.length >= 2 && (
+            <div className="mb-4 rounded-xl border border-border p-4">
+              <div className="mb-2 text-xs text-muted-foreground">
                 Gewicht ({wMin}–{wMax} kg)
-              </Typography>
-              <Box ref={chartRef} sx={{ width: '100%' }}>
-                <Box
-                  component="svg"
-                  viewBox={`0 0 ${CW} ${CH}`}
-                  sx={{ width: '100%', height: CH, display: 'block', color: 'primary.main' }}
-                >
+              </div>
+              <div ref={chartRef} className="w-full text-primary">
+                <svg viewBox={`0 0 ${CW} ${CH}`} className="block h-[130px] w-full">
                   {goalY != null && (
                     <line x1={0} y1={goalY} x2={CW} y2={goalY} stroke="#9e9e9e" strokeWidth={1} strokeDasharray="4 4" />
                   )}
@@ -312,131 +300,124 @@ export function MetingenPage() {
                       <title>{`${p.date}: ${p.weightKg} kg`}</title>
                     </circle>
                   ))}
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        )}
+                </svg>
+              </div>
+            </div>
+          )}
 
-        {/* Invoer */}
-        <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-          {editingId ? 'Meting bewerken' : 'Nieuwe meting'}
-        </Typography>
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1, mb: 1 }}>
-          <TextField type="date" size="small" label="Datum" value={date} onChange={(e) => setDate(e.target.value)} InputLabelProps={{ shrink: true }} sx={{ flex: 1 }} />
-          <TextField type="number" size="small" label="Gewicht (kg)" value={weight} onChange={(e) => setWeight(e.target.value)} sx={{ flex: 1 }} inputProps={{ step: 0.1, min: 0 }} />
-          <TextField type="number" size="small" label="Vet (%)" value={bodyFat} onChange={(e) => setBodyFat(e.target.value)} sx={{ flex: 1 }} inputProps={{ step: 0.1, min: 0 }} />
-        </Box>
-        {/* Omtrekken (cm) — uitklapbaar */}
-        <Button
-          size="small"
-          variant="text"
-          onClick={() => setShowCirc((v) => !v)}
-          sx={{ mb: showCirc ? 1 : 1, px: 0, minWidth: 0 }}
-        >
-          {showCirc ? 'Omtrekken verbergen' : 'Omtrekken toevoegen (cm)'}
-        </Button>
-        <Collapse in={showCirc} unmountOnExit>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' },
-              gap: 1,
-              mb: 1,
-            }}
-          >
-            {CIRCUMFERENCE_FIELDS.map((f) => (
-              <TextField
-                key={f.key}
-                type="number"
-                size="small"
-                label={f.label}
-                value={circ[f.key]}
-                onChange={(e) => setCirc((c) => ({ ...c, [f.key]: e.target.value }))}
-                inputProps={{ step: 0.5, min: 0 }}
-              />
-            ))}
-          </Box>
-        </Collapse>
-        <TextField size="small" label="Notitie (optioneel)" value={note} onChange={(e) => setNote(e.target.value)} fullWidth sx={{ mb: 1 }} />
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button variant="contained" onClick={handleSave} disabled={saving} sx={{ bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}>
-            {saving ? 'Bezig…' : editingId ? 'Opslaan' : 'Toevoegen'}
+          {/* Invoer */}
+          <h2 className="mb-2 text-base font-semibold">{editingId ? 'Meting bewerken' : 'Nieuwe meting'}</h2>
+          <div className="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="meting-date">Datum</Label>
+              <Input id="meting-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="meting-weight">Gewicht (kg)</Label>
+              <Input id="meting-weight" type="number" step={0.1} min={0} value={weight} onChange={(e) => setWeight(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="meting-fat">Vet (%)</Label>
+              <Input id="meting-fat" type="number" step={0.1} min={0} value={bodyFat} onChange={(e) => setBodyFat(e.target.value)} />
+            </div>
+          </div>
+
+          {/* Omtrekken (cm) — uitklapbaar */}
+          <Button variant="ghost" size="sm" onClick={() => setShowCirc((v) => !v)} className="mb-2 h-auto px-0 py-1 font-normal text-muted-foreground hover:bg-transparent hover:text-foreground">
+            {showCirc ? 'Omtrekken verbergen' : 'Omtrekken toevoegen (cm)'}
           </Button>
-          {editingId && <Button onClick={resetForm}>Annuleren</Button>}
-        </Box>
+          {showCirc && (
+            <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {CIRCUMFERENCE_FIELDS.map((f) => (
+                <div key={f.key} className="space-y-1.5">
+                  <Label htmlFor={`circ-${f.key}`} className="text-xs">
+                    {f.label}
+                  </Label>
+                  <Input
+                    id={`circ-${f.key}`}
+                    type="number"
+                    step={0.5}
+                    min={0}
+                    value={circ[f.key]}
+                    onChange={(e) => setCirc((c) => ({ ...c, [f.key]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
 
-        {/* Historie */}
-        <Typography variant="subtitle1" fontWeight={600} sx={{ mt: 3, mb: 1 }}>
-          Historie
-        </Typography>
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-            <CircularProgress size={22} />
-          </Box>
-        ) : items.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            Nog geen metingen.
-          </Typography>
-        ) : (
-          <List dense>
-            {[...items].reverse().map((m) => (
-              <ListItem
-                key={m.id}
-                secondaryAction={
-                  <Box>
-                    <IconButton edge="end" size="small" onClick={() => handleEdit(m)} aria-label="Bewerken" sx={{ mr: 0.5 }}>
-                      <EditRoundedIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton edge="end" size="small" onClick={() => handleDelete(m.id)} aria-label="Verwijderen">
-                      <DeleteOutlineRoundedIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
-                }
-              >
-                <ListItemText
-                  primary={`${m.date} · ${m.weightKg != null ? `${m.weightKg} kg` : ''}${m.weightKg != null && m.bodyFatPct != null ? ' · ' : ''}${m.bodyFatPct != null ? `${m.bodyFatPct}%` : ''}`}
-                  secondary={
-                    [
-                      CIRCUMFERENCE_FIELDS.filter((f) => m[f.key] != null)
-                        .map((f) => `${f.label} ${m[f.key]}`)
-                        .join(' · ') || null,
-                      m.note || null,
-                    ]
-                      .filter(Boolean)
-                      .join(' — ') || undefined
-                  }
-                />
-              </ListItem>
-            ))}
-          </List>
-        )}
-      </ContentCard>
+          <div className="mb-2 space-y-1.5">
+            <Label htmlFor="meting-note">Notitie (optioneel)</Label>
+            <Input id="meting-note" value={note} onChange={(e) => setNote(e.target.value)} />
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? 'Bezig…' : editingId ? 'Opslaan' : 'Toevoegen'}
+            </Button>
+            {editingId && (
+              <Button variant="ghost" onClick={resetForm}>
+                Annuleren
+              </Button>
+            )}
+          </div>
 
-      <Dialog open={goalOpen} onClose={() => setGoalOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Doelgewicht</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Vul je streefgewicht in. Laat leeg om geen doel te gebruiken.
-          </Typography>
-          <TextField
-            type="number"
-            size="small"
-            label="Doelgewicht (kg)"
-            value={goalInput}
-            onChange={(e) => setGoalInput(e.target.value)}
-            fullWidth
-            inputProps={{ step: 0.1, min: 0 }}
-            autoFocus
-          />
+          {/* Historie */}
+          <h2 className="mb-2 mt-6 text-base font-semibold">Historie</h2>
+          {loading ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : items.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nog geen metingen.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {[...items].reverse().map((m) => {
+                const circSummary = CIRCUMFERENCE_FIELDS.filter((f) => m[f.key] != null)
+                  .map((f) => `${f.label} ${m[f.key]}`)
+                  .join(' · ');
+                const secondary = [circSummary || null, m.note || null].filter(Boolean).join(' — ');
+                return (
+                  <li key={m.id} className="flex items-start justify-between gap-3 py-2.5">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium">
+                        {`${m.date} · ${m.weightKg != null ? `${m.weightKg} kg` : ''}${m.weightKg != null && m.bodyFatPct != null ? ' · ' : ''}${m.bodyFatPct != null ? `${m.bodyFatPct}%` : ''}`}
+                      </div>
+                      {secondary && <div className="mt-0.5 text-xs text-muted-foreground">{secondary}</div>}
+                    </div>
+                    <div className="flex shrink-0 gap-0.5">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(m)} aria-label="Bewerken">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(m.id)} aria-label="Verwijderen">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={goalOpen} onOpenChange={setGoalOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Doelgewicht</DialogTitle>
+            <DialogDescription>Vul je streefgewicht in. Laat leeg om geen doel te gebruiken.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5 py-2">
+            <Label htmlFor="goal-input">Doelgewicht (kg)</Label>
+            <Input id="goal-input" type="number" step={0.1} min={0} value={goalInput} onChange={(e) => setGoalInput(e.target.value)} autoFocus />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setGoalOpen(false)}>
+              Annuleren
+            </Button>
+            <Button onClick={handleSaveGoal}>Opslaan</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setGoalOpen(false)}>Annuleren</Button>
-          <Button variant="contained" onClick={handleSaveGoal} sx={{ bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}>
-            Opslaan
-          </Button>
-        </DialogActions>
       </Dialog>
-    </PageLayout>
+    </div>
   );
 }

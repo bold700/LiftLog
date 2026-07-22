@@ -1,21 +1,14 @@
 import { useState, useCallback } from 'react';
-import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  TextField,
-  Button,
-  Alert,
-  InputAdornment,
-  IconButton,
-} from '@mui/material';
-import EmailRoundedIcon from '@mui/icons-material/EmailRounded';
-import LockRoundedIcon from '@mui/icons-material/LockRounded';
-import PersonOutlineRoundedIcon from '@mui/icons-material/PersonOutlineRounded';
-import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
-import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
+import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '../context/AuthContext';
+
+const LOGO_TINT =
+  'brightness(0) saturate(100%) invert(94%) sepia(6%) saturate(800%) hue-rotate(340deg) brightness(98%) contrast(94%)';
 
 export function LoginPage() {
   const auth = useAuth();
@@ -94,185 +87,123 @@ export function LoginPage() {
   if (!auth) return null;
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        px: 2,
-        py: 3,
-        bgcolor: '#0d0d0d',
-      }}
-    >
-      <Card
-        sx={{
-          maxWidth: 400,
-          width: '100%',
-          borderRadius: 3,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-          bgcolor: '#1a1a1a',
-          border: '1px solid rgba(242, 228, 211, 0.12)',
-        }}
-      >
-        <CardContent
-          sx={{
-            p: 3,
-            '& .MuiTextField-root .MuiOutlinedInput-root': {
-              color: '#F2E4D3',
-              '& fieldset': { borderColor: 'rgba(242, 228, 211, 0.23)' },
-              '&:hover fieldset': { borderColor: 'rgba(242, 228, 211, 0.4)' },
-              '&.Mui-focused fieldset': { borderColor: '#F2E4D3' },
-            },
-            '& .MuiTextField-root .MuiInputLabel-root': { color: 'rgba(242, 228, 211, 0.7)' },
-            '& .MuiFormLabel-root.Mui-focused': { color: '#F2E4D3' },
-            '& .MuiButton-root:not(.MuiButton-contained)': { color: '#F2E4D3' },
-            '& .MuiInputAdornment-root .MuiSvgIcon-root': { color: '#F2E4D3' },
-            '& .MuiIconButton-root': { color: '#F2E4D3' },
-          }}
-        >
-          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-            <Box
-              component="img"
+    <div className="dark flex min-h-[100dvh] items-center justify-center bg-background px-4 py-6">
+      <Card className="w-full max-w-sm rounded-3xl shadow-2xl">
+        <CardContent className="p-6 sm:p-8">
+          <div className="mb-4 flex justify-center">
+            <img
               src="/va-logo.svg"
               alt="Van As Personal Training"
-              sx={{
-                height: 56,
-                width: 'auto',
-                display: 'block',
-                filter: 'brightness(0) saturate(100%) invert(94%) sepia(6%) saturate(800%) hue-rotate(340deg) brightness(98%) contrast(94%)',
-              }}
+              className="h-14 w-auto"
+              style={{ filter: LOGO_TINT }}
             />
-          </Box>
-          <Typography variant="h5" fontWeight={600} gutterBottom align="center" sx={{ color: '#F2E4D3' }}>
+          </div>
+          <h1 className="text-center text-2xl font-semibold text-foreground">
             {isRegister ? 'Account aanmaken' : 'Inloggen'}
-          </Typography>
-          <Typography variant="body2" sx={{ mb: 2 }} align="center" color="rgba(242, 228, 211, 0.7)">
-            Van As Personal Training Logs
-          </Typography>
+          </h1>
+          <p className="mb-5 mt-1 text-center text-sm text-muted-foreground">Van As Personal Training Logs</p>
 
           {(auth.error || localError) && (
-            <Alert severity="error" sx={{ mb: 2 }} onClose={() => { auth.clearError(); setLocalError(null); }}>
-              {localError || auth.error}
+            <Alert variant="destructive" className="mb-4">
+              <AlertDescription>{localError || auth.error}</AlertDescription>
             </Alert>
           )}
           {resetMsg && (
-            <Alert severity="success" sx={{ mb: 2 }} onClose={() => setResetMsg(null)}>
-              {resetMsg}
+            <Alert className="mb-4">
+              <AlertDescription>{resetMsg}</AlertDescription>
             </Alert>
           )}
 
-          <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {isRegister && (
-              <TextField
-                label="Naam"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                fullWidth
-                autoComplete="name"
-                placeholder="Voor je profiel"
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <PersonOutlineRoundedIcon sx={{ color: '#F2E4D3' }} fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
+              <div className="space-y-1.5">
+                <Label htmlFor="login-name">Naam</Label>
+                <div className="relative">
+                  <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="login-name"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    autoComplete="name"
+                    placeholder="Voor je profiel"
+                    className="pl-9"
+                  />
+                </div>
+              </div>
             )}
-            <TextField
-              label="E-mail"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              fullWidth
-              autoComplete="email"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <EmailRoundedIcon sx={{ color: '#F2E4D3' }} fontSize="small" />
-                  </InputAdornment>
-                ),
-              }}
-            />
-            <TextField
-              label="Wachtwoord"
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              fullWidth
-              autoComplete={isRegister ? 'new-password' : 'current-password'}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <LockRoundedIcon sx={{ color: '#F2E4D3' }} fontSize="small" />
-                  </InputAdornment>
-                ),
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      aria-label={showPassword ? 'Wachtwoord verbergen' : 'Wachtwoord tonen'}
-                      onClick={() => setShowPassword((v) => !v)}
-                      edge="end"
-                      size="small"
-                      sx={{ color: '#F2E4D3' }}
-                    >
-                      {showPassword ? <VisibilityOffRoundedIcon /> : <VisibilityRoundedIcon />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-            <Button
-              type="submit"
-              variant="contained"
-              size="large"
-              disabled={submitting}
-              sx={{
-                bgcolor: '#F2E4D3',
-                color: '#000',
-                py: 1.5,
-                '&:hover': { bgcolor: '#e5d4c0', color: '#000' },
-              }}
-            >
+            <div className="space-y-1.5">
+              <Label htmlFor="login-email">E-mail</Label>
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="login-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                  placeholder="jij@voorbeeld.nl"
+                  className="pl-9"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="login-password">Wachtwoord</Label>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete={isRegister ? 'new-password' : 'current-password'}
+                  className="px-9"
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? 'Wachtwoord verbergen' : 'Wachtwoord tonen'}
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <Button type="submit" size="lg" disabled={submitting} className="w-full">
               {submitting ? 'Even geduld…' : isRegister ? 'Account aanmaken' : 'Inloggen'}
             </Button>
             {!isRegister && (
               <Button
-                variant="text"
-                size="small"
+                type="button"
+                variant="ghost"
+                size="sm"
                 onClick={handleForgotPassword}
-                sx={{ color: 'rgba(242, 228, 211, 0.7)', alignSelf: 'center', textTransform: 'none' }}
+                className="self-center text-muted-foreground"
               >
                 Wachtwoord vergeten?
               </Button>
             )}
-          </Box>
+          </form>
 
-          <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'rgba(242, 228, 211, 0.12)' }}>
+          <div className="mt-5 border-t border-border pt-5">
             <Button
-              fullWidth
-              variant="outlined"
-              size="large"
+              type="button"
+              variant="outline"
+              size="lg"
               disabled={submitting}
               onClick={handleGoogle}
-              sx={{
-                py: 1.25,
-                borderColor: 'rgba(242, 228, 211, 0.4)',
-                color: '#F2E4D3',
-                '&:hover': { borderColor: '#F2E4D3', bgcolor: 'rgba(242, 228, 211, 0.08)' },
-              }}
+              className="w-full"
             >
               Doorgaan met Google
             </Button>
-          </Box>
+          </div>
 
           <Button
-            fullWidth
-            size="small"
-            sx={{ mt: 2, color: 'rgba(242, 228, 211, 0.7)' }}
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-3 w-full text-muted-foreground"
             onClick={() => {
               auth.clearError();
               setIsRegister((v) => !v);
@@ -282,6 +213,6 @@ export function LoginPage() {
           </Button>
         </CardContent>
       </Card>
-    </Box>
+    </div>
   );
 }

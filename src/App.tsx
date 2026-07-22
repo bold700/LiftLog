@@ -1,17 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { ThemeProvider, CssBaseline, Box, Fab, Menu, MenuItem, Alert, Button } from '@mui/material';
-import AddRoundedIcon from '@mui/icons-material/AddRounded';
-import FitnessCenterRoundedIcon from '@mui/icons-material/FitnessCenterRounded';
-import EventNoteRoundedIcon from '@mui/icons-material/EventNoteRounded';
-import MenuRoundedIcon from '@mui/icons-material/MenuRounded';
-import DonutLargeRoundedIcon from '@mui/icons-material/DonutLargeRounded';
-import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
-import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
-import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
-import MonitorWeightRoundedIcon from '@mui/icons-material/MonitorWeightRounded';
+import { useState, useEffect, useCallback } from 'react';
+import { ThemeProvider, CssBaseline, Box, Alert, Button } from '@mui/material';
+import { Activity, Dumbbell, UtensilsCrossed, Scale, User, ClipboardList, NotebookPen } from 'lucide-react';
 import { lightTheme } from './theme';
-import { NavigationBar } from './components/NavigationBar';
-import { FullscreenMenu } from './components/FullscreenMenu';
+import { AppShell, type ShellNavItem, type ShellLogAction } from './components/AppShell';
 import { InzichtenPage } from './components/InzichtenPage';
 import { AddPage } from './components/AddPage';
 import { SchemasPage } from './components/SchemasPage';
@@ -31,7 +22,6 @@ import { updateProfile } from './services/profileService';
 import './styles/material-web-theme.css';
 import './styles/animations.css';
 
-const TAB_MENU = 0;
 const TAB_INZICHTEN = 1;
 const TAB_SCHEMAS = 2;
 const TAB_PROFIEL = 3;
@@ -44,8 +34,6 @@ function AppContent() {
   const [addOpen, setAddOpen] = useState(false);
   const [requestedInsightsSubTab, setRequestedInsightsSubTab] = useState<number | null>(null);
   const [requestedOpenSessionLogDialog, setRequestedOpenSessionLogDialog] = useState(false);
-  const [fabAnchorEl, setFabAnchorEl] = useState<null | HTMLElement>(null);
-  const fabMenuOpen = Boolean(fabAnchorEl);
   const profile = useProfile();
   const auth = useAuth();
   // Rol direct uit profiel (zelfde bron als in menu); fallback tot profile?.role uit context
@@ -74,33 +62,20 @@ function AppContent() {
     setRequestedInsightsSubTab(INZICHTEN_SUB.LOGS);
   }, []);
 
-  const handleFabClick = useCallback((event: React.MouseEvent<HTMLElement>) => {
-    setFabAnchorEl(event.currentTarget);
-  }, []);
-
-  const handleFabMenuClose = useCallback(() => setFabAnchorEl(null), []);
-
-  const handleAddExerciseFromFab = useCallback(() => {
-    handleFabMenuClose();
-    openAdd();
-  }, [handleFabMenuClose, openAdd]);
-
-  const handleAddTrainingLogFromFab = useCallback(() => {
-    handleFabMenuClose();
-    setActiveTab(TAB_INZICHTEN);
-    setRequestedInsightsSubTab(INZICHTEN_SUB.LOGS);
-    setRequestedOpenSessionLogDialog(true);
-  }, [handleFabMenuClose]);
-
-  const handleAddNutritionFromFab = useCallback(() => {
-    handleFabMenuClose();
-    setActiveTab(TAB_VOEDING);
-  }, [handleFabMenuClose]);
-
-  const handleAddMeasurementFromFab = useCallback(() => {
-    handleFabMenuClose();
-    setActiveTab(TAB_METINGEN);
-  }, [handleFabMenuClose]);
+  const logActions: ShellLogAction[] = [
+    { label: 'Oefening loggen', icon: <Dumbbell className="h-4 w-4" />, onClick: openAdd },
+    {
+      label: 'Training loggen',
+      icon: <NotebookPen className="h-4 w-4" />,
+      onClick: () => {
+        setActiveTab(TAB_INZICHTEN);
+        setRequestedInsightsSubTab(INZICHTEN_SUB.LOGS);
+        setRequestedOpenSessionLogDialog(true);
+      },
+    },
+    { label: 'Voeding loggen', icon: <UtensilsCrossed className="h-4 w-4" />, onClick: () => setActiveTab(TAB_VOEDING) },
+    { label: 'Meting loggen', icon: <Scale className="h-4 w-4" />, onClick: () => setActiveTab(TAB_METINGEN) },
+  ];
 
   useEffect(() => {
     document.title = 'Van As Personal Training Logs';
@@ -117,39 +92,17 @@ function AppContent() {
     setRequestedInsightsSubTab(INZICHTEN_SUB.LOGS);
   }, []);
 
-  const tabs = [
-    { label: 'Menu', icon: <MenuRoundedIcon fontSize="small" />, tabIndex: TAB_MENU },
-    { label: 'Inzichten', icon: <DonutLargeRoundedIcon fontSize="small" />, tabIndex: TAB_INZICHTEN },
-    { label: 'Workouts', icon: <CalendarMonthRoundedIcon fontSize="small" />, tabIndex: TAB_SCHEMAS },
-    ...(isTrainer ? [{ label: 'Beheer', icon: <FitnessCenterRoundedIcon fontSize="small" />, tabIndex: TAB_BEHEER }] : []),
+  const navItems: ShellNavItem[] = [
+    { label: 'Inzichten', icon: <Activity className="h-5 w-5" />, tabIndex: TAB_INZICHTEN },
+    { label: 'Workouts', icon: <Dumbbell className="h-5 w-5" />, tabIndex: TAB_SCHEMAS },
+    { label: 'Voeding', icon: <UtensilsCrossed className="h-5 w-5" />, tabIndex: TAB_VOEDING },
+    { label: 'Metingen', icon: <Scale className="h-5 w-5" />, tabIndex: TAB_METINGEN },
+    { label: 'Profiel', icon: <User className="h-5 w-5" />, tabIndex: TAB_PROFIEL },
+    ...(isTrainer ? [{ label: 'Beheer', icon: <ClipboardList className="h-5 w-5" />, tabIndex: TAB_BEHEER }] : []),
   ];
-
-  const barIndexForActiveTab = tabs.findIndex((t) => t.tabIndex === activeTab);
-  const navBarValue = barIndexForActiveTab >= 0 ? barIndexForActiveTab : 0;
-  const tabsRef = useRef(tabs);
-  tabsRef.current = tabs;
-  const handleNavBarChange = useCallback((barIndex: number) => {
-    const t = tabsRef.current[barIndex];
-    if (t?.tabIndex != null) setActiveTab(t.tabIndex);
-  }, []);
 
   const renderPage = () => {
     switch (activeTab) {
-      case TAB_MENU:
-        return (
-          <FullscreenMenu
-            onClose={() => setActiveTab(TAB_INZICHTEN)}
-            navItems={[
-              { label: 'Inzichten', tabIndex: TAB_INZICHTEN, icon: <DonutLargeRoundedIcon fontSize="small" /> },
-              { label: 'Workouts', tabIndex: TAB_SCHEMAS, icon: <CalendarMonthRoundedIcon fontSize="small" /> },
-              { label: 'Voeding', tabIndex: TAB_VOEDING, icon: <RestaurantRoundedIcon fontSize="small" /> },
-              { label: 'Metingen', tabIndex: TAB_METINGEN, icon: <MonitorWeightRoundedIcon fontSize="small" /> },
-              { label: 'Profiel', tabIndex: TAB_PROFIEL, icon: <PersonRoundedIcon fontSize="small" /> },
-            ]}
-            onNavigateToTab={setActiveTab}
-            beheerTabIndex={TAB_BEHEER}
-          />
-        );
       case TAB_INZICHTEN:
         return (
           <InzichtenPage
@@ -185,14 +138,7 @@ function AppContent() {
   const showLogin = firebaseConfigured && !auth?.loading && !auth?.user;
 
   if (showLogin) {
-    return (
-      <ThemeProvider theme={lightTheme}>
-        <CssBaseline />
-        <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
-          <LoginPage />
-        </Box>
-      </ThemeProvider>
-    );
+    return <LoginPage />;
   }
 
   // E-mail/wachtwoord-accounts moeten hun e-mail bevestigen voordat ze de app in mogen
@@ -203,12 +149,7 @@ function AppContent() {
     !auth.user.emailVerified;
 
   if (needsVerification) {
-    return (
-      <ThemeProvider theme={lightTheme}>
-        <CssBaseline />
-        <VerifyEmailScreen />
-      </ThemeProvider>
-    );
+    return <VerifyEmailScreen />;
   }
 
   return (
@@ -221,127 +162,47 @@ function AppContent() {
         onSwitchToSchemasTab={switchToSchemasTab}
         onSwitchToLogsTab={switchToLogsTab}
       >
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            minHeight: '100vh',
-            pb: 10,
-          }}
-        >
-          <Box
-            sx={{
-              flex: 1,
-              p: 3,
-              paddingTop: {
-                xs: 'calc(24px + env(safe-area-inset-top, 0px))',
-                sm: 'calc(24px + env(safe-area-inset-top, 0px))',
-              },
-              overflow: 'auto',
-              scrollbarGutter: 'stable',
-            }}
-          >
-            {profile?.error && (
-              <Alert
-                severity="error"
-                sx={{ mb: 2 }}
-                action={
-                  <Button color="inherit" size="small" onClick={() => profile?.refreshProfile()}>
-                    Opnieuw proberen
-                  </Button>
-                }
-              >
-                {profile.error}
-              </Alert>
-            )}
-            {profile?.profile?.trainerRequested && (
-              <Alert
-                severity="info"
-                sx={{ mb: 2 }}
-                icon={false}
-                action={
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      color="inherit"
-                      onClick={handleSelfApproveTrainer}
-                      disabled={approvingSelf}
-                    >
-                      {approvingSelf ? 'Bezig…' : 'Direct trainerrechten'}
-                    </Button>
-                    <Button color="inherit" size="small" onClick={() => profile?.refreshProfile()}>
-                      Vernieuwen
-                    </Button>
-                  </Box>
-                }
-              >
-                <strong>Je trainer-aanvraag wacht op goedkeuring.</strong> Geen beheerder? Klik op <strong>Direct trainerrechten</strong> om jezelf nu trainer te maken.
-              </Alert>
-            )}
-            {renderPage()}
-          </Box>
-
-          {!addOpen && (
-            <>
-              <Fab
-                color="primary"
-                aria-label="Log toevoegen"
-                sx={{
-                  position: 'fixed',
-                  bottom: 92,
-                  right: 16,
-                  zIndex: 1001,
-                  transition: 'transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease',
-                  '&:hover': {
-                    transform: 'scale(1.08)',
-                    boxShadow: 4,
-                  },
-                  '&:active': {
-                    transform: 'scale(0.96)',
-                  },
-                }}
-                onClick={handleFabClick}
-              >
-                <AddRoundedIcon />
-              </Fab>
-              <Menu
-                anchorEl={fabAnchorEl}
-                open={fabMenuOpen}
-                onClose={handleFabMenuClose}
-                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-                transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-                slotProps={{
-                  paper: {
-                    sx: {
-                      mt: -2,
-                      minWidth: 200,
-                    },
-                  },
-                }}
-              >
-                <MenuItem onClick={handleAddExerciseFromFab}>
-                  <FitnessCenterRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
-                  Oefening loggen
-                </MenuItem>
-                <MenuItem onClick={handleAddTrainingLogFromFab}>
-                  <EventNoteRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
-                  Training loggen
-                </MenuItem>
-                <MenuItem onClick={handleAddNutritionFromFab}>
-                  <RestaurantRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
-                  Voeding loggen
-                </MenuItem>
-                <MenuItem onClick={handleAddMeasurementFromFab}>
-                  <MonitorWeightRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
-                  Meting loggen
-                </MenuItem>
-              </Menu>
-            </>
+        <AppShell navItems={navItems} activeTab={activeTab} onNavigate={setActiveTab} logActions={logActions}>
+          {profile?.error && (
+            <Alert
+              severity="error"
+              sx={{ mb: 2 }}
+              action={
+                <Button color="inherit" size="small" onClick={() => profile?.refreshProfile()}>
+                  Opnieuw proberen
+                </Button>
+              }
+            >
+              {profile.error}
+            </Alert>
           )}
-
-          <NavigationBar key={`nav-${role}`} value={navBarValue} onChange={handleNavBarChange} tabs={tabs} />
-        </Box>
+          {profile?.profile?.trainerRequested && (
+            <Alert
+              severity="info"
+              sx={{ mb: 2 }}
+              icon={false}
+              action={
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="inherit"
+                    onClick={handleSelfApproveTrainer}
+                    disabled={approvingSelf}
+                  >
+                    {approvingSelf ? 'Bezig…' : 'Direct trainerrechten'}
+                  </Button>
+                  <Button color="inherit" size="small" onClick={() => profile?.refreshProfile()}>
+                    Vernieuwen
+                  </Button>
+                </Box>
+              }
+            >
+              <strong>Je trainer-aanvraag wacht op goedkeuring.</strong> Geen beheerder? Klik op <strong>Direct trainerrechten</strong> om jezelf nu trainer te maken.
+            </Alert>
+          )}
+          {renderPage()}
+        </AppShell>
 
         {addOpen && (
           <AddPage
