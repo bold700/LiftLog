@@ -16,10 +16,17 @@ import {
   Select,
   MenuItem,
   Chip,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
 import EmailRoundedIcon from '@mui/icons-material/EmailRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
+import EditRoundedIcon from '@mui/icons-material/EditRounded';
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useProfile } from '../context/ProfileContext';
 import { useAuth } from '../context/AuthContext';
 import { getProfileByEmail, assignTrainerToSporter, updateProfile, getAllProfiles } from '../services/profileService';
@@ -44,6 +51,13 @@ export function BeheerPage() {
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState<ProfileRole>('sporter');
   const [creating, setCreating] = useState(false);
+
+  // Account bewerken (naam) + verwijderen
+  const [editTarget, setEditTarget] = useState<Profile | null>(null);
+  const [editName, setEditName] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     getPendingWorkoutRequests()
@@ -172,6 +186,45 @@ export function BeheerPage() {
     }
   }, [auth, newEmail, newPwd, newName, newRole, loadAllAccounts]);
 
+  const handleSaveEdit = useCallback(async () => {
+    if (!editTarget) return;
+    setSavingEdit(true);
+    setMessage(null);
+    try {
+      await updateProfile(editTarget.userId, { displayName: editName.trim() || null });
+      await loadAllAccounts();
+      setMessage({ type: 'success', text: 'Naam bijgewerkt.' });
+      setEditTarget(null);
+    } catch (e) {
+      setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Bewerken mislukt.' });
+    } finally {
+      setSavingEdit(false);
+    }
+  }, [editTarget, editName, loadAllAccounts]);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteTarget || !auth?.user) return;
+    setDeleting(true);
+    setMessage(null);
+    try {
+      const token = await auth.user.getIdToken();
+      const res = await fetch('/api/admin-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'delete', targetUid: deleteTarget.userId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Verwijderen mislukt.');
+      await loadAllAccounts();
+      setMessage({ type: 'success', text: 'Account definitief verwijderd.' });
+      setDeleteTarget(null);
+    } catch (e) {
+      setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Verwijderen mislukt.' });
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteTarget, auth, loadAllAccounts]);
+
   if (!profile?.isTrainer) {
     return (
       <PageLayout>
@@ -275,6 +328,29 @@ export function BeheerPage() {
                       {isAdmin && <MenuItem value="admin">Beheerder</MenuItem>}
                     </Select>
                   </FormControl>
+                  {isAdmin && (
+                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                      <IconButton
+                        size="small"
+                        aria-label="Naam bewerken"
+                        onClick={() => {
+                          setEditTarget(p);
+                          setEditName(p.displayName ?? '');
+                        }}
+                      >
+                        <EditRoundedIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        aria-label="Account verwijderen"
+                        color="error"
+                        disabled={p.userId === profile?.profile?.userId}
+                        onClick={() => setDeleteTarget(p)}
+                      >
+                        <DeleteOutlineRoundedIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  )}
                 </ListItem>
               ))}
             </List>
@@ -361,6 +437,44 @@ export function BeheerPage() {
           </Box>
         )}
       </ContentCard>
+
+      <Dialog open={!!editTarget} onClose={() => setEditTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Naam bewerken</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {editTarget?.email || editTarget?.userId}
+          </Typography>
+          <TextField
+            label="Naam"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            fullWidth
+            autoFocus
+            size="small"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditTarget(null)}>Annuleren</Button>
+          <Button variant="contained" onClick={handleSaveEdit} disabled={savingEdit}>
+            {savingEdit ? 'Bezig…' : 'Opslaan'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Account verwijderen</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            Weet je zeker dat je <strong>{deleteTarget?.displayName || deleteTarget?.email || deleteTarget?.userId}</strong> definitief wilt verwijderen? Dit verwijdert zowel het login-account als het profiel en kan niet ongedaan worden gemaakt.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)}>Annuleren</Button>
+          <Button variant="contained" color="error" onClick={handleConfirmDelete} disabled={deleting}>
+            {deleting ? 'Bezig…' : 'Definitief verwijderen'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </PageLayout>
   );
 }
