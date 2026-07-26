@@ -225,10 +225,10 @@ export function MetingenPage() {
           </p>
 
           {isTrainer && sporters.length > 0 && (
-            <div className="mb-4 max-w-xs space-y-1.5">
+            <div className="mb-4 space-y-1.5">
               <Label htmlFor="meting-target">Voor wie?</Label>
               <Select value={targetId || 'self'} onValueChange={(v) => setTargetId(v === 'self' ? '' : v)}>
-                <SelectTrigger id="meting-target">
+                <SelectTrigger id="meting-target" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -303,17 +303,17 @@ export function MetingenPage() {
           {/* Invoer */}
           <h2 className="mb-2 text-base font-semibold">{editingId ? 'Meting bewerken' : 'Nieuwe meting'}</h2>
           <div className="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <div className="space-y-1.5">
+            <div className="min-w-0 space-y-1.5">
               <Label htmlFor="meting-date">Datum</Label>
-              <Input id="meting-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              <Input id="meting-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full" />
             </div>
-            <div className="space-y-1.5">
+            <div className="min-w-0 space-y-1.5">
               <Label htmlFor="meting-weight">Gewicht (kg)</Label>
-              <Input id="meting-weight" type="number" step={0.1} min={0} value={weight} onChange={(e) => setWeight(e.target.value)} />
+              <Input id="meting-weight" type="number" step={0.1} min={0} value={weight} onChange={(e) => setWeight(e.target.value)} className="w-full" />
             </div>
-            <div className="space-y-1.5">
+            <div className="min-w-0 space-y-1.5">
               <Label htmlFor="meting-fat">Vet (%)</Label>
-              <Input id="meting-fat" type="number" step={0.1} min={0} value={bodyFat} onChange={(e) => setBodyFat(e.target.value)} />
+              <Input id="meting-fat" type="number" step={0.1} min={0} value={bodyFat} onChange={(e) => setBodyFat(e.target.value)} className="w-full" />
             </div>
           </div>
 
