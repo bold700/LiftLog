@@ -52,9 +52,13 @@ export function BeheerPage() {
   const [newRole, setNewRole] = useState<ProfileRole>('sporter');
   const [creating, setCreating] = useState(false);
 
-  // Account bewerken (naam) + verwijderen
+  // Profiel bewerken (naam, lengte, geboortedatum, geslacht, rusthartslag) + verwijderen
   const [editTarget, setEditTarget] = useState<Profile | null>(null);
   const [editName, setEditName] = useState('');
+  const [editHeight, setEditHeight] = useState('');
+  const [editBirth, setEditBirth] = useState('');
+  const [editGender, setEditGender] = useState<'man' | 'vrouw' | 'anders' | ''>('');
+  const [editHr, setEditHr] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -191,16 +195,23 @@ export function BeheerPage() {
     setSavingEdit(true);
     setMessage(null);
     try {
-      await updateProfile(editTarget.userId, { displayName: editName.trim() || null });
+      await updateProfile(editTarget.userId, {
+        displayName: editName.trim() || null,
+        heightCm: editHeight.trim() ? Number(editHeight) : null,
+        birthDate: editBirth || null,
+        gender: editGender || null,
+        restingHrBpm: editHr.trim() ? Number(editHr) : null,
+      });
       await loadAllAccounts();
-      setMessage({ type: 'success', text: 'Naam bijgewerkt.' });
+      await profile?.refreshProfile();
+      setMessage({ type: 'success', text: 'Profiel bijgewerkt.' });
       setEditTarget(null);
     } catch (e) {
       setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Bewerken mislukt.' });
     } finally {
       setSavingEdit(false);
     }
-  }, [editTarget, editName, loadAllAccounts]);
+  }, [editTarget, editName, editHeight, editBirth, editGender, editHr, loadAllAccounts, profile]);
 
   const handleConfirmDelete = useCallback(async () => {
     if (!deleteTarget || !auth?.user) return;
@@ -328,18 +339,22 @@ export function BeheerPage() {
                       {isAdmin && <MenuItem value="admin">Beheerder</MenuItem>}
                     </Select>
                   </FormControl>
-                  {isAdmin && (
-                    <Box sx={{ display: 'flex', gap: 0.5 }}>
-                      <IconButton
-                        size="small"
-                        aria-label="Naam bewerken"
-                        onClick={() => {
-                          setEditTarget(p);
-                          setEditName(p.displayName ?? '');
-                        }}
-                      >
-                        <EditRoundedIcon fontSize="small" />
-                      </IconButton>
+                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                    <IconButton
+                      size="small"
+                      aria-label="Profiel bewerken"
+                      onClick={() => {
+                        setEditTarget(p);
+                        setEditName(p.displayName ?? '');
+                        setEditHeight(p.heightCm != null ? String(p.heightCm) : '');
+                        setEditBirth(p.birthDate ?? '');
+                        setEditGender(p.gender ?? '');
+                        setEditHr(p.restingHrBpm != null ? String(p.restingHrBpm) : '');
+                      }}
+                    >
+                      <EditRoundedIcon fontSize="small" />
+                    </IconButton>
+                    {isAdmin && (
                       <IconButton
                         size="small"
                         aria-label="Account verwijderen"
@@ -349,8 +364,8 @@ export function BeheerPage() {
                       >
                         <DeleteOutlineRoundedIcon fontSize="small" />
                       </IconButton>
-                    </Box>
-                  )}
+                    )}
+                  </Box>
                 </ListItem>
               ))}
             </List>
@@ -439,19 +454,39 @@ export function BeheerPage() {
       </ContentCard>
 
       <Dialog open={!!editTarget} onClose={() => setEditTarget(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Naam bewerken</DialogTitle>
+        <DialogTitle>Profiel bewerken</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {editTarget?.email || editTarget?.userId}
           </Typography>
-          <TextField
-            label="Naam"
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-            fullWidth
-            autoFocus
-            size="small"
-          />
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 0.5 }}>
+            <TextField label="Naam" value={editName} onChange={(e) => setEditName(e.target.value)} fullWidth autoFocus size="small" />
+            <TextField
+              label="Geboortedatum"
+              type="date"
+              value={editBirth}
+              onChange={(e) => setEditBirth(e.target.value)}
+              fullWidth
+              size="small"
+              InputLabelProps={{ shrink: true }}
+              helperText="Nodig voor het berekenen van het vetpercentage uit huidplooien"
+            />
+            <FormControl size="small" fullWidth>
+              <Select
+                value={editGender || 'none'}
+                onChange={(e) => setEditGender(e.target.value === 'none' ? '' : (e.target.value as 'man' | 'vrouw' | 'anders'))}
+                displayEmpty
+                inputProps={{ 'aria-label': 'Geslacht' }}
+              >
+                <MenuItem value="none">Geslacht: niet opgegeven</MenuItem>
+                <MenuItem value="man">Man</MenuItem>
+                <MenuItem value="vrouw">Vrouw</MenuItem>
+                <MenuItem value="anders">Anders</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField label="Lengte (cm)" type="number" inputProps={{ min: 0 }} value={editHeight} onChange={(e) => setEditHeight(e.target.value)} fullWidth size="small" />
+            <TextField label="Rusthartslag (bpm)" type="number" inputProps={{ min: 0 }} value={editHr} onChange={(e) => setEditHr(e.target.value)} fullWidth size="small" />
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditTarget(null)}>Annuleren</Button>

@@ -112,6 +112,10 @@ export function MetingenPage() {
   const [saving, setSaving] = useState(false);
   const [goalOpen, setGoalOpen] = useState(false);
   const [goalInput, setGoalInput] = useState('');
+  // Trainer vult geboortedatum/geslacht van de gekozen sporter in als die ontbreken (anders wachten op de sporter).
+  const [fixBirth, setFixBirth] = useState('');
+  const [fixGender, setFixGender] = useState<'man' | 'vrouw' | 'anders' | ''>('');
+  const [savingFix, setSavingFix] = useState(false);
 
   const effectiveUserId = targetId || selfUid;
   const targetProfile = targetId ? sporters.find((s) => s.userId === targetId) ?? null : profileCtx?.profile ?? null;
@@ -188,6 +192,27 @@ export function MetingenPage() {
     else if (age < DW_MIN_AGE) formulaHint = `De formule is gevalideerd vanaf ${DW_MIN_AGE} jaar; vul het vetpercentage handmatig in.`;
     else formulaHint = 'Deze plooien geven geen bruikbaar percentage; controleer de waarden.';
   }
+
+  const profileIncomplete = !!targetProfile && (!targetProfile.birthDate || !targetProfile.gender);
+  const canFixProfile = isTrainer && !!targetId && profileIncomplete;
+
+  useEffect(() => {
+    setFixBirth(targetProfile?.birthDate ?? '');
+    setFixGender(targetProfile?.gender ?? '');
+  }, [targetProfile?.userId, targetProfile?.birthDate, targetProfile?.gender]);
+
+  const handleFixProfile = async () => {
+    if (!targetId) return;
+    setSavingFix(true);
+    try {
+      await updateProfile(targetId, { birthDate: fixBirth || null, gender: fixGender || null });
+      await profileCtx?.refreshProfile();
+    } catch {
+      /* ignore */
+    } finally {
+      setSavingFix(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!effectiveUserId) return;
@@ -459,6 +484,41 @@ export function MetingenPage() {
               </div>
             ))}
           </div>
+
+          {/* Profiel van de sporter aanvullen (alleen trainer, alleen als het ontbreekt) */}
+          {canFixProfile && (
+            <div className="mb-3 mt-3 rounded-xl border border-border p-3">
+              <div className="mb-1 text-sm font-medium">Profiel aanvullen</div>
+              <p className="mb-2 text-xs text-muted-foreground">
+                Voor het vetpercentage uit huidplooien zijn geboortedatum en geslacht van {targetProfile?.displayName?.trim() || 'deze sporter'} nodig. Je kunt ze hier direct invullen.
+              </p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="fix-birth">Geboortedatum</Label>
+                  <Input id="fix-birth" type="date" value={fixBirth} onChange={(e) => setFixBirth(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="fix-gender">Geslacht</Label>
+                  <Select value={fixGender || 'none'} onValueChange={(v) => setFixGender(v === 'none' ? '' : (v as typeof fixGender))}>
+                    <SelectTrigger id="fix-gender" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Niet opgegeven</SelectItem>
+                      <SelectItem value="man">Man</SelectItem>
+                      <SelectItem value="vrouw">Vrouw</SelectItem>
+                      <SelectItem value="anders">Anders</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end">
+                  <Button className="w-full" variant="secondary" onClick={handleFixProfile} disabled={savingFix || (!fixBirth && !fixGender)}>
+                    {savingFix ? 'Bezig…' : 'Profiel opslaan'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Huidplooien (mm) — optioneel; vier plooien geven het vetpercentage */}
           <div className="mb-1 mt-3 text-sm font-medium text-muted-foreground">Huidplooien (mm) — optioneel</div>
