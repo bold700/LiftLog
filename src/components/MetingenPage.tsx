@@ -463,7 +463,7 @@ export function MetingenPage() {
           )}
 
           {/* Huidige waarden */}
-          <div className="mb-4 flex flex-wrap justify-around gap-2 rounded-xl border border-border p-4 text-center">
+          <div className="mb-4 grid grid-cols-3 gap-x-2 gap-y-4 rounded-xl border border-border p-4 text-center sm:grid-cols-5">
             <div>
               <div className="text-lg font-bold">{latestWeight != null ? `${latestWeight} kg` : '—'}</div>
               <div className="text-xs text-muted-foreground">
@@ -484,7 +484,7 @@ export function MetingenPage() {
             </div>
             <div>
               <div className="text-lg font-bold">{latestBmi != null ? latestBmi : '—'}</div>
-              <div className="text-xs text-muted-foreground">{latestBmi != null ? 'BMI' : 'BMI (lengte in profiel)'}</div>
+              <div className="text-xs text-muted-foreground">BMI</div>
             </div>
             <div>
               <div className="text-lg font-bold">{latestSkin != null ? `${latestSkin} mm` : '—'}</div>

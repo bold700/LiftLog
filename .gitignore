@@ -56,3 +56,7 @@ ios/App/build
 *.xcuserdata
 *.xcuserstate
 
+
+# Lokale preview-harness (niet committen)
+preview-metingen.html
+src/dev/

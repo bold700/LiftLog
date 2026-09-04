@@ -27,6 +27,26 @@
   button:disabled {
     cursor: not-allowed;
   }
+  /* Idem voor fieldset/legend (RadioGroup "Ranglijst") en hr. */
+  fieldset {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+  }
+  legend {
+    padding: 0;
+  }
+  hr {
+    border: 0;
+    border-top: 1px solid hsl(var(--border));
+  }
+  /* Native inputs (o.a. type=date) erven zonder preflight het lettertype niet. MUI's InputBase zet dit zelf. */
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+  }
 
   :root {
     --background: 33 55% 89%;
