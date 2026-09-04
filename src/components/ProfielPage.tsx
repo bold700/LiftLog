@@ -3,19 +3,10 @@
  */
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { User, Mail, EyeOff, Camera, CheckCircle2, AlertCircle } from 'lucide-react';
+import { TextField, MenuItem, InputAdornment, RadioGroup, Radio, FormControlLabel } from '@mui/material';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -30,6 +21,8 @@ import { updateProfile } from '../services/profileService';
 import { uploadAvatar, deleteAvatar } from '../services/avatarService';
 import type { LeaderboardVisibility } from '../types';
 import { UserAvatar } from './UserAvatar';
+import { ageOnDate } from '../utils/bodyFat';
+import { heartRateZones } from '../utils/heartRate';
 
 export function ProfielPage() {
   const profile = useProfile();
@@ -191,6 +184,12 @@ export function ProfielPage() {
 
   const email = auth?.user?.email ?? p?.email ?? '';
 
+  // Hartslagzones live uit de formulierwaarden (leeftijd uit geboortedatum, rusthartslag), zodat je ze meteen ziet.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const ageNow = ageOnDate(birthDate || null, todayIso);
+  const restingNum = restingHr.trim() !== '' && Number.isFinite(Number(restingHr)) ? Number(restingHr) : null;
+  const hrZones = heartRateZones(ageNow, restingNum);
+
   return (
     <div className="animate-fade-in-up mx-auto w-full max-w-3xl pb-6">
       <Card>
@@ -242,19 +241,21 @@ export function ProfielPage() {
           )}
 
           <div className="flex w-full flex-col gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="profile-name">Profielnaam</Label>
-              <div className="relative">
-                <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="profile-name"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Bijv. Jan Jansen"
-                  className="pl-9"
-                />
-              </div>
-            </div>
+            <TextField
+              label="Profielnaam"
+              size="small"
+              fullWidth
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Bijv. Jan Jansen"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                  </InputAdornment>
+                ),
+              }}
+            />
 
             <div className="mt-1">
               <h2 className="text-sm font-semibold">Persoonlijke gegevens</h2>
@@ -263,46 +264,89 @@ export function ProfielPage() {
               </p>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="profile-height">Lengte (cm)</Label>
-                <Input id="profile-height" type="number" min={0} value={heightCm} onChange={(e) => setHeightCm(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="profile-birth">Geboortedatum</Label>
-                <Input id="profile-birth" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="profile-gender">Geslacht</Label>
-                <Select value={gender || 'none'} onValueChange={(v) => setGender(v === 'none' ? '' : (v as typeof gender))}>
-                  <SelectTrigger id="profile-gender">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Niet opgegeven</SelectItem>
-                    <SelectItem value="man">Man</SelectItem>
-                    <SelectItem value="vrouw">Vrouw</SelectItem>
-                    <SelectItem value="anders">Anders</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="profile-hr">Rusthartslag (bpm)</Label>
-                <Input id="profile-hr" type="number" min={0} value={restingHr} onChange={(e) => setRestingHr(e.target.value)} />
-              </div>
+              <TextField label="Lengte (cm)" type="number" size="small" fullWidth inputProps={{ min: 0, inputMode: 'numeric' }} value={heightCm} onChange={(e) => setHeightCm(e.target.value)} />
+              <TextField label="Geboortedatum" type="date" size="small" fullWidth value={birthDate} onChange={(e) => setBirthDate(e.target.value)} InputLabelProps={{ shrink: true }} />
+              <TextField select label="Geslacht" size="small" fullWidth value={gender || 'none'} onChange={(e) => setGender(e.target.value === 'none' ? '' : (e.target.value as typeof gender))}>
+                <MenuItem value="none">Niet opgegeven</MenuItem>
+                <MenuItem value="man">Man</MenuItem>
+                <MenuItem value="vrouw">Vrouw</MenuItem>
+                <MenuItem value="anders">Anders</MenuItem>
+              </TextField>
+              <TextField label="Rusthartslag (bpm)" type="number" size="small" fullWidth inputProps={{ min: 0, inputMode: 'numeric' }} value={restingHr} onChange={(e) => setRestingHr(e.target.value)} />
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="profile-email">E-mail</Label>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input id="profile-email" value={email} disabled className="pl-9" />
+            {/* Hartslagzones: uit leeftijd + rusthartslag, zelfde formule als de routekaart */}
+            <div className="rounded-xl border border-border p-4">
+              <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-sm font-semibold">Hartslagzones</h2>
+                {hrZones && (
+                  <span className="text-xs text-muted-foreground">
+                    max {hrZones.maxHr} bpm (220 − leeftijd){hrZones.restingHr != null ? ` · rust ${hrZones.restingHr} bpm` : ''}
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                {isPasswordAccount
-                  ? 'Klik op "E-mail wijzigen" om je e-mailadres te veranderen.'
-                  : 'E-mail wordt beheerd via je aanbieder (Google, etc.).'}
-              </p>
+              {hrZones ? (
+                <>
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    {hrZones.method === 'karvonen'
+                      ? 'Berekend met de hartslagreserve (Karvonen): rust + (max − rust) × percentage.'
+                      : 'Berekend als percentage van de maximale hartslag. Vul je rusthartslag in voor zones op maat (Karvonen).'}
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs text-muted-foreground">
+                          <th className="py-1 pr-2 font-medium">Zone</th>
+                          <th className="py-1 pr-2 font-medium">bpm</th>
+                          <th className="py-1 font-medium">Waarvoor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {hrZones.zones.map((z) => (
+                          <tr key={z.zone} className="border-t border-border">
+                            <td className="whitespace-nowrap py-1.5 pr-3 align-top">
+                              <span className="font-medium">Z{z.zone}</span> <span className="text-muted-foreground">{z.name}</span>
+                              <div className="text-xs text-muted-foreground">
+                                {Math.round(z.low * 100)}–{Math.round(z.high * 100)}%
+                              </div>
+                            </td>
+                            <td className="whitespace-nowrap py-1.5 pr-2 align-top font-medium tabular-nums">
+                              {z.lowBpm}–{z.highBpm}
+                            </td>
+                            <td className="py-1.5 align-top text-xs text-muted-foreground">{z.purpose}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    De 220-formule wijkt per persoon tot zo'n 10 bpm af. Een gemeten maximum uit een test is nauwkeuriger.
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">Vul je geboortedatum in om je hartslagzones te zien. Met rusthartslag worden ze op maat berekend.</p>
+              )}
             </div>
+
+            <TextField
+              label="E-mail"
+              size="small"
+              fullWidth
+              value={email}
+              disabled
+              helperText={
+                isPasswordAccount
+                  ? 'Klik op "E-mail wijzigen" om je e-mailadres te veranderen.'
+                  : 'E-mail wordt beheerd via je aanbieder (Google, etc.).'
+              }
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                  </InputAdornment>
+                ),
+              }}
+            />
             {isPasswordAccount && (
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" onClick={() => setEmailDialogOpen(true)}>
@@ -319,26 +363,19 @@ export function ProfielPage() {
               <p className="mb-3 text-sm text-muted-foreground">
                 Standaard tonen we je <strong>profielnaam</strong> op de ranglijst. Je kunt anoniem gaan of jezelf uitzetten.
               </p>
-              <RadioGroup
-                value={leaderboardVisibility}
-                onValueChange={(v) => setLeaderboardVisibility(v as LeaderboardVisibility)}
-                className="gap-3"
-              >
-                <div className="flex items-center gap-2.5">
-                  <RadioGroupItem value="named" id="lb-named" />
-                  <Label htmlFor="lb-named" className="font-normal">Met mijn profielnaam op de ranglijst (standaard)</Label>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <RadioGroupItem value="anonymous" id="lb-anon" />
-                  <Label htmlFor="lb-anon" className="font-normal">Anoniem op de ranglijst</Label>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <RadioGroupItem value="hidden" id="lb-hidden" />
-                  <Label htmlFor="lb-hidden" className="flex items-center gap-1.5 font-normal">
-                    <EyeOff className="h-4 w-4 text-muted-foreground" />
-                    Niet op de ranglijst
-                  </Label>
-                </div>
+              <RadioGroup value={leaderboardVisibility} onChange={(e) => setLeaderboardVisibility(e.target.value as LeaderboardVisibility)}>
+                <FormControlLabel value="named" control={<Radio size="small" />} label="Met mijn profielnaam op de ranglijst (standaard)" />
+                <FormControlLabel value="anonymous" control={<Radio size="small" />} label="Anoniem op de ranglijst" />
+                <FormControlLabel
+                  value="hidden"
+                  control={<Radio size="small" />}
+                  label={
+                    <span className="flex items-center gap-1.5">
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                      Niet op de ranglijst
+                    </span>
+                  }
+                />
               </RadioGroup>
             </fieldset>
 
@@ -358,14 +395,8 @@ export function ProfielPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="new-email">Nieuw e-mailadres</Label>
-              <Input id="new-email" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} autoComplete="email" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="email-current-pwd">Huidig wachtwoord</Label>
-              <Input id="email-current-pwd" type="password" value={currentPwd} onChange={(e) => setCurrentPwd(e.target.value)} autoComplete="current-password" />
-            </div>
+            <TextField label="Nieuw e-mailadres" type="email" size="small" fullWidth value={newEmail} onChange={(e) => setNewEmail(e.target.value)} autoComplete="email" autoFocus />
+            <TextField label="Huidig wachtwoord" type="password" size="small" fullWidth value={currentPwd} onChange={(e) => setCurrentPwd(e.target.value)} autoComplete="current-password" />
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setEmailDialogOpen(false)}>Annuleren</Button>
@@ -382,15 +413,8 @@ export function ProfielPage() {
             <DialogTitle>Wachtwoord wijzigen</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-4 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="pwd-current">Huidig wachtwoord</Label>
-              <Input id="pwd-current" type="password" value={pwdCurrent} onChange={(e) => setPwdCurrent(e.target.value)} autoComplete="current-password" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="pwd-new">Nieuw wachtwoord</Label>
-              <Input id="pwd-new" type="password" value={pwdNew} onChange={(e) => setPwdNew(e.target.value)} autoComplete="new-password" />
-              <p className="text-xs text-muted-foreground">Minstens 6 tekens.</p>
-            </div>
+            <TextField label="Huidig wachtwoord" type="password" size="small" fullWidth value={pwdCurrent} onChange={(e) => setPwdCurrent(e.target.value)} autoComplete="current-password" autoFocus />
+            <TextField label="Nieuw wachtwoord" type="password" size="small" fullWidth value={pwdNew} onChange={(e) => setPwdNew(e.target.value)} autoComplete="new-password" helperText="Minstens 6 tekens." />
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setPwdDialogOpen(false)}>Annuleren</Button>
