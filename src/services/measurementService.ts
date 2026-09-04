@@ -39,6 +39,10 @@ export interface Measurement {
   skinfoldAbdomenMm: number | null;
   /** Hoe `bodyFatPct` tot stand kwam: handmatig ingevuld (bijv. bodyscan) of berekend uit de plooien. */
   bodyFatMethod: BodyFatMethod | null;
+  /** Voortgangsfoto's (download-URL's uit Storage), optioneel. */
+  photoFrontUrl: string | null;
+  photoSideUrl: string | null;
+  photoBackUrl: string | null;
   note: string;
   createdAt: string;
 }
@@ -90,6 +94,15 @@ function newId(): string {
   return `meas_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** Nieuw meting-id vooraf (nodig om foto's te uploaden vóór het document bestaat). */
+export function newMeasurementId(): string {
+  return newId();
+}
+
+function str(v: unknown): string | null {
+  return typeof v === 'string' && v.trim() ? v : null;
+}
+
 function num(v: unknown): number | null {
   if (v == null || v === '') return null;
   const n = typeof v === 'number' ? v : Number(v);
@@ -119,6 +132,9 @@ function toMeasurement(data: Record<string, unknown>, id: string): Measurement {
     skinfoldSuprailiacMm: num(data.skinfoldSuprailiacMm),
     skinfoldAbdomenMm: num(data.skinfoldAbdomenMm),
     bodyFatMethod: data.bodyFatMethod === 'manual' || data.bodyFatMethod === 'durnin-womersley' ? data.bodyFatMethod : null,
+    photoFrontUrl: str(data.photoFrontUrl),
+    photoSideUrl: str(data.photoSideUrl),
+    photoBackUrl: str(data.photoBackUrl),
     note: String(data.note ?? ''),
     createdAt: typeof data.createdAt === 'string' ? data.createdAt : new Date().toISOString(),
   };

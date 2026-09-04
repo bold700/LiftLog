@@ -1,0 +1,45 @@
+rules_version = '2';
+
+// Firebase Storage-regels voor LiftLog (project vanas-d1a25).
+// Let op: deze worden NIET door de Vercel-push gedeployed. Plakken in
+// Firebase Console → Storage → Rules, of: npm run deploy:storage (na firebase login).
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myRole() {
+      return firestore.get(/databases/(default)/documents/profiles/$(request.auth.uid)).data.role;
+    }
+
+    function isTrainerOrAdmin() {
+      return signedIn() && (myRole() == 'trainer' || myRole() == 'admin');
+    }
+
+    function isImageUnder(maxBytes) {
+      return request.resource.contentType.matches('image/.*') && request.resource.size < maxBytes;
+    }
+
+    // Oefening-GIF's: eigen ExerciseDB-dataset, publiek leesbaar (URL's met ?alt=media zonder token).
+    match /exercises/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Profielfoto's: iedereen die is ingelogd mag ze zien (ranglijst), alleen de eigenaar schrijft.
+    match /avatars/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == uid && isImageUnder(5 * 1024 * 1024);
+    }
+
+    // Voortgangsfoto's bij metingen: alleen de sporter zelf en trainers/beheerders.
+    match /progress/{uid}/{measurementId}/{view} {
+      allow read: if signedIn() && (request.auth.uid == uid || isTrainerOrAdmin());
+      allow write: if signedIn()
+        && (request.auth.uid == uid || isTrainerOrAdmin())
+        && (request.resource == null || isImageUnder(5 * 1024 * 1024));
+    }
+  }
+}
