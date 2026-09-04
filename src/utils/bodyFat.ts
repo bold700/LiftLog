@@ -96,3 +96,16 @@ export function bodyFatDurninWomersley(input: DurninWomersleyInput): BodyFatResu
   if (!Number.isFinite(pct) || pct <= 0 || pct >= 70) return null;
   return { pct: Math.round(pct * 10) / 10, density, sumMm, method: 'durnin-womersley' };
 }
+
+/** Vetvrije massa in kg: alles wat geen vet is (spieren, bot, water, organen). Afgerond op 0,1 kg. */
+export function fatFreeMassKg(weightKg: number, fatPct: number): number | null {
+  if (!Number.isFinite(weightKg) || weightKg <= 0 || !Number.isFinite(fatPct) || fatPct < 0 || fatPct >= 100) return null;
+  return Math.round(weightKg * (1 - fatPct / 100) * 10) / 10;
+}
+
+/** BMI = gewicht / lengte². Afgerond op 0,1. Grove maat; bij gespierde sporters overschat hij vet. */
+export function bmi(weightKg: number, heightCm: number | null | undefined): number | null {
+  if (!Number.isFinite(weightKg) || weightKg <= 0 || heightCm == null || !Number.isFinite(heightCm) || heightCm <= 0) return null;
+  const m = heightCm / 100;
+  return Math.round((weightKg / (m * m)) * 10) / 10;
+}

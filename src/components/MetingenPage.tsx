@@ -44,7 +44,7 @@ import {
   type PhotoView,
   type PhotoUrlKey,
 } from '../services/progressPhotoService';
-import { ageOnDate, bodyFatDurninWomersley, toSkinfoldSex, DW_MIN_AGE } from '../utils/bodyFat';
+import { ageOnDate, bodyFatDurninWomersley, toSkinfoldSex, DW_MIN_AGE, fatFreeMassKg, bmi } from '../utils/bodyFat';
 
 const EMPTY_CIRC = Object.fromEntries(CIRCUMFERENCE_FIELDS.map((f) => [f.key, ''])) as Record<CircumferenceKey, string>;
 const EMPTY_SKIN = Object.fromEntries(SKINFOLD_FIELDS.map((f) => [f.key, ''])) as Record<SkinfoldKey, string>;
@@ -231,6 +231,9 @@ export function MetingenPage() {
   const fatIsComputed = computedFat != null;
   const bodyFatValue = fatIsComputed ? String(computedFat.pct) : bodyFat;
   const currentSkinSum = skinfoldSum(skinNumbers);
+  const weightNum = weight.trim() !== '' && Number.isFinite(Number(weight)) ? Number(weight) : null;
+  const formFfm = weightNum != null && computedFat ? fatFreeMassKg(weightNum, computedFat.pct) : null;
+  const formBmi = weightNum != null ? bmi(weightNum, targetProfile?.heightCm) : null;
   const circFilled = CIRCUMFERENCE_FIELDS.filter((f) => circ[f.key].trim() !== '').length;
   const skinFilled = SKINFOLD_FIELDS.filter((f) => skin[f.key].trim() !== '').length;
   let formulaHint: string | null = null;
@@ -385,6 +388,13 @@ export function MetingenPage() {
     [items]
   );
   const latestSkin = skinPoints.length ? skinPoints[skinPoints.length - 1].value : null;
+  // Vetvrije massa uit de laatste meting die gewicht én vetpercentage heeft; BMI uit laatste gewicht + lengte (profiel).
+  const latestWithBoth = [...items].reverse().find((m) => m.weightKg != null && m.bodyFatPct != null) ?? null;
+  const latestFfm = latestWithBoth ? fatFreeMassKg(latestWithBoth.weightKg as number, latestWithBoth.bodyFatPct as number) : null;
+  const firstWithBoth = items.find((m) => m.weightKg != null && m.bodyFatPct != null) ?? null;
+  const firstFfm = firstWithBoth ? fatFreeMassKg(firstWithBoth.weightKg as number, firstWithBoth.bodyFatPct as number) : null;
+  const ffmDelta = latestFfm != null && firstFfm != null && latestWithBoth !== firstWithBoth ? Math.round((latestFfm - firstFfm) * 10) / 10 : null;
+  const latestBmi = latestWeight != null ? bmi(latestWeight, targetProfile?.heightCm) : null;
   const firstSkin = skinPoints.length ? skinPoints[0].value : null;
   const skinDelta = latestSkin != null && firstSkin != null ? Math.round((latestSkin - firstSkin) * 10) / 10 : null;
 
@@ -465,6 +475,16 @@ export function MetingenPage() {
               <div className="text-xs text-muted-foreground">
                 vetpercentage{latestBf?.bodyFatMethod === 'durnin-womersley' ? ' (berekend)' : ''}
               </div>
+            </div>
+            <div>
+              <div className="text-lg font-bold">{latestFfm != null ? `${latestFfm} kg` : '—'}</div>
+              <div className="text-xs text-muted-foreground">
+                vetvrije massa{ffmDelta != null ? ` (${ffmDelta > 0 ? '+' : ''}${ffmDelta} kg)` : ''}
+              </div>
+            </div>
+            <div>
+              <div className="text-lg font-bold">{latestBmi != null ? latestBmi : '—'}</div>
+              <div className="text-xs text-muted-foreground">{latestBmi != null ? 'BMI' : 'BMI (lengte in profiel)'}</div>
             </div>
             <div>
               <div className="text-lg font-bold">{latestSkin != null ? `${latestSkin} mm` : '—'}</div>
@@ -562,7 +582,10 @@ export function MetingenPage() {
             </div>
             <div className="min-w-0 space-y-1.5">
               <Label htmlFor="meting-weight">Gewicht (kg)</Label>
-              <Input id="meting-weight" type="number" step={0.1} min={0} value={weight} onChange={(e) => setWeight(e.target.value)} className="w-full" />
+              <Input id="meting-weight" type="number" step={0.1} min={0} value={weight} onChange={(e) => setWeight(e.target.value)} className="w-full" aria-describedby="meting-weight-hint" />
+              <div id="meting-weight-hint" className="text-xs text-muted-foreground">
+                {formBmi != null ? `BMI ${formBmi}` : weightNum != null && !targetProfile?.heightCm ? 'Vul lengte in bij Profiel voor BMI' : '\u00a0'}
+              </div>
             </div>
           </div>
 
@@ -669,6 +692,14 @@ export function MetingenPage() {
                     <>
                       <span className="font-medium">Vetpercentage: {computedFat.pct}%</span>
                       <span className="text-muted-foreground"> · som {computedFat.sumMm} mm · berekend</span>
+                      {formFfm != null ? (
+                        <div className="mt-1">
+                          <span className="font-medium">Vetvrije massa: {formFfm} kg</span>
+                          <span className="text-muted-foreground"> · gewicht min vet</span>
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-xs text-muted-foreground">Vul gewicht in voor de vetvrije massa.</div>
+                      )}
                     </>
                   ) : formulaHint ? (
                     <span className="text-muted-foreground">{formulaHint}</span>
@@ -787,8 +818,11 @@ export function MetingenPage() {
                 const photoCount = PHOTO_VIEWS.filter((v) => m[v.key] != null).length;
                 const photoSummary = photoCount > 0 ? `${photoCount} foto${photoCount === 1 ? '' : "'s"}` : null;
                 const secondary = [circSummary || null, skinSummary, photoSummary, m.note || null].filter(Boolean).join(' — ');
+                const ffm = m.weightKg != null && m.bodyFatPct != null ? fatFreeMassKg(m.weightKg, m.bodyFatPct) : null;
                 const fatLabel =
-                  m.bodyFatPct != null ? `${m.bodyFatPct}%${m.bodyFatMethod === 'durnin-womersley' ? ' (berekend)' : ''}` : '';
+                  m.bodyFatPct != null
+                    ? `${m.bodyFatPct}%${m.bodyFatMethod === 'durnin-womersley' ? ' (berekend)' : ''}${ffm != null ? ` · VVM ${ffm} kg` : ''}`
+                    : '';
                 return (
                   <li key={m.id} className="flex items-start justify-between gap-3 py-2.5">
                     <div className="min-w-0">
