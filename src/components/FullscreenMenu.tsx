@@ -14,6 +14,7 @@ import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import FitnessCenterRoundedIcon from '@mui/icons-material/FitnessCenterRounded';
+import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
 import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../context/ProfileContext';
 
@@ -29,14 +30,17 @@ export interface FullscreenMenuProps {
   onNavigateToTab: (tabIndex: number) => void;
   /** Tab-index voor Beheer (wordt alleen getoond als profiel trainer of admin). */
   beheerTabIndex: number;
+  /** Tab-index voor Profielen (alle accounts inzien en bijwerken; alleen trainer of admin). */
+  profielenTabIndex?: number;
 }
 
-export const FullscreenMenu = ({ onClose, navItems, onNavigateToTab, beheerTabIndex }: FullscreenMenuProps) => {
+export const FullscreenMenu = ({ onClose, navItems, onNavigateToTab, beheerTabIndex, profielenTabIndex }: FullscreenMenuProps) => {
   const auth = useAuth();
   const profile = useProfile();
   const isTrainer = profile?.isTrainer ?? false;
   const menuItems: FullscreenMenuNavItem[] = [
     ...navItems,
+    ...(isTrainer && profielenTabIndex != null ? [{ label: 'Profielen', tabIndex: profielenTabIndex, icon: <GroupRoundedIcon fontSize="small" /> }] : []),
     ...(isTrainer ? [{ label: 'Beheer', tabIndex: beheerTabIndex, icon: <FitnessCenterRoundedIcon fontSize="small" /> }] : []),
   ];
 

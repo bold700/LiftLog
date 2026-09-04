@@ -16,6 +16,7 @@ import { InzichtenPage } from './components/InzichtenPage';
 import { AddPage } from './components/AddPage';
 import { SchemasPage } from './components/SchemasPage';
 import { BeheerPage } from './components/BeheerPage';
+import { ProfielenPage } from './components/ProfielenPage';
 import { ProfielPage } from './components/ProfielPage';
 import { NutritionPage } from './components/NutritionPage';
 import { MetingenPage } from './components/MetingenPage';
@@ -38,6 +39,7 @@ const TAB_PROFIEL = 3;
 const TAB_BEHEER = 4;
 const TAB_VOEDING = 5;
 const TAB_METINGEN = 6;
+const TAB_PROFIELEN = 7;
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState(TAB_INZICHTEN);
@@ -148,6 +150,7 @@ function AppContent() {
             ]}
             onNavigateToTab={setActiveTab}
             beheerTabIndex={TAB_BEHEER}
+            profielenTabIndex={TAB_PROFIELEN}
           />
         );
       case TAB_INZICHTEN:
@@ -163,6 +166,8 @@ function AppContent() {
         return <SchemasPage />;
       case TAB_BEHEER:
         return <BeheerPage />;
+      case TAB_PROFIELEN:
+        return <ProfielenPage />;
       case TAB_PROFIEL:
         return <ProfielPage />;
       case TAB_VOEDING:
