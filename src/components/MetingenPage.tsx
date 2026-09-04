@@ -1,18 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pencil, Trash2, Loader2, Camera, X } from 'lucide-react';
+import { TextField, MenuItem, Accordion, AccordionSummary, AccordionDetails, Typography } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -58,6 +50,21 @@ interface PhotoSlot {
 }
 const EMPTY_PHOTO: PhotoSlot = { existingUrl: null, file: null, previewUrl: null, remove: false };
 const EMPTY_PHOTOS = Object.fromEntries(PHOTO_VIEWS.map((v) => [v.view, EMPTY_PHOTO])) as Record<PhotoView, PhotoSlot>;
+
+/** Zelfde sectie-look als de Formule 7-routekaart in het workout-scherm. */
+const ACCORDION_SX = {
+  margin: 0,
+  p: 1.5,
+  borderRadius: 2,
+  border: '1px solid rgba(0,0,0,0.08)',
+  backgroundColor: 'rgba(0,0,0,0.02)',
+  '&:before': { display: 'none' },
+  boxShadow: 'none',
+  '& .MuiAccordionSummary-root': { py: 0.5, minHeight: 44, px: 0 },
+  '& .MuiAccordionSummary-content': { my: 0.75, minWidth: 0 },
+} as const;
+
+type SectionKey = 'circ' | 'skin' | 'photos';
 
 function todayIso(): string {
   const d = new Date();
@@ -126,7 +133,8 @@ export function MetingenPage() {
   /** Handmatig/extern vetpercentage van een bestaand record (bijv. bodyscan). Alleen bewaard bij bewerken, niet meer invoerbaar. */
   const [bodyFat, setBodyFat] = useState('');
   const [bodyFatMethodStored, setBodyFatMethodStored] = useState<BodyFatMethod | null>(null);
-  const [openSections, setOpenSections] = useState<string[]>([]);
+  const [openSections, setOpenSections] = useState<SectionKey[]>([]);
+  const toggleSection = (k: SectionKey) => setOpenSections((o) => (o.includes(k) ? o.filter((x) => x !== k) : [...o, k]));
   const [photos, setPhotos] = useState<Record<PhotoView, PhotoSlot>>(EMPTY_PHOTOS);
   const photoInputs = useRef<Record<PhotoView, HTMLInputElement | null>>({ front: null, side: null, back: null });
   const [note, setNote] = useState('');
@@ -344,7 +352,7 @@ export function MetingenPage() {
         PHOTO_VIEWS.map((v) => [v.view, { existingUrl: m[v.key], file: null, previewUrl: null, remove: false }])
       ) as Record<PhotoView, PhotoSlot>;
     });
-    const open: string[] = [];
+    const open: SectionKey[] = [];
     if (CIRCUMFERENCE_FIELDS.some((f) => m[f.key] != null)) open.push('circ');
     if (SKINFOLD_FIELDS.some((f) => m[f.key] != null)) open.push('skin');
     if (PHOTO_VIEWS.some((v) => m[v.key] != null)) open.push('photos');
@@ -444,22 +452,22 @@ export function MetingenPage() {
           </p>
 
           {isTrainer && sporters.length > 0 && (
-            <div className="mb-4 space-y-1.5">
-              <Label htmlFor="meting-target">Voor wie?</Label>
-              <Select value={targetId || 'self'} onValueChange={(v) => setTargetId(v === 'self' ? '' : v)}>
-                <SelectTrigger id="meting-target" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="self">Mijzelf</SelectItem>
-                  {sporters.map((s) => (
-                    <SelectItem key={s.userId} value={s.userId}>
-                      {s.displayName?.trim() || s.email || s.userId}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Voor wie?"
+              value={targetId || 'self'}
+              onChange={(e) => setTargetId(e.target.value === 'self' ? '' : e.target.value)}
+              sx={{ mb: 2 }}
+            >
+              <MenuItem value="self">Mijzelf</MenuItem>
+              {sporters.map((s) => (
+                <MenuItem key={s.userId} value={s.userId}>
+                  {s.displayName?.trim() || s.email || s.userId}
+                </MenuItem>
+              ))}
+            </TextField>
           )}
 
           {/* Huidige waarden */}
@@ -575,119 +583,112 @@ export function MetingenPage() {
 
           {/* Invoer */}
           <h2 className="mb-2 text-base font-semibold">{editingId ? 'Meting bewerken' : 'Nieuwe meting'}</h2>
-          <div className="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div className="min-w-0 space-y-1.5">
-              <Label htmlFor="meting-date">Datum</Label>
-              <Input id="meting-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full" />
-            </div>
-            <div className="min-w-0 space-y-1.5">
-              <Label htmlFor="meting-weight">Gewicht (kg)</Label>
-              <Input id="meting-weight" type="number" step={0.1} min={0} value={weight} onChange={(e) => setWeight(e.target.value)} className="w-full" aria-describedby="meting-weight-hint" />
-              <div id="meting-weight-hint" className="text-xs text-muted-foreground">
-                {formBmi != null ? `BMI ${formBmi}` : weightNum != null && !targetProfile?.heightCm ? 'Vul lengte in bij Profiel voor BMI' : '\u00a0'}
-              </div>
-            </div>
+          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <TextField
+              label="Datum"
+              type="date"
+              size="small"
+              fullWidth
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Gewicht (kg)"
+              type="number"
+              size="small"
+              fullWidth
+              inputProps={{ step: 0.1, min: 0, inputMode: 'decimal' }}
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+              helperText={formBmi != null ? `BMI ${formBmi}` : weightNum != null && !targetProfile?.heightCm ? 'Vul lengte in bij Profiel voor BMI' : ' '}
+            />
           </div>
 
           {/* Profiel van de sporter aanvullen (alleen trainer, alleen als het ontbreekt) */}
           {canFixProfile && (
             <div className="mb-3 rounded-xl border border-border p-3">
               <div className="mb-1 text-sm font-medium">Profiel aanvullen</div>
-              <p className="mb-2 text-xs text-muted-foreground">
+              <p className="mb-3 text-xs text-muted-foreground">
                 Voor het vetpercentage uit huidplooien zijn geboortedatum en geslacht van {targetProfile?.displayName?.trim() || 'deze sporter'} nodig. Je kunt ze hier direct invullen.
               </p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="fix-birth">Geboortedatum</Label>
-                  <Input id="fix-birth" type="date" value={fixBirth} onChange={(e) => setFixBirth(e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="fix-gender">Geslacht</Label>
-                  <Select value={fixGender || 'none'} onValueChange={(v) => setFixGender(v === 'none' ? '' : (v as typeof fixGender))}>
-                    <SelectTrigger id="fix-gender" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Niet opgegeven</SelectItem>
-                      <SelectItem value="man">Man</SelectItem>
-                      <SelectItem value="vrouw">Vrouw</SelectItem>
-                      <SelectItem value="anders">Anders</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-end">
-                  <Button className="w-full" variant="secondary" onClick={handleFixProfile} disabled={savingFix || (!fixBirth && !fixGender)}>
-                    {savingFix ? 'Bezig…' : 'Profiel opslaan'}
-                  </Button>
-                </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <TextField label="Geboortedatum" type="date" size="small" fullWidth value={fixBirth} onChange={(e) => setFixBirth(e.target.value)} InputLabelProps={{ shrink: true }} />
+                <TextField select label="Geslacht" size="small" fullWidth value={fixGender || 'none'} onChange={(e) => setFixGender(e.target.value === 'none' ? '' : (e.target.value as typeof fixGender))}>
+                  <MenuItem value="none">Niet opgegeven</MenuItem>
+                  <MenuItem value="man">Man</MenuItem>
+                  <MenuItem value="vrouw">Vrouw</MenuItem>
+                  <MenuItem value="anders">Anders</MenuItem>
+                </TextField>
+                <Button className="h-10 w-full" variant="secondary" onClick={handleFixProfile} disabled={savingFix || (!fixBirth && !fixGender)}>
+                  {savingFix ? 'Bezig…' : 'Profiel opslaan'}
+                </Button>
               </div>
             </div>
           )}
 
-          {/* Omtrekken en huidplooien ingeklapt: optioneel, en samen 13 velden */}
-          <Accordion type="multiple" value={openSections} onValueChange={setOpenSections} className="mb-3 rounded-xl border border-border px-3">
-            <AccordionItem value="circ">
-              <AccordionTrigger className="py-3 hover:no-underline">
-                <span className="flex flex-1 items-center justify-between gap-2 pr-2">
-                  <span>Omtrekken (cm)</span>
-                  <span className="text-xs font-normal text-muted-foreground">{circFilled > 0 ? `${circFilled} ingevuld` : 'optioneel'}</span>
-                </span>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="flex flex-col gap-2">
+          {/* Omtrekken, huidplooien en foto's ingeklapt: optioneel, samen 16 velden. Zelfde secties als de routekaart. */}
+          <div className="mb-3 flex flex-col gap-3">
+            <Accordion disableGutters expanded={openSections.includes('circ')} onChange={() => toggleSection('circ')} sx={ACCORDION_SX}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <div className="flex min-w-0 flex-1 items-center justify-between gap-2 pr-2">
+                  <Typography variant="subtitle1" fontWeight={600}>
+                    Omtrekken (cm)
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {circFilled > 0 ? `${circFilled} ingevuld` : 'optioneel'}
+                  </Typography>
+                </div>
+              </AccordionSummary>
+              <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {CIRCUMFERENCE_FIELDS.map((f) => (
-                    <div key={f.key} className="space-y-1.5">
-                      <Label htmlFor={`circ-${f.key}`}>{f.label}</Label>
-                      <Input
-                        id={`circ-${f.key}`}
-                        type="number"
-                        step={0.5}
-                        min={0}
-                        inputMode="decimal"
-                        value={circ[f.key]}
-                        onChange={(e) => setCirc((c) => ({ ...c, [f.key]: e.target.value }))}
-                      />
-                    </div>
+                    <TextField
+                      key={f.key}
+                      label={f.label}
+                      type="number"
+                      size="small"
+                      fullWidth
+                      inputProps={{ step: 0.5, min: 0, inputMode: 'decimal' }}
+                      value={circ[f.key]}
+                      onChange={(e) => setCirc((c) => ({ ...c, [f.key]: e.target.value }))}
+                    />
                   ))}
                 </div>
-              </AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="skin">
-              <AccordionTrigger className="py-3 hover:no-underline">
-                <span className="flex flex-1 items-center justify-between gap-2 pr-2">
-                  <span>Huidplooien (mm)</span>
-                  <span className="text-xs font-normal text-muted-foreground">
-                    {currentSkinSum != null
-                      ? `som ${currentSkinSum} mm${computedFat ? ` · ${computedFat.pct}%` : ''}`
-                      : 'optioneel'}
-                  </span>
-                </span>
-              </AccordionTrigger>
-              <AccordionContent>
-                <p className="mb-2 text-xs text-muted-foreground">
+              </AccordionDetails>
+            </Accordion>
+
+            <Accordion disableGutters expanded={openSections.includes('skin')} onChange={() => toggleSection('skin')} sx={ACCORDION_SX}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <div className="flex min-w-0 flex-1 items-center justify-between gap-2 pr-2">
+                  <Typography variant="subtitle1" fontWeight={600}>
+                    Huidplooien (mm)
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {currentSkinSum != null ? `som ${currentSkinSum} mm${computedFat ? ` · ${computedFat.pct}%` : ''}` : 'optioneel'}
+                  </Typography>
+                </div>
+              </AccordionSummary>
+              <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
+                <p className="mb-3 text-xs text-muted-foreground">
                   Meet rechts, met dezelfde caliper en op hetzelfde moment van de dag. Biceps, triceps, rug en heup samen geven het vetpercentage (Durnin &amp; Womersley); buik telt alleen mee in de som.
                 </p>
-                <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {SKINFOLD_FIELDS.map((f) => (
-                    <div key={f.key} className="space-y-1.5">
-                      <Label htmlFor={`skin-${f.key}`}>{f.label}</Label>
-                      <Input
-                        id={`skin-${f.key}`}
-                        type="number"
-                        step={0.5}
-                        min={0}
-                        inputMode="decimal"
-                        value={skin[f.key]}
-                        onChange={(e) => setSkin((s) => ({ ...s, [f.key]: e.target.value }))}
-                        aria-describedby={`skin-${f.key}-hint`}
-                      />
-                      <div id={`skin-${f.key}-hint`} className="text-xs text-muted-foreground">
-                        {f.hint}
-                      </div>
-                    </div>
+                    <TextField
+                      key={f.key}
+                      label={f.label}
+                      type="number"
+                      size="small"
+                      fullWidth
+                      inputProps={{ step: 0.5, min: 0, inputMode: 'decimal' }}
+                      value={skin[f.key]}
+                      onChange={(e) => setSkin((s) => ({ ...s, [f.key]: e.target.value }))}
+                      helperText={f.hint}
+                    />
                   ))}
                 </div>
-                <div className="mt-3 rounded-lg bg-muted p-3 text-sm" aria-live="polite">
+                <div className="mt-2 rounded-lg bg-muted p-3 text-sm" aria-live="polite">
                   {computedFat ? (
                     <>
                       <span className="font-medium">Vetpercentage: {computedFat.pct}%</span>
@@ -712,22 +713,25 @@ export function MetingenPage() {
                     <div className="mt-1 text-xs text-muted-foreground">Opgeslagen vetpercentage van deze meting: {bodyFat}% (blijft bewaard).</div>
                   )}
                 </div>
-              </AccordionContent>
-            </AccordionItem>
-            <AccordionItem value="photos" className="border-b-0">
-              <AccordionTrigger className="py-3 hover:no-underline">
-                <span className="flex flex-1 items-center justify-between gap-2 pr-2">
-                  <span>Foto's</span>
-                  <span className="text-xs font-normal text-muted-foreground">
+              </AccordionDetails>
+            </Accordion>
+
+            <Accordion disableGutters expanded={openSections.includes('photos')} onChange={() => toggleSection('photos')} sx={ACCORDION_SX}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <div className="flex min-w-0 flex-1 items-center justify-between gap-2 pr-2">
+                  <Typography variant="subtitle1" fontWeight={600}>
+                    Foto's
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
                     {(() => {
                       const n = PHOTO_VIEWS.filter((v) => photos[v.view].file || (photos[v.view].existingUrl && !photos[v.view].remove)).length;
                       return n > 0 ? `${n} van 3` : 'optioneel';
                     })()}
-                  </span>
-                </span>
-              </AccordionTrigger>
-              <AccordionContent>
-                <p className="mb-2 text-xs text-muted-foreground">
+                  </Typography>
+                </div>
+              </AccordionSummary>
+              <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
+                <p className="mb-3 text-xs text-muted-foreground">
                   Voor, zij en achter. Zelfde plek, zelfde licht, zelfde houding: dan zie je het verschil echt.
                 </p>
                 <div className="grid grid-cols-3 gap-2">
@@ -780,14 +784,11 @@ export function MetingenPage() {
                     );
                   })}
                 </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-
-          <div className="mb-2 space-y-1.5">
-            <Label htmlFor="meting-note">Notitie (optioneel)</Label>
-            <Input id="meting-note" value={note} onChange={(e) => setNote(e.target.value)} />
+              </AccordionDetails>
+            </Accordion>
           </div>
+
+          <TextField label="Notitie (optioneel)" size="small" fullWidth value={note} onChange={(e) => setNote(e.target.value)} sx={{ mb: 2 }} />
           <div className="flex gap-2">
             <Button onClick={handleSave} disabled={saving}>
               {saving ? 'Bezig…' : editingId ? 'Opslaan' : 'Toevoegen'}
@@ -853,9 +854,17 @@ export function MetingenPage() {
             <DialogTitle>Doelgewicht</DialogTitle>
             <DialogDescription>Vul je streefgewicht in. Laat leeg om geen doel te gebruiken.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-1.5 py-2">
-            <Label htmlFor="goal-input">Doelgewicht (kg)</Label>
-            <Input id="goal-input" type="number" step={0.1} min={0} value={goalInput} onChange={(e) => setGoalInput(e.target.value)} autoFocus />
+          <div className="py-2">
+            <TextField
+              label="Doelgewicht (kg)"
+              type="number"
+              size="small"
+              fullWidth
+              autoFocus
+              inputProps={{ step: 0.1, min: 0, inputMode: 'decimal' }}
+              value={goalInput}
+              onChange={(e) => setGoalInput(e.target.value)}
+            />
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setGoalOpen(false)}>
