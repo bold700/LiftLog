@@ -31,8 +31,43 @@ export interface Measurement {
   thighLeftCm: number | null;
   thighRightCm: number | null;
   armCm: number | null;
+  /** Huidplooien in mm (optioneel). De eerste vier vormen de Durnin & Womersley-som. */
+  skinfoldBicepsMm: number | null;
+  skinfoldTricepsMm: number | null;
+  skinfoldSubscapularMm: number | null;
+  skinfoldSuprailiacMm: number | null;
+  skinfoldAbdomenMm: number | null;
+  /** Hoe `bodyFatPct` tot stand kwam: handmatig ingevuld (bijv. bodyscan) of berekend uit de plooien. */
+  bodyFatMethod: BodyFatMethod | null;
   note: string;
   createdAt: string;
+}
+
+export type BodyFatMethod = 'manual' | 'durnin-womersley';
+
+/** Huidplooivelden (key + label + meetplek) voor de UI. `inFormula` = telt mee in Durnin & Womersley. */
+export const SKINFOLD_FIELDS = [
+  { key: 'skinfoldBicepsMm', label: 'Biceps', hint: 'voorkant bovenarm, verticale plooi', inFormula: true },
+  { key: 'skinfoldTricepsMm', label: 'Triceps', hint: 'achterkant bovenarm, verticale plooi', inFormula: true },
+  { key: 'skinfoldSubscapularMm', label: 'Rug (subscapulair)', hint: 'net onder het schouderblad, schuine plooi', inFormula: true },
+  { key: 'skinfoldSuprailiacMm', label: 'Heup (suprailiacaal)', hint: 'net boven het heupbot, schuine plooi', inFormula: true },
+  { key: 'skinfoldAbdomenMm', label: 'Buik', hint: 'naast de navel, verticale plooi (telt mee in de som, niet in de formule)', inFormula: false },
+] as const;
+
+export type SkinfoldKey = (typeof SKINFOLD_FIELDS)[number]['key'];
+
+/** Som van alle ingevulde plooien (mm), of null als er geen zijn. */
+export function skinfoldSum(m: Pick<Measurement, SkinfoldKey>): number | null {
+  let sum = 0;
+  let any = false;
+  for (const f of SKINFOLD_FIELDS) {
+    const v = m[f.key];
+    if (v != null) {
+      sum += v;
+      any = true;
+    }
+  }
+  return any ? Math.round(sum * 10) / 10 : null;
 }
 
 /** Omtrekvelden (key + label) voor de UI. */
@@ -78,6 +113,12 @@ function toMeasurement(data: Record<string, unknown>, id: string): Measurement {
     thighLeftCm: num(data.thighLeftCm),
     thighRightCm: num(data.thighRightCm),
     armCm: num(data.armCm),
+    skinfoldBicepsMm: num(data.skinfoldBicepsMm),
+    skinfoldTricepsMm: num(data.skinfoldTricepsMm),
+    skinfoldSubscapularMm: num(data.skinfoldSubscapularMm),
+    skinfoldSuprailiacMm: num(data.skinfoldSuprailiacMm),
+    skinfoldAbdomenMm: num(data.skinfoldAbdomenMm),
+    bodyFatMethod: data.bodyFatMethod === 'manual' || data.bodyFatMethod === 'durnin-womersley' ? data.bodyFatMethod : null,
     note: String(data.note ?? ''),
     createdAt: typeof data.createdAt === 'string' ? data.createdAt : new Date().toISOString(),
   };
