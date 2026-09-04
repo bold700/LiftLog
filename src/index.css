@@ -8,6 +8,26 @@
    Componenten gebruiken deze tokens (bg-background, text-foreground, ...),
    nooit hardcoded hex-waarden. */
 @layer base {
+  /* Tailwind's preflight staat uit (MUI). shadcn-componenten rekenen wél op een gereset <button>:
+     zonder dit krijgen accordion-triggers en icon-knoppen de standaard browser-rand en -achtergrond.
+     MUI's ButtonBase zet deze eigenschappen zelf (hogere specificiteit), dus die blijven ongemoeid. */
+  button,
+  [role='button'] {
+    -webkit-appearance: none;
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    text-align: inherit;
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+
   :root {
     --background: 33 55% 89%;
     --foreground: 0 0% 10%;
