@@ -1,3 +1,4 @@
+import { applyCors } from './cors.mjs';
 import { getExerciseCatalog } from './exerciseCatalog.mjs';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
@@ -638,6 +639,7 @@ function normalizeDayFormule7(day, index) {
 }
 
 export default async function handler(req, res) {
+  if (applyCors(req, res)) return;
   if (req.method !== 'POST') {
     return json(res, 405, { error: 'Method not allowed' });
   }

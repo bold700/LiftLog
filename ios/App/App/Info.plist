@@ -49,5 +49,9 @@
 	<string>LiftLog leest relevante gegevens uit Apple Gezondheid (zoals hartslag van je Apple Watch en actieve energie) om je training te koppelen aan je workout.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>LiftLog kan optioneel een krachttraining-workout opslaan in Apple Gezondheid wanneer je dat aanzet bij het beëindigen van een sessie.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>LiftLog gebruikt de camera om barcodes van voedingsproducten te scannen en om een foto van je maaltijd te maken voor voedingsherkenning.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>LiftLog gebruikt je fotobibliotheek om een profielfoto te kiezen en om een foto van je maaltijd te selecteren.</string>
 </dict>
 </plist>

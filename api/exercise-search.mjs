@@ -1,3 +1,4 @@
+import { applyCors } from './cors.mjs';
 /**
  * Autocomplete over de eigen ExerciseDB-dataset (geen externe API).
  * Query: ?q=&equipment=&muscleGroup=&limit=  →  { ok, options: string[] }
@@ -23,6 +24,7 @@ function json(res, status, body) {
 }
 
 export default async function handler(req, res) {
+  if (applyCors(req, res)) return;
   if (req.method !== 'GET') return json(res, 405, { error: 'Method not allowed' });
 
   const q = req.query && typeof req.query === 'object' ? req.query : {};

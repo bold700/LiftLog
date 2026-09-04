@@ -1,3 +1,4 @@
+import { applyCors } from './cors.mjs';
 /**
  * Zoekt een oefening op naam in de eigen dataset en geeft id + GIF-URL terug.
  * De GIF komt uit Firebase Storage (exercises/720/{id}.gif). Geen externe API.
@@ -23,6 +24,7 @@ function json(res, status, body) {
 }
 
 export default async function handler(req, res) {
+  if (applyCors(req, res)) return;
   if (req.method !== 'GET') {
     return json(res, 405, { error: 'Method not allowed' });
   }

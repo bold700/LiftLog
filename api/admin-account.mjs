@@ -1,3 +1,4 @@
+import { applyCors } from './cors.mjs';
 /**
  * Admin-endpoint: een beheerder verwijdert een account definitief (Auth + profiel).
  *
@@ -53,6 +54,7 @@ async function readBody(req) {
 }
 
 export default async function handler(req, res) {
+  if (applyCors(req, res)) return;
   if (req.method !== 'POST') {
     return json(res, 405, { error: 'Method not allowed' });
   }

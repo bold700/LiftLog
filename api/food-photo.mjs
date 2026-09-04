@@ -1,3 +1,4 @@
+import { applyCors } from './cors.mjs';
 /**
  * Herkent voeding op een foto met een vision-model (OpenAI) en geeft per item een
  * naam + geschatte portie (gram) + geschatte voedingswaarde per 100 g terug.
@@ -49,6 +50,7 @@ const SYSTEM =
   'Antwoord ALLEEN met JSON: {"items":[{"name":string,"grams":number,"per100g":{"kcal":number,"protein":number,"carbs":number,"fat":number}}]}. Maximaal 4 items.';
 
 export default async function handler(req, res) {
+  if (applyCors(req, res)) return;
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
   if (!process.env.OPENAI_API_KEY) return json(res, 500, { error: 'OPENAI_API_KEY ontbreekt op de server.' });
 
