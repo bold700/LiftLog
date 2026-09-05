@@ -1012,6 +1012,9 @@ export const SchemasPage = () => {
           ))}
         </Tabs>
       )}
+    {/* Gewone Box als paneel (zoals bij Inzichten): als direct kind van de flex-kolom zou
+        PageLayout met zijn automatische marges tot de inhoud krimpen i.p.v. 800px breed worden. */}
+    <Box sx={{ flex: 1, minHeight: 0 }}>
     <PageLayout>
       <ContentCard>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2, flexWrap: 'wrap' }}>
@@ -1229,6 +1232,7 @@ export const SchemasPage = () => {
         </DialogActions>
       </Dialog>
     </PageLayout>
+    </Box>
     </Box>
   );
 };
