@@ -23,7 +23,12 @@ import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { useWorkouts } from '../hooks/useWorkouts';
-import { getSortedDayIndices, getLastSessionDateForDay } from '../utils/schemaSessionUtils';
+import {
+  getSortedDayIndices,
+  getLastSessionDateForDay,
+  getCurrentWeekDayIndex,
+  isWeeklyGroupSchema,
+} from '../utils/schemaSessionUtils';
 import {
   getCompletedSessionsInPeriod,
   getExerciseProgressInPeriod,
@@ -408,6 +413,7 @@ export const SchemasPage = () => {
                 <Box key={dayIndex} sx={{ mt: 3 }}>
                   <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                     {day.dayLabel}
+                    {day.notes ? ` · ${day.notes}` : ''}
                   </Typography>
                   {day.exercises.length === 0 ? (
                     <Typography variant="body2" color="text.secondary">
@@ -600,6 +606,8 @@ export const SchemasPage = () => {
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {getSortedDayIndices(selectedSchema).map((dayIndex) => {
                   const day = selectedSchema.days[dayIndex];
+                  const isCurrentWeek =
+                    isWeeklyGroupSchema(selectedSchema) && getCurrentWeekDayIndex(selectedSchema) === dayIndex;
                   return (
                   <Card
                     key={dayIndex}
@@ -611,9 +619,33 @@ export const SchemasPage = () => {
                     }}
                   >
                     <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 0.25 }}>
-                        {day.dayLabel}
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.25 }}>
+                        <Typography variant="subtitle1" fontWeight={600}>
+                          {day.dayLabel}
+                        </Typography>
+                        {isCurrentWeek && (
+                          <Box
+                            component="span"
+                            sx={{
+                              px: 1,
+                              py: 0.25,
+                              borderRadius: '12px',
+                              bgcolor: '#000000',
+                              color: '#F2E4D3',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            Deze week
+                          </Box>
+                        )}
+                      </Box>
+                      {day.notes && (
+                        <Typography variant="body2" sx={{ mb: 0.5, fontStyle: 'italic' }}>
+                          {day.notes}
+                        </Typography>
+                      )}
                       {(() => {
                         const last = getLastSessionDateForDay(selectedSchema.id, dayIndex);
                         return (
