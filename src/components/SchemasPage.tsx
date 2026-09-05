@@ -20,6 +20,8 @@ import {
   Tabs,
   Tab,
   Chip,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
@@ -92,6 +94,8 @@ export const SchemasPage = () => {
   const sportersForAssignment = isTrainer ? (profile?.allSporters ?? []) : [];
   const [view, setView] = useState<View>('list');
   const [selectedSchemaId, setSelectedSchemaId] = useState<string | null>(null);
+  const theme = useTheme();
+  const wide = useMediaQuery(theme.breakpoints.up('sm'));
   const today = todayIso();
   const isThisWeek = useCallback((s: Schema) => isCurrentWeekFor(s, today), [today]);
   const currentScheduleWeek = getCurrentScheduleWeek();
@@ -969,11 +973,50 @@ export const SchemasPage = () => {
   }
 
   return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+      {categories.length > 0 && (
+        <Tabs
+          value={activeCategory}
+          onChange={(_, v: string) =>
+            applyFilter(() => {
+              setActiveCategory(v);
+              setActiveSeries(null);
+              setOnlyCurrentWeek(false);
+            })
+          }
+          variant={wide ? 'fullWidth' : 'scrollable'}
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+          sx={{
+            minHeight: 48,
+            mb: 2,
+            width: '100%',
+            '& .MuiTab-root': {
+              minHeight: 48,
+              minWidth: 'auto',
+              px: 2,
+              textTransform: 'none',
+              fontWeight: 600,
+              transition: 'color 0.2s ease',
+            },
+            '& .MuiTabs-indicator': {
+              height: 3,
+              borderRadius: '3px 3px 0 0',
+              transition: 'left 0.25s cubic-bezier(0.22, 1, 0.36, 1), width 0.25s cubic-bezier(0.22, 1, 0.36, 1)',
+            },
+          }}
+        >
+          <Tab label="Workouts" value="" id="workouts-tab-alle" />
+          {categories.map((c) => (
+            <Tab key={c} label={c} value={c} id={`workouts-tab-${c}`} />
+          ))}
+        </Tabs>
+      )}
     <PageLayout>
       <ContentCard>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2, flexWrap: 'wrap' }}>
           <Typography variant="h5" sx={{ fontWeight: 600 }}>
-            Workouts
+            {activeCategory || 'Workouts'}
           </Typography>
           {canCreateWorkouts && (
             <Box
@@ -992,26 +1035,6 @@ export const SchemasPage = () => {
           )}
         </Box>
 
-        {categories.length > 0 && (
-          <Tabs
-            value={activeCategory}
-            onChange={(_, v: string) =>
-              applyFilter(() => {
-                setActiveCategory(v);
-                setActiveSeries(null);
-                setOnlyCurrentWeek(false);
-              })
-            }
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{ mb: 2, minHeight: 40, '& .MuiTab-root': { textTransform: 'none', fontWeight: 600, minHeight: 40 } }}
-          >
-            <Tab label="Workouts" value="" />
-            {categories.map((c) => (
-              <Tab key={c} label={c} value={c} />
-            ))}
-          </Tabs>
-        )}
         {activeCategory && seriesOptions.length > 1 && (
           <Box sx={{ mb: 2 }}>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -1206,5 +1229,6 @@ export const SchemasPage = () => {
         </DialogActions>
       </Dialog>
     </PageLayout>
+    </Box>
   );
 };
