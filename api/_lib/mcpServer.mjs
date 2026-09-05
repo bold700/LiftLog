@@ -512,6 +512,81 @@ export function buildServer(ctx, store) {
     })
   );
 
+  if (isStaff) {
+    server.registerTool(
+      'create_workout',
+      {
+        title: 'Workout aanmaken',
+        description:
+          'Maakt een nieuw trainingsschema aan in LiftLog en wijst het toe aan een sporter, of aan jezelf als je geen sporter noemt. Gebruik dit als de gebruiker vraagt om een programma "in de app te zetten". Maakt altijd een nieuw schema; bestaande schema\'s worden nooit overschreven of gewijzigd. Vul per oefening sets en herhalingen in; laat gewicht leeg als dat nog niet vaststaat.',
+        inputSchema: {
+          name: z.string().min(1).describe('Naam van het schema, bijv. "Full body kracht - 12 weken".'),
+          ...athleteParam,
+          days: z
+            .array(
+              z.object({
+                dayLabel: z.string().min(1).describe('Naam van de trainingsdag, bijv. "Dag A - Full body".'),
+                exercises: z
+                  .array(
+                    z.object({
+                      name: z.string().min(1),
+                      sets: z.number().int().positive().max(20),
+                      reps: z.number().int().positive().max(200),
+                      weightKg: z.number().nonnegative().max(1000).optional(),
+                      restSeconds: z.number().int().nonnegative().max(3600).optional(),
+                      notes: z.string().max(500).optional().describe('Bijv. "Superset met Pull-Up" of een techniekaanwijzing.'),
+                    })
+                  )
+                  .min(1)
+                  .max(40),
+              })
+            )
+            .min(1)
+            .max(14)
+            .describe('De trainingsdagen van het schema, in volgorde.'),
+        },
+      },
+      withTarget(async (t, args) => {
+        const schema = {
+          name: args.name.trim(),
+          trainerId: me.userId,
+          clientId: t.userId,
+          audience: 'single',
+          participantIds: [],
+          category: null,
+          series: null,
+          seriesOrder: null,
+          scheduleWeek: null,
+          startDate: null,
+          endDate: null,
+          formule7: null,
+          isFormule7Template: false,
+          days: args.days.map((d) => ({
+            dayLabel: d.dayLabel.trim(),
+            exercises: d.exercises.map((e) => ({
+              exerciseId: '',
+              exerciseName: e.name.trim(),
+              setsTarget: e.sets,
+              repsTarget: e.reps,
+              ...(e.weightKg != null ? { targetWeight: e.weightKg } : {}),
+              ...(e.restSeconds != null ? { restSeconds: e.restSeconds } : {}),
+              notes: e.notes?.trim() ?? '',
+            })),
+          })),
+        };
+        const saved = await store.saveSchema(schema);
+        return text({
+          ok: true,
+          schemaId: saved.id,
+          name: saved.name,
+          forAthlete: displayName(t),
+          days: saved.days.map((d) => ({ dayLabel: d.dayLabel, exerciseCount: d.exercises.length })),
+          note: 'Het schema staat nu in LiftLog onder Workouts. Wijzigen of verwijderen doe je in de app.',
+        });
+      })
+    );
+  }
+
   server.registerTool(
     'get_class_workout',
     {
