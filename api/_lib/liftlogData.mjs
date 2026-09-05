@@ -140,8 +140,15 @@ function toMeasurement(data, id) {
   };
 }
 
-/** Maakt de datalaag voor één Firestore-instantie. */
-export function createStore(db) {
+/** Leesbaar tijdelijk wachtwoord zonder verwarrende tekens (0/O, 1/l). */
+export function generatePassword() {
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = randomBytes(10);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join('');
+}
+
+/** Maakt de datalaag voor Firestore en (optioneel) Firebase Auth. */
+export function createStore(db, auth) {
   return {
     async findUserByKey(key) {
       const snap = await db.collection('mcpKeys').doc(hashKey(key)).get();
@@ -199,6 +206,45 @@ export function createStore(db) {
       const doc = { ...schema, id, createdAt: new Date().toISOString(), updatedAt: FieldValue.serverTimestamp() };
       await db.collection('workouts').doc(id).set(doc);
       return { ...schema, id, createdAt: doc.createdAt };
+    },
+
+    /**
+     * Maakt een login-account plus profiel aan. Geeft het tijdelijke wachtwoord één keer terug.
+     * `createdByAdmin` staat aan, zodat de gebruiker zonder e-mailverificatie kan inloggen.
+     */
+    async createAccount({ email, displayName, role, trainerId }) {
+      if (!auth) throw new Error('Accounts aanmaken is niet beschikbaar op deze server.');
+      const normalized = String(email).trim().toLowerCase();
+      const password = generatePassword();
+      let user;
+      try {
+        user = await auth.createUser({ email: normalized, password, displayName: displayName || undefined });
+      } catch (e) {
+        if (e?.code === 'auth/email-already-exists') throw new Error(`Er bestaat al een account met ${normalized}.`);
+        if (e?.code === 'auth/invalid-email') throw new Error(`${normalized} is geen geldig e-mailadres.`);
+        throw new Error(`Account aanmaken mislukt: ${e?.message || 'onbekende fout'}`);
+      }
+      await db.collection('profiles').doc(user.uid).set({
+        userId: user.uid,
+        role,
+        email: normalized,
+        displayName: displayName || null,
+        trainerId: role === 'sporter' ? trainerId ?? null : null,
+        trainerRequested: false,
+        leaderboardVisibility: 'named',
+        createdByAdmin: true,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return { userId: user.uid, email: normalized, password };
+    },
+
+    /** Wijst een bestaand schema toe aan een sporter (of maakt het los). Raakt de oefeningen niet aan. */
+    async assignSchema(schemaId, clientId) {
+      await db.collection('workouts').doc(schemaId).set(
+        { clientId, audience: 'single', updatedAt: FieldValue.serverTimestamp() },
+        { merge: true }
+      );
     },
 
     async getLogsForUser(userId) {

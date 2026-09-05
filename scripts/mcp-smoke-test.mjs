@@ -35,6 +35,8 @@ const store = {
   getLogsForUser: async (uid) => logs.filter((l) => l.userId === uid).sort((a, b) => (b.date > a.date ? 1 : -1)),
   saveLog: async (l) => { const s = { ...l, id: 'l' + (logs.length + 1) }; logs.push(s); return s; },
   saveSchema: async (sc) => ({ ...sc, id: 'schema_nieuw', createdAt: new Date().toISOString() }),
+  assignSchema: async () => {},
+  createAccount: async (a) => ({ userId: 'u_nieuw', email: a.email, password: 'GeheimTest1' }),
   getNutritionForDay: async (uid, date) => nutrition.filter((n) => n.userId === uid && n.date === date),
   saveNutritionLog: async (n) => { nutrition.push({ ...n, id: 'n' + nutrition.length }); return n; },
   getMeasurements: async () => meas,
@@ -80,6 +82,10 @@ if (who === 't1') {
     athlete: 'danny',
     days: [{ dayLabel: 'Dag A', exercises: [{ name: 'Goblet Squat', sets: 3, reps: 10, notes: 'rustig tempo' }, { name: 'Lat Pulldown', sets: 3, reps: 12, weightKg: 45 }] }],
   });
+  await show('create_account', { email: 'nieuw@voorbeeld.nl', name: 'Nieuwe Sporter' });
+  await show('create_account', { email: 'x@voorbeeld.nl', name: 'X', trainer: 'bestaat-niet' });
+  await show('assign_workout', { workout: 'Full body A/B', athlete: 'danny' });
+  await show('assign_workout', { workout: 'bestaat-niet', athlete: 'danny' });
   await show('list_athletes', {});
   await show('get_profile', { athlete: 'danny' });
   await show('get_profile', { athlete: 'zzz' });

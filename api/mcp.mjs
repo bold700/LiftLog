@@ -36,7 +36,7 @@ export default async function handler(req, res) {
   const key = keyFromRequest(req);
   if (!key || key.length < 20) return json(res, 401, { error: 'Koppelsleutel ontbreekt. Maak er een aan in LiftLog onder Profiel.' });
 
-  const store = createStore(admin.db);
+  const store = createStore(admin.db, admin.auth);
   const userId = await store.findUserByKey(key);
   if (!userId) return json(res, 401, { error: 'Koppelsleutel is ongeldig of ingetrokken.' });
   const profile = await store.getProfile(userId);

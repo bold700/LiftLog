@@ -514,6 +514,60 @@ export function buildServer(ctx, store) {
 
   if (isStaff) {
     server.registerTool(
+      'create_account',
+      {
+        title: 'Account aanmaken',
+        description:
+          'Maakt een nieuw LiftLog-account aan voor een sporter of trainer, met een tijdelijk wachtwoord dat je één keer terugkrijgt en aan de persoon doorgeeft. E-mailverificatie is niet nodig; de gebruiker kan meteen inloggen en het wachtwoord later zelf wijzigen. Vraag altijd eerst om een echt e-mailadres en een naam: verzin die nooit zelf, want een verkeerd adres levert een account op dat niemand kan gebruiken. Beheerdersaccounts maak je niet hier maar in de app.',
+        inputSchema: {
+          email: z.string().email().describe('Het echte e-mailadres van de persoon; hiermee logt hij in.'),
+          name: z.string().min(1).describe('Volledige naam, bijv. "Jan Jansen".'),
+          role: z.enum(['sporter', 'trainer']).optional().describe('Standaard "sporter".'),
+          trainer: z
+            .string()
+            .optional()
+            .describe('Alleen bij een sporter: naam of e-mail van de trainer. Weglaten = jijzelf. Geef "geen" voor geen trainer.'),
+        },
+      },
+      async (args) => {
+        try {
+          const role = args.role ?? 'sporter';
+          let trainerId = me.userId;
+          if (role === 'sporter' && args.trainer) {
+            const q = norm(args.trainer);
+            if (q === 'geen' || q === 'none') {
+              trainerId = null;
+            } else {
+              const all = await store.getAllProfiles();
+              const hits = all.filter(
+                (p) => (p.role === 'trainer' || p.role === 'admin') && (norm(p.displayName).includes(q) || norm(p.email).includes(q))
+              );
+              if (hits.length !== 1) {
+                return fail(
+                  hits.length === 0
+                    ? `Geen trainer gevonden die lijkt op "${args.trainer}".`
+                    : `Meerdere trainers gevonden voor "${args.trainer}": ${hits.map(displayName).join(', ')}.`
+                );
+              }
+              trainerId = hits[0].userId;
+            }
+          }
+          const created = await store.createAccount({ email: args.email, displayName: args.name.trim(), role, trainerId });
+          return text({
+            ok: true,
+            name: args.name.trim(),
+            email: created.email,
+            role,
+            temporaryPassword: created.password,
+            note: 'Geef dit wachtwoord door aan de gebruiker; het is hierna niet meer op te vragen. Hij kan meteen inloggen en het zelf wijzigen.',
+          });
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : 'Account aanmaken mislukt.');
+        }
+      }
+    );
+
+    server.registerTool(
       'create_workout',
       {
         title: 'Workout aanmaken',
@@ -589,6 +643,48 @@ export function buildServer(ctx, store) {
           note: 'Het schema staat nu in LiftLog onder Workouts. Wijzigen of verwijderen doe je in de app.',
         });
       })
+    );
+
+    server.registerTool(
+      'assign_workout',
+      {
+        title: 'Workout toewijzen',
+        description:
+          'Wijst een bestaand trainingsschema toe aan een sporter, of maakt het los met "geen". Gebruik dit als een schema onder de verkeerde naam staat, bijvoorbeeld omdat er bij het aanmaken nog geen sporter bekend was. Verandert alleen aan wie het schema hangt; dagen en oefeningen blijven ongewijzigd.',
+        inputSchema: {
+          workout: z.string().min(1).describe('Naam of id van het schema, bijv. "Full-body krachttraining v2".'),
+          athlete: z.string().min(1).describe('Naam of e-mail van de sporter, of "geen" om het schema los te maken.'),
+        },
+      },
+      async (args) => {
+        try {
+          const all = await store.getSchemasForUser(me.userId, me.role);
+          // Je wijst alleen schema's toe die je zelf hebt gemaakt; een beheerder mag alles.
+          const mine = all.filter((s) => s.trainerId === me.userId || me.role === 'admin');
+          const q = norm(args.workout);
+          const exact = mine.find((s) => s.id === args.workout || norm(s.name) === q);
+          const hits = exact ? [exact] : mine.filter((s) => norm(s.name).includes(q));
+          if (hits.length === 0) return fail(`Geen schema van jou gevonden dat lijkt op "${args.workout}".`);
+          if (hits.length > 1) {
+            return fail(
+              `Meerdere schema's gevonden voor "${args.workout}": ${hits.map((s) => s.name).join(', ')}. Wees specifieker of geef het schemaId.`
+            );
+          }
+          const schema = hits[0];
+          const wantsNone = ['geen', 'none', 'niemand'].includes(norm(args.athlete));
+          const target = wantsNone ? null : await resolveTarget(args.athlete);
+          await store.assignSchema(schema.id, target ? target.userId : null);
+          return text({
+            ok: true,
+            schemaId: schema.id,
+            name: schema.name,
+            assignedTo: target ? displayName(target) : null,
+            note: target ? null : 'Het schema hangt nu aan niemand meer.',
+          });
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : 'Toewijzen mislukt.');
+        }
+      }
     );
   }
 
