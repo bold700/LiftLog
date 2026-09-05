@@ -1,9 +1,11 @@
 {
-  "source": "Trainingen_SGT_2026.pdf (export uit Google Sheets, 8 tabbladen; tabblad 6 is leeg)",
+  "source": "Trainingen_SGT_2026.pdf (export uit Google Sheets). Eén tabblad per lesmoment; tabblad 6 (vrijdag) was leeg. Week 1..26 volgen de ISO-weeknummers en herhalen vanaf week 27.",
   "tabs": [
     {
       "page": 1,
-      "name": "Groepsles 1",
+      "key": "groepsles_1",
+      "name": "Maandag",
+      "order": 0,
       "weeks": {
         "Week 1": [
           "Farmerswalk",
@@ -360,7 +362,9 @@
     },
     {
       "page": 2,
-      "name": "Groepsles 2",
+      "key": "groepsles_2",
+      "name": "Dinsdag",
+      "order": 1,
       "weeks": {
         "Week 1": [
           "Blugarian spl squat-bo siderai",
@@ -749,7 +753,9 @@
     },
     {
       "page": 3,
-      "name": "Groepsles 3",
+      "key": "groepsles_3",
+      "name": "Woensdag ochtend",
+      "order": 2,
       "weeks": {
         "Week 1": [
           "Squat to chair",
@@ -1118,7 +1124,9 @@
     },
     {
       "page": 4,
-      "name": "Groepsles 4",
+      "key": "groepsles_4",
+      "name": "Woensdag avond",
+      "order": 3,
       "weeks": {
         "Week 1": [
           "Squat",
@@ -1503,7 +1511,9 @@
     },
     {
       "page": 5,
-      "name": "Groepsles 5",
+      "key": "groepsles_5",
+      "name": "Donderdag",
+      "order": 4,
       "weeks": {
         "Week 1": [
           "8 reps beastmode",
@@ -1881,7 +1891,9 @@
     },
     {
       "page": 7,
-      "name": "Groepsles 7",
+      "key": "groepsles_7",
+      "name": "Zaterdag",
+      "order": 5,
       "weeks": {
         "Week 1": [
           "slamball",
@@ -2298,7 +2310,9 @@
     },
     {
       "page": 8,
-      "name": "Groepsles 8",
+      "key": "groepsles_8",
+      "name": "Zondag",
+      "order": 6,
       "weeks": {
         "Week 1": [
           "side raise",

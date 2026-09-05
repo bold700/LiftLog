@@ -9,18 +9,20 @@ import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../context/ProfileContext';
 import { saveWorkoutToFirestore, getWorkoutsForUser, deleteWorkoutFromFirestore } from '../services/workoutFirestore';
+import { getCurrentScheduleWeek } from '../utils/workoutFilter';
 import type { Schema, SchemaDay } from '../types';
 
 interface LessonData {
   key: string;
   name: string;
+  /** Volgorde binnen de week: 0 = maandag … 6 = zondag. */
+  order: number;
   days: SchemaDay[];
 }
 
 interface AppData {
   source: string;
   generatedAt: string;
-  defaultStart: string;
   lessons: LessonData[];
 }
 
@@ -36,26 +38,10 @@ function legacySchemaId(key: string): string {
   return `schema_sgt2026_${key}`;
 }
 
-function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr + 'T12:00:00');
-  d.setDate(d.getDate() + days);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
 async function inChunks<T>(items: T[], size: number, fn: (item: T) => Promise<void>): Promise<void> {
   for (let i = 0; i < items.length; i += size) {
     await Promise.all(items.slice(i, i + size).map(fn));
   }
-}
-
-function nextMonday(): string {
-  const d = new Date();
-  const day = d.getDay(); // 0 = zondag
-  const add = day === 1 ? 0 : (8 - day) % 7;
-  d.setDate(d.getDate() + add);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 export function GroepslessenImportCard() {
@@ -63,13 +49,13 @@ export function GroepslessenImportCard() {
   const profile = useProfile();
   const [data, setData] = useState<AppData | null>(null);
   const [names, setNames] = useState<Record<string, string>>({});
-  const [startDate, setStartDate] = useState(nextMonday());
   const [existing, setExisting] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const [result, setResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const uid = auth?.user?.uid ?? null;
+  const currentWeek = getCurrentScheduleWeek();
 
   useEffect(() => {
     let cancelled = false;
@@ -97,10 +83,6 @@ export function GroepslessenImportCard() {
 
   const handleImport = useCallback(async () => {
     if (!data || !uid || busy) return;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
-      setResult({ type: 'error', text: 'Kies een geldige startdatum voor Week 1.' });
-      return;
-    }
     setBusy(true);
     setResult(null);
     let saved = 0;
@@ -111,7 +93,6 @@ export function GroepslessenImportCard() {
       for (const lesson of data.lessons) {
         const lessonName = (names[lesson.key] ?? lesson.name).trim() || lesson.name;
         lesson.days.forEach((day, weekIndex) => {
-          const weekStart = addDays(startDate, weekIndex * 7);
           schemas.push({
             id: weekSchemaId(lesson.key, weekIndex),
             name: `${lessonName} · ${day.dayLabel}`,
@@ -121,10 +102,13 @@ export function GroepslessenImportCard() {
             participantIds: [],
             category: CATEGORY,
             series: lessonName,
+            seriesOrder: lesson.order,
+            scheduleWeek: weekIndex + 1,
             createdAt,
             days: [day],
-            startDate: weekStart,
-            endDate: addDays(weekStart, 6),
+            // Geen periode: week 1–26 volgen het weeknummer van de kalender.
+            startDate: null,
+            endDate: null,
             formule7: null,
             isFormule7Template: false,
           });
@@ -145,7 +129,7 @@ export function GroepslessenImportCard() {
       });
       setResult({
         type: 'success',
-        text: `${schemas.length} trainingen opgeslagen (${data.lessons.length} lessen × 26 weken) in Workouts → tab "${CATEGORY}". Per les kun je filteren; de training van deze week is gemarkeerd.${legacy.length ? ` De ${legacy.length} oude 26-weken-workouts zijn verwijderd.` : ''}`,
+        text: `${schemas.length} trainingen opgeslagen (${data.lessons.length} lesmomenten × 26 weken) in Workouts → tab "${CATEGORY}". Week ${currentWeek} is nu aan de beurt.${legacy.length ? ` De ${legacy.length} oude workouts met 26 dagen zijn verwijderd.` : ''}`,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -157,7 +141,7 @@ export function GroepslessenImportCard() {
       setBusy(false);
       setProgress(null);
     }
-  }, [data, uid, busy, startDate, names]);
+  }, [data, uid, busy, names, existing]);
 
   if (!uid) return null;
 
@@ -171,32 +155,24 @@ export function GroepslessenImportCard() {
         Groepslessen importeren
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Zet elke week van elke les als losse groepsles-workout op jouw naam, in Workouts onder de tab &quot;{CATEGORY}&quot;.
-        {data ? ` ${data.lessons.length} lessen × 26 weken, ${totalExercises} oefeningen.` : ' Laden…'}
-        {alreadyImported > 0 && ` ${alreadyImported} van de lessen staan al in je workouts; importeren werkt ze bij.`}
-        {hasLegacy && ' De oude 26-weken-workouts worden daarbij vervangen.'}
+        Zet elke week van elk lesmoment als losse groepsles-workout op jouw naam, in Workouts onder de tab
+        &quot;{CATEGORY}&quot;.
+        {data ? ` ${data.lessons.length} lesmomenten × 26 weken, ${totalExercises} oefeningen.` : ' Laden…'} Week 1–26
+        volgen het weeknummer van de kalender en herhalen zich vanaf week 27; deze week is week {currentWeek}.
+        {alreadyImported > 0 && ` ${alreadyImported} lesmomenten staan al in je workouts; importeren werkt ze bij.`}
+        {hasLegacy && ' De oude workouts met 26 dagen worden daarbij vervangen.'}
       </Typography>
 
       {data && (
         <>
-          <TextField
-            type="date"
-            label="Datum van Week 1"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            size="small"
-            InputLabelProps={{ shrink: true }}
-            sx={{ mb: 2, minWidth: 200 }}
-            disabled={busy}
-          />
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-            Naam per les (zoals in het rooster: tabblad 1 t/m 8, tabblad 6 was leeg)
+            Naam per lesmoment (tabblad 1 t/m 8 uit het rooster; tabblad 6, vrijdag, was leeg)
           </Typography>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1, mb: 2 }}>
             {data.lessons.map((l) => (
               <TextField
                 key={l.key}
-                label={`Tabblad ${l.key.replace(/\D/g, '') || l.key}`}
+                label={`Tabblad ${l.key.replace(/\D/g, '') || l.key}`.trim()}
                 value={names[l.key] ?? l.name}
                 onChange={(e) => setNames((n) => ({ ...n, [l.key]: e.target.value }))}
                 size="small"

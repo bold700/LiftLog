@@ -69,6 +69,8 @@ function toSchema(data: Record<string, unknown>, id: string): Schema {
     participantIds: Array.isArray(d.participantIds) ? d.participantIds.map((x) => String(x)) : undefined,
     category: typeof d.category === 'string' && d.category.trim() ? d.category : null,
     series: typeof d.series === 'string' && d.series.trim() ? d.series : null,
+    seriesOrder: typeof d.seriesOrder === 'number' ? d.seriesOrder : null,
+    scheduleWeek: typeof d.scheduleWeek === 'number' ? d.scheduleWeek : null,
     createdAt: typeof d.createdAt === 'string' ? d.createdAt : new Date().toISOString(),
     days: Array.isArray(d.days) ? (d.days as Schema['days']) : [],
     startDate: toDateStr(d.startDate) ?? null,

@@ -50,7 +50,8 @@ import {
   getCategories,
   getSeriesOptions,
   filterWorkouts,
-  isCurrentPeriod as isCurrentPeriodOn,
+  isCurrentWeek as isCurrentWeekFor,
+  getCurrentScheduleWeek,
 } from '../utils/workoutFilter';
 import { SchemaEditView } from './SchemaEditView';
 import { TrainingSessionView } from './TrainingSessionView';
@@ -92,7 +93,8 @@ export const SchemasPage = () => {
   const [view, setView] = useState<View>('list');
   const [selectedSchemaId, setSelectedSchemaId] = useState<string | null>(null);
   const today = todayIso();
-  const isCurrentPeriod = useCallback((s: Schema) => isCurrentPeriodOn(s, today), [today]);
+  const isThisWeek = useCallback((s: Schema) => isCurrentWeekFor(s, today), [today]);
+  const currentScheduleWeek = getCurrentScheduleWeek();
   // Tabs in de lijst: '' = gewone workouts (zonder categorie), anders de categorie (bijv. "Groepslessen").
   const [activeCategory, setActiveCategory] = useState<string>('');
   const [activeSeries, setActiveSeries] = useState<string | null>(null);
@@ -641,7 +643,8 @@ export const SchemasPage = () => {
                 {getSortedDayIndices(selectedSchema).map((dayIndex) => {
                   const day = selectedSchema.days[dayIndex];
                   const isCurrentWeek =
-                    isWeeklyGroupSchema(selectedSchema) && getCurrentWeekDayIndex(selectedSchema) === dayIndex;
+                    isThisWeek(selectedSchema) ||
+                    (isWeeklyGroupSchema(selectedSchema) && getCurrentWeekDayIndex(selectedSchema) === dayIndex);
                   return (
                   <Card
                     key={dayIndex}
@@ -1030,7 +1033,7 @@ export const SchemasPage = () => {
                 />
               ))}
               <Chip
-                label="Deze week"
+                label={`Deze week (week ${currentScheduleWeek})`}
                 size="small"
                 color={onlyCurrentWeek ? 'primary' : 'default'}
                 variant={onlyCurrentWeek ? 'filled' : 'outlined'}
@@ -1039,8 +1042,8 @@ export const SchemasPage = () => {
             </Box>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
               {visibleSchemas.length} {visibleSchemas.length === 1 ? 'training' : 'trainingen'}
-              {activeSeries ? ` in ${activeSeries}` : ''}
-              {onlyCurrentWeek ? ' · alleen deze week' : ''}
+              {activeSeries ? ` · ${activeSeries}` : ''}
+              {onlyCurrentWeek ? ` · alleen week ${currentScheduleWeek}` : ''}
             </Typography>
           </Box>
         )}
@@ -1076,7 +1079,7 @@ export const SchemasPage = () => {
           <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
             {activeCategory
               ? onlyCurrentWeek
-                ? `Geen training deze week in "${activeCategory}"${activeSeries ? ` voor ${activeSeries}` : ''}.`
+                ? `Geen training in week ${currentScheduleWeek}${activeSeries ? ` voor ${activeSeries}` : ''}.`
                 : `Geen workouts in "${activeCategory}".`
               : 'Geen gewone workouts. Kijk in de andere tabs.'}
           </Typography>
@@ -1107,7 +1110,7 @@ export const SchemasPage = () => {
                       <Typography variant="subtitle1" fontWeight={600}>
                         {schema.name}
                       </Typography>
-                      {isCurrentPeriod(schema) && (
+                      {isThisWeek(schema) && (
                         <Box
                           component="span"
                           sx={{

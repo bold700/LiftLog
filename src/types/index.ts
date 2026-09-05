@@ -277,8 +277,15 @@ export interface Schema {
   participantIds?: string[];
   /** Categorie (tab in Workouts), bijv. "Groepslessen". Leeg = gewone workout. */
   category?: string | null;
-  /** Reeks binnen een categorie, bijv. de naam van de groepsles ("Groepsles 1") bij losse weektrainingen. */
+  /** Reeks binnen een categorie, bijv. het lesmoment ("Woensdag ochtend") bij groepslessen. */
   series?: string | null;
+  /** Volgorde van de reeks binnen de categorie (0 = maandag … 6 = zondag). Voor sortering van de filterchips. */
+  seriesOrder?: number | null;
+  /**
+   * Week in een halfjaarschema (1–26). Volgt het ISO-weeknummer van de kalender en herhaalt zich
+   * vanaf week 27: ISO-week 27 is weer schemaweek 1. Zo hoort er geen startdatum bij het schema.
+   */
+  scheduleWeek?: number | null;
   createdAt: string; // ISO date string
   days: SchemaDay[];
   /** Start van de schema-periode (YYYY-MM-DD). Optioneel. */
