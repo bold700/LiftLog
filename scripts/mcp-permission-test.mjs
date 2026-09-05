@@ -22,6 +22,7 @@ const store = {
   saveSchema: async (sc) => ({ ...sc, id: 'schema_nieuw', createdAt: new Date().toISOString() }),
   assignSchema: async () => {},
   createAccount: async (a) => ({ userId: 'u_nieuw', email: a.email, password: 'GeheimTest1' }),
+  updateProfileFields: async (uid, f) => { Object.assign(profiles.u1 ?? {}, {}); return f; },
   getLogsForUser: async () => [],
   saveLog: async (l) => l,
   getNutritionForDay: async () => [],

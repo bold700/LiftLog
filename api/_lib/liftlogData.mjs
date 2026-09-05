@@ -129,15 +129,26 @@ function toNutritionLog(data, id) {
   };
 }
 
+const CIRCUMFERENCE_KEYS = ['chestCm', 'waistCm', 'bellyCm', 'hipCm', 'glutesCm', 'thighLeftCm', 'thighRightCm', 'armCm'];
+const SKINFOLD_KEYS = [
+  'skinfoldBicepsMm',
+  'skinfoldTricepsMm',
+  'skinfoldSubscapularMm',
+  'skinfoldSuprailiacMm',
+  'skinfoldAbdomenMm',
+];
+
 function toMeasurement(data, id) {
-  return {
+  const out = {
     id,
     date: String(data.date ?? ''),
     weightKg: num(data.weightKg),
     bodyFatPct: num(data.bodyFatPct),
-    waistCm: num(data.waistCm),
+    bodyFatMethod: str(data.bodyFatMethod),
     note: String(data.note ?? ''),
   };
+  for (const k of [...CIRCUMFERENCE_KEYS, ...SKINFOLD_KEYS]) out[k] = num(data[k]);
+  return out;
 }
 
 /** Leesbaar tijdelijk wachtwoord zonder verwarrende tekens (0/O, 1/l). */
@@ -162,6 +173,11 @@ export function createStore(db, auth) {
     async getProfile(userId) {
       const snap = await db.collection('profiles').doc(userId).get();
       return snap.exists ? toProfile(snap.data(), snap.id) : null;
+    },
+
+    /** Werkt losse profielvelden bij; alleen wat is meegegeven verandert. */
+    async updateProfileFields(userId, fields) {
+      await db.collection('profiles').doc(userId).set({ ...fields, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     },
 
     async getAllProfiles() {

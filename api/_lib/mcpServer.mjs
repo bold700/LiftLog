@@ -5,6 +5,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { todayNl, scheduleWeekFor, weekdayIndex } from './liftlogData.mjs';
+import { ageOnDate, toSkinfoldSex, bodyFatDurninWomersley, DW_MIN_AGE } from './bodyFat.mjs';
 
 const ROLE_LABEL = { sporter: 'sporter', trainer: 'trainer', admin: 'beheerder' };
 
@@ -462,32 +463,127 @@ export function buildServer(ctx, store) {
   server.registerTool(
     'log_measurement',
     {
-      title: 'Gewicht of meting loggen',
-      description: 'Legt lichaamsgewicht (kg) en/of vetpercentage en/of taille (cm) vast op een datum.',
+      title: 'Meting vastleggen',
+      description:
+        'Legt een volledige lichaamsmeting vast: gewicht, omtrekken in cm en huidplooien in mm. Vul de losse velden in en zet niets in de notitie wat een eigen veld heeft, anders kan de app er niet mee rekenen. Het vetpercentage wordt automatisch berekend uit de vier plooien (biceps, triceps, rug, heup) volgens Durnin & Womersley, mits geboortedatum en geslacht in het profiel staan; gebruik anders eerst "update_profile". Geef bodyFatPct alleen mee als het uit een bodyscan of weegschaal komt.',
       inputSchema: {
         ...athleteParam,
-        weightKg: z.number().positive().optional(),
-        bodyFatPct: z.number().positive().max(70).optional(),
-        waistCm: z.number().positive().optional(),
-        note: z.string().optional(),
         date: z.string().optional().describe('YYYY-MM-DD; weglaten = vandaag.'),
+        weightKg: z.number().positive().max(400).optional(),
+        bodyFatPct: z.number().positive().max(70).optional().describe('Alleen bij een handmatige meting (bodyscan, weegschaal). Uit plooien wordt het zelf berekend.'),
+        chestCm: z.number().positive().max(300).optional().describe('Borstomvang.'),
+        waistCm: z.number().positive().max(300).optional().describe('Taille.'),
+        bellyCm: z.number().positive().max(300).optional().describe('Buikomvang.'),
+        hipCm: z.number().positive().max(300).optional().describe('Heup.'),
+        glutesCm: z.number().positive().max(300).optional().describe('Billen.'),
+        thighLeftCm: z.number().positive().max(200).optional().describe('Bovenbeen links.'),
+        thighRightCm: z.number().positive().max(200).optional().describe('Bovenbeen rechts.'),
+        armCm: z.number().positive().max(200).optional().describe('Arm- of bicepsomvang.'),
+        skinfoldBicepsMm: z.number().positive().max(100).optional().describe('Huidplooi biceps; telt mee in de formule.'),
+        skinfoldTricepsMm: z.number().positive().max(100).optional().describe('Huidplooi triceps; telt mee in de formule.'),
+        skinfoldSubscapularMm: z.number().positive().max(100).optional().describe('Huidplooi rug (subscapulair); telt mee in de formule.'),
+        skinfoldSuprailiacMm: z.number().positive().max(100).optional().describe('Huidplooi heup (suprailiacaal); telt mee in de formule.'),
+        skinfoldAbdomenMm: z.number().positive().max(100).optional().describe('Huidplooi buik; telt mee in de som, niet in de formule.'),
+        note: z.string().optional().describe('Alleen vrije opmerkingen, geen meetwaarden.'),
       },
     },
     withTarget(async (t, args) => {
-      if (args.weightKg == null && args.bodyFatPct == null && args.waistCm == null) return fail('Geef minstens gewicht, vetpercentage of taille op.');
+      const fields = [
+        'weightKg', 'bodyFatPct',
+        'chestCm', 'waistCm', 'bellyCm', 'hipCm', 'glutesCm', 'thighLeftCm', 'thighRightCm', 'armCm',
+        'skinfoldBicepsMm', 'skinfoldTricepsMm', 'skinfoldSubscapularMm', 'skinfoldSuprailiacMm', 'skinfoldAbdomenMm',
+      ];
+      const given = {};
+      for (const f of fields) if (args[f] != null) given[f] = args[f];
+      if (Object.keys(given).length === 0) return fail('Geef minstens één meetwaarde op (gewicht, een omtrek of een huidplooi).');
+
       const date = dateOrToday(args.date);
+      // Vetpercentage uit de plooien, net als de app doet bij opslaan.
+      const age = ageOnDate(t.birthDate, date);
+      const sex = toSkinfoldSex(t.gender);
+      const computed =
+        sex && age != null
+          ? bodyFatDurninWomersley({
+              bicepsMm: given.skinfoldBicepsMm,
+              tricepsMm: given.skinfoldTricepsMm,
+              subscapularMm: given.skinfoldSubscapularMm,
+              suprailiacMm: given.skinfoldSuprailiacMm,
+              sex,
+              ageYears: age,
+            })
+          : null;
+      const hasAllFolds = ['skinfoldBicepsMm', 'skinfoldTricepsMm', 'skinfoldSubscapularMm', 'skinfoldSuprailiacMm'].every((k) => given[k] != null);
+      const bodyFatPct = computed ? computed.pct : given.bodyFatPct ?? null;
+      const bodyFatMethod = computed ? 'durnin-womersley' : given.bodyFatPct != null ? 'manual' : null;
+
       await store.saveMeasurement({
         userId: t.userId,
         loggedBy: me.userId,
         trainerId: t.trainerId ?? null,
         date,
-        weightKg: args.weightKg ?? null,
-        bodyFatPct: args.bodyFatPct ?? null,
-        waistCm: args.waistCm ?? null,
-        bodyFatMethod: args.bodyFatPct != null ? 'manual' : null,
+        ...given,
+        bodyFatPct,
+        bodyFatMethod,
         note: args.note?.trim() ?? '',
       });
-      return text({ ok: true, date, forAthlete: displayName(t), weightKg: args.weightKg ?? null, bodyFatPct: args.bodyFatPct ?? null, waistCm: args.waistCm ?? null, goalWeightKg: t.weightGoalKg });
+
+      // Zeg eerlijk waarom er géén percentage uitkwam, zodat de gebruiker weet wat er ontbreekt.
+      let bodyFatNote = null;
+      if (!computed && hasAllFolds) {
+        if (!sex) bodyFatNote = `Geen vetpercentage berekend: het geslacht van ${displayName(t)} staat niet in het profiel. Zet het met update_profile.`;
+        else if (age == null) bodyFatNote = `Geen vetpercentage berekend: de geboortedatum van ${displayName(t)} staat niet in het profiel. Zet die met update_profile.`;
+        else if (age < DW_MIN_AGE) bodyFatNote = `Geen vetpercentage berekend: de formule geldt vanaf ${DW_MIN_AGE} jaar.`;
+      } else if (!computed && Object.keys(given).some((k) => k.startsWith('skinfold'))) {
+        bodyFatNote = 'Geen vetpercentage berekend: daarvoor zijn alle vier de plooien nodig (biceps, triceps, rug, heup).';
+      }
+
+      return text({
+        ok: true,
+        date,
+        forAthlete: displayName(t),
+        saved: given,
+        bodyFatPct,
+        bodyFatMethod,
+        skinfoldSumMm: computed?.sumMm ?? null,
+        goalWeightKg: t.weightGoalKg,
+        ...(bodyFatNote ? { bodyFatNote } : {}),
+      });
+    })
+  );
+
+  server.registerTool(
+    'update_profile',
+    {
+      title: 'Profiel bijwerken',
+      description:
+        'Vult profielgegevens aan: geboortedatum, geslacht, lengte, rusthartslag en doelgewicht. Geboortedatum en geslacht zijn nodig om het vetpercentage uit huidplooien te berekenen, lengte voor de BMI en rusthartslag voor hartslagzones op maat. Alleen wat je meegeeft verandert; de rest blijft staan.',
+      inputSchema: {
+        ...athleteParam,
+        birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('YYYY-MM-DD.'),
+        gender: z.enum(['man', 'vrouw', 'anders']).optional(),
+        heightCm: z.number().positive().max(260).optional(),
+        restingHrBpm: z.number().int().positive().max(200).optional(),
+        weightGoalKg: z.number().positive().max(400).optional(),
+      },
+    },
+    withTarget(async (t, args) => {
+      const fields = {};
+      for (const f of ['birthDate', 'gender', 'heightCm', 'restingHrBpm', 'weightGoalKg']) {
+        if (args[f] != null) fields[f] = args[f];
+      }
+      if (Object.keys(fields).length === 0) return fail('Geef minstens één veld op om bij te werken.');
+      await store.updateProfileFields(t.userId, fields);
+      const age = ageOnDate(fields.birthDate ?? t.birthDate, todayNl());
+      return text({
+        ok: true,
+        athlete: displayName(t),
+        updated: fields,
+        age,
+        note:
+          (fields.birthDate || fields.gender) && age != null
+            ? 'Geboortedatum en geslacht staan nu goed; het vetpercentage uit huidplooien kan hiermee berekend worden.'
+            : null,
+      });
     })
   );
 
@@ -507,7 +603,24 @@ export function buildServer(ctx, store) {
         athlete: displayName(t),
         goalWeightKg: t.weightGoalKg,
         change: first && lastM && first.weightKg != null && lastM.weightKg != null ? { fromDate: first.date, toDate: lastM.date, weightKg: Math.round((lastM.weightKg - first.weightKg) * 10) / 10 } : null,
-        measurements: recent.map((m) => ({ date: m.date, weightKg: m.weightKg, bodyFatPct: m.bodyFatPct, waistCm: m.waistCm, note: m.note || null })),
+        measurements: recent.map((m) => ({
+          date: m.date,
+          weightKg: m.weightKg,
+          bodyFatPct: m.bodyFatPct,
+          bodyFatMethod: m.bodyFatMethod,
+          waistCm: m.waistCm,
+          chestCm: m.chestCm,
+          hipCm: m.hipCm,
+          armCm: m.armCm,
+          skinfolds: {
+            biceps: m.skinfoldBicepsMm,
+            triceps: m.skinfoldTricepsMm,
+            subscapular: m.skinfoldSubscapularMm,
+            suprailiac: m.skinfoldSuprailiacMm,
+            abdomen: m.skinfoldAbdomenMm,
+          },
+          note: m.note || null,
+        })),
       });
     })
   );
