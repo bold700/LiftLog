@@ -110,10 +110,12 @@
   animation: tabPanelIn 0.25s ease-out forwards;
 }
 
-/* Stagger: zet --stagger-index op elk kind (0, 1, 2, ...) */
+/* Stagger: zet --stagger-index op elk kind (0, 1, 2, ...).
+   De vertraging is afgetopt op 0.48s (index 8): bij lange lijsten (honderden kaarten)
+   zou een lineaire vertraging kaarten seconden lang onzichtbaar houden. */
 .stagger-children > * {
   animation: fadeInUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
-  animation-delay: calc(var(--stagger-index, 0) * 0.06s);
+  animation-delay: min(calc(var(--stagger-index, 0) * 0.06s), 0.48s);
 }
 
 @media (prefers-reduced-motion: reduce) {
