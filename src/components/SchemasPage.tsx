@@ -46,6 +46,12 @@ import {
 import { Schema } from '../types';
 import type { GroupSession } from '../types';
 import { createEmptyFormule7 } from '../utils/formule7Defaults';
+import {
+  getCategories,
+  getSeriesOptions,
+  filterWorkouts,
+  isCurrentPeriod as isCurrentPeriodOn,
+} from '../utils/workoutFilter';
 import { SchemaEditView } from './SchemaEditView';
 import { TrainingSessionView } from './TrainingSessionView';
 import { GroupSessionView } from './GroupSessionView';
@@ -85,51 +91,30 @@ export const SchemasPage = () => {
   const sportersForAssignment = isTrainer ? (profile?.allSporters ?? []) : [];
   const [view, setView] = useState<View>('list');
   const [selectedSchemaId, setSelectedSchemaId] = useState<string | null>(null);
+  const today = todayIso();
+  const isCurrentPeriod = useCallback((s: Schema) => isCurrentPeriodOn(s, today), [today]);
   // Tabs in de lijst: '' = gewone workouts (zonder categorie), anders de categorie (bijv. "Groepslessen").
   const [activeCategory, setActiveCategory] = useState<string>('');
   const [activeSeries, setActiveSeries] = useState<string | null>(null);
-  const categories = useMemo(
-    () =>
-      Array.from(new Set(schemas.map((s) => s.category?.trim()).filter((c): c is string => Boolean(c)))).sort((a, b) =>
-        a.localeCompare(b, 'nl')
-      ),
-    [schemas]
-  );
+  const [onlyCurrentWeek, setOnlyCurrentWeek] = useState(false);
+  const categories = useMemo(() => getCategories(schemas), [schemas]);
   useEffect(() => {
     if (activeCategory && !categories.includes(activeCategory)) {
       setActiveCategory('');
       setActiveSeries(null);
+      setOnlyCurrentWeek(false);
     }
   }, [activeCategory, categories]);
-  const seriesOptions = useMemo(() => {
-    if (!activeCategory) return [] as string[];
-    return Array.from(
-      new Set(
-        schemas
-          .filter((s) => (s.category ?? '') === activeCategory)
-          .map((s) => s.series?.trim())
-          .filter((x): x is string => Boolean(x))
-      )
-    ).sort((a, b) => a.localeCompare(b, 'nl', { numeric: true }));
-  }, [schemas, activeCategory]);
-  const visibleSchemas = useMemo(() => {
-    const list = schemas.filter(
-      (s) => (s.category?.trim() ?? '') === activeCategory && (!activeSeries || s.series === activeSeries)
-    );
-    if (!activeCategory) return list;
-    // Binnen een categorie: per reeks, op startdatum (Week 1 → Week 26), dan op naam.
-    return [...list].sort((a, b) => {
-      const sa = a.series ?? '';
-      const sb = b.series ?? '';
-      if (sa !== sb) return sa.localeCompare(sb, 'nl', { numeric: true });
-      const da = a.startDate ?? '';
-      const db = b.startDate ?? '';
-      if (da !== db) return da.localeCompare(db);
-      return a.name.localeCompare(b.name, 'nl', { numeric: true });
-    });
-  }, [schemas, activeCategory, activeSeries]);
-  const today = todayIso();
-  const isCurrentPeriod = (s: Schema) => Boolean(s.startDate && s.endDate && s.startDate <= today && today <= s.endDate);
+  const seriesOptions = useMemo(() => getSeriesOptions(schemas, activeCategory), [schemas, activeCategory]);
+  const visibleSchemas = useMemo(
+    () => filterWorkouts(schemas, { category: activeCategory, series: activeSeries, onlyCurrentWeek }, today),
+    [schemas, activeCategory, activeSeries, onlyCurrentWeek, today]
+  );
+  /** Wisselt van filter en springt terug naar de bovenkant van de lijst. */
+  const applyFilter = useCallback((change: () => void) => {
+    change();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
   const [sessionDayIndex, setSessionDayIndex] = useState<number>(0);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [justLoggedExerciseId, setJustLoggedExerciseId] = useState<string | null>(null);
@@ -1007,10 +992,13 @@ export const SchemasPage = () => {
         {categories.length > 0 && (
           <Tabs
             value={activeCategory}
-            onChange={(_, v: string) => {
-              setActiveCategory(v);
-              setActiveSeries(null);
-            }}
+            onChange={(_, v: string) =>
+              applyFilter(() => {
+                setActiveCategory(v);
+                setActiveSeries(null);
+                setOnlyCurrentWeek(false);
+              })
+            }
             variant="scrollable"
             scrollButtons="auto"
             sx={{ mb: 2, minHeight: 40, '& .MuiTab-root': { textTransform: 'none', fontWeight: 600, minHeight: 40 } }}
@@ -1022,22 +1010,38 @@ export const SchemasPage = () => {
           </Tabs>
         )}
         {activeCategory && seriesOptions.length > 1 && (
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
-            <Chip
-              label="Alle"
-              size="small"
-              variant={activeSeries ? 'outlined' : 'filled'}
-              onClick={() => setActiveSeries(null)}
-            />
-            {seriesOptions.map((s) => (
+          <Box sx={{ mb: 2 }}>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               <Chip
-                key={s}
-                label={s}
+                label="Alle"
                 size="small"
-                variant={activeSeries === s ? 'filled' : 'outlined'}
-                onClick={() => setActiveSeries(s)}
+                color={activeSeries ? 'default' : 'primary'}
+                variant={activeSeries ? 'outlined' : 'filled'}
+                onClick={() => applyFilter(() => setActiveSeries(null))}
               />
-            ))}
+              {seriesOptions.map((s) => (
+                <Chip
+                  key={s}
+                  label={s}
+                  size="small"
+                  color={activeSeries === s ? 'primary' : 'default'}
+                  variant={activeSeries === s ? 'filled' : 'outlined'}
+                  onClick={() => applyFilter(() => setActiveSeries(activeSeries === s ? null : s))}
+                />
+              ))}
+              <Chip
+                label="Deze week"
+                size="small"
+                color={onlyCurrentWeek ? 'primary' : 'default'}
+                variant={onlyCurrentWeek ? 'filled' : 'outlined'}
+                onClick={() => applyFilter(() => setOnlyCurrentWeek((v) => !v))}
+              />
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              {visibleSchemas.length} {visibleSchemas.length === 1 ? 'training' : 'trainingen'}
+              {activeSeries ? ` in ${activeSeries}` : ''}
+              {onlyCurrentWeek ? ' · alleen deze week' : ''}
+            </Typography>
           </Box>
         )}
 
@@ -1070,7 +1074,11 @@ export const SchemasPage = () => {
           </EmptyState>
         ) : visibleSchemas.length === 0 ? (
           <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-            {activeCategory ? `Geen workouts in "${activeCategory}".` : 'Geen gewone workouts. Kijk in de andere tabs.'}
+            {activeCategory
+              ? onlyCurrentWeek
+                ? `Geen training deze week in "${activeCategory}"${activeSeries ? ` voor ${activeSeries}` : ''}.`
+                : `Geen workouts in "${activeCategory}".`
+              : 'Geen gewone workouts. Kijk in de andere tabs.'}
           </Typography>
         ) : (
             <Box className="stagger-children" sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -1079,7 +1087,7 @@ export const SchemasPage = () => {
                   key={schema.id}
                   onClick={() => handleSchemaClick(schema)}
                   sx={{
-                    '--stagger-index': index,
+                    '--stagger-index': Math.min(index, 8),
                     backgroundColor: 'transparent',
                     borderRadius: `${designTokens.cardRadius}px`,
                     border: `1px solid ${designTokens.cardBorder}`,
