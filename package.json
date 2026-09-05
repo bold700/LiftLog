@@ -20,7 +20,8 @@
     "test:mcp": "node scripts/mcp-smoke-test.mjs",
     "deploy:firestore": "npx --yes firebase-tools@13 deploy --only firestore:rules",
     "deploy:storage": "npx --yes firebase-tools@13 deploy --only storage",
-    "import:groepslessen": "node scripts/import-groepslessen.mjs"
+    "import:groepslessen": "node scripts/import-groepslessen.mjs",
+    "test:mcp:rechten": "node scripts/mcp-permission-test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",

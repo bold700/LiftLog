@@ -10,6 +10,32 @@ export function todayNl() {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Amsterdam' });
 }
 
+/** Aantal weken in één schemablok (een half jaar). Gelijk aan SCHEDULE_WEEKS in workoutFilter.ts. */
+export const SCHEDULE_WEEKS = 26;
+
+/** ISO 8601-weeknummer (1-53): de week waarin de donderdag valt. */
+export function getIsoWeek(date) {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dayIndex = (d.getUTCDay() + 6) % 7; // maandag = 0
+  d.setUTCDate(d.getUTCDate() - dayIndex + 3); // donderdag van deze week
+  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  const firstDayIndex = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayIndex + 3);
+  return 1 + Math.round((d.getTime() - firstThursday.getTime()) / (7 * 24 * 60 * 60 * 1000));
+}
+
+/** Welke week van het halfjaarschema loopt op deze datum (1-26). */
+export function scheduleWeekFor(isoDate) {
+  const d = new Date(`${isoDate}T12:00:00Z`);
+  return ((getIsoWeek(d) - 1) % SCHEDULE_WEEKS) + 1;
+}
+
+/** Weekdag van een YYYY-MM-DD-datum: 0 = maandag … 6 = zondag (zoals seriesOrder). */
+export function weekdayIndex(isoDate) {
+  const d = new Date(`${isoDate}T12:00:00Z`);
+  return (d.getUTCDay() + 6) % 7;
+}
+
 export function hashKey(key) {
   return createHash('sha256').update(String(key)).digest('hex');
 }
@@ -62,6 +88,10 @@ function toSchema(data, id) {
     clientId: str(data.clientId),
     audience: data.audience ?? 'single',
     participantIds: Array.isArray(data.participantIds) ? data.participantIds.map(String) : [],
+    category: str(data.category),
+    series: str(data.series),
+    seriesOrder: num(data.seriesOrder),
+    scheduleWeek: num(data.scheduleWeek),
     createdAt: typeof data.createdAt === 'string' ? data.createdAt : '',
     days: Array.isArray(data.days) ? data.days : [],
     startDate: toDateStr(data.startDate),
@@ -132,16 +162,34 @@ export function createStore(db) {
       return snap.docs.map((d) => toProfile(d.data(), d.id));
     },
 
+    /**
+     * Schema's rond deze gebruiker, elk met een `source`:
+     *  - 'client'      : persoonlijk aan deze gebruiker toegewezen
+     *  - 'participant' : deelnemer aan een groepsles / meerdere-klanten-schema
+     *  - 'open'        : beschikbaar voor iedereen
+     *  - 'authored'    : door deze trainer gemaakt voor anderen (dus NIET zijn eigen training)
+     * De eerste treffer wint, zodat een eigen schema nooit als 'authored' wordt gemarkeerd.
+     */
     async getSchemasForUser(userId, role) {
       const col = db.collection('workouts');
-      const snaps = await Promise.all([
+      const isStaff = role === 'trainer' || role === 'admin';
+      const [byClient, byParticipant, byOpen, byAuthor] = await Promise.all([
         col.where('clientId', '==', userId).get(),
         col.where('participantIds', 'array-contains', userId).get(),
         col.where('audience', '==', 'open').get(),
-        ...(role === 'trainer' || role === 'admin' ? [col.where('trainerId', '==', userId).get()] : []),
+        isStaff ? col.where('trainerId', '==', userId).get() : null,
       ]);
       const byId = new Map();
-      for (const snap of snaps) for (const d of snap.docs) byId.set(d.id, toSchema(d.data(), d.id));
+      const add = (snap, source) => {
+        if (!snap) return;
+        for (const d of snap.docs) {
+          if (!byId.has(d.id)) byId.set(d.id, { ...toSchema(d.data(), d.id), source });
+        }
+      };
+      add(byClient, 'client');
+      add(byParticipant, 'participant');
+      add(byOpen, 'open');
+      add(byAuthor, 'authored');
       return Array.from(byId.values()).sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
     },
 

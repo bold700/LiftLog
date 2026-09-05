@@ -4,7 +4,7 @@
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { todayNl } from './liftlogData.mjs';
+import { todayNl, scheduleWeekFor, weekdayIndex } from './liftlogData.mjs';
 
 const ROLE_LABEL = { sporter: 'sporter', trainer: 'trainer', admin: 'beheerder' };
 
@@ -41,6 +41,48 @@ function nextDayIndex(schema, logs) {
   const lastDate = last.date.slice(0, 10);
   if (lastDate === todayNl()) return { index: last.schemaDayIndex % schema.days.length, startedToday: true, lastDate };
   return { index: (last.schemaDayIndex + 1) % schema.days.length, startedToday: false, lastDate };
+}
+
+const WEEKDAYS = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'];
+
+/** Datum n dagen vanaf vandaag, als YYYY-MM-DD. */
+function dayOffset(days) {
+  const d = new Date(`${todayNl()}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Zet "morgen", "zondag" of "2026-09-06" om naar een datum (YYYY-MM-DD).
+ * Een weekdagnaam betekent de eerstvolgende keer dat die dag valt, vandaag meegerekend.
+ */
+function resolveDate(input) {
+  const t = String(input ?? '').trim().toLowerCase();
+  if (!t) return todayNl();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  if (t === 'vandaag') return todayNl();
+  if (t === 'morgen') return dayOffset(1);
+  if (t === 'overmorgen') return dayOffset(2);
+  if (t === 'gisteren') return dayOffset(-1);
+  const wanted = WEEKDAYS.findIndex((d) => t.includes(d));
+  if (wanted >= 0) {
+    const diff = (wanted - weekdayIndex(todayNl()) + 7) % 7;
+    return dayOffset(diff);
+  }
+  return todayNl();
+}
+
+/** Is dit een groepsles (categorie "Groepslessen" of audience "group")? */
+function isGroupClass(s) {
+  return String(s.category ?? '').toLowerCase().includes('groepsles') || s.audience === 'group';
+}
+
+/**
+ * Schema's die voor deze persoon zélf bedoeld zijn. Een trainer maakt schema's voor sporters
+ * ('authored'); die zijn niet zijn eigen training en tellen hier dus niet mee.
+ */
+function ownSchemas(schemas) {
+  return schemas.filter((s) => s.source !== 'authored');
 }
 
 /** Kies het actieve schema: binnen start/einddatum, anders het nieuwste. */
@@ -82,16 +124,27 @@ export function buildServer(ctx, store) {
     ? { athlete: z.string().optional().describe('Alleen voor trainers: naam of e-mail van de sporter. Weglaten = jezelf.') }
     : {};
 
-  /** Bepaal over wie het gaat en controleer rechten. */
+  /**
+   * Bepaal over wie het gaat en controleer rechten.
+   * Een trainer komt alleen bij zichzelf en bij zijn eigen sporters; alleen een beheerder bij iedereen.
+   * Een sporter komt nooit bij een ander (die heeft de parameter `athlete` niet eens).
+   */
   async function resolveTarget(athlete) {
     const q = norm(athlete);
     if (!q) return me;
     if (!isStaff) throw new Error('Je kunt alleen je eigen gegevens bekijken.');
     const all = await store.getAllProfiles();
-    const exact = all.find((p) => norm(p.email) === q || norm(p.displayName) === q);
-    const partial = exact ? [exact] : all.filter((p) => norm(p.displayName).includes(q) || norm(p.email).includes(q));
+    const reachable = me.role === 'admin' ? all : all.filter((p) => p.userId === me.userId || p.trainerId === me.userId);
+    const exact = reachable.find((p) => norm(p.email) === q || norm(p.displayName) === q);
+    const partial = exact ? [exact] : reachable.filter((p) => norm(p.displayName).includes(q) || norm(p.email).includes(q));
     if (partial.length === 1) return partial[0];
-    if (partial.length === 0) throw new Error(`Geen sporter gevonden die lijkt op "${athlete}".`);
+    if (partial.length === 0) {
+      throw new Error(
+        me.role === 'admin'
+          ? `Geen sporter gevonden die lijkt op "${athlete}".`
+          : `Geen sporter van jou gevonden die lijkt op "${athlete}". Je kunt alleen bij sporters die aan jou zijn gekoppeld.`
+      );
+    }
     throw new Error(`Meerdere sporters gevonden voor "${athlete}": ${partial.map(displayName).join(', ')}. Wees specifieker.`);
   }
 
@@ -143,8 +196,25 @@ export function buildServer(ctx, store) {
       inputSchema: { ...athleteParam },
     },
     withTarget(async (t) => {
-      const schemas = await store.getSchemasForUser(t.userId, t.role);
-      if (!schemas.length) return text({ message: `${displayName(t)} heeft nog geen trainingsschema. Vraag je trainer om er een te maken.` });
+      const all = await store.getSchemasForUser(t.userId, t.role);
+      const schemas = ownSchemas(all);
+      if (!schemas.length) {
+        // Geen eigen training: wijs een trainer door naar zijn groepslessen en sporters.
+        const today = todayNl();
+        const week = scheduleWeekFor(today);
+        const wd = weekdayIndex(today);
+        const classesToday = all
+          .filter((s) => isGroupClass(s) && s.scheduleWeek === week && (s.seriesOrder === wd || norm(s.series).includes(WEEKDAYS[wd])))
+          .map((s) => s.name);
+        return text({
+          message:
+            all.length > 0
+              ? `${displayName(t)} heeft zelf geen trainingsschema toegewezen gekregen; de schema's die deze trainer voor sporters en groepslessen maakte tellen niet als eigen training. Gebruik "athlete" voor de workout van een sporter, of "get_class_workout" voor een groepsles.`
+              : `${displayName(t)} heeft nog geen trainingsschema. Vraag je trainer om er een te maken.`,
+          groupClassesToday: classesToday,
+          scheduleWeek: week,
+        });
+      }
       const logs = await store.getLogsForUser(t.userId);
       const schema = pickActiveSchema(schemas);
       const { index, startedToday, lastDate } = nextDayIndex(schema, logs);
@@ -185,8 +255,8 @@ export function buildServer(ctx, store) {
       inputSchema: { ...athleteParam, schemaId: z.string().optional().describe('Schema-id; weglaten = het actieve schema.') },
     },
     withTarget(async (t, args) => {
-      const schemas = await store.getSchemasForUser(t.userId, t.role);
-      const schema = args.schemaId ? schemas.find((s) => s.id === args.schemaId) : pickActiveSchema(schemas);
+      const all = await store.getSchemasForUser(t.userId, t.role);
+      const schema = args.schemaId ? all.find((s) => s.id === args.schemaId) : pickActiveSchema(ownSchemas(all));
       if (!schema) return text({ message: 'Geen schema gevonden.' });
       return text({
         schemaId: schema.id,
@@ -221,7 +291,7 @@ export function buildServer(ctx, store) {
       },
     },
     withTarget(async (t, args) => {
-      const schemas = await store.getSchemasForUser(t.userId, t.role);
+      const schemas = ownSchemas(await store.getSchemasForUser(t.userId, t.role));
       const logs = await store.getLogsForUser(t.userId);
       let schemaId = null;
       let schemaDayIndex = null;
@@ -440,6 +510,67 @@ export function buildServer(ctx, store) {
         measurements: recent.map((m) => ({ date: m.date, weightKg: m.weightKg, bodyFatPct: m.bodyFatPct, waistCm: m.waistCm, note: m.note || null })),
       });
     })
+  );
+
+  server.registerTool(
+    'get_class_workout',
+    {
+      title: 'Groepsles opzoeken',
+      description:
+        'De oefeningen van een groepsles op een bepaalde dag. Gebruik dit bij vragen als "wat is de les van morgen", "wat staat er zondag op het programma" of "welke groepsles is er woensdag". De juiste schemaweek wordt automatisch bepaald uit het weeknummer van de kalender, dus niet uit de naam van het schema.',
+      inputSchema: {
+        date: z.string().optional().describe('YYYY-MM-DD, of "vandaag" / "morgen" / een weekdag zoals "zondag". Weglaten = vandaag.'),
+        series: z.string().optional().describe('Lesmoment, bijv. "Woensdag ochtend". Weglaten = het lesmoment dat bij die weekdag hoort.'),
+      },
+    },
+    async (args) => {
+      try {
+        const date = resolveDate(args?.date);
+        const week = scheduleWeekFor(date);
+        const wd = weekdayIndex(date);
+        const all = await store.getSchemasForUser(me.userId, me.role);
+        const classes = all.filter(isGroupClass);
+        if (!classes.length) return text({ message: 'Er zijn geen groepslessen gevonden.' });
+
+        const thisWeek = classes.filter((s) => s.scheduleWeek === week);
+        const q = norm(args?.series);
+        const match = (s) =>
+          q ? norm(s.series).includes(q) || norm(s.name).includes(q) : s.seriesOrder === wd || norm(s.series).includes(WEEKDAYS[wd]);
+        const hits = thisWeek.filter(match);
+
+        if (!hits.length) {
+          const series = [...new Set(classes.map((s) => s.series).filter(Boolean))];
+          return text({
+            message: `Geen groepsles gevonden voor ${WEEKDAYS[wd]} ${date} (schemaweek ${week}).`,
+            date,
+            weekday: WEEKDAYS[wd],
+            scheduleWeek: week,
+            availableSeries: series,
+            seriesThisWeek: thisWeek.map((s) => s.series ?? s.name),
+          });
+        }
+
+        return text({
+          date,
+          weekday: WEEKDAYS[wd],
+          scheduleWeek: week,
+          classes: hits.map((s) => ({
+            schemaId: s.id,
+            name: s.name,
+            series: s.series,
+            exercises: (s.days[0]?.exercises ?? []).map((e) => ({
+              name: e.exerciseName,
+              targetSets: e.setsTarget,
+              targetReps: e.repsTarget,
+              targetWeightKg: e.targetWeight ?? null,
+              notes: e.notes || null,
+            })),
+          })),
+        });
+      } catch (e) {
+        return fail(e instanceof Error ? e.message : 'Groepsles opzoeken mislukt.');
+      }
+    }
   );
 
   if (isStaff) {
