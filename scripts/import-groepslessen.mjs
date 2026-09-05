@@ -5,8 +5,9 @@
  * CSV-exports uit Google Sheets (één CSV per tabblad, bestandsnaam = naam van de les).
  *
  * Per tabblad × week ontstaat één losse workout (audience "group", categorie "Groepslessen",
- * reeks = naam van de les, één dag "Week n"). De --emit-app-data variant bewaart per les de 26 weken;
- * de importknop in de app splitst ze op dezelfde manier.
+ * reeks = het lesmoment zoals "Woensdag ochtend", één dag "Week n"). Er hoort geen startdatum bij:
+ * week 1..26 volgen de ISO-weeknummers van de kalender en herhalen zich vanaf week 27.
+ * De --emit-app-data variant bewaart per les de 26 weken; de importknop in de app doet hetzelfde.
  * Elke regel in het raster wordt een oefening. Regels die een trainingsvorm beschrijven
  * ("10x10x8", "Tabata", "AMRAP 17min", "8 reps beastmode") worden een notitie bij die week.
  * Supersets ("hiptrust-facepull") worden twee oefeningen met een verwijzing naar elkaar.
@@ -23,7 +24,6 @@
  *   --dry-run               Niets naar Firestore schrijven, alleen output + rapport.
  *   --trainer-email <mail>  E-mail van de trainer (eigenaar van de workouts). Of:
  *   --trainer-uid <uid>     Firebase Auth uid van de trainer.
- *   --start <YYYY-MM-DD>    Datum van Week 1 (standaard: 2026-09-07). Bepaalt "deze week" in de app.
  *   --json <pad>            Ander JSON-bronbestand (standaard scripts/groepslessen/trainingen-sgt-2026.json).
  *   --csv <map>             Map met CSV-exports uit Google Sheets (één per tabblad) i.p.v. de JSON.
  *   --only <naam>           Alleen het tabblad met deze naam importeren.
@@ -44,7 +44,6 @@ const DATA_DIR = join(__dirname, 'groepslessen');
 const DEFAULT_JSON = join(DATA_DIR, 'trainingen-sgt-2026.json');
 const OUT_DIR = join(DATA_DIR, 'out');
 const APP_DATA_FILE = join(__dirname, '../src/data/groepslessenSgt2026.json');
-const DEFAULT_START = '2026-09-07';
 const DEFAULT_SETS = 3;
 const DEFAULT_REPS = 12;
 
@@ -53,14 +52,13 @@ const DEFAULT_REPS = 12;
 // ---------------------------------------------------------------------------
 
 function parseArgs(argv) {
-  const args = { dryRun: false, start: DEFAULT_START, json: DEFAULT_JSON, csv: null, only: null, emitAppData: false };
+  const args = { dryRun: false, json: DEFAULT_JSON, csv: null, only: null, emitAppData: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
     if (a === '--dry-run') args.dryRun = true;
     else if (a === '--trainer-email') args.trainerEmail = next();
     else if (a === '--trainer-uid') args.trainerUid = next();
-    else if (a === '--start') args.start = next();
     else if (a === '--json') args.json = resolvePath(next());
     else if (a === '--csv') args.csv = resolvePath(next());
     else if (a === '--only') args.only = next();
@@ -73,10 +71,6 @@ function parseArgs(argv) {
       process.exit(1);
     }
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(args.start)) {
-    console.error('--start moet YYYY-MM-DD zijn');
-    process.exit(1);
-  }
   return args;
 }
 
@@ -84,10 +78,15 @@ function parseArgs(argv) {
 // Bron inlezen: JSON (uit PDF) of CSV-map (uit Google Sheets)
 // ---------------------------------------------------------------------------
 
-/** @returns {{ name: string, weeks: Record<string, string[]> }[]} */
+/** @returns {{ key?: string, name: string, order?: number, weeks: Record<string, string[]> }[]} */
 function loadTabsFromJson(path) {
   const doc = JSON.parse(readFileSync(path, 'utf8'));
-  return (doc.tabs || []).map((t) => ({ name: String(t.name), weeks: t.weeks || {} }));
+  return (doc.tabs || []).map((t) => ({
+    key: typeof t.key === 'string' ? t.key : undefined,
+    name: String(t.name),
+    order: typeof t.order === 'number' ? t.order : undefined,
+    weeks: t.weeks || {},
+  }));
 }
 
 /** Eenvoudige CSV-parser (komma's, dubbele quotes, newlines binnen quotes). */
@@ -151,7 +150,7 @@ function loadTabsFromCsvDir(dir) {
         (weeks[week] ||= []).push(...val.split(/\n/).map((s) => s.trim()).filter(Boolean));
       });
     }
-    return { name: basename(f, '.csv').trim(), weeks };
+    return { name: basename(f, '.csv').trim(), order: files.indexOf(f), weeks };
   });
 }
 
@@ -1028,16 +1027,11 @@ function slug(s) {
     .replace(/^_+|_+$/g, '');
 }
 
-function addDays(dateStr, days) {
-  const d = new Date(dateStr + 'T12:00:00Z');
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
 const CATEGORY = 'Groepslessen';
+const SCHEDULE_WEEKS = 26;
 
-/** Tabblad → { key, name, days } (alle weken van één les). */
-function buildLesson(tab) {
+/** Tabblad → { key, name, order, days } (alle weken van één les). */
+function buildLesson(tab, index) {
   const weekKeys = Object.keys(tab.weeks).sort((a, b) => Number(a.replace(/\D/g, '')) - Number(b.replace(/\D/g, '')));
   const days = weekKeys.map((week) => {
     const { notes, exercises } = parseWeek(tab.weeks[week] || []);
@@ -1045,31 +1039,32 @@ function buildLesson(tab) {
     if (notes) day.notes = notes;
     return day;
   });
-  return { key: slug(tab.name), name: tab.name, days };
+  // De key blijft vast (uit het bronbestand), zodat hernoemen geen nieuwe workouts aanmaakt.
+  return { key: tab.key ?? slug(tab.name), name: tab.name, order: tab.order ?? index, days };
 }
 
 /** Les → één Schema per week (zelfde vorm als src/types Schema en als de importknop in de app). */
-function buildWeekSchemas(lesson, { trainerId, start }) {
+function buildWeekSchemas(lesson, { trainerId }) {
   const createdAt = new Date().toISOString();
-  return lesson.days.map((day, weekIndex) => {
-    const weekStart = addDays(start, weekIndex * 7);
-    return {
-      id: `schema_sgt2026_${lesson.key}_w${String(weekIndex + 1).padStart(2, '0')}`,
-      name: `${lesson.name} · ${day.dayLabel}`,
-      trainerId,
-      clientId: null,
-      audience: 'group',
-      participantIds: [],
-      category: CATEGORY,
-      series: lesson.name,
-      createdAt,
-      days: [day],
-      startDate: weekStart,
-      endDate: addDays(weekStart, 6),
-      formule7: null,
-      isFormule7Template: false,
-    };
-  });
+  return lesson.days.map((day, weekIndex) => ({
+    id: `schema_sgt2026_${lesson.key}_w${String(weekIndex + 1).padStart(2, '0')}`,
+    name: `${lesson.name} · ${day.dayLabel}`,
+    trainerId,
+    clientId: null,
+    audience: 'group',
+    participantIds: [],
+    category: CATEGORY,
+    series: lesson.name,
+    seriesOrder: lesson.order,
+    scheduleWeek: weekIndex + 1,
+    createdAt,
+    days: [day],
+    // Geen periode: het schema volgt het weeknummer van de kalender (zie workoutFilter.ts).
+    startDate: null,
+    endDate: null,
+    formule7: null,
+    isFormule7Template: false,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -1114,7 +1109,7 @@ function printReport(lessons, schemas) {
     const ex = l.days.reduce((m, d) => m + d.exercises.length, 0);
     console.log(`  ${l.name.padEnd(28)} ${String(l.days.length).padStart(2)} weken  ${String(ex).padStart(4)} oefeningen`);
   }
-  console.log(`\nLosse workouts (les × week): ${schemas.length}, categorie "${CATEGORY}", ${schemas[0]?.startDate} t/m ${schemas[schemas.length - 1]?.endDate}`);
+  console.log(`\nLosse workouts (les × week): ${schemas.length}, categorie "${CATEGORY}", week 1 t/m ${SCHEDULE_WEEKS}`);
   const resolvedCount = [...report.resolved.values()].reduce((n, e) => n + e.count, 0);
   const unresolvedCount = [...report.unresolved.values()].reduce((n, e) => n + e.count, 0);
   console.log(`\nOefeningen totaal: ${totalEx}`);
@@ -1144,8 +1139,8 @@ async function main() {
   }
 
   const trainerId = await resolveTrainerId(args);
-  const lessons = tabs.map((t) => buildLesson(t));
-  const schemas = lessons.flatMap((l) => buildWeekSchemas(l, { trainerId, start: args.start }));
+  const lessons = tabs.map((t, i) => buildLesson(t, i));
+  const schemas = lessons.flatMap((l) => buildWeekSchemas(l, { trainerId }));
 
   mkdirSync(OUT_DIR, { recursive: true });
   for (const l of lessons) writeFileSync(join(OUT_DIR, `les_${l.key}.json`), JSON.stringify(l, null, 2));
@@ -1161,7 +1156,6 @@ async function main() {
     const appData = {
       source: 'Trainingen_SGT_2026.pdf',
       generatedAt: new Date().toISOString().slice(0, 10),
-      defaultStart: args.start,
       lessons,
     };
     writeFileSync(APP_DATA_FILE, JSON.stringify(appData));
