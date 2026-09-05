@@ -14,6 +14,12 @@ service cloud.firestore {
             || get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'trainer'
             || get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin');
     }
+    // Koppelsleutels voor AI-chats (MCP). Doc-id = SHA-256 van de sleutel; alleen de eigenaar beheert ze.
+    // De server (Admin SDK) leest ze om de gebruiker te herkennen.
+    match /mcpKeys/{keyId} {
+      allow read, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
     // Workouts: alleen eigen (trainer of toegewezen sporter)
     match /workouts/{workoutId} {
       allow read: if request.auth != null
