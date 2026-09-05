@@ -19,6 +19,7 @@ const store = {
   getProfile: async (id) => Object.values(profiles).find((p) => p.userId === id) ?? null,
   getAllProfiles: async () => Object.values(profiles),
   getSchemasForUser: async () => [],
+  saveSchema: async (sc) => ({ ...sc, id: 'schema_nieuw', createdAt: new Date().toISOString() }),
   getLogsForUser: async () => [],
   saveLog: async (l) => l,
   getNutritionForDay: async () => [],
@@ -55,6 +56,7 @@ const check = (label, ok, detail = '') => {
   const tools = (await client.listTools()).tools;
   check('sporter ziet list_athletes NIET', !tools.some((t) => t.name === 'list_athletes'));
   check('sporter heeft geen athlete-parameter', !Object.keys(tools.find((t) => t.name === 'get_profile').inputSchema.properties ?? {}).includes('athlete'));
+  check('sporter ziet create_workout NIET', !tools.some((t) => t.name === 'create_workout'));
   const r = await client.callTool({ name: 'get_profile', arguments: { athlete: 'margot' } });
   const t = r.content[0].text;
   check('sporter krijgt GEEN data van Margot', !t.includes('Margot') && !t.includes('margot@'), `kreeg: ${JSON.parse(t).name}`);
@@ -72,6 +74,8 @@ const check = (label, ok, detail = '') => {
   check('trainer kan sporter van ANDERE trainer niet opvragen', r.isError === true, (r.content[0].text || '').replace(/\s+/g, ' ').slice(0, 70));
   const eigen = await client.callTool({ name: 'get_profile', arguments: { athlete: 'danny' } });
   check('trainer kan zijn EIGEN sporter wel opvragen', !eigen.isError && eigen.content[0].text.includes('Danny'));
+  const mk = await client.callTool({ name: 'create_workout', arguments: { name: 'Test', athlete: 'margot', days: [{ dayLabel: 'A', exercises: [{ name: 'Squat', sets: 3, reps: 10 }] }] } });
+  check('trainer maakt GEEN workout voor sporter van een ander', mk.isError === true);
   await client.close(); close();
 }
 // --- Beheerder: mag overal bij ---
