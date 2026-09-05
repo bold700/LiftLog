@@ -120,3 +120,33 @@ export function filterWorkouts(
     return a.name.localeCompare(b.name, 'nl', { numeric: true });
   });
 }
+
+// --- Filter op sporter ------------------------------------------------------
+
+/** Pseudo-sleutels naast de uid's van sporters. */
+export const ASSIGNEE_OPEN = 'open';
+export const ASSIGNEE_UNASSIGNED = 'unassigned';
+
+/** Uid's van de sporters aan wie deze workout is gekoppeld (één klant of meerdere klanten). */
+export function getAssigneeIds(schema: Schema): string[] {
+  if (schema.audience === 'group' || schema.audience === 'open') return [];
+  const ids = new Set<string>();
+  if (schema.clientId) ids.add(schema.clientId);
+  for (const id of schema.participantIds ?? []) if (id) ids.add(id);
+  return Array.from(ids);
+}
+
+/**
+ * Valt de workout binnen de selectie? Lege selectie = alles. Meerdere selecties zijn "of":
+ * een sporter-uid matcht als de workout aan die sporter hangt, `open` matcht open workouts,
+ * `unassigned` matcht workouts zonder klant (en niet open of groepsles).
+ */
+export function matchesAssignees(schema: Schema, selected: string[]): boolean {
+  if (selected.length === 0) return true;
+  const ids = getAssigneeIds(schema);
+  return selected.some((key) => {
+    if (key === ASSIGNEE_OPEN) return schema.audience === 'open';
+    if (key === ASSIGNEE_UNASSIGNED) return ids.length === 0 && schema.audience !== 'open' && schema.audience !== 'group';
+    return ids.includes(key);
+  });
+}
