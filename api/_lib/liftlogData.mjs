@@ -132,16 +132,34 @@ export function createStore(db) {
       return snap.docs.map((d) => toProfile(d.data(), d.id));
     },
 
+    /**
+     * Schema's rond deze gebruiker, elk met een `source`:
+     *  - 'client'      : persoonlijk aan deze gebruiker toegewezen
+     *  - 'participant' : deelnemer aan een groepsles / meerdere-klanten-schema
+     *  - 'open'        : beschikbaar voor iedereen
+     *  - 'authored'    : door deze trainer gemaakt voor anderen (dus NIET zijn eigen training)
+     * De eerste treffer wint, zodat een eigen schema nooit als 'authored' wordt gemarkeerd.
+     */
     async getSchemasForUser(userId, role) {
       const col = db.collection('workouts');
-      const snaps = await Promise.all([
+      const isStaff = role === 'trainer' || role === 'admin';
+      const [byClient, byParticipant, byOpen, byAuthor] = await Promise.all([
         col.where('clientId', '==', userId).get(),
         col.where('participantIds', 'array-contains', userId).get(),
         col.where('audience', '==', 'open').get(),
-        ...(role === 'trainer' || role === 'admin' ? [col.where('trainerId', '==', userId).get()] : []),
+        isStaff ? col.where('trainerId', '==', userId).get() : null,
       ]);
       const byId = new Map();
-      for (const snap of snaps) for (const d of snap.docs) byId.set(d.id, toSchema(d.data(), d.id));
+      const add = (snap, source) => {
+        if (!snap) return;
+        for (const d of snap.docs) {
+          if (!byId.has(d.id)) byId.set(d.id, { ...toSchema(d.data(), d.id), source });
+        }
+      };
+      add(byClient, 'client');
+      add(byParticipant, 'participant');
+      add(byOpen, 'open');
+      add(byAuthor, 'authored');
       return Array.from(byId.values()).sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
     },
 

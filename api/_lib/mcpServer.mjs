@@ -43,6 +43,14 @@ function nextDayIndex(schema, logs) {
   return { index: (last.schemaDayIndex + 1) % schema.days.length, startedToday: false, lastDate };
 }
 
+/**
+ * Schema's die voor deze persoon zélf bedoeld zijn. Een trainer maakt schema's voor sporters
+ * ('authored'); die zijn niet zijn eigen training en tellen hier dus niet mee.
+ */
+function ownSchemas(schemas) {
+  return schemas.filter((s) => s.source !== 'authored');
+}
+
 /** Kies het actieve schema: binnen start/einddatum, anders het nieuwste. */
 function pickActiveSchema(schemas) {
   const today = todayNl();
@@ -143,8 +151,18 @@ export function buildServer(ctx, store) {
       inputSchema: { ...athleteParam },
     },
     withTarget(async (t) => {
-      const schemas = await store.getSchemasForUser(t.userId, t.role);
-      if (!schemas.length) return text({ message: `${displayName(t)} heeft nog geen trainingsschema. Vraag je trainer om er een te maken.` });
+      const all = await store.getSchemasForUser(t.userId, t.role);
+      const schemas = ownSchemas(all);
+      if (!schemas.length) {
+        const authored = all.length;
+        return text({
+          message:
+            authored > 0
+              ? `${displayName(t)} heeft zelf geen trainingsschema toegewezen gekregen. Wel ${authored} ${authored === 1 ? 'schema' : "schema's"} die deze trainer voor sporters maakte; die tellen niet als eigen training. Gebruik de parameter "athlete" om de workout van een sporter op te vragen.`
+              : `${displayName(t)} heeft nog geen trainingsschema. Vraag je trainer om er een te maken.`,
+          authoredForOthers: authored,
+        });
+      }
       const logs = await store.getLogsForUser(t.userId);
       const schema = pickActiveSchema(schemas);
       const { index, startedToday, lastDate } = nextDayIndex(schema, logs);
@@ -185,8 +203,8 @@ export function buildServer(ctx, store) {
       inputSchema: { ...athleteParam, schemaId: z.string().optional().describe('Schema-id; weglaten = het actieve schema.') },
     },
     withTarget(async (t, args) => {
-      const schemas = await store.getSchemasForUser(t.userId, t.role);
-      const schema = args.schemaId ? schemas.find((s) => s.id === args.schemaId) : pickActiveSchema(schemas);
+      const all = await store.getSchemasForUser(t.userId, t.role);
+      const schema = args.schemaId ? all.find((s) => s.id === args.schemaId) : pickActiveSchema(ownSchemas(all));
       if (!schema) return text({ message: 'Geen schema gevonden.' });
       return text({
         schemaId: schema.id,
@@ -221,7 +239,7 @@ export function buildServer(ctx, store) {
       },
     },
     withTarget(async (t, args) => {
-      const schemas = await store.getSchemasForUser(t.userId, t.role);
+      const schemas = ownSchemas(await store.getSchemasForUser(t.userId, t.role));
       const logs = await store.getLogsForUser(t.userId);
       let schemaId = null;
       let schemaDayIndex = null;
