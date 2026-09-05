@@ -514,6 +514,60 @@ export function buildServer(ctx, store) {
 
   if (isStaff) {
     server.registerTool(
+      'create_account',
+      {
+        title: 'Account aanmaken',
+        description:
+          'Maakt een nieuw LiftLog-account aan voor een sporter of trainer, met een tijdelijk wachtwoord dat je één keer terugkrijgt en aan de persoon doorgeeft. E-mailverificatie is niet nodig; de gebruiker kan meteen inloggen en het wachtwoord later zelf wijzigen. Vraag altijd eerst om een echt e-mailadres en een naam: verzin die nooit zelf, want een verkeerd adres levert een account op dat niemand kan gebruiken. Beheerdersaccounts maak je niet hier maar in de app.',
+        inputSchema: {
+          email: z.string().email().describe('Het echte e-mailadres van de persoon; hiermee logt hij in.'),
+          name: z.string().min(1).describe('Volledige naam, bijv. "Jan Jansen".'),
+          role: z.enum(['sporter', 'trainer']).optional().describe('Standaard "sporter".'),
+          trainer: z
+            .string()
+            .optional()
+            .describe('Alleen bij een sporter: naam of e-mail van de trainer. Weglaten = jijzelf. Geef "geen" voor geen trainer.'),
+        },
+      },
+      async (args) => {
+        try {
+          const role = args.role ?? 'sporter';
+          let trainerId = me.userId;
+          if (role === 'sporter' && args.trainer) {
+            const q = norm(args.trainer);
+            if (q === 'geen' || q === 'none') {
+              trainerId = null;
+            } else {
+              const all = await store.getAllProfiles();
+              const hits = all.filter(
+                (p) => (p.role === 'trainer' || p.role === 'admin') && (norm(p.displayName).includes(q) || norm(p.email).includes(q))
+              );
+              if (hits.length !== 1) {
+                return fail(
+                  hits.length === 0
+                    ? `Geen trainer gevonden die lijkt op "${args.trainer}".`
+                    : `Meerdere trainers gevonden voor "${args.trainer}": ${hits.map(displayName).join(', ')}.`
+                );
+              }
+              trainerId = hits[0].userId;
+            }
+          }
+          const created = await store.createAccount({ email: args.email, displayName: args.name.trim(), role, trainerId });
+          return text({
+            ok: true,
+            name: args.name.trim(),
+            email: created.email,
+            role,
+            temporaryPassword: created.password,
+            note: 'Geef dit wachtwoord door aan de gebruiker; het is hierna niet meer op te vragen. Hij kan meteen inloggen en het zelf wijzigen.',
+          });
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : 'Account aanmaken mislukt.');
+        }
+      }
+    );
+
+    server.registerTool(
       'create_workout',
       {
         title: 'Workout aanmaken',
