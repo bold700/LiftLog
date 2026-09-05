@@ -10,6 +10,32 @@ export function todayNl() {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Amsterdam' });
 }
 
+/** Aantal weken in één schemablok (een half jaar). Gelijk aan SCHEDULE_WEEKS in workoutFilter.ts. */
+export const SCHEDULE_WEEKS = 26;
+
+/** ISO 8601-weeknummer (1-53): de week waarin de donderdag valt. */
+export function getIsoWeek(date) {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dayIndex = (d.getUTCDay() + 6) % 7; // maandag = 0
+  d.setUTCDate(d.getUTCDate() - dayIndex + 3); // donderdag van deze week
+  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  const firstDayIndex = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayIndex + 3);
+  return 1 + Math.round((d.getTime() - firstThursday.getTime()) / (7 * 24 * 60 * 60 * 1000));
+}
+
+/** Welke week van het halfjaarschema loopt op deze datum (1-26). */
+export function scheduleWeekFor(isoDate) {
+  const d = new Date(`${isoDate}T12:00:00Z`);
+  return ((getIsoWeek(d) - 1) % SCHEDULE_WEEKS) + 1;
+}
+
+/** Weekdag van een YYYY-MM-DD-datum: 0 = maandag … 6 = zondag (zoals seriesOrder). */
+export function weekdayIndex(isoDate) {
+  const d = new Date(`${isoDate}T12:00:00Z`);
+  return (d.getUTCDay() + 6) % 7;
+}
+
 export function hashKey(key) {
   return createHash('sha256').update(String(key)).digest('hex');
 }
@@ -62,6 +88,10 @@ function toSchema(data, id) {
     clientId: str(data.clientId),
     audience: data.audience ?? 'single',
     participantIds: Array.isArray(data.participantIds) ? data.participantIds.map(String) : [],
+    category: str(data.category),
+    series: str(data.series),
+    seriesOrder: num(data.seriesOrder),
+    scheduleWeek: num(data.scheduleWeek),
     createdAt: typeof data.createdAt === 'string' ? data.createdAt : '',
     days: Array.isArray(data.days) ? data.days : [],
     startDate: toDateStr(data.startDate),
