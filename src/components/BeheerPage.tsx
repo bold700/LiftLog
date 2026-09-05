@@ -34,6 +34,7 @@ import { deleteAccountAsAdmin } from '../services/adminAccountService';
 import type { Profile, ProfileRole } from '../types';
 import { PageLayout, ContentCard } from './layout';
 import { getPendingWorkoutRequests, resolveWorkoutRequest, type WorkoutRequest } from '../services/workoutRequestService';
+import { GroepslessenImportCard } from './GroepslessenImportCard';
 
 export function BeheerPage() {
   const profile = useProfile();
@@ -445,6 +446,8 @@ export function BeheerPage() {
             </Box>
           </Box>
         )}
+
+        <GroepslessenImportCard />
       </ContentCard>
 
       <Dialog open={!!editTarget} onClose={() => setEditTarget(null)} maxWidth="xs" fullWidth>

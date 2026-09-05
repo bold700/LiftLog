@@ -25,6 +25,8 @@
  *   --json <pad>            Ander JSON-bronbestand (standaard scripts/groepslessen/trainingen-sgt-2026.json).
  *   --csv <map>             Map met CSV-exports uit Google Sheets (één per tabblad) i.p.v. de JSON.
  *   --only <naam>           Alleen het tabblad met deze naam importeren.
+ *   --emit-app-data         Schrijf src/data/groepslessenSgt2026.json, de bron voor de importknop in
+ *                           de app (Beheer → Groepslessen importeren). Geen Firestore nodig.
  *
  * Bij opnieuw draaien worden dezelfde workout-id's gebruikt (schema_sgt2026_<tab>), dus bestaande
  * imports worden bijgewerkt in plaats van gedupliceerd.
@@ -39,6 +41,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'groepslessen');
 const DEFAULT_JSON = join(DATA_DIR, 'trainingen-sgt-2026.json');
 const OUT_DIR = join(DATA_DIR, 'out');
+const APP_DATA_FILE = join(__dirname, '../src/data/groepslessenSgt2026.json');
 const DEFAULT_START = '2026-09-07';
 const DEFAULT_SETS = 3;
 const DEFAULT_REPS = 12;
@@ -48,7 +51,7 @@ const DEFAULT_REPS = 12;
 // ---------------------------------------------------------------------------
 
 function parseArgs(argv) {
-  const args = { dryRun: false, start: DEFAULT_START, json: DEFAULT_JSON, csv: null, only: null };
+  const args = { dryRun: false, start: DEFAULT_START, json: DEFAULT_JSON, csv: null, only: null, emitAppData: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
@@ -59,6 +62,7 @@ function parseArgs(argv) {
     else if (a === '--json') args.json = resolvePath(next());
     else if (a === '--csv') args.csv = resolvePath(next());
     else if (a === '--only') args.only = next();
+    else if (a === '--emit-app-data') args.emitAppData = true;
     else if (a === '--help' || a === '-h') {
       console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('*/')[0]);
       process.exit(0);
@@ -1136,6 +1140,18 @@ async function main() {
   writeFileSync(join(OUT_DIR, 'mapping-rapport.json'), JSON.stringify(mapping, null, 2));
   printReport(schemas);
   console.log(`\nJSON per workout + mapping-rapport.json staan in ${OUT_DIR}`);
+
+  if (args.emitAppData) {
+    const appData = {
+      source: 'Trainingen_SGT_2026.pdf',
+      generatedAt: new Date().toISOString().slice(0, 10),
+      defaultStart: args.start,
+      lessons: schemas.map((s) => ({ key: s.id.replace(/^schema_sgt2026_/, ''), name: s.name, days: s.days })),
+    };
+    writeFileSync(APP_DATA_FILE, JSON.stringify(appData));
+    console.log(`App-data geschreven naar ${APP_DATA_FILE} (${schemas.length} lessen).`);
+    return;
+  }
 
   if (args.dryRun) {
     console.log('\n--dry-run: niets naar Firestore geschreven.');

@@ -15,7 +15,18 @@ per week een lijst oefeningen. `trainingen-sgt-2026.json` is daar de uitgelezen 
 
 In de app staat bij zo'n workout de huidige week bovenaan (badge "Deze week"), berekend vanaf de startdatum.
 
-## Stappen
+## Snelste route: knop in de app
+
+Log in als trainer, ga naar **Beheer → Groepslessen importeren**, pas de lesnamen en de datum van Week 1
+aan en klik op **Importeren als workouts**. De app schrijft de workouts op jouw naam naar Firestore; er is
+geen service account nodig. De data daarvoor staat in `src/data/groepslessenSgt2026.json` en wordt
+opnieuw gemaakt met:
+
+```bash
+npm run import:groepslessen -- --dry-run --emit-app-data
+```
+
+## Stappen via het script (alternatief)
 
 1. **Namen van de lessen** aanpassen in `trainingen-sgt-2026.json` (`tabs[].name`, nu "Groepsles 1" … "Groepsles 8").
    De naam bepaalt ook het workout-id (`schema_sgt2026_<naam>`), dus kies hem vóór de eerste echte import.
