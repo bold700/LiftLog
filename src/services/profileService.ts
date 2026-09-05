@@ -57,6 +57,7 @@ function toProfile(data: Record<string, unknown>, userId: string): Profile {
     restingHrBpm: numOrNull(data.restingHrBpm),
     trainerId: toStr(data.trainerId),
     trainerRequested: data.trainerRequested === true,
+    createdByAdmin: data.createdByAdmin === true,
     leaderboardVisibility,
     createdAt: ts(data.createdAt),
     updatedAt: ts(data.updatedAt),

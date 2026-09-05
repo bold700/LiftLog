@@ -1,6 +1,7 @@
 /**
  * Profielen: alle accounts inzien en bijwerken (trainers en beheerders).
- * Zoeken, filteren op rol/volledigheid, en per profiel alle velden bewerken in één dialoog.
+ * Zoeken, filteren op rol/volledigheid, per profiel alle velden bewerken in één dialoog,
+ * en nieuwe accounts aanmaken (zonder e-mailverificatie) om voor sporters bij te houden.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -27,7 +28,9 @@ import {
 } from '@mui/material';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
+import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
 import { useProfile } from '../context/ProfileContext';
+import { useAuth } from '../context/AuthContext';
 import { getAllProfiles, updateProfile } from '../services/profileService';
 import type { LeaderboardVisibility, Profile, ProfileRole } from '../types';
 import { PageLayout, ContentCard } from './layout';
@@ -36,6 +39,9 @@ import { ageOnDate } from '../utils/bodyFat';
 import { heartRateZones } from '../utils/heartRate';
 
 type Filter = 'all' | 'sporter' | 'trainer' | 'incomplete';
+
+const FILTER_LABEL: Record<Filter, string> = { all: 'Alle', sporter: 'Sporters', trainer: 'Trainers', incomplete: 'Onvolledig' };
+const FILTERS: Filter[] = ['all', 'sporter', 'trainer', 'incomplete'];
 
 const ROLE_LABEL: Record<ProfileRole, string> = { sporter: 'Sporter', trainer: 'Trainer', admin: 'Beheerder' };
 
@@ -98,8 +104,28 @@ function num(v: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+/** Formulier voor een nieuw account (aangemaakt door trainer/beheerder). */
+interface NewAccountState {
+  displayName: string;
+  email: string;
+  password: string;
+  role: 'sporter' | 'trainer';
+  trainerId: string;
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Willekeurig, makkelijk over te typen tijdelijk wachtwoord (zonder verwarrende tekens). */
+function generatePassword(): string {
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = new Uint32Array(10);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join('');
+}
+
 export function ProfielenPage() {
   const profileCtx = useProfile();
+  const auth = useAuth();
   const isTrainer = profileCtx?.isTrainer ?? false;
   const isAdmin = profileCtx?.role === 'admin';
   const selfId = profileCtx?.profile?.userId ?? '';
@@ -115,6 +141,10 @@ export function ProfielenPage() {
   const [target, setTarget] = useState<Profile | null>(null);
   const [edit, setEdit] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const [newAccount, setNewAccount] = useState<NewAccountState | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -157,6 +187,57 @@ export function ProfielenPage() {
   }, [profiles, query, filter, nameOf]);
 
   const incompleteCount = useMemo(() => profiles.filter((p) => missingFields(p).length > 0).length, [profiles]);
+  const sporterCount = useMemo(() => profiles.filter((p) => p.role === 'sporter').length, [profiles]);
+  const filterCount: Record<Filter, number> = {
+    all: profiles.length,
+    sporter: sporterCount,
+    trainer: trainers.length,
+    incomplete: incompleteCount,
+  };
+
+  const openCreate = () => {
+    setCreateError(null);
+    setMessage(null);
+    // Nieuwe sporter standaard aan mezelf koppelen, zodat ik direct voor hem/haar kan bijhouden.
+    setNewAccount({ displayName: '', email: '', password: generatePassword(), role: 'sporter', trainerId: selfId });
+  };
+
+  const closeCreate = () => {
+    if (creating) return;
+    setNewAccount(null);
+    setCreateError(null);
+  };
+
+  const handleCreate = async () => {
+    if (!newAccount || !auth) return;
+    const mail = newAccount.email.trim();
+    if (!EMAIL_RE.test(mail)) {
+      setCreateError('Vul een geldig e-mailadres in.');
+      return;
+    }
+    if (newAccount.password.length < 6) {
+      setCreateError('Het tijdelijke wachtwoord moet minstens 6 tekens zijn.');
+      return;
+    }
+    setCreating(true);
+    setCreateError(null);
+    try {
+      await auth.adminCreateAccount(mail, newAccount.password, newAccount.role, newAccount.displayName.trim() || null, {
+        trainerId: newAccount.role === 'sporter' ? newAccount.trainerId || null : null,
+      });
+      const who = newAccount.displayName.trim() || mail;
+      setMessage({
+        type: 'success',
+        text: `Account aangemaakt voor ${who} (${newAccount.role === 'trainer' ? 'trainer' : 'sporter'}). Tijdelijk wachtwoord: ${newAccount.password} — geef dit door; e-mailverificatie is niet nodig en het wachtwoord kan later gewijzigd worden.`,
+      });
+      setNewAccount(null);
+      await load();
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : 'Account aanmaken mislukt.');
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const openEditor = (p: Profile) => {
     setTarget(p);
@@ -239,20 +320,43 @@ export function ProfielenPage() {
           <Button size="small" startIcon={<RefreshRoundedIcon />} onClick={load} disabled={loading}>
             {loading ? 'Laden…' : 'Vernieuwen'}
           </Button>
+          <Button size="small" variant="contained" startIcon={<PersonAddRoundedIcon />} onClick={openCreate} disabled={!auth}>
+            Nieuw account
+          </Button>
         </Box>
-        <ToggleButtonGroup
-          size="small"
-          exclusive
-          value={filter}
-          onChange={(_, v: Filter | null) => v && setFilter(v)}
-          sx={{ mb: 2, flexWrap: 'wrap' }}
-          aria-label="Filter profielen"
-        >
-          <ToggleButton value="all">Alle ({profiles.length})</ToggleButton>
-          <ToggleButton value="sporter">Sporters ({profiles.filter((p) => p.role === 'sporter').length})</ToggleButton>
-          <ToggleButton value="trainer">Trainers ({trainers.length})</ToggleButton>
-          <ToggleButton value="incomplete">Onvolledig ({incompleteCount})</ToggleButton>
-        </ToggleButtonGroup>
+        {fullScreen ? (
+          <TextField
+            select
+            size="small"
+            fullWidth
+            label="Filter"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as Filter)}
+            sx={{ mb: 2 }}
+            inputProps={{ 'aria-label': 'Filter profielen' }}
+          >
+            {FILTERS.map((f) => (
+              <MenuItem key={f} value={f}>
+                {FILTER_LABEL[f]} ({filterCount[f]})
+              </MenuItem>
+            ))}
+          </TextField>
+        ) : (
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={filter}
+            onChange={(_, v: Filter | null) => v && setFilter(v)}
+            sx={{ mb: 2, flexWrap: 'wrap' }}
+            aria-label="Filter profielen"
+          >
+            {FILTERS.map((f) => (
+              <ToggleButton key={f} value={f}>
+                {FILTER_LABEL[f]} ({filterCount[f]})
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        )}
 
         {message && (
           <Alert severity={message.type} sx={{ mb: 2 }} onClose={() => setMessage(null)}>
@@ -270,6 +374,11 @@ export function ProfielenPage() {
               <Typography color="text.secondary">
                 {profiles.length === 0 ? 'Nog geen profielen.' : 'Geen profielen gevonden met dit filter.'}
               </Typography>
+              {profiles.length === 0 && (
+                <Button size="small" startIcon={<PersonAddRoundedIcon />} onClick={openCreate} sx={{ mt: 1 }}>
+                  Nieuw account aanmaken
+                </Button>
+              )}
             </Box>
           ) : (
             <List disablePadding>
@@ -401,6 +510,105 @@ export function ProfielenPage() {
           <Button onClick={closeEditor}>Annuleren</Button>
           <Button variant="contained" onClick={handleSave} disabled={saving}>
             {saving ? 'Bezig…' : 'Opslaan'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!newAccount} onClose={closeCreate} maxWidth="sm" fullWidth fullScreen={fullScreen}>
+        <DialogTitle>Nieuw account</DialogTitle>
+        {newAccount && (
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Maak direct een account aan met een tijdelijk wachtwoord. E-mailverificatie is niet nodig: de gebruiker kan meteen inloggen en
+              jij kunt direct gegevens voor dit profiel bijhouden.
+            </Typography>
+            {createError && (
+              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setCreateError(null)}>
+                {createError}
+              </Alert>
+            )}
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, pt: 0.5 }}>
+              <TextField
+                label="Naam"
+                size="small"
+                fullWidth
+                autoFocus
+                placeholder="Bijv. Jan Jansen"
+                value={newAccount.displayName}
+                onChange={(e) => setNewAccount({ ...newAccount, displayName: e.target.value })}
+                sx={{ gridColumn: { sm: '1 / -1' } }}
+              />
+              <TextField
+                label="E-mail"
+                type="email"
+                size="small"
+                fullWidth
+                placeholder="sporter@voorbeeld.nl"
+                value={newAccount.email}
+                onChange={(e) => setNewAccount({ ...newAccount, email: e.target.value })}
+                inputProps={{ inputMode: 'email', autoCapitalize: 'none', autoCorrect: 'off' }}
+                sx={{ gridColumn: { sm: '1 / -1' } }}
+              />
+              <TextField
+                label="Tijdelijk wachtwoord"
+                size="small"
+                fullWidth
+                value={newAccount.password}
+                onChange={(e) => setNewAccount({ ...newAccount, password: e.target.value })}
+                helperText="Min. 6 tekens. Geef dit door; de gebruiker kan het later wijzigen."
+                inputProps={{ autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false }}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <Button size="small" onClick={() => setNewAccount({ ...newAccount, password: generatePassword() })} sx={{ minWidth: 0 }}>
+                        Nieuw
+                      </Button>
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{ gridColumn: { sm: '1 / -1' } }}
+              />
+              <TextField
+                select
+                label="Rol"
+                size="small"
+                fullWidth
+                value={newAccount.role}
+                onChange={(e) => setNewAccount({ ...newAccount, role: e.target.value as NewAccountState['role'] })}
+              >
+                <MenuItem value="sporter">Sporter</MenuItem>
+                <MenuItem value="trainer">Trainer</MenuItem>
+              </TextField>
+              <TextField
+                select
+                label="Trainer"
+                size="small"
+                fullWidth
+                value={newAccount.role === 'sporter' ? newAccount.trainerId || 'none' : 'none'}
+                onChange={(e) => setNewAccount({ ...newAccount, trainerId: e.target.value === 'none' ? '' : e.target.value })}
+                disabled={newAccount.role !== 'sporter'}
+                helperText={newAccount.role !== 'sporter' ? 'Alleen voor sporters.' : ' '}
+              >
+                <MenuItem value="none">Geen trainer</MenuItem>
+                {trainers.map((t) => (
+                  <MenuItem key={t.userId} value={t.userId}>
+                    {t.displayName?.trim() || t.email || t.userId}
+                    {t.userId === selfId ? ' (ik)' : ''}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+              Geboortedatum, geslacht, lengte en rusthartslag vul je daarna in door op het profiel te tikken.
+            </Typography>
+          </DialogContent>
+        )}
+        <DialogActions>
+          <Button onClick={closeCreate} disabled={creating}>
+            Annuleren
+          </Button>
+          <Button variant="contained" startIcon={<PersonAddRoundedIcon />} onClick={handleCreate} disabled={creating}>
+            {creating ? 'Bezig…' : 'Account aanmaken'}
           </Button>
         </DialogActions>
       </Dialog>

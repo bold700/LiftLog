@@ -35,8 +35,17 @@ type AuthState = {
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, role?: ProfileRole, displayName?: string | null) => Promise<void>;
-  /** Beheerder maakt een account aan zonder uit te loggen en zonder e-mailverificatie. */
-  adminCreateAccount: (email: string, password: string, role: ProfileRole, displayName: string | null) => Promise<{ uid: string; email: string | null }>;
+  /**
+   * Trainer of beheerder maakt een account aan zonder uit te loggen en zonder e-mailverificatie.
+   * Optioneel wordt de nieuwe sporter direct aan een trainer gekoppeld.
+   */
+  adminCreateAccount: (
+    email: string,
+    password: string,
+    role: ProfileRole,
+    displayName: string | null,
+    options?: { trainerId?: string | null }
+  ) => Promise<{ uid: string; email: string | null }>;
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -141,8 +150,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const adminCreateAccount = useCallback(
-    async (email: string, password: string, role: ProfileRole, displayName: string | null) => {
+    async (email: string, password: string, role: ProfileRole, displayName: string | null, options?: { trainerId?: string | null }) => {
       if (!firebaseConfig) throw new Error('Firebase niet geconfigureerd');
+      const trainerId = role === 'sporter' ? options?.trainerId?.trim() || null : null;
       // Tweede app-instance: de nieuwe user wordt daar ingelogd, de admin blijft in de hoofd-app ingelogd.
       const secondary = initializeApp(firebaseConfig, `admin-create-${Date.now()}`);
       try {
@@ -162,9 +172,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role: 'sporter',
           email: (cred.user.email ?? email).trim().toLowerCase(),
           displayName: name,
-          trainerId: null,
+          trainerId,
           trainerRequested: false,
           leaderboardVisibility: 'named',
+          // Account is direct bruikbaar: de verificatiepoort slaat door beheer aangemaakte accounts over.
           createdByAdmin: true,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
