@@ -34,6 +34,7 @@ const store = {
     uid === 'u1' ? [{ ...schema, source: 'client' }] : uid === 't1' ? [{ ...schema, source: 'authored' }, ...classes] : [],
   getLogsForUser: async (uid) => logs.filter((l) => l.userId === uid).sort((a, b) => (b.date > a.date ? 1 : -1)),
   saveLog: async (l) => { const s = { ...l, id: 'l' + (logs.length + 1) }; logs.push(s); return s; },
+  saveSchema: async (sc) => ({ ...sc, id: 'schema_nieuw', createdAt: new Date().toISOString() }),
   getNutritionForDay: async (uid, date) => nutrition.filter((n) => n.userId === uid && n.date === date),
   saveNutritionLog: async (n) => { nutrition.push({ ...n, id: 'n' + nutrition.length }); return n; },
   getMeasurements: async () => meas,
@@ -74,6 +75,11 @@ if (who === 't1') {
   // Morgen is zondag 6 september 2026: ISO-week 36, dus schemaweek 10 (niet week 26).
   await show('get_class_workout', { date: 'morgen' });
   await show('get_class_workout', { date: 'zondag' });
+  await show('create_workout', {
+    name: 'Full body kracht',
+    athlete: 'danny',
+    days: [{ dayLabel: 'Dag A', exercises: [{ name: 'Goblet Squat', sets: 3, reps: 10, notes: 'rustig tempo' }, { name: 'Lat Pulldown', sets: 3, reps: 12, weightKg: 45 }] }],
+  });
   await show('list_athletes', {});
   await show('get_profile', { athlete: 'danny' });
   await show('get_profile', { athlete: 'zzz' });

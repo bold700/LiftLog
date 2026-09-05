@@ -193,6 +193,14 @@ export function createStore(db) {
       return Array.from(byId.values()).sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
     },
 
+    /** Slaat een nieuw schema op. Overschrijft nooit: de id wordt hier gemaakt. */
+    async saveSchema(schema) {
+      const id = `schema_${Date.now()}_${randomBytes(4).toString('hex')}`;
+      const doc = { ...schema, id, createdAt: new Date().toISOString(), updatedAt: FieldValue.serverTimestamp() };
+      await db.collection('workouts').doc(id).set(doc);
+      return { ...schema, id, createdAt: doc.createdAt };
+    },
+
     async getLogsForUser(userId) {
       const snap = await db.collection('logs').where('userId', '==', userId).get();
       return snap.docs.map((d) => toLog(d.data(), d.id)).sort((a, b) => (b.date > a.date ? 1 : -1));
