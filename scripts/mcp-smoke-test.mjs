@@ -23,7 +23,8 @@ const nutrition = []; const meas = [{ id: 'm1', date: '2026-08-01', weightKg: 86
 const store = {
   getProfile: async (id) => profiles[id] ?? null,
   getAllProfiles: async () => Object.values(profiles),
-  getSchemasForUser: async (uid) => (uid === 'u1' ? [schema] : []),
+  getSchemasForUser: async (uid) =>
+    uid === 'u1' ? [{ ...schema, source: 'client' }] : uid === 't1' ? [{ ...schema, source: 'authored' }] : [],
   getLogsForUser: async (uid) => logs.filter((l) => l.userId === uid).sort((a, b) => (b.date > a.date ? 1 : -1)),
   saveLog: async (l) => { const s = { ...l, id: 'l' + (logs.length + 1) }; logs.push(s); return s; },
   getNutritionForDay: async (uid, date) => nutrition.filter((n) => n.userId === uid && n.date === date),
@@ -59,6 +60,13 @@ await show('get_nutrition_day', {});
 await show('log_measurement', { weightKg: 84.2 });
 await show('get_progress', {});
 await show('get_recent_logs', { days: 30, exercise: 'bank' });
-if (who === 't1') { await show('list_athletes', {}); await show('get_profile', { athlete: 'danny' }); await show('get_profile', { athlete: 'zzz' }); }
+if (who === 't1') {
+  // Een trainer die alleen schema's voor sporters maakte, heeft zelf geen training vandaag.
+  await show('get_todays_workout', {});
+  await show('get_todays_workout', { athlete: 'danny' });
+  await show('list_athletes', {});
+  await show('get_profile', { athlete: 'danny' });
+  await show('get_profile', { athlete: 'zzz' });
+}
 else { await show('get_profile', { athlete: 'kenny' }); }
 await client.close(); httpServer.close();
