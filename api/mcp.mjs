@@ -1,13 +1,14 @@
-import { applyCors } from '../cors.mjs';
+import { applyCors } from './cors.mjs';
 /**
  * MCP-endpoint (Streamable HTTP, stateless) voor ChatGPT, Claude en Gemini.
- * URL: /api/mcp/<koppelsleutel>. De sleutel wordt in de app aangemaakt (Profiel → Koppel met AI-chat)
+ * URL: /api/mcp/<koppelsleutel> (via rewrite in vercel.json naar /api/mcp?key=…), of /api/mcp met
+ * "Authorization: Bearer <sleutel>". De sleutel wordt in de app aangemaakt (Profiel → Koppel met AI-chat)
  * en als SHA-256-hash opgeslagen in Firestore `mcpKeys/{hash}` met de userId.
  */
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { getAdmin } from '../_lib/firebaseAdmin.mjs';
-import { createStore } from '../_lib/liftlogData.mjs';
-import { buildServer } from '../_lib/mcpServer.mjs';
+import { getAdmin } from './_lib/firebaseAdmin.mjs';
+import { createStore } from './_lib/liftlogData.mjs';
+import { buildServer } from './_lib/mcpServer.mjs';
 
 function json(res, status, body) {
   res.statusCode = status;
