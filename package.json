@@ -17,6 +17,7 @@
     "cap:run:android": "npm run cap:sync && npx cap open android",
     "build:ios": "npm run build && cp -r dist/* \"Van As Personal Training Logs/Van As Personal Training Logs/public/\" && echo \"✅ Build voltooid en bestanden gekopieerd naar iOS project!\"",
     "delete-all-accounts": "node scripts/delete-all-accounts.cjs",
+    "test:mcp": "node scripts/mcp-smoke-test.mjs",
     "deploy:firestore": "npx --yes firebase-tools@13 deploy --only firestore:rules",
     "deploy:storage": "npx --yes firebase-tools@13 deploy --only storage"
   },
@@ -33,6 +34,7 @@
     "@emotion/react": "^11.13.0",
     "@emotion/styled": "^11.13.0",
     "@material/web": "^2.4.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@mui/icons-material": "^6.1.1",
     "@mui/material": "^6.1.1",
     "@radix-ui/react-accordion": "^1.2.20",
@@ -62,7 +64,8 @@
     "recharts": "^2.12.7",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",

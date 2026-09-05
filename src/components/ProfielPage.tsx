@@ -21,6 +21,7 @@ import { updateProfile } from '../services/profileService';
 import { uploadAvatar, deleteAvatar } from '../services/avatarService';
 import type { LeaderboardVisibility } from '../types';
 import { UserAvatar } from './UserAvatar';
+import { AiChatConnectCard } from './AiChatConnectCard';
 import { ageOnDate } from '../utils/bodyFat';
 import { heartRateZones } from '../utils/heartRate';
 
@@ -385,6 +386,12 @@ export function ProfielPage() {
           </div>
         </CardContent>
       </Card>
+
+      {uid && (
+        <div className="mt-4">
+          <AiChatConnectCard userId={uid} />
+        </div>
+      )}
 
       <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
         <DialogContent className="sm:max-w-md">
