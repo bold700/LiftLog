@@ -22,6 +22,7 @@ import {
   Chip,
   useMediaQuery,
   useTheme,
+  Autocomplete,
 } from '@mui/material';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
@@ -54,7 +55,13 @@ import {
   filterWorkouts,
   isCurrentWeek as isCurrentWeekFor,
   getCurrentScheduleWeek,
+  matchesAssignees,
+  getAssigneeIds,
+  ASSIGNEE_OPEN,
+  ASSIGNEE_UNASSIGNED,
 } from '../utils/workoutFilter';
+import { UserAvatar } from './UserAvatar';
+import type { Profile } from '../types';
 import { SchemaEditView } from './SchemaEditView';
 import { TrainingSessionView } from './TrainingSessionView';
 import { GroupSessionView } from './GroupSessionView';
@@ -112,9 +119,53 @@ export const SchemasPage = () => {
     }
   }, [activeCategory, categories]);
   const seriesOptions = useMemo(() => getSeriesOptions(schemas, activeCategory), [schemas, activeCategory]);
-  const visibleSchemas = useMemo(
-    () => filterWorkouts(schemas, { category: activeCategory, series: activeSeries, onlyCurrentWeek }, today),
-    [schemas, activeCategory, activeSeries, onlyCurrentWeek, today]
+  // Filter op sporter (tab Workouts, alleen trainer): zoekveld met meerdere selecties.
+  type AssigneeOption = { key: string; label: string; profile?: Profile };
+  const [assigneeFilter, setAssigneeFilter] = useState<AssigneeOption[]>([]);
+  const rosterById = useMemo(() => {
+    const m = new Map<string, Profile>();
+    for (const p of sportersForAssignment) m.set(p.userId, p);
+    return m;
+  }, [sportersForAssignment]);
+  const nameOf = useCallback(
+    (uid: string) => {
+      const p = rosterById.get(uid);
+      return p?.displayName?.trim() || p?.email || 'Onbekende sporter';
+    },
+    [rosterById]
+  );
+  const assigneeOptions = useMemo<AssigneeOption[]>(() => {
+    const people = [...sportersForAssignment]
+      .sort((a, b) => nameOf(a.userId).localeCompare(nameOf(b.userId), 'nl'))
+      .map((p) => ({ key: p.userId, label: nameOf(p.userId), profile: p }));
+    return [
+      { key: ASSIGNEE_OPEN, label: 'Open voor iedereen' },
+      { key: ASSIGNEE_UNASSIGNED, label: 'Niet toegewezen' },
+      ...people,
+    ];
+  }, [sportersForAssignment, nameOf]);
+  const visibleSchemas = useMemo(() => {
+    const list = filterWorkouts(schemas, { category: activeCategory, series: activeSeries, onlyCurrentWeek }, today);
+    if (activeCategory || assigneeFilter.length === 0) return list;
+    const keys = assigneeFilter.map((o) => o.key);
+    return list.filter((s) => matchesAssignees(s, keys));
+  }, [schemas, activeCategory, activeSeries, onlyCurrentWeek, today, assigneeFilter]);
+  /** Korte omschrijving van voor wie de workout is, met namen i.p.v. "Klant toegewezen". */
+  const assigneeSummary = useCallback(
+    (s: Schema): { text: string; avatars: Profile[] } => {
+      if (s.audience === 'group') return { text: `Groepsles (${s.participantIds?.length ?? 0})`, avatars: [] };
+      if (s.audience === 'open') return { text: 'Open voor iedereen', avatars: [] };
+      const ids = getAssigneeIds(s);
+      if (ids.length === 0) return { text: 'Niet toegewezen', avatars: [] };
+      const names = ids.map(nameOf);
+      const shown = names.slice(0, 3).join(', ');
+      const rest = names.length - 3;
+      return {
+        text: rest > 0 ? `${shown} +${rest}` : shown,
+        avatars: ids.map((id) => rosterById.get(id)).filter((p): p is Profile => Boolean(p)).slice(0, 3),
+      };
+    },
+    [nameOf, rosterById]
   );
   /** Wisselt van filter en springt terug naar de bovenkant van de lijst. */
   const applyFilter = useCallback((change: () => void) => {
@@ -1038,6 +1089,41 @@ export const SchemasPage = () => {
           )}
         </Box>
 
+        {!activeCategory && isTrainer && sportersForAssignment.length > 0 && (
+          <Box sx={{ mb: 2 }}>
+            <Autocomplete
+              multiple
+              options={assigneeOptions}
+              value={assigneeFilter}
+              onChange={(_, v) => applyFilter(() => setAssigneeFilter(v))}
+              getOptionLabel={(o) => o.label}
+              isOptionEqualToValue={(a, b) => a.key === b.key}
+              filterSelectedOptions
+              size="small"
+              renderOption={(props, o) => (
+                <li {...props} key={o.key}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {o.profile && <UserAvatar name={o.label} photoURL={o.profile.photoURL ?? null} size={24} />}
+                    <span>{o.label}</span>
+                  </Box>
+                </li>
+              )}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Filter op sporter"
+                  placeholder={assigneeFilter.length ? '' : 'Zoek op naam of e-mail…'}
+                />
+              )}
+            />
+            {assigneeFilter.length > 0 && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                {visibleSchemas.length} {visibleSchemas.length === 1 ? 'workout' : 'workouts'} voor{' '}
+                {assigneeFilter.map((o) => o.label).join(', ')}
+              </Typography>
+            )}
+          </Box>
+        )}
         {activeCategory && seriesOptions.length > 1 && (
           <Box sx={{ mb: 2 }}>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -1154,17 +1240,27 @@ export const SchemasPage = () => {
                         </Box>
                       )}
                     </Box>
+                    {(() => {
+                      const who = assigneeSummary(schema);
+                      return (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.75 }}>
+                          {who.avatars.length > 0 && (
+                            <Box sx={{ display: 'flex' }}>
+                              {who.avatars.map((p, i) => (
+                                <Box key={p.userId} sx={{ ml: i === 0 ? 0 : -0.75, borderRadius: '50%', border: '2px solid', borderColor: 'background.paper' }}>
+                                  <UserAvatar name={nameOf(p.userId)} photoURL={p.photoURL ?? null} size={22} />
+                                </Box>
+                              ))}
+                            </Box>
+                          )}
+                          <Typography variant="body2" color="text.secondary">
+                            {who.text}
+                          </Typography>
+                        </Box>
+                      );
+                    })()}
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
                       {schema.days.length} {schema.days.length === 1 ? 'dag' : 'dagen'}
-                      {schema.audience === 'group'
-                        ? ` · Groepsles (${schema.participantIds?.length ?? 0})`
-                        : schema.audience === 'multiple'
-                          ? ` · ${schema.participantIds?.length ?? 0} klanten`
-                          : schema.audience === 'open'
-                            ? ' · Open'
-                            : schema.clientId
-                              ? ' · Klant toegewezen'
-                              : ''}
                       {schema.isFormule7Template
                         ? schema.formule7AssistMode === 'ai'
                           ? ' · Formule 7 · AI'
