@@ -10,10 +10,13 @@ import { getAdmin } from './_lib/firebaseAdmin.mjs';
 import { createStore } from './_lib/liftlogData.mjs';
 import { buildServer } from './_lib/mcpServer.mjs';
 
+/** Korte commit-hash van de draaiende versie, zodat je kunt zien of een deploy al live is. */
+const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
+
 function json(res, status, body) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.end(JSON.stringify(body));
+  res.end(JSON.stringify({ ...body, build: BUILD }));
 }
 
 function keyFromRequest(req) {

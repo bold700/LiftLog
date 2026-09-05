@@ -529,7 +529,12 @@ export function buildServer(ctx, store) {
                 exercises: z
                   .array(
                     z.object({
-                      name: z.string().min(1),
+                      name: z
+                        .string()
+                        .min(1)
+                        .describe(
+                          'Gebruik de gangbare Engelse naam van de oefening, zoals "Farmer\'s Carry", "Dumbbell Step Up", "Pallof Press" of "Dead Bug". De app zoekt de demo-animatie op die naam, dus vrije of Nederlandse omschrijvingen leveren geen plaatje op.'
+                        ),
                       sets: z.number().int().positive().max(20),
                       reps: z.number().int().positive().max(200),
                       weightKg: z.number().nonnegative().max(1000).optional(),
