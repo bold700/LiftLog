@@ -18,7 +18,8 @@
     "build:ios": "npm run build && cp -r dist/* \"Van As Personal Training Logs/Van As Personal Training Logs/public/\" && echo \"✅ Build voltooid en bestanden gekopieerd naar iOS project!\"",
     "delete-all-accounts": "node scripts/delete-all-accounts.cjs",
     "deploy:firestore": "npx --yes firebase-tools@13 deploy --only firestore:rules",
-    "deploy:storage": "npx --yes firebase-tools@13 deploy --only storage"
+    "deploy:storage": "npx --yes firebase-tools@13 deploy --only storage",
+    "import:groepslessen": "node scripts/import-groepslessen.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",

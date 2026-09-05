@@ -92,6 +92,8 @@ export interface SchemaExercise {
 export interface SchemaDay {
   dayLabel: string;
   exercises: SchemaExercise[];
+  /** Vrije notitie bij deze dag/week, bijv. trainingsvorm ("10x10x8", "Tabata", "AMRAP 17 min"). */
+  notes?: string | null;
   /** Formule 7 – per trainingsdag (sectie 2–6). Optioneel. */
   warmup?: Formule7Warmup | null;
   cardio?: Formule7Cardio | null;

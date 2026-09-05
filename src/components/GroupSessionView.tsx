@@ -202,6 +202,11 @@ export function GroupSessionView({ schema, session, participants, currentUserId,
           Groepsles · {day?.dayLabel ?? `Dag ${session.dayIndex + 1}`} · {dateLabel} · {participants.length}{' '}
           {participants.length === 1 ? 'deelnemer' : 'deelnemers'}
         </Typography>
+        {day?.notes && (
+          <Typography variant="body2" sx={{ mb: 2, ml: 0.5, fontStyle: 'italic' }}>
+            {day.notes}
+          </Typography>
+        )}
 
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>

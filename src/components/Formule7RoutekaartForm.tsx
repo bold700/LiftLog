@@ -120,9 +120,9 @@ interface Formule7RoutekaartFormProps {
   slotBeforeDayCards?: React.ReactNode;
   /** Optioneel: periode van het schema, getoond in blok 1 Intake (schema is altijd 4–8 weken) */
   startDate?: string;
-  durationWeeks?: 4 | 5 | 6 | 7 | 8;
+  durationWeeks?: number;
   onStartDateChange?: (value: string) => void;
-  onDurationWeeksChange?: (value: 4 | 5 | 6 | 7 | 8) => void;
+  onDurationWeeksChange?: (value: number) => void;
   /** Oefennamen uit het schema; gebruikt om stretching-spiergroepen voor te stellen */
   schemaExerciseNames?: string[];
   /** Opties voor oefening-autocomplete (bij per-dag weergave). */
@@ -713,9 +713,9 @@ export function Formule7RoutekaartForm({
               InputLabelProps={{ shrink: true }}
             />
             <Autocomplete
-              options={[4, 5, 6, 7, 8] as const}
+              options={[4, 5, 6, 7, 8]}
               value={durationWeeks}
-              onChange={(_, v) => v != null && onDurationWeeksChange(v as 4 | 5 | 6 | 7 | 8)}
+              onChange={(_, v) => v != null && onDurationWeeksChange(v)}
               getOptionLabel={(v) => `${v} weken`}
               renderInput={(params) => (
                 <TextField {...params} label="Duur (weken)" size="small" fullWidth />
