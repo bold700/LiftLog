@@ -1,14 +1,40 @@
 import { useState, useCallback } from 'react';
-import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Divider,
+  IconButton,
+  InputAdornment,
+  TextField,
+  Typography,
+} from '@mui/material';
+import MailOutlineRoundedIcon from '@mui/icons-material/MailOutlineRounded';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import PersonOutlineRoundedIcon from '@mui/icons-material/PersonOutlineRounded';
+import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
+import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
 import { useAuth } from '../context/AuthContext';
 
-const LOGO_TINT =
-  'brightness(0) saturate(100%) invert(94%) sepia(6%) saturate(800%) hue-rotate(340deg) brightness(98%) contrast(94%)';
+/** VA-logo als inline SVG, zodat het via `currentColor` de tekstkleur van het thema volgt. */
+function VaLogo({ height = 56 }: { height?: number }) {
+  return (
+    <Box
+      component="svg"
+      viewBox="0 0 1260.31 837.16"
+      role="img"
+      aria-label="Van As Personal Training"
+      sx={{ height, width: 'auto', color: 'text.primary', display: 'block' }}
+    >
+      <path
+        fill="currentColor"
+        d="M1260.31,837.16,887,0H746L445.75,673.28,145.49,0H0L373,836.4l-.34.76H518.84l-.34-.76,85.21-195,423.83,4,87.27,191.81ZM665.08,507.72l151.41-339.5,151.4,339.5Z"
+      />
+    </Box>
+  );
+}
 
 export function LoginPage() {
   const auth = useAuth();
@@ -87,123 +113,159 @@ export function LoginPage() {
   if (!auth) return null;
 
   return (
-    <div className="dark flex min-h-[100dvh] items-center justify-center bg-background px-4 py-6">
-      <Card className="w-full max-w-sm rounded-3xl shadow-2xl">
-        <CardContent className="p-6 sm:p-8">
-          <div className="mb-4 flex justify-center">
-            <img
-              src="/va-logo.svg"
-              alt="Van As Personal Training"
-              className="h-14 w-auto"
-              style={{ filter: LOGO_TINT }}
-            />
-          </div>
-          <h1 className="text-center text-2xl font-semibold text-foreground">
+    <Box
+      sx={{
+        minHeight: '100dvh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        px: 2,
+        py: 3,
+        bgcolor: 'background.default',
+      }}
+    >
+      <Card
+        elevation={0}
+        sx={{
+          width: '100%',
+          maxWidth: 400,
+          borderRadius: 6,
+          bgcolor: 'background.paper',
+          border: '1px solid',
+          borderColor: 'divider',
+        }}
+      >
+        <CardContent sx={{ p: { xs: 3, sm: 4 }, '&:last-child': { pb: { xs: 3, sm: 4 } } }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+            <VaLogo />
+          </Box>
+          <Typography variant="h5" component="h1" align="center" sx={{ fontWeight: 600 }}>
             {isRegister ? 'Account aanmaken' : 'Inloggen'}
-          </h1>
-          <p className="mb-5 mt-1 text-center text-sm text-muted-foreground">Van As Personal Training Logs</p>
+          </Typography>
+          <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 0.5, mb: 3 }}>
+            Van As Personal Training Logs
+          </Typography>
 
           {(auth.error || localError) && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertDescription>{localError || auth.error}</AlertDescription>
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {localError || auth.error}
             </Alert>
           )}
           {resetMsg && (
-            <Alert className="mb-4">
-              <AlertDescription>{resetMsg}</AlertDescription>
+            <Alert severity="success" sx={{ mb: 2 }}>
+              {resetMsg}
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {isRegister && (
-              <div className="space-y-1.5">
-                <Label htmlFor="login-name">Naam</Label>
-                <div className="relative">
-                  <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="login-name"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    autoComplete="name"
-                    placeholder="Voor je profiel"
-                    className="pl-9"
-                  />
-                </div>
-              </div>
+              <TextField
+                id="login-name"
+                label="Naam"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                autoComplete="name"
+                placeholder="Voor je profiel"
+                fullWidth
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <PersonOutlineRoundedIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
             )}
-            <div className="space-y-1.5">
-              <Label htmlFor="login-email">E-mail</Label>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="login-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  autoComplete="email"
-                  placeholder="jij@voorbeeld.nl"
-                  className="pl-9"
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="login-password">Wachtwoord</Label>
-              <div className="relative">
-                <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="login-password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete={isRegister ? 'new-password' : 'current-password'}
-                  className="px-9"
-                />
-                <button
-                  type="button"
-                  aria-label={showPassword ? 'Wachtwoord verbergen' : 'Wachtwoord tonen'}
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-            <Button type="submit" size="lg" disabled={submitting} className="w-full">
+            <TextField
+              id="login-email"
+              type="email"
+              label="E-mail"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              placeholder="jij@voorbeeld.nl"
+              fullWidth
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <MailOutlineRoundedIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <TextField
+              id="login-password"
+              type={showPassword ? 'text' : 'password'}
+              label="Wachtwoord"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete={isRegister ? 'new-password' : 'current-password'}
+              fullWidth
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <LockOutlinedIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label={showPassword ? 'Wachtwoord verbergen' : 'Wachtwoord tonen'}
+                      onClick={() => setShowPassword((v) => !v)}
+                      edge="end"
+                      size="small"
+                    >
+                      {showPassword ? <VisibilityOffRoundedIcon fontSize="small" /> : <VisibilityRoundedIcon fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <Button
+              type="submit"
+              variant="contained"
+              size="large"
+              disabled={submitting}
+              fullWidth
+              sx={{ mt: 0.5, borderRadius: '24px', textTransform: 'none', fontWeight: 600, py: 1.25 }}
+            >
               {submitting ? 'Even geduld…' : isRegister ? 'Account aanmaken' : 'Inloggen'}
             </Button>
             {!isRegister && (
               <Button
                 type="button"
-                variant="ghost"
-                size="sm"
+                variant="text"
+                size="small"
                 onClick={handleForgotPassword}
-                className="self-center text-muted-foreground"
+                sx={{ alignSelf: 'center', textTransform: 'none' }}
               >
                 Wachtwoord vergeten?
               </Button>
             )}
-          </form>
+          </Box>
 
-          <div className="mt-5 border-t border-border pt-5">
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              disabled={submitting}
-              onClick={handleGoogle}
-              className="w-full"
-            >
-              Doorgaan met Google
-            </Button>
-          </div>
+          <Divider sx={{ my: 2.5 }} />
 
           <Button
             type="button"
-            variant="ghost"
-            size="sm"
-            className="mt-3 w-full text-muted-foreground"
+            variant="outlined"
+            size="large"
+            disabled={submitting}
+            onClick={handleGoogle}
+            fullWidth
+            sx={{ borderRadius: '24px', textTransform: 'none', fontWeight: 600, py: 1.25 }}
+          >
+            Doorgaan met Google
+          </Button>
+
+          <Button
+            type="button"
+            variant="text"
+            size="small"
+            fullWidth
+            sx={{ mt: 1.5, textTransform: 'none' }}
             onClick={() => {
               auth.clearError();
               setIsRegister((v) => !v);
@@ -213,6 +275,6 @@ export function LoginPage() {
           </Button>
         </CardContent>
       </Card>
-    </div>
+    </Box>
   );
 }
