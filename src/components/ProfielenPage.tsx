@@ -29,9 +29,11 @@ import {
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useProfile } from '../context/ProfileContext';
 import { useAuth } from '../context/AuthContext';
 import { getAllProfiles, updateProfile } from '../services/profileService';
+import { deleteAccountAsAdmin } from '../services/adminAccountService';
 import type { LeaderboardVisibility, Profile, ProfileRole } from '../types';
 import { PageLayout, ContentCard } from './layout';
 import { UserAvatar } from './UserAvatar';
@@ -141,6 +143,10 @@ export function ProfielenPage() {
   const [target, setTarget] = useState<Profile | null>(null);
   const [edit, setEdit] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [newAccount, setNewAccount] = useState<NewAccountState | null>(null);
   const [creating, setCreating] = useState(false);
@@ -276,6 +282,38 @@ export function ProfielenPage() {
       setSaving(false);
     }
   };
+
+  const openDelete = () => {
+    if (!target) return;
+    setDeleteError(null);
+    setDeleteTarget(target);
+  };
+
+  const closeDelete = () => {
+    if (deleting) return;
+    setDeleteTarget(null);
+    setDeleteError(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget || !auth?.user) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteAccountAsAdmin(auth.user, deleteTarget.userId);
+      const who = deleteTarget.displayName?.trim() || deleteTarget.email || 'gebruiker';
+      setDeleteTarget(null);
+      closeEditor();
+      await load();
+      setMessage({ type: 'success', text: `Account van ${who} definitief verwijderd.` });
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : 'Verwijderen mislukt.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const canDeleteTarget = isAdmin && !!target && target.userId !== selfId;
 
   // Afgeleide waarden in de editor, live uit de formulierwaarden.
   const editAge = edit ? ageOnDate(edit.birthDate || null, todayIso()) : null;
@@ -506,10 +544,38 @@ export function ProfielenPage() {
             </Typography>
           </DialogContent>
         )}
-        <DialogActions>
+        <DialogActions sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+          {canDeleteTarget && (
+            <Button color="error" startIcon={<DeleteOutlineRoundedIcon />} onClick={openDelete} disabled={saving} sx={{ mr: 'auto' }}>
+              Verwijderen
+            </Button>
+          )}
           <Button onClick={closeEditor}>Annuleren</Button>
           <Button variant="contained" onClick={handleSave} disabled={saving}>
             {saving ? 'Bezig…' : 'Opslaan'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!deleteTarget} onClose={closeDelete} maxWidth="xs" fullWidth>
+        <DialogTitle>Account verwijderen</DialogTitle>
+        <DialogContent>
+          {deleteError && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setDeleteError(null)}>
+              {deleteError}
+            </Alert>
+          )}
+          <Typography variant="body2">
+            Weet je zeker dat je <strong>{deleteTarget?.displayName?.trim() || deleteTarget?.email || deleteTarget?.userId}</strong> definitief wilt
+            verwijderen? Dit verwijdert zowel het login-account als het profiel en kan niet ongedaan worden gemaakt.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeDelete} disabled={deleting}>
+            Annuleren
+          </Button>
+          <Button variant="contained" color="error" onClick={handleConfirmDelete} disabled={deleting}>
+            {deleting ? 'Bezig…' : 'Definitief verwijderen'}
           </Button>
         </DialogActions>
       </Dialog>

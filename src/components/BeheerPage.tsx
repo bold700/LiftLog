@@ -30,6 +30,7 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useProfile } from '../context/ProfileContext';
 import { useAuth } from '../context/AuthContext';
 import { getProfileByEmail, assignTrainerToSporter, updateProfile, getAllProfiles } from '../services/profileService';
+import { deleteAccountAsAdmin } from '../services/adminAccountService';
 import type { Profile, ProfileRole } from '../types';
 import { PageLayout, ContentCard } from './layout';
 import { getPendingWorkoutRequests, resolveWorkoutRequest, type WorkoutRequest } from '../services/workoutRequestService';
@@ -218,14 +219,7 @@ export function BeheerPage() {
     setDeleting(true);
     setMessage(null);
     try {
-      const token = await auth.user.getIdToken();
-      const res = await fetch('/api/admin-account', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ action: 'delete', targetUid: deleteTarget.userId }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || 'Verwijderen mislukt.');
+      await deleteAccountAsAdmin(auth.user, deleteTarget.userId);
       await loadAllAccounts();
       setMessage({ type: 'success', text: 'Account definitief verwijderd.' });
       setDeleteTarget(null);
