@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Card,
   CardContent,
@@ -17,6 +17,9 @@ import {
   FormControlLabel,
   FormGroup,
   TextField,
+  Tabs,
+  Tab,
+  Chip,
 } from '@mui/material';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
@@ -82,6 +85,51 @@ export const SchemasPage = () => {
   const sportersForAssignment = isTrainer ? (profile?.allSporters ?? []) : [];
   const [view, setView] = useState<View>('list');
   const [selectedSchemaId, setSelectedSchemaId] = useState<string | null>(null);
+  // Tabs in de lijst: '' = gewone workouts (zonder categorie), anders de categorie (bijv. "Groepslessen").
+  const [activeCategory, setActiveCategory] = useState<string>('');
+  const [activeSeries, setActiveSeries] = useState<string | null>(null);
+  const categories = useMemo(
+    () =>
+      Array.from(new Set(schemas.map((s) => s.category?.trim()).filter((c): c is string => Boolean(c)))).sort((a, b) =>
+        a.localeCompare(b, 'nl')
+      ),
+    [schemas]
+  );
+  useEffect(() => {
+    if (activeCategory && !categories.includes(activeCategory)) {
+      setActiveCategory('');
+      setActiveSeries(null);
+    }
+  }, [activeCategory, categories]);
+  const seriesOptions = useMemo(() => {
+    if (!activeCategory) return [] as string[];
+    return Array.from(
+      new Set(
+        schemas
+          .filter((s) => (s.category ?? '') === activeCategory)
+          .map((s) => s.series?.trim())
+          .filter((x): x is string => Boolean(x))
+      )
+    ).sort((a, b) => a.localeCompare(b, 'nl', { numeric: true }));
+  }, [schemas, activeCategory]);
+  const visibleSchemas = useMemo(() => {
+    const list = schemas.filter(
+      (s) => (s.category?.trim() ?? '') === activeCategory && (!activeSeries || s.series === activeSeries)
+    );
+    if (!activeCategory) return list;
+    // Binnen een categorie: per reeks, op startdatum (Week 1 → Week 26), dan op naam.
+    return [...list].sort((a, b) => {
+      const sa = a.series ?? '';
+      const sb = b.series ?? '';
+      if (sa !== sb) return sa.localeCompare(sb, 'nl', { numeric: true });
+      const da = a.startDate ?? '';
+      const db = b.startDate ?? '';
+      if (da !== db) return da.localeCompare(db);
+      return a.name.localeCompare(b.name, 'nl', { numeric: true });
+    });
+  }, [schemas, activeCategory, activeSeries]);
+  const today = todayIso();
+  const isCurrentPeriod = (s: Schema) => Boolean(s.startDate && s.endDate && s.startDate <= today && today <= s.endDate);
   const [sessionDayIndex, setSessionDayIndex] = useState<number>(0);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [justLoggedExerciseId, setJustLoggedExerciseId] = useState<string | null>(null);
@@ -354,6 +402,7 @@ export const SchemasPage = () => {
         onSave={handleSaveSchema}
         onCancel={handleCancelEdit}
         sporters={sportersForAssignment}
+        categories={categories}
       />
     );
   }
@@ -955,6 +1004,43 @@ export const SchemasPage = () => {
           )}
         </Box>
 
+        {categories.length > 0 && (
+          <Tabs
+            value={activeCategory}
+            onChange={(_, v: string) => {
+              setActiveCategory(v);
+              setActiveSeries(null);
+            }}
+            variant="scrollable"
+            scrollButtons="auto"
+            sx={{ mb: 2, minHeight: 40, '& .MuiTab-root': { textTransform: 'none', fontWeight: 600, minHeight: 40 } }}
+          >
+            <Tab label="Workouts" value="" />
+            {categories.map((c) => (
+              <Tab key={c} label={c} value={c} />
+            ))}
+          </Tabs>
+        )}
+        {activeCategory && seriesOptions.length > 1 && (
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+            <Chip
+              label="Alle"
+              size="small"
+              variant={activeSeries ? 'outlined' : 'filled'}
+              onClick={() => setActiveSeries(null)}
+            />
+            {seriesOptions.map((s) => (
+              <Chip
+                key={s}
+                label={s}
+                size="small"
+                variant={activeSeries === s ? 'filled' : 'outlined'}
+                onClick={() => setActiveSeries(s)}
+              />
+            ))}
+          </Box>
+        )}
+
         {loading ? (
           <Typography color="text.secondary">Workouts laden…</Typography>
         ) : schemas.length === 0 ? (
@@ -982,9 +1068,13 @@ export const SchemasPage = () => {
               </Box>
             )}
           </EmptyState>
+        ) : visibleSchemas.length === 0 ? (
+          <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+            {activeCategory ? `Geen workouts in "${activeCategory}".` : 'Geen gewone workouts. Kijk in de andere tabs.'}
+          </Typography>
         ) : (
             <Box className="stagger-children" sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {schemas.map((schema, index) => (
+              {visibleSchemas.map((schema, index) => (
                 <Card
                   key={schema.id}
                   onClick={() => handleSchemaClick(schema)}
@@ -1004,11 +1094,28 @@ export const SchemasPage = () => {
                   } as any}
                 >
                   <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                       <CalendarMonthRoundedIcon color="action" fontSize="small" />
                       <Typography variant="subtitle1" fontWeight={600}>
                         {schema.name}
                       </Typography>
+                      {isCurrentPeriod(schema) && (
+                        <Box
+                          component="span"
+                          sx={{
+                            px: 1,
+                            py: 0.25,
+                            borderRadius: '12px',
+                            bgcolor: '#000000',
+                            color: '#F2E4D3',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          Deze week
+                        </Box>
+                      )}
                     </Box>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
                       {schema.days.length} {schema.days.length === 1 ? 'dag' : 'dagen'}

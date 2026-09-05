@@ -4,7 +4,9 @@
  * Bron: scripts/groepslessen/trainingen-sgt-2026.json (uit de PDF gehaald) of een map met
  * CSV-exports uit Google Sheets (één CSV per tabblad, bestandsnaam = naam van de les).
  *
- * Per tabblad ontstaat één workout met audience "group", per week één dag ("Week 1" … "Week 26").
+ * Per tabblad × week ontstaat één losse workout (audience "group", categorie "Groepslessen",
+ * reeks = naam van de les, één dag "Week n"). De --emit-app-data variant bewaart per les de 26 weken;
+ * de importknop in de app splitst ze op dezelfde manier.
  * Elke regel in het raster wordt een oefening. Regels die een trainingsvorm beschrijven
  * ("10x10x8", "Tabata", "AMRAP 17min", "8 reps beastmode") worden een notitie bij die week.
  * Supersets ("hiptrust-facepull") worden twee oefeningen met een verwijzing naar elkaar.
@@ -1032,8 +1034,10 @@ function addDays(dateStr, days) {
   return d.toISOString().slice(0, 10);
 }
 
-/** Tabblad → Schema (zelfde vorm als src/types Schema). */
-function buildSchema(tab, { trainerId, start }) {
+const CATEGORY = 'Groepslessen';
+
+/** Tabblad → { key, name, days } (alle weken van één les). */
+function buildLesson(tab) {
   const weekKeys = Object.keys(tab.weeks).sort((a, b) => Number(a.replace(/\D/g, '')) - Number(b.replace(/\D/g, '')));
   const days = weekKeys.map((week) => {
     const { notes, exercises } = parseWeek(tab.weeks[week] || []);
@@ -1041,21 +1045,31 @@ function buildSchema(tab, { trainerId, start }) {
     if (notes) day.notes = notes;
     return day;
   });
-  const weeks = days.length;
-  return {
-    id: `schema_sgt2026_${slug(tab.name)}`,
-    name: tab.name,
-    trainerId,
-    clientId: null,
-    audience: 'group',
-    participantIds: [],
-    createdAt: new Date().toISOString(),
-    days,
-    startDate: start,
-    endDate: weeks > 0 ? addDays(start, weeks * 7 - 1) : null,
-    formule7: null,
-    isFormule7Template: false,
-  };
+  return { key: slug(tab.name), name: tab.name, days };
+}
+
+/** Les → één Schema per week (zelfde vorm als src/types Schema en als de importknop in de app). */
+function buildWeekSchemas(lesson, { trainerId, start }) {
+  const createdAt = new Date().toISOString();
+  return lesson.days.map((day, weekIndex) => {
+    const weekStart = addDays(start, weekIndex * 7);
+    return {
+      id: `schema_sgt2026_${lesson.key}_w${String(weekIndex + 1).padStart(2, '0')}`,
+      name: `${lesson.name} · ${day.dayLabel}`,
+      trainerId,
+      clientId: null,
+      audience: 'group',
+      participantIds: [],
+      category: CATEGORY,
+      series: lesson.name,
+      createdAt,
+      days: [day],
+      startDate: weekStart,
+      endDate: addDays(weekStart, 6),
+      formule7: null,
+      isFormule7Template: false,
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1093,13 +1107,14 @@ async function initAdmin() {
   return admin;
 }
 
-function printReport(schemas) {
-  const totalEx = schemas.reduce((n, s) => n + s.days.reduce((m, d) => m + d.exercises.length, 0), 0);
-  console.log('\nWorkouts:');
-  for (const s of schemas) {
-    const ex = s.days.reduce((m, d) => m + d.exercises.length, 0);
-    console.log(`  ${s.name.padEnd(28)} ${String(s.days.length).padStart(2)} weken  ${String(ex).padStart(4)} oefeningen  (${s.startDate} t/m ${s.endDate})`);
+function printReport(lessons, schemas) {
+  const totalEx = lessons.reduce((n, l) => n + l.days.reduce((m, d) => m + d.exercises.length, 0), 0);
+  console.log('\nLessen:');
+  for (const l of lessons) {
+    const ex = l.days.reduce((m, d) => m + d.exercises.length, 0);
+    console.log(`  ${l.name.padEnd(28)} ${String(l.days.length).padStart(2)} weken  ${String(ex).padStart(4)} oefeningen`);
   }
+  console.log(`\nLosse workouts (les × week): ${schemas.length}, categorie "${CATEGORY}", ${schemas[0]?.startDate} t/m ${schemas[schemas.length - 1]?.endDate}`);
   const resolvedCount = [...report.resolved.values()].reduce((n, e) => n + e.count, 0);
   const unresolvedCount = [...report.unresolved.values()].reduce((n, e) => n + e.count, 0);
   console.log(`\nOefeningen totaal: ${totalEx}`);
@@ -1129,16 +1144,17 @@ async function main() {
   }
 
   const trainerId = await resolveTrainerId(args);
-  const schemas = tabs.map((t) => buildSchema(t, { trainerId, start: args.start }));
+  const lessons = tabs.map((t) => buildLesson(t));
+  const schemas = lessons.flatMap((l) => buildWeekSchemas(l, { trainerId, start: args.start }));
 
   mkdirSync(OUT_DIR, { recursive: true });
-  for (const s of schemas) writeFileSync(join(OUT_DIR, `${s.id}.json`), JSON.stringify(s, null, 2));
+  for (const l of lessons) writeFileSync(join(OUT_DIR, `les_${l.key}.json`), JSON.stringify(l, null, 2));
   const mapping = {
     resolved: Object.fromEntries([...report.resolved.entries()].sort()),
     unresolved: Object.fromEntries([...report.unresolved.entries()].sort()),
   };
   writeFileSync(join(OUT_DIR, 'mapping-rapport.json'), JSON.stringify(mapping, null, 2));
-  printReport(schemas);
+  printReport(lessons, schemas);
   console.log(`\nJSON per workout + mapping-rapport.json staan in ${OUT_DIR}`);
 
   if (args.emitAppData) {
@@ -1146,10 +1162,10 @@ async function main() {
       source: 'Trainingen_SGT_2026.pdf',
       generatedAt: new Date().toISOString().slice(0, 10),
       defaultStart: args.start,
-      lessons: schemas.map((s) => ({ key: s.id.replace(/^schema_sgt2026_/, ''), name: s.name, days: s.days })),
+      lessons,
     };
     writeFileSync(APP_DATA_FILE, JSON.stringify(appData));
-    console.log(`App-data geschreven naar ${APP_DATA_FILE} (${schemas.length} lessen).`);
+    console.log(`App-data geschreven naar ${APP_DATA_FILE} (${lessons.length} lessen).`);
     return;
   }
 
@@ -1160,11 +1176,13 @@ async function main() {
 
   const admin = await initAdmin();
   const db = admin.firestore();
-  const batch = db.batch();
-  for (const s of schemas) {
-    batch.set(db.collection('workouts').doc(s.id), { ...s, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  for (let i = 0; i < schemas.length; i += 400) {
+    const batch = db.batch();
+    for (const s of schemas.slice(i, i + 400)) {
+      batch.set(db.collection('workouts').doc(s.id), { ...s, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    }
+    await batch.commit();
   }
-  await batch.commit();
   console.log(`\n✅ ${schemas.length} groepsles-workout(s) geschreven naar Firestore (collectie workouts, trainer ${trainerId}).`);
 }
 

@@ -275,6 +275,10 @@ export interface Schema {
   audience?: SchemaAudience;
   /** Toegewezen accounts bij 'multiple' en de deelnemers bij 'group'. */
   participantIds?: string[];
+  /** Categorie (tab in Workouts), bijv. "Groepslessen". Leeg = gewone workout. */
+  category?: string | null;
+  /** Reeks binnen een categorie, bijv. de naam van de groepsles ("Groepsles 1") bij losse weektrainingen. */
+  series?: string | null;
   createdAt: string; // ISO date string
   days: SchemaDay[];
   /** Start van de schema-periode (YYYY-MM-DD). Optioneel. */

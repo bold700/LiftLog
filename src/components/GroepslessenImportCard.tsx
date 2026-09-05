@@ -8,8 +8,7 @@ import { Alert, Box, Button, TextField, Typography } from '@mui/material';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../context/ProfileContext';
-import { saveWorkoutToFirestore, getWorkoutsForUser } from '../services/workoutFirestore';
-import { addWeeks } from '../utils/format';
+import { saveWorkoutToFirestore, getWorkoutsForUser, deleteWorkoutFromFirestore } from '../services/workoutFirestore';
 import type { Schema, SchemaDay } from '../types';
 
 interface LessonData {
@@ -25,8 +24,29 @@ interface AppData {
   lessons: LessonData[];
 }
 
-function schemaIdFor(key: string): string {
+const CATEGORY = 'Groepslessen';
+
+/** Id van de losse weektraining (les × week). */
+function weekSchemaId(key: string, weekIndex: number): string {
+  return `schema_sgt2026_${key}_w${String(weekIndex + 1).padStart(2, '0')}`;
+}
+
+/** Id van de oude import (één workout met 26 dagen); wordt bij een nieuwe import opgeruimd. */
+function legacySchemaId(key: string): string {
   return `schema_sgt2026_${key}`;
+}
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+async function inChunks<T>(items: T[], size: number, fn: (item: T) => Promise<void>): Promise<void> {
+  for (let i = 0; i < items.length; i += size) {
+    await Promise.all(items.slice(i, i + size).map(fn));
+  }
 }
 
 function nextMonday(): string {
@@ -83,39 +103,55 @@ export function GroepslessenImportCard() {
     }
     setBusy(true);
     setResult(null);
-    const done: string[] = [];
+    let saved = 0;
     try {
+      // Elke week van elke les wordt een losse workout in de categorie "Groepslessen".
+      const schemas: Schema[] = [];
+      const createdAt = new Date().toISOString();
       for (const lesson of data.lessons) {
-        const name = (names[lesson.key] ?? lesson.name).trim() || lesson.name;
-        setProgress(`Bezig met ${name}…`);
-        const weeks = lesson.days.length;
-        const schema: Schema = {
-          id: schemaIdFor(lesson.key),
-          name,
-          trainerId: uid,
-          clientId: null,
-          audience: 'group',
-          participantIds: [],
-          createdAt: new Date().toISOString(),
-          days: lesson.days,
-          startDate,
-          endDate: weeks > 0 ? addWeeks(startDate, weeks) : null,
-          formule7: null,
-          isFormule7Template: false,
-        };
-        await saveWorkoutToFirestore(schema);
-        done.push(name);
+        const lessonName = (names[lesson.key] ?? lesson.name).trim() || lesson.name;
+        lesson.days.forEach((day, weekIndex) => {
+          const weekStart = addDays(startDate, weekIndex * 7);
+          schemas.push({
+            id: weekSchemaId(lesson.key, weekIndex),
+            name: `${lessonName} · ${day.dayLabel}`,
+            trainerId: uid,
+            clientId: null,
+            audience: 'group',
+            participantIds: [],
+            category: CATEGORY,
+            series: lessonName,
+            createdAt,
+            days: [day],
+            startDate: weekStart,
+            endDate: addDays(weekStart, 6),
+            formule7: null,
+            isFormule7Template: false,
+          });
+        });
       }
-      setExisting((prev) => new Set([...prev, ...data.lessons.map((l) => schemaIdFor(l.key))]));
+      await inChunks(schemas, 10, async (schema) => {
+        await saveWorkoutToFirestore(schema);
+        saved += 1;
+        setProgress(`Bezig… ${saved}/${schemas.length}`);
+      });
+      // Oude import (één workout met 26 dagen per les) opruimen.
+      const legacy = data.lessons.map((l) => legacySchemaId(l.key)).filter((id) => existing.has(id));
+      await inChunks(legacy, 10, (id) => deleteWorkoutFromFirestore(id));
+      setExisting((prev) => {
+        const next = new Set([...prev, ...schemas.map((s) => s.id)]);
+        legacy.forEach((id) => next.delete(id));
+        return next;
+      });
       setResult({
         type: 'success',
-        text: `${done.length} groepslessen opgeslagen als workouts: ${done.join(', ')}. Je vindt ze onder Workouts; de huidige week staat bovenaan.`,
+        text: `${schemas.length} trainingen opgeslagen (${data.lessons.length} lessen × 26 weken) in Workouts → tab "${CATEGORY}". Per les kun je filteren; de training van deze week is gemarkeerd.${legacy.length ? ` De ${legacy.length} oude 26-weken-workouts zijn verwijderd.` : ''}`,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setResult({
         type: 'error',
-        text: `Import gestopt na ${done.length} les(sen): ${msg}. Opnieuw proberen werkt bestaande lessen bij.`,
+        text: `Import gestopt na ${saved} trainingen: ${msg}. Opnieuw proberen werkt bestaande trainingen bij.`,
       });
     } finally {
       setBusy(false);
@@ -125,7 +161,8 @@ export function GroepslessenImportCard() {
 
   if (!uid) return null;
 
-  const alreadyImported = data ? data.lessons.filter((l) => existing.has(schemaIdFor(l.key))).length : 0;
+  const alreadyImported = data ? data.lessons.filter((l) => existing.has(weekSchemaId(l.key, 0))).length : 0;
+  const hasLegacy = data ? data.lessons.some((l) => existing.has(legacySchemaId(l.key))) : false;
   const totalExercises = data ? data.lessons.reduce((n, l) => n + l.days.reduce((m, d) => m + d.exercises.length, 0), 0) : 0;
 
   return (
@@ -134,9 +171,10 @@ export function GroepslessenImportCard() {
         Groepslessen importeren
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Zet het lesrooster (26 weken per les) als groepsles-workouts op jouw naam.
-        {data ? ` ${data.lessons.length} lessen, ${totalExercises} oefeningen.` : ' Laden…'}
+        Zet elke week van elke les als losse groepsles-workout op jouw naam, in Workouts onder de tab &quot;{CATEGORY}&quot;.
+        {data ? ` ${data.lessons.length} lessen × 26 weken, ${totalExercises} oefeningen.` : ' Laden…'}
         {alreadyImported > 0 && ` ${alreadyImported} van de lessen staan al in je workouts; importeren werkt ze bij.`}
+        {hasLegacy && ' De oude 26-weken-workouts worden daarbij vervangen.'}
       </Typography>
 
       {data && (
@@ -174,7 +212,7 @@ export function GroepslessenImportCard() {
             onClick={handleImport}
             disabled={busy}
           >
-            {busy ? progress ?? 'Bezig…' : alreadyImported > 0 ? 'Opnieuw importeren (bijwerken)' : 'Importeren als workouts'}
+            {busy ? progress ?? 'Bezig…' : alreadyImported > 0 || hasLegacy ? 'Opnieuw importeren (bijwerken)' : 'Importeren als workouts'}
           </Button>
         </>
       )}

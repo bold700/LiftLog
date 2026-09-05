@@ -4,16 +4,17 @@ De groepslessen staan in een Google Sheet met per les een tabblad: 26 kolommen (
 per week een lijst oefeningen. `trainingen-sgt-2026.json` is daar de uitgelezen versie van
 (uit `Trainingen_SGT_2026.pdf`; tabblad 6 was leeg en is weggelaten).
 
-`node scripts/import-groepslessen.mjs` zet elk tabblad om in één groepsles-workout in de app:
+Elke week van elke les wordt een **losse workout** in de app (7 lessen × 26 weken = 182 workouts):
 
-- workout met `audience: "group"`, één dag per week (`Week 1` … `Week 26`), startdatum = Week 1;
+- `audience: "group"`, categorie `Groepslessen` (eigen tab in Workouts), reeks = naam van de les
+  (filterchip binnen de tab), naam `<les> · Week n`, één dag, start- en einddatum van die week;
 - elke regel wordt een oefening; gym-jargon wordt vertaald naar de namen uit de oefeningencatalogus
   (`hiptrust` → Barbell Hip Thrust, `touwen` → Battle Rope Waves, `optrekken` → Pull-Up, …);
 - reps in de regel (`20 lunges`, `burpees (10)`) worden `repsTarget`; afstanden en tijden (`500 m`, `1 min`) een notitie;
 - supersets (`hiptrust-facepull`, `bridge march + schuine crunch`) worden twee oefeningen met "Superset met …";
 - trainingsvormen (`10x10x8`, `Tabata`, `AMRAP 17min`, `8 reps beastmode`) worden de notitie van die week.
 
-In de app staat bij zo'n workout de huidige week bovenaan (badge "Deze week"), berekend vanaf de startdatum.
+In Workouts → tab "Groepslessen" staat de training van deze week gemarkeerd met "Deze week".
 
 ## Snelste route: knop in de app
 
