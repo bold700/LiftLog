@@ -136,6 +136,8 @@ interface SchemaEditViewProps {
   onCancel: () => void;
   /** Lijst sporters (alleen voor trainers) om workout aan toe te wijzen. */
   sporters?: Profile[];
+  /** Bestaande categorieën (voor suggesties in het categorie-veld). */
+  categories?: string[];
 }
 
 const DURATION_WEEKS_OPTIONS = [4, 5, 6, 7, 8, 12, 26];
@@ -159,7 +161,7 @@ function schemaHasMeaningfulF7Content(s: Schema): boolean {
   return false;
 }
 
-export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: SchemaEditViewProps) => {
+export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], categories = [] }: SchemaEditViewProps) => {
   const me = useProfile()?.profile ?? null;
   // Trainer kan ook aan zichzelf toewijzen
   const assignOptions = me ? [me, ...sporters.filter((s) => s.userId !== me.userId)] : sporters;
@@ -167,6 +169,7 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
   const [name, setName] = useState(schema.name);
   const [clientId, setClientId] = useState<string | null>(schema.clientId ?? null);
   const [audience, setAudience] = useState<SchemaAudience>(schema.audience ?? 'single');
+  const [category, setCategory] = useState<string>(schema.category ?? '');
   const [participantIds, setParticipantIds] = useState<string[]>(schema.participantIds ?? []);
   const [startDate, setStartDate] = useState(schema.startDate ?? '');
   const [durationWeeks, setDurationWeeks] = useState<DurationWeeks>(() =>
@@ -215,6 +218,7 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
     setName(schema.name);
     setClientId(schema.clientId ?? null);
     setAudience(schema.audience ?? 'single');
+    setCategory(schema.category ?? '');
     setParticipantIds(schema.participantIds ?? []);
     setStartDate(schema.startDate ?? '');
     setDurationWeeks(getDurationWeeksFromSchema(schema));
@@ -340,6 +344,7 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
       clientId: audience === 'single' ? clientId || null : null,
       audience,
       participantIds: audience === 'multiple' || audience === 'group' ? participantIds : [],
+      category: category.trim() || null,
       startDate: start,
       endDate: endDateValue,
       days: cleanedDays,
@@ -358,7 +363,7 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
     } finally {
       setSaving(false);
     }
-  }, [saving, schema, name, clientId, audience, participantIds, startDate, durationWeeks, days, formule7, onSave]);
+  }, [saving, schema, name, clientId, audience, category, participantIds, startDate, durationWeeks, days, formule7, onSave]);
 
   const addDay = useCallback(() => {
     setDays((prev) => [...prev, { dayLabel: `Dag ${prev.length + 1}`, exercises: [] }]);
@@ -954,6 +959,23 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
             fullWidth
             sx={{ mb: 2 }}
             placeholder="Bijv. Push Pull Legs"
+          />
+
+          <Autocomplete
+            freeSolo
+            options={categories}
+            value={category}
+            onChange={(_, v) => setCategory(typeof v === 'string' ? v : v ?? '')}
+            onInputChange={(_, v) => setCategory(v)}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Categorie (tab in Workouts)"
+                size="small"
+                placeholder="Bijv. Groepslessen; leeg = gewone workout"
+              />
+            )}
+            sx={{ mb: 2 }}
           />
 
           {showFormule7AiWizard && (
