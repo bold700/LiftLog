@@ -644,6 +644,48 @@ export function buildServer(ctx, store) {
         });
       })
     );
+
+    server.registerTool(
+      'assign_workout',
+      {
+        title: 'Workout toewijzen',
+        description:
+          'Wijst een bestaand trainingsschema toe aan een sporter, of maakt het los met "geen". Gebruik dit als een schema onder de verkeerde naam staat, bijvoorbeeld omdat er bij het aanmaken nog geen sporter bekend was. Verandert alleen aan wie het schema hangt; dagen en oefeningen blijven ongewijzigd.',
+        inputSchema: {
+          workout: z.string().min(1).describe('Naam of id van het schema, bijv. "Full-body krachttraining v2".'),
+          athlete: z.string().min(1).describe('Naam of e-mail van de sporter, of "geen" om het schema los te maken.'),
+        },
+      },
+      async (args) => {
+        try {
+          const all = await store.getSchemasForUser(me.userId, me.role);
+          // Je wijst alleen schema's toe die je zelf hebt gemaakt; een beheerder mag alles.
+          const mine = all.filter((s) => s.trainerId === me.userId || me.role === 'admin');
+          const q = norm(args.workout);
+          const exact = mine.find((s) => s.id === args.workout || norm(s.name) === q);
+          const hits = exact ? [exact] : mine.filter((s) => norm(s.name).includes(q));
+          if (hits.length === 0) return fail(`Geen schema van jou gevonden dat lijkt op "${args.workout}".`);
+          if (hits.length > 1) {
+            return fail(
+              `Meerdere schema's gevonden voor "${args.workout}": ${hits.map((s) => s.name).join(', ')}. Wees specifieker of geef het schemaId.`
+            );
+          }
+          const schema = hits[0];
+          const wantsNone = ['geen', 'none', 'niemand'].includes(norm(args.athlete));
+          const target = wantsNone ? null : await resolveTarget(args.athlete);
+          await store.assignSchema(schema.id, target ? target.userId : null);
+          return text({
+            ok: true,
+            schemaId: schema.id,
+            name: schema.name,
+            assignedTo: target ? displayName(target) : null,
+            note: target ? null : 'Het schema hangt nu aan niemand meer.',
+          });
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : 'Toewijzen mislukt.');
+        }
+      }
+    );
   }
 
   server.registerTool(

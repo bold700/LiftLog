@@ -239,6 +239,14 @@ export function createStore(db, auth) {
       return { userId: user.uid, email: normalized, password };
     },
 
+    /** Wijst een bestaand schema toe aan een sporter (of maakt het los). Raakt de oefeningen niet aan. */
+    async assignSchema(schemaId, clientId) {
+      await db.collection('workouts').doc(schemaId).set(
+        { clientId, audience: 'single', updatedAt: FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+    },
+
     async getLogsForUser(userId) {
       const snap = await db.collection('logs').where('userId', '==', userId).get();
       return snap.docs.map((d) => toLog(d.data(), d.id)).sort((a, b) => (b.date > a.date ? 1 : -1));

@@ -20,6 +20,7 @@ const store = {
   getAllProfiles: async () => Object.values(profiles),
   getSchemasForUser: async () => [],
   saveSchema: async (sc) => ({ ...sc, id: 'schema_nieuw', createdAt: new Date().toISOString() }),
+  assignSchema: async () => {},
   createAccount: async (a) => ({ userId: 'u_nieuw', email: a.email, password: 'GeheimTest1' }),
   getLogsForUser: async () => [],
   saveLog: async (l) => l,
@@ -59,6 +60,7 @@ const check = (label, ok, detail = '') => {
   check('sporter heeft geen athlete-parameter', !Object.keys(tools.find((t) => t.name === 'get_profile').inputSchema.properties ?? {}).includes('athlete'));
   check('sporter ziet create_workout NIET', !tools.some((t) => t.name === 'create_workout'));
   check('sporter ziet create_account NIET', !tools.some((t) => t.name === 'create_account'));
+  check('sporter ziet assign_workout NIET', !tools.some((t) => t.name === 'assign_workout'));
   const r = await client.callTool({ name: 'get_profile', arguments: { athlete: 'margot' } });
   const t = r.content[0].text;
   check('sporter krijgt GEEN data van Margot', !t.includes('Margot') && !t.includes('margot@'), `kreeg: ${JSON.parse(t).name}`);
