@@ -20,8 +20,8 @@ import {
   List,
   ListItemButton,
   ListItemText,
-  ToggleButton,
-  ToggleButtonGroup,
+  Tabs,
+  Tab,
   Card,
   useMediaQuery,
   useTheme,
@@ -330,10 +330,43 @@ export function ProfielenPage() {
   }
 
   return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+      <Tabs
+        value={filter}
+        onChange={(_, v: Filter) => setFilter(v)}
+        variant={fullScreen ? 'scrollable' : 'fullWidth'}
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        aria-label="Filter profielen"
+        sx={{
+          minHeight: 48,
+          mb: 2,
+          width: '100%',
+          '& .MuiTab-root': {
+            minHeight: 48,
+            minWidth: 'auto',
+            px: 2,
+            textTransform: 'none',
+            fontWeight: 600,
+            transition: 'color 0.2s ease',
+          },
+          '& .MuiTabs-indicator': {
+            height: 3,
+            borderRadius: '3px 3px 0 0',
+            transition: 'left 0.25s cubic-bezier(0.22, 1, 0.36, 1), width 0.25s cubic-bezier(0.22, 1, 0.36, 1)',
+          },
+        }}
+      >
+        {FILTERS.map((f) => (
+          <Tab key={f} value={f} label={`${FILTER_LABEL[f]} (${filterCount[f]})`} id={`profielen-tab-${f}`} />
+        ))}
+      </Tabs>
+    {/* Gewone Box als paneel: als direct kind van de flex-kolom zou PageLayout tot de inhoud krimpen. */}
+    <Box sx={{ flex: 1, minHeight: 0 }}>
     <PageLayout>
       <ContentCard>
         <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
-          Profielen
+          {FILTER_LABEL[filter]}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Alle accounts op één plek. Tik op een profiel om gegevens aan te vullen of te wijzigen.
@@ -362,40 +395,6 @@ export function ProfielenPage() {
             Nieuw account
           </Button>
         </Box>
-        {fullScreen ? (
-          <TextField
-            select
-            size="small"
-            fullWidth
-            label="Filter"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value as Filter)}
-            sx={{ mb: 2 }}
-            inputProps={{ 'aria-label': 'Filter profielen' }}
-          >
-            {FILTERS.map((f) => (
-              <MenuItem key={f} value={f}>
-                {FILTER_LABEL[f]} ({filterCount[f]})
-              </MenuItem>
-            ))}
-          </TextField>
-        ) : (
-          <ToggleButtonGroup
-            size="small"
-            exclusive
-            value={filter}
-            onChange={(_, v: Filter | null) => v && setFilter(v)}
-            sx={{ mb: 2, flexWrap: 'wrap' }}
-            aria-label="Filter profielen"
-          >
-            {FILTERS.map((f) => (
-              <ToggleButton key={f} value={f}>
-                {FILTER_LABEL[f]} ({filterCount[f]})
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-        )}
-
         {message && (
           <Alert severity={message.type} sx={{ mb: 2 }} onClose={() => setMessage(null)}>
             {message.text}
@@ -679,5 +678,7 @@ export function ProfielenPage() {
         </DialogActions>
       </Dialog>
     </PageLayout>
+    </Box>
+    </Box>
   );
 }
