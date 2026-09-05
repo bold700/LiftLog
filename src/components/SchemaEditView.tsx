@@ -138,13 +138,14 @@ interface SchemaEditViewProps {
   sporters?: Profile[];
 }
 
-const DURATION_WEEKS_OPTIONS = [4, 5, 6, 7, 8] as const;
-export type DurationWeeks = (typeof DURATION_WEEKS_OPTIONS)[number];
+const DURATION_WEEKS_OPTIONS = [4, 5, 6, 7, 8, 12, 26];
+export type DurationWeeks = number;
 
+/** Bestaande periode behouden (bijv. 26 weken groepsles), anders standaard 6 weken. */
 function getDurationWeeksFromSchema(schema: Schema): DurationWeeks {
   if (schema.startDate && schema.endDate) {
     const w = getWeeksBetween(schema.startDate, schema.endDate);
-    return Math.min(8, Math.max(4, w)) as DurationWeeks;
+    return Math.max(1, w);
   }
   return 6;
 }
@@ -324,6 +325,7 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
           dayLabel,
           exercises,
         };
+        if (d.notes && d.notes.trim()) cleaned.notes = d.notes.trim();
         if (d.warmup != null) cleaned.warmup = d.warmup;
         if (d.cardio != null) cleaned.cardio = d.cardio;
         if (d.cooldown != null) cleaned.cooldown = d.cooldown;
@@ -548,6 +550,14 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
               </IconButton>
             )}
           </Box>
+          <TextField
+            label="Notitie bij deze dag (bijv. 10x10x8, Tabata, AMRAP 17 min)"
+            value={day.notes ?? ''}
+            onChange={(e) => updateDay(dayIndex, { notes: e.target.value })}
+            size="small"
+            fullWidth
+            sx={{ mb: 2 }}
+          />
             {day.exercises.map((ex, exIndex) => (
               <Box
                 key={exIndex}
@@ -1296,7 +1306,11 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [] }: Sche
                 sx={{ minWidth: 180 }}
               />
               <Autocomplete
-                options={DURATION_WEEKS_OPTIONS}
+                options={
+                  DURATION_WEEKS_OPTIONS.includes(durationWeeks)
+                    ? DURATION_WEEKS_OPTIONS
+                    : [...DURATION_WEEKS_OPTIONS, durationWeeks].sort((a, b) => a - b)
+                }
                 value={durationWeeks}
                 onChange={(_, v) => v != null && setDurationWeeks(v)}
                 getOptionLabel={(v) => `${v} weken`}

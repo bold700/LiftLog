@@ -77,13 +77,44 @@ function getLatestLogTimeForDay(schemaId: string, dayIndex: number): number {
 }
 
 /**
+ * Index van de dag die bij "deze week" hoort, voor schema's met een startdatum en één dag per week
+ * (groepslessen: Week 1 … Week 26). `null` als er geen startdatum is of vandaag buiten de periode valt.
+ */
+export function getCurrentWeekDayIndex(schema: Schema, today: Date = new Date()): number | null {
+  if (!schema.startDate || schema.days.length === 0) return null;
+  const start = new Date(schema.startDate + 'T00:00:00');
+  if (Number.isNaN(start.getTime())) return null;
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const diffDays = Math.floor((todayMidnight.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return null;
+  const weekIndex = Math.floor(diffDays / 7);
+  return weekIndex < schema.days.length ? weekIndex : null;
+}
+
+/** Groepsles op weekbasis: dagen heten "Week n" en er is een startdatum. */
+export function isWeeklyGroupSchema(schema: Schema): boolean {
+  return (
+    schema.audience === 'group' &&
+    Boolean(schema.startDate) &&
+    schema.days.length > 0 &&
+    schema.days.every((d) => /^week\s*\d+/i.test(d.dayLabel.trim()))
+  );
+}
+
+/**
  * Dag-indices gesorteerd: de volgende te doen training staat altijd bovenaan.
+ * - Groepsles per week (met startdatum): de huidige week eerst, daarna de volgende weken, dan de weken ervoor.
  * - Niet alle dagen voltooid (12h): onvoltooide dagen eerst (in volgorde), dan voltooide.
  * - Alle dagen voltooid: dag die het laatst is gedaan bepalen → de volgende in de cyclus komt bovenaan
  *   (net Dag 1 gedaan → Dag 2 boven; net laatste dag gedaan → Dag 1 boven voor nieuwe ronde).
  */
 export function getSortedDayIndices(schema: Schema): number[] {
   const n = schema.days.length;
+  if (isWeeklyGroupSchema(schema)) {
+    const current = getCurrentWeekDayIndex(schema);
+    if (current != null) return [...Array(n)].map((_, i) => (current + i) % n);
+    return [...Array(n)].map((_, i) => i);
+  }
   const allCompleted = schema.days.every((_, i) => isDayCompletedInLast12Hours(schema, i));
 
   if (allCompleted && n > 0) {

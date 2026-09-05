@@ -60,3 +60,6 @@ ios/App/build
 # Lokale preview-harness (niet committen)
 preview-metingen.html
 src/dev/
+
+# Gegenereerde import-output (node scripts/import-groepslessen.mjs)
+scripts/groepslessen/out/
