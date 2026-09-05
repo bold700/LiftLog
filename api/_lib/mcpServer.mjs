@@ -124,16 +124,27 @@ export function buildServer(ctx, store) {
     ? { athlete: z.string().optional().describe('Alleen voor trainers: naam of e-mail van de sporter. Weglaten = jezelf.') }
     : {};
 
-  /** Bepaal over wie het gaat en controleer rechten. */
+  /**
+   * Bepaal over wie het gaat en controleer rechten.
+   * Een trainer komt alleen bij zichzelf en bij zijn eigen sporters; alleen een beheerder bij iedereen.
+   * Een sporter komt nooit bij een ander (die heeft de parameter `athlete` niet eens).
+   */
   async function resolveTarget(athlete) {
     const q = norm(athlete);
     if (!q) return me;
     if (!isStaff) throw new Error('Je kunt alleen je eigen gegevens bekijken.');
     const all = await store.getAllProfiles();
-    const exact = all.find((p) => norm(p.email) === q || norm(p.displayName) === q);
-    const partial = exact ? [exact] : all.filter((p) => norm(p.displayName).includes(q) || norm(p.email).includes(q));
+    const reachable = me.role === 'admin' ? all : all.filter((p) => p.userId === me.userId || p.trainerId === me.userId);
+    const exact = reachable.find((p) => norm(p.email) === q || norm(p.displayName) === q);
+    const partial = exact ? [exact] : reachable.filter((p) => norm(p.displayName).includes(q) || norm(p.email).includes(q));
     if (partial.length === 1) return partial[0];
-    if (partial.length === 0) throw new Error(`Geen sporter gevonden die lijkt op "${athlete}".`);
+    if (partial.length === 0) {
+      throw new Error(
+        me.role === 'admin'
+          ? `Geen sporter gevonden die lijkt op "${athlete}".`
+          : `Geen sporter van jou gevonden die lijkt op "${athlete}". Je kunt alleen bij sporters die aan jou zijn gekoppeld.`
+      );
+    }
     throw new Error(`Meerdere sporters gevonden voor "${athlete}": ${partial.map(displayName).join(', ')}. Wees specifieker.`);
   }
 
