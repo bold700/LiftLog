@@ -30,7 +30,7 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useProfile } from '../context/ProfileContext';
 import { useAuth } from '../context/AuthContext';
 import { getProfileByEmail, assignTrainerToSporter, updateProfile, getAllProfiles } from '../services/profileService';
-import { deleteAccountAsAdmin } from '../services/adminAccountService';
+import { deleteAccountAsAdmin, cleanupOrphanedLeaderboard } from '../services/adminAccountService';
 import type { Profile, ProfileRole } from '../types';
 import { PageLayout, ContentCard } from './layout';
 import { getPendingWorkoutRequests, resolveWorkoutRequest, type WorkoutRequest } from '../services/workoutRequestService';
@@ -53,6 +53,7 @@ export function BeheerPage() {
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState<ProfileRole>('sporter');
   const [creating, setCreating] = useState(false);
+  const [cleaningLeaderboard, setCleaningLeaderboard] = useState(false);
 
   // Profiel bewerken (naam, lengte, geboortedatum, geslacht, rusthartslag) + verwijderen
   const [editTarget, setEditTarget] = useState<Profile | null>(null);
@@ -160,6 +161,28 @@ export function BeheerPage() {
       setAdding(false);
     }
   }, [profile, email, loadAllAccounts]);
+
+  const handleCleanupLeaderboard = useCallback(async () => {
+    if (!auth?.user || cleaningLeaderboard) return;
+    setCleaningLeaderboard(true);
+    setMessage(null);
+    try {
+      const removed = await cleanupOrphanedLeaderboard(auth.user);
+      setMessage({
+        type: 'success',
+        text:
+          removed.length === 0
+            ? 'Ranglijst is al schoon: geen verwijderde accounts gevonden.'
+            : `${removed.length} verwijderde account(s) van de ranglijst gehaald: ${removed
+                .map((r) => r.label || r.uid)
+                .join(', ')}.`,
+      });
+    } catch (e) {
+      setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Opschonen mislukt.' });
+    } finally {
+      setCleaningLeaderboard(false);
+    }
+  }, [auth?.user, cleaningLeaderboard]);
 
   const handleCreateAccount = useCallback(async () => {
     if (!auth) return;
@@ -444,6 +467,22 @@ export function BeheerPage() {
                 {creating ? 'Bezig…' : 'Account aanmaken'}
               </Button>
             </Box>
+
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mt: 4, mb: 0.5 }}>
+              Ranglijst opschonen
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Haalt accounts die al verwijderd zijn van de ranglijst. Bij nieuwe verwijderingen gebeurt dit
+              voortaan automatisch.
+            </Typography>
+            <Button
+              variant="outlined"
+              startIcon={<DeleteOutlineRoundedIcon />}
+              onClick={handleCleanupLeaderboard}
+              disabled={cleaningLeaderboard}
+            >
+              {cleaningLeaderboard ? 'Bezig…' : 'Ranglijst opschonen'}
+            </Button>
           </Box>
         )}
 
