@@ -39,6 +39,7 @@ import { PageLayout, ContentCard } from './layout';
 import { UserAvatar } from './UserAvatar';
 import { ageOnDate } from '../utils/bodyFat';
 import { heartRateZones } from '../utils/heartRate';
+import { HeartRateZonesTable } from './HeartRateZonesTable';
 
 type Filter = 'all' | 'sporter' | 'trainer' | 'incomplete';
 
@@ -541,6 +542,10 @@ export function ProfielenPage() {
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
               Geboortedatum en geslacht zijn nodig voor het vetpercentage uit huidplooien; lengte voor BMI; rusthartslag voor hartslagzones op maat.
             </Typography>
+            <HeartRateZonesTable
+              zones={editZones}
+              emptyText="Vul de geboortedatum in om de hartslagzones van deze sporter te zien. Met rusthartslag worden ze op maat berekend."
+            />
           </DialogContent>
         )}
         <DialogActions sx={{ flexWrap: 'wrap', gap: 0.5 }}>
