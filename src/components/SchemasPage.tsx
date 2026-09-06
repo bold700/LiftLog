@@ -23,6 +23,8 @@ import {
   useMediaQuery,
   useTheme,
   Autocomplete,
+  Snackbar,
+  CircularProgress,
 } from '@mui/material';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
@@ -179,6 +181,9 @@ export const SchemasPage = () => {
   const deleteCancelButtonRef = useRef<any>(null);
   const deleteConfirmButtonRef = useRef<any>(null);
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
+  /** Statusmelding tijdens het maken van de PDF (plaatjes ophalen kan even duren). */
+  const [pdfStatus, setPdfStatus] = useState<string | null>(null);
+  const [pdfFailed, setPdfFailed] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
   const [requestNote, setRequestNote] = useState('');
   const [requestSending, setRequestSending] = useState(false);
@@ -609,6 +614,7 @@ export const SchemasPage = () => {
                       Dupliceren
                     </MenuItem>
                     <MenuItem
+                      disabled={pdfStatus !== null}
                       onClick={async () => {
                         handleCloseActions();
                         const clientProfile = sportersForAssignment.find(
@@ -618,7 +624,24 @@ export const SchemasPage = () => {
                           clientProfile?.displayName || clientProfile?.email || null;
                         const trainerName =
                           profile?.profile?.displayName || profile?.profile?.email || null;
-                        await exportSchemaToPdf(selectedSchema, { clientName, trainerName });
+                        const participantNames = (selectedSchema.participantIds ?? [])
+                          .filter((uid) => rosterById.has(uid))
+                          .map((uid) => nameOf(uid));
+                        setPdfStatus('PDF maken…');
+                        try {
+                          await exportSchemaToPdf(selectedSchema, {
+                            clientName,
+                            trainerName,
+                            participantNames,
+                            onProgress: setPdfStatus,
+                          });
+                        } catch (err) {
+                          console.error('PDF maken mislukt', err);
+                          setPdfFailed(true);
+                          setPdfStatus(null);
+                          return;
+                        }
+                        setPdfStatus(null);
                       }}
                     >
                       Download PDF
@@ -1329,6 +1352,23 @@ export const SchemasPage = () => {
       </Dialog>
     </PageLayout>
     </Box>
+      <Snackbar
+        open={pdfStatus !== null}
+        message={
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <CircularProgress size={16} color="inherit" />
+            {pdfStatus}
+          </Box>
+        }
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
+      <Snackbar
+        open={pdfFailed}
+        autoHideDuration={5000}
+        onClose={() => setPdfFailed(false)}
+        message="PDF maken mislukt. Probeer het opnieuw."
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
     </Box>
   );
 };
