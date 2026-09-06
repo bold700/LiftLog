@@ -10,7 +10,7 @@ import { buildServer } from '../api/_lib/mcpServer.mjs';
 
 const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Amsterdam' });
 const profiles = {
-  u1: { userId: 'u1', role: 'sporter', email: 'danny@gmail.com', displayName: 'Danny', trainerId: 't1', weightGoalKg: 80, nutritionGoal: { kcal: 2400, protein: 160, carbs: 250, fat: 80 } },
+  u1: { userId: 'u1', role: 'sporter', email: 'danny@gmail.com', displayName: 'Danny', trainerId: 't1', birthDate: '1984-09-15', gender: 'man', weightGoalKg: 80, nutritionGoal: { kcal: 2400, protein: 160, carbs: 250, fat: 80 } },
   t1: { userId: 't1', role: 'trainer', email: 'kenny@x.nl', displayName: 'Kenny', trainerId: null },
 };
 const schema = { id: 's1', name: 'Full body A/B', trainerId: 't1', clientId: 'u1', audience: 'single', participantIds: [], createdAt: '2026-09-01', startDate: null, endDate: null,
@@ -37,6 +37,7 @@ const store = {
   saveSchema: async (sc) => ({ ...sc, id: 'schema_nieuw', createdAt: new Date().toISOString() }),
   assignSchema: async () => {},
   createAccount: async (a) => ({ userId: 'u_nieuw', email: a.email, password: 'GeheimTest1' }),
+  updateProfileFields: async (uid, f) => { Object.assign(profiles.u1 ?? {}, {}); return f; },
   getNutritionForDay: async (uid, date) => nutrition.filter((n) => n.userId === uid && n.date === date),
   saveNutritionLog: async (n) => { nutrition.push({ ...n, id: 'n' + nutrition.length }); return n; },
   getMeasurements: async () => meas,
@@ -67,7 +68,9 @@ await show('log_exercise', { exercise: 'bankdrukken', weightKg: 80, sets: 3, rep
 await show('get_todays_workout', {});
 await show('log_nutrition', { productName: 'Skyr', grams: 250, kcal: 160, protein: 27, carbs: 10, fat: 0.5 });
 await show('get_nutrition_day', {});
-await show('log_measurement', { weightKg: 84.2 });
+await show('update_profile', { birthDate: '1984-09-15', gender: 'man', heightCm: 185 });
+// Zonder geboortedatum/geslacht in het testprofiel volgt een uitleg in plaats van een percentage.
+await show('log_measurement', { weightKg: 84.2, waistCm: 106, chestCm: 106, armCm: 31, skinfoldBicepsMm: 7, skinfoldTricepsMm: 15, skinfoldSubscapularMm: 12, skinfoldSuprailiacMm: 31, skinfoldAbdomenMm: 23 });
 await show('get_progress', {});
 await show('get_recent_logs', { days: 30, exercise: 'bank' });
 if (who === 't1') {
