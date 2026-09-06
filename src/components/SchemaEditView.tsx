@@ -29,6 +29,7 @@ import { createEmptyFormule7, NMT_PRESETS_BY_GOAL } from '../utils/formule7Defau
 import type { Formule7StrengthGoal } from '../types';
 import { Formule7RoutekaartForm } from './Formule7RoutekaartForm';
 import { useExerciseDbSearch, type ExerciseDbEquipmentFilter } from '../hooks/useExerciseDbSearch';
+import { ExerciseGifThumb } from './ExerciseGifThumb';
 import { MUSCLE_GROUP_OPTIONS } from '../utils/exerciseMuscleFilter';
 import { designTokens } from '../theme/designTokens';
 import { addWeeks, getWeeksBetween } from '../utils/format';
@@ -613,6 +614,23 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
                     renderInput={(params) => (
                       <TextField {...params} label="Oefening" size="small" fullWidth />
                     )}
+                    renderOption={(props, option) => {
+                      // Naam links, klein GIF-plaatje rechts (alleen als de dataset er een heeft).
+                      const { key, ...rest } = props as typeof props & { key?: string };
+                      return (
+                        <Box
+                          component="li"
+                          key={key ?? option}
+                          {...rest}
+                          sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minHeight: 44 }}
+                        >
+                          <Box component="span" sx={{ flex: 1, minWidth: 0 }}>
+                            {option}
+                          </Box>
+                          <ExerciseGifThumb exerciseName={option} />
+                        </Box>
+                      );
+                    }}
                     ListboxProps={{
                       style: { maxHeight: 380 },
                     }}
