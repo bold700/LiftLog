@@ -13,6 +13,9 @@
     "api/exercise-search.mjs": {
       "includeFiles": "src/data/*.json"
     },
+    "api/exercise-gif.mjs": {
+      "maxDuration": 30
+    },
     "api/food-photo.mjs": {
       "maxDuration": 30
     }

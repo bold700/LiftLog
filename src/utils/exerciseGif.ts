@@ -53,13 +53,18 @@ export function gifUrlForId(id: string): string {
   return `${GIF_BASE}${encodeURIComponent(id)}.gif?alt=media`;
 }
 
+/** Dataset-id voor een oefeningnaam (exact, genormaliseerd), of null. */
+export function gifIdForExerciseName(name: string): string | null {
+  const k = norm(name);
+  if (!k) return null;
+  return OVERRIDES[k] ?? idByNorm.get(k) ?? null;
+}
+
 /**
  * GIF-URL voor een oefeningnaam, of null als de naam niet (exact, genormaliseerd) in de dataset staat.
  * Geen fuzzy matching: in een keuzelijst is een verkeerd plaatje erger dan geen plaatje.
  */
 export function gifUrlForExerciseName(name: string): string | null {
-  const k = norm(name);
-  if (!k) return null;
-  const id = OVERRIDES[k] ?? idByNorm.get(k);
+  const id = gifIdForExerciseName(name);
   return id ? gifUrlForId(id) : null;
 }
