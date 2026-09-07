@@ -1,48 +1,27 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Card,
-  CardContent,
   Typography,
   Box,
   IconButton,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Menu,
   MenuItem,
-  Stack,
-  Checkbox,
-  FormControlLabel,
-  FormGroup,
-  TextField,
   Tabs,
   Tab,
-  Chip,
   useMediaQuery,
   useTheme,
-  Autocomplete,
   Snackbar,
   CircularProgress,
 } from '@mui/material';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
-import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
-import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { useWorkouts } from '../hooks/useWorkouts';
 import {
   getSortedDayIndices,
-  getLastSessionDateForDay,
   getCurrentWeekDayIndex,
   isWeeklyGroupSchema,
 } from '../utils/schemaSessionUtils';
-import {
-  getCompletedSessionsInPeriod,
-  getExerciseProgressInPeriod,
-  getDaysRemaining,
-} from '../utils/schemaProgressUtils';
-import { formatWarmupSummary, formatCardioSummary, formatCooldownSummary, formatStretchingSummary, todayIso } from '../utils/format';
+import { todayIso } from '../utils/format';
 import { Schema } from '../types';
 import type { GroupSession } from '../types';
 import { createEmptyFormule7 } from '../utils/formule7Defaults';
@@ -57,18 +36,25 @@ import {
   ASSIGNEE_OPEN,
   ASSIGNEE_UNASSIGNED,
 } from '../utils/workoutFilter';
-import { UserAvatar } from './UserAvatar';
 import type { Profile } from '../types';
 import { SchemaEditView } from './SchemaEditView';
 import { TrainingSessionView } from './TrainingSessionView';
 import { GroupSessionView } from './GroupSessionView';
-import { ExerciseDbDemo } from './ExerciseDbDemo';
 import { createGroupSession } from '../services/groupSessionService';
-import { createWorkoutRequest, getMyPendingRequest } from '../services/workoutRequestService';
+import { getMyPendingRequest } from '../services/workoutRequestService';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { useProfile } from '../context/ProfileContext';
-import { designTokens } from '../theme/designTokens';
 import { PageLayout, ContentCard, EmptyState } from './layout';
+import { SchemaDeleteDialog } from './schemas/SchemaDeleteDialog';
+import { GroupSessionSetupDialog } from './schemas/GroupSessionSetupDialog';
+import { WorkoutRequestDialog } from './schemas/WorkoutRequestDialog';
+import { NewSchemaDialog } from './schemas/NewSchemaDialog';
+import { SchemaPrintView } from './schemas/SchemaPrintView';
+import { SchemaPeriodSummary } from './schemas/SchemaPeriodSummary';
+import { SchemaDayCard } from './schemas/SchemaDayCard';
+import { SchemaListFilters } from './schemas/SchemaListFilters';
+import type { AssigneeOption } from './schemas/SchemaListFilters';
+import { SchemaListCard } from './schemas/SchemaListCard';
 import '@material/web/button/filled-button.js';
 import '@material/web/button/text-button.js';
 import '@material/web/icon/icon.js';
@@ -112,7 +98,6 @@ export const SchemasPage = () => {
   }, [activeCategory, categories]);
   const seriesOptions = useMemo(() => getSeriesOptions(schemas, activeCategory), [schemas, activeCategory]);
   // Filter op sporter (tab Workouts, alleen trainer): zoekveld met meerdere selecties.
-  type AssigneeOption = { key: string; label: string; profile?: Profile };
   const [assigneeFilter, setAssigneeFilter] = useState<AssigneeOption[]>([]);
   const rosterById = useMemo(() => {
     const m = new Map<string, Profile>();
@@ -168,15 +153,11 @@ export const SchemasPage = () => {
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [justLoggedExerciseId, setJustLoggedExerciseId] = useState<string | null>(null);
   const [openNewSchemaDialog, setOpenNewSchemaDialog] = useState(false);
-  const deleteCancelButtonRef = useRef<any>(null);
-  const deleteConfirmButtonRef = useRef<any>(null);
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
   /** Statusmelding tijdens het maken van de PDF (plaatjes ophalen kan even duren). */
   const [pdfStatus, setPdfStatus] = useState<string | null>(null);
   const [pdfFailed, setPdfFailed] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
-  const [requestNote, setRequestNote] = useState('');
-  const [requestSending, setRequestSending] = useState(false);
   const [hasPendingRequest, setHasPendingRequest] = useState(false);
   const [activeGroupSession, setActiveGroupSession] = useState<GroupSession | null>(null);
   const [groupSetup, setGroupSetup] = useState<{
@@ -329,6 +310,10 @@ export const SchemasPage = () => {
     setGroupSetup((s) => ({ ...s, open: false }));
   }, []);
 
+  const handleGroupDateChange = useCallback((date: string) => {
+    setGroupSetup((s) => ({ ...s, date }));
+  }, []);
+
   const toggleGroupParticipant = useCallback((userId: string) => {
     setGroupSetup((s) => ({
       ...s,
@@ -371,27 +356,10 @@ export const SchemasPage = () => {
       .catch(() => {});
   }, [isTrainer, profile?.profile?.userId]);
 
-  const handleSendRequest = useCallback(async () => {
-    const p = profile?.profile;
-    if (!p) return;
-    setRequestSending(true);
-    try {
-      await createWorkoutRequest({
-        userId: p.userId,
-        displayName: p.displayName,
-        email: p.email,
-        trainerId: p.trainerId ?? null,
-        note: requestNote.trim(),
-      });
-      setHasPendingRequest(true);
-      setRequestOpen(false);
-      setRequestNote('');
-    } catch {
-      /* ignore */
-    } finally {
-      setRequestSending(false);
-    }
-  }, [profile, requestNote]);
+  const handleRequestSent = useCallback(() => {
+    setHasPendingRequest(true);
+    setRequestOpen(false);
+  }, []);
 
   const handleNextDay = useCallback(() => {
     if (!selectedSchema) return;
@@ -399,38 +367,6 @@ export const SchemasPage = () => {
     setSessionDayIndex(next);
     setJustLoggedExerciseId(null);
   }, [selectedSchema, sessionDayIndex]);
-
-  useEffect(() => {
-    if (!openDeleteDialog) return;
-    requestAnimationFrame(() => {
-      const cancelBtn = deleteCancelButtonRef.current;
-      const confirmBtn = deleteConfirmButtonRef.current;
-      if (cancelBtn) {
-        const h = () => handleCloseDeleteDialog();
-        cancelBtn.addEventListener('click', h);
-        (cancelBtn as any)._clickHandler = h;
-      }
-      if (confirmBtn) {
-        const h = () => handleConfirmDelete();
-        confirmBtn.addEventListener('click', h);
-        (confirmBtn as any)._clickHandler = h;
-      }
-    });
-    return () => {
-      requestAnimationFrame(() => {
-        const cancelBtn = deleteCancelButtonRef.current;
-        const confirmBtn = deleteConfirmButtonRef.current;
-        if (cancelBtn && (cancelBtn as any)._clickHandler) {
-          cancelBtn.removeEventListener('click', (cancelBtn as any)._clickHandler);
-          delete (cancelBtn as any)._clickHandler;
-        }
-        if (confirmBtn && (confirmBtn as any)._clickHandler) {
-          confirmBtn.removeEventListener('click', (confirmBtn as any)._clickHandler);
-          delete (confirmBtn as any)._clickHandler;
-        }
-      });
-    };
-  }, [openDeleteDialog, handleCloseDeleteDialog, handleConfirmDelete]);
 
   if (view === 'edit' && selectedSchema) {
     return (
@@ -480,76 +416,7 @@ export const SchemasPage = () => {
       <PageLayout>
         <ContentCard>
             {/* Print-vriendelijke variant: eenvoudige header + tabel per dag */}
-            <Box className="workout-detail-print" sx={{ display: 'none' }}>
-              <Typography variant="h5" fontWeight={600} gutterBottom>
-                {selectedSchema.name}
-              </Typography>
-              <Typography variant="body2" gutterBottom>
-                Periode:{' '}
-                {selectedSchema.startDate && selectedSchema.endDate
-                  ? `${selectedSchema.startDate} t/m ${selectedSchema.endDate}`
-                  : 'geen periode ingesteld'}
-              </Typography>
-              {selectedSchema.clientId && (
-                <Typography variant="body2" gutterBottom>
-                  Cliënt-ID: {selectedSchema.clientId}
-                </Typography>
-              )}
-              {selectedSchema.days.map((day, dayIndex) => (
-                <Box key={dayIndex} sx={{ mt: 3 }}>
-                  <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                    {day.dayLabel}
-                    {day.notes ? ` · ${day.notes}` : ''}
-                  </Typography>
-                  {day.exercises.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                      Geen oefeningen
-                    </Typography>
-                  ) : (
-                    <table
-                      style={{
-                        width: '100%',
-                        borderCollapse: 'collapse',
-                        fontSize: '0.9rem',
-                      }}
-                    >
-                      <thead>
-                        <tr>
-                          <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '4px 0' }}>
-                            Oefening
-                          </th>
-                          <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '4px 0' }}>
-                            Sets
-                          </th>
-                          <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '4px 0' }}>
-                            Reps
-                          </th>
-                          <th style={{ textAlign: 'left', borderBottom: '1px solid #ccc', padding: '4px 0' }}>
-                            Rust (sec)
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {day.exercises.map((ex, idx) => (
-                          <tr key={idx}>
-                            <td style={{ padding: '2px 0', borderBottom: '1px solid #eee' }}>{ex.exerciseName}</td>
-                            <td style={{ padding: '2px 0', borderBottom: '1px solid #eee' }}>
-                              {ex.setsTarget ?? ''}
-                            </td>
-                            <td style={{ padding: '2px 0', borderBottom: '1px solid #eee' }}>
-                              {ex.repsTarget ?? ''}
-                            </td>
-                            <td style={{ padding: '2px 0', borderBottom: '1px solid #eee' }}>
-                              {ex.restSeconds ?? ''}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </Box>
-              ))}
-            </Box>
+            <SchemaPrintView schema={selectedSchema} />
 
             {/* Normale scherm-layout */}
             {/* Eén regel: de titel kort af met … zodat het menu rechts blijft staan. */}
@@ -655,56 +522,11 @@ export const SchemasPage = () => {
             </Box>
 
             {selectedSchema.startDate && selectedSchema.endDate && (
-              <Box
-                sx={{
-                  py: 1.5,
-                  px: 2,
-                  mb: 2,
-                  borderRadius: 2,
-                  bgcolor: 'rgba(0,0,0,0.04)',
-                  border: '1px solid rgba(0,0,0,0.08)',
-                }}
-              >
-                <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                  Periode
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {new Date(selectedSchema.startDate).toLocaleDateString('nl-NL', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                  })}{' '}
-                  t/m{' '}
-                  {new Date(selectedSchema.endDate).toLocaleDateString('nl-NL', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                  })}
-                </Typography>
-                {(() => {
-                  const remaining = getDaysRemaining(selectedSchema.endDate);
-                  if (remaining !== null) {
-                    return (
-                      <Typography variant="body2" sx={{ mt: 0.5 }} fontWeight={500}>
-                        Nog {remaining} {remaining === 1 ? 'dag' : 'dagen'} te gaan
-                      </Typography>
-                    );
-                  }
-                  return null;
-                })()}
-                {(() => {
-                  const sessions = getCompletedSessionsInPeriod(
-                    selectedSchema,
-                    selectedSchema.startDate!,
-                    selectedSchema.endDate!
-                  );
-                  return (
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                      {sessions} {sessions === 1 ? 'sessie' : 'sessies'} voltooid in deze periode
-                    </Typography>
-                  );
-                })()}
-              </Box>
+              <SchemaPeriodSummary
+                schema={selectedSchema}
+                startDate={selectedSchema.startDate}
+                endDate={selectedSchema.endDate}
+              />
             )}
 
             {selectedSchema.days.length === 0 ? (
@@ -714,329 +536,47 @@ export const SchemasPage = () => {
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {getSortedDayIndices(selectedSchema).map((dayIndex) => {
-                  const day = selectedSchema.days[dayIndex];
                   const isCurrentWeek =
                     isThisWeek(selectedSchema) ||
                     (isWeeklyGroupSchema(selectedSchema) && getCurrentWeekDayIndex(selectedSchema) === dayIndex);
                   return (
-                  <Card
-                    key={dayIndex}
-                    sx={{
-                      backgroundColor: 'transparent',
-                      borderRadius: `${designTokens.cardRadius}px`,
-                      border: `1px solid ${designTokens.cardBorder}`,
-                      boxShadow: 'none',
-                    }}
-                  >
-                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.25 }}>
-                        <Typography variant="subtitle1" fontWeight={600}>
-                          {day.dayLabel}
-                        </Typography>
-                        {isCurrentWeek && (
-                          <Box
-                            component="span"
-                            sx={{
-                              px: 1,
-                              py: 0.25,
-                              borderRadius: '12px',
-                              bgcolor: '#000000',
-                              color: '#F2E4D3',
-                              fontSize: 12,
-                              fontWeight: 600,
-                              lineHeight: 1.4,
-                            }}
-                          >
-                            Deze week
-                          </Box>
-                        )}
-                      </Box>
-                      {day.notes && (
-                        <Typography variant="body2" sx={{ mb: 0.5, fontStyle: 'italic' }}>
-                          {day.notes}
-                        </Typography>
-                      )}
-                      {(() => {
-                        const last = getLastSessionDateForDay(selectedSchema.id, dayIndex);
-                        return (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                            {last
-                              ? `Laatst getraind: ${new Date(last).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}`
-                              : 'Nog niet getraind'}
-                          </Typography>
-                        );
-                      })()}
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 0 }}>
-                        {formatWarmupSummary(day.warmup ?? selectedSchema.formule7?.warmup) && (
-                          <Box sx={{ py: 0.5, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                            <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                              Warming-up
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {formatWarmupSummary(day.warmup ?? selectedSchema.formule7?.warmup)}
-                            </Typography>
-                          </Box>
-                        )}
-                        {formatCardioSummary(day.cardio ?? selectedSchema.formule7?.cardio) && (
-                          <Box sx={{ py: 0.5, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                            <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                              Cardio
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {formatCardioSummary(day.cardio ?? selectedSchema.formule7?.cardio)}
-                            </Typography>
-                          </Box>
-                        )}
-                        {day.exercises.length === 0 ? (
-                          <Typography variant="body2" color="text.secondary">
-                            Geen oefeningen
-                          </Typography>
-                        ) : (
-                          <>
-                            <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ display: 'block', mb: 0.25 }}>
-                              Krachtoefeningen
-                            </Typography>
-                            {day.exercises.map((ex, exIndex) => {
-                            const prog =
-                              selectedSchema.startDate && selectedSchema.endDate
-                                ? getExerciseProgressInPeriod(
-                                    selectedSchema,
-                                    ex.exerciseName,
-                                    selectedSchema.startDate,
-                                    selectedSchema.endDate
-                                  )
-                                : null;
-                            const hasProg =
-                              prog &&
-                              (prog.firstWeight != null ||
-                                prog.lastWeight != null ||
-                                prog.targetWeight != null);
-                            const hasTarget =
-                              hasProg &&
-                              prog!.targetWeight != null &&
-                              prog!.firstWeight != null &&
-                              prog!.targetWeight > prog!.firstWeight;
-                            const hasStartAndLast =
-                              hasProg &&
-                              prog!.firstWeight != null &&
-                              prog!.lastWeight != null;
-                            const barPercent =
-                              hasProg && (hasTarget || (hasStartAndLast && prog!.lastWeight! > prog!.firstWeight!))
-                                ? hasTarget
-                                  ? prog!.lastWeight != null
-                                    ? Math.min(
-                                        100,
-                                        ((prog!.lastWeight - prog!.firstWeight!) /
-                                          (prog!.targetWeight! - prog!.firstWeight!)) *
-                                          100
-                                      )
-                                    : 0
-                                  : 100
-                                : null;
-                            return (
-                              <Box
-                                key={exIndex}
-                                sx={{
-                                  display: 'flex',
-                                  gap: 1.5,
-                                  alignItems: 'flex-start',
-                                  py: 1,
-                                  borderBottom: exIndex < day.exercises.length - 1 ? '1px solid rgba(0,0,0,0.06)' : 'none',
-                                }}
-                              >
-                                <ExerciseDbDemo exerciseName={ex.exerciseName} variant="thumb" />
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, flex: 1, minWidth: 0 }}>
-                                <Typography variant="body2" fontWeight={500}>
-                                  {ex.exerciseName}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {ex.setsTarget} × {ex.repsTarget} reps
-                                  {ex.restSeconds != null && ex.restSeconds > 0 && ` · ${ex.restSeconds}s rust`}
-                                </Typography>
-                                {ex.notes && (
-                                  <Typography variant="caption" color="text.secondary" fontStyle="italic">
-                                    {ex.notes}
-                                  </Typography>
-                                )}
-                                {hasProg && (
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
-                                    <Typography variant="caption" color="text.secondary">
-                                      {prog!.firstWeight != null ? `${prog!.firstWeight} kg` : '–'} →{' '}
-                                      {prog!.lastWeight != null ? `${prog!.lastWeight} kg` : '–'}
-                                      {prog!.targetWeight != null ? ` → ${prog!.targetWeight} kg doel` : ''}
-                                    </Typography>
-                                    {barPercent != null && (
-                                      <Box
-                                        sx={{
-                                          height: 5,
-                                          borderRadius: 1,
-                                          bgcolor: 'rgba(0,0,0,0.08)',
-                                          overflow: 'hidden',
-                                          minWidth: 60,
-                                          maxWidth: 100,
-                                        }}
-                                      >
-                                        <Box
-                                          sx={{
-                                            height: '100%',
-                                            width: `${hasTarget ? barPercent : 100}%`,
-                                            bgcolor: 'success.main',
-                                            borderRadius: 1,
-                                          }}
-                                        />
-                                      </Box>
-                                    )}
-                                  </Box>
-                                )}
-                                </Box>
-                              </Box>
-                            );
-                          })}
-                          </>
-                        )}
-                        {formatCooldownSummary(day.cooldown ?? selectedSchema.formule7?.cooldown) && (
-                          <Box sx={{ py: 0.5, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                            <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                              Cooling-down
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {formatCooldownSummary(day.cooldown ?? selectedSchema.formule7?.cooldown)}
-                            </Typography>
-                          </Box>
-                        )}
-                        {formatStretchingSummary(day.stretching ?? selectedSchema.formule7?.stretching) && (
-                          <Box sx={{ py: 0.5 }}>
-                            <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                              Stretching
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {formatStretchingSummary(day.stretching ?? selectedSchema.formule7?.stretching)}
-                            </Typography>
-                          </Box>
-                        )}
-                      </Box>
-                      <Button
-                        fullWidth
-                        variant="contained"
-                        startIcon={<PlayArrowRoundedIcon />}
-                        onClick={() =>
-                          isTrainer && selectedSchema.audience === 'group'
-                            ? handleOpenGroupSetup(dayIndex)
-                            : handleStartTraining(dayIndex)
-                        }
-                        disabled={day.exercises.length === 0}
-                        aria-label={`Training starten voor ${day.dayLabel}`}
-                        sx={{
-                          mt: 2,
-                          bgcolor: '#000000',
-                          color: '#F2E4D3',
-                          borderRadius: '24px',
-                          py: 1.25,
-                          textTransform: 'none',
-                          fontWeight: 600,
-                          '&:hover': { bgcolor: '#1a1a1a' },
-                          '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.12)', color: 'rgba(29,27,26,0.38)' },
-                        }}
-                      >
-                        Training starten
-                      </Button>
-                    </CardContent>
-                  </Card>
+                    <SchemaDayCard
+                      key={dayIndex}
+                      schema={selectedSchema}
+                      dayIndex={dayIndex}
+                      isCurrentWeek={isCurrentWeek}
+                      onStart={() =>
+                        isTrainer && selectedSchema.audience === 'group'
+                          ? handleOpenGroupSetup(dayIndex)
+                          : handleStartTraining(dayIndex)
+                      }
+                    />
                   );
                 })}
               </Box>
             )}
 
-        <Dialog open={openDeleteDialog} onClose={handleCloseDeleteDialog} maxWidth="sm" fullWidth>
-          <DialogTitle>Workout verwijderen</DialogTitle>
-          <DialogContent>
-            <Typography variant="body1">
-              Weet je zeker dat je de workout &quot;{selectedSchema?.name}&quot; wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.
-            </Typography>
-          </DialogContent>
-          <DialogActions>
-            {/* @ts-ignore */}
-            <md-text-button ref={deleteCancelButtonRef}>Annuleren</md-text-button>
-            {/* @ts-ignore */}
-            <md-filled-button
-              ref={deleteConfirmButtonRef}
-              style={{ '--md-filled-button-container-color': '#BA1A1A' } as any}
-            >
-              <md-icon slot="start">delete</md-icon>
-              Verwijderen
-            </md-filled-button>
-          </DialogActions>
-        </Dialog>
+        <SchemaDeleteDialog
+          open={openDeleteDialog}
+          schemaName={selectedSchema.name}
+          onClose={handleCloseDeleteDialog}
+          onConfirm={handleConfirmDelete}
+        />
       </ContentCard>
 
-      <Dialog open={groupSetup.open} onClose={handleCloseGroupSetup} maxWidth="sm" fullWidth>
-        <DialogTitle>Wie trainen er mee?</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {selectedSchema?.days[groupSetup.dayIndex]?.dayLabel ?? `Dag ${groupSetup.dayIndex + 1}`}. Kies de datum en
-            vink aan wie er vandaag meetrainen. Per deelnemer zie je straks wat ze vorige keer deden, zodat je progressie
-            kunt loggen.
-          </Typography>
-          <TextField
-            type="date"
-            label="Datum"
-            value={groupSetup.date}
-            onChange={(e) => setGroupSetup((s) => ({ ...s, date: e.target.value }))}
-            fullWidth
-            size="small"
-            InputLabelProps={{ shrink: true }}
-            sx={{ mb: 2 }}
-          />
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            Aanwezig vandaag ({groupSetup.participantIds.length})
-          </Typography>
-          {(() => {
-            const roster = profile?.allSporters ?? [];
-            if (roster.length === 0) {
-              return (
-                <Typography variant="body2" color="text.secondary">
-                  Nog geen sporter-accounts. Voeg eerst klanten toe via Menu → Beheer (of laat ze een account aanmaken en
-                  wijs ze de rol "sporter" toe).
-                </Typography>
-              );
-            }
-            const assigned = new Set(selectedSchema?.participantIds ?? []);
-            const sorted = [...roster].sort((a, b) => {
-              const aa = assigned.has(a.userId) ? 0 : 1;
-              const bb = assigned.has(b.userId) ? 0 : 1;
-              if (aa !== bb) return aa - bb;
-              return (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '');
-            });
-            return (
-              <FormGroup sx={{ maxHeight: 320, overflow: 'auto' }}>
-                {sorted.map((sp) => (
-                  <FormControlLabel
-                    key={sp.userId}
-                    control={
-                      <Checkbox
-                        checked={groupSetup.participantIds.includes(sp.userId)}
-                        onChange={() => toggleGroupParticipant(sp.userId)}
-                      />
-                    }
-                    label={`${sp.displayName?.trim() || sp.email || sp.userId}${assigned.has(sp.userId) ? ' · vast' : ''}`}
-                  />
-                ))}
-              </FormGroup>
-            );
-          })()}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseGroupSetup}>Annuleren</Button>
-          <Button
-            variant="contained"
-            onClick={handleConfirmGroupStart}
-            disabled={groupSetup.participantIds.length === 0 || groupSetup.starting}
-            sx={{ bgcolor: '#000000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}
-          >
-            {groupSetup.starting ? 'Bezig…' : 'Training starten'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <GroupSessionSetupDialog
+        open={groupSetup.open}
+        dayLabel={selectedSchema.days[groupSetup.dayIndex]?.dayLabel ?? `Dag ${groupSetup.dayIndex + 1}`}
+        date={groupSetup.date}
+        participantIds={groupSetup.participantIds}
+        starting={groupSetup.starting}
+        roster={profile?.allSporters ?? []}
+        assignedParticipantIds={selectedSchema.participantIds ?? []}
+        onDateChange={handleGroupDateChange}
+        onToggleParticipant={toggleGroupParticipant}
+        onClose={handleCloseGroupSetup}
+        onConfirm={handleConfirmGroupStart}
+      />
     </PageLayout>
     );
   }
@@ -1107,76 +647,20 @@ export const SchemasPage = () => {
           )}
         </Box>
 
-        {!activeCategory && isTrainer && sportersForAssignment.length > 0 && (
-          <Box sx={{ mb: 2 }}>
-            <Autocomplete
-              multiple
-              options={assigneeOptions}
-              value={assigneeFilter}
-              onChange={(_, v) => applyFilter(() => setAssigneeFilter(v))}
-              getOptionLabel={(o) => o.label}
-              isOptionEqualToValue={(a, b) => a.key === b.key}
-              filterSelectedOptions
-              size="small"
-              renderOption={(props, o) => (
-                <li {...props} key={o.key}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {o.profile && <UserAvatar name={o.label} photoURL={o.profile.photoURL ?? null} size={24} />}
-                    <span>{o.label}</span>
-                  </Box>
-                </li>
-              )}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Filter op sporter"
-                  placeholder={assigneeFilter.length ? '' : 'Zoek op naam of e-mail…'}
-                />
-              )}
-            />
-            {assigneeFilter.length > 0 && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                {visibleSchemas.length} {visibleSchemas.length === 1 ? 'workout' : 'workouts'} voor{' '}
-                {assigneeFilter.map((o) => o.label).join(', ')}
-              </Typography>
-            )}
-          </Box>
-        )}
-        {activeCategory && seriesOptions.length > 1 && (
-          <Box sx={{ mb: 2 }}>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              <Chip
-                label="Alle"
-                size="small"
-                color={activeSeries ? 'default' : 'primary'}
-                variant={activeSeries ? 'outlined' : 'filled'}
-                onClick={() => applyFilter(() => setActiveSeries(null))}
-              />
-              {seriesOptions.map((s) => (
-                <Chip
-                  key={s}
-                  label={s}
-                  size="small"
-                  color={activeSeries === s ? 'primary' : 'default'}
-                  variant={activeSeries === s ? 'filled' : 'outlined'}
-                  onClick={() => applyFilter(() => setActiveSeries(activeSeries === s ? null : s))}
-                />
-              ))}
-              <Chip
-                label={`Deze week (week ${currentScheduleWeek})`}
-                size="small"
-                color={onlyCurrentWeek ? 'primary' : 'default'}
-                variant={onlyCurrentWeek ? 'filled' : 'outlined'}
-                onClick={() => applyFilter(() => setOnlyCurrentWeek((v) => !v))}
-              />
-            </Box>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-              {visibleSchemas.length} {visibleSchemas.length === 1 ? 'training' : 'trainingen'}
-              {activeSeries ? ` · ${activeSeries}` : ''}
-              {onlyCurrentWeek ? ` · alleen week ${currentScheduleWeek}` : ''}
-            </Typography>
-          </Box>
-        )}
+        <SchemaListFilters
+          activeCategory={activeCategory}
+          showAssigneeFilter={isTrainer && sportersForAssignment.length > 0}
+          assigneeOptions={assigneeOptions}
+          assigneeFilter={assigneeFilter}
+          onAssigneeFilterChange={(v) => applyFilter(() => setAssigneeFilter(v))}
+          seriesOptions={seriesOptions}
+          activeSeries={activeSeries}
+          onSeriesChange={(s) => applyFilter(() => setActiveSeries(s))}
+          onlyCurrentWeek={onlyCurrentWeek}
+          onToggleCurrentWeek={() => applyFilter(() => setOnlyCurrentWeek((v) => !v))}
+          currentScheduleWeek={currentScheduleWeek}
+          visibleCount={visibleSchemas.length}
+        />
 
         {loading ? (
           <Typography color="text.secondary">Workouts laden…</Typography>
@@ -1216,135 +700,33 @@ export const SchemasPage = () => {
         ) : (
             <Box className="stagger-children" sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {visibleSchemas.map((schema, index) => (
-                <Card
+                <SchemaListCard
                   key={schema.id}
+                  schema={schema}
+                  index={index}
+                  isThisWeek={isThisWeek(schema)}
+                  assignee={assigneeSummary(schema)}
+                  nameOf={nameOf}
                   onClick={() => handleSchemaClick(schema)}
-                  sx={{
-                    '--stagger-index': Math.min(index, 8),
-                    backgroundColor: 'transparent',
-                    borderRadius: `${designTokens.cardRadius}px`,
-                    border: `1px solid ${designTokens.cardBorder}`,
-                    boxShadow: 'none',
-                    cursor: 'pointer',
-                    transition: 'transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease',
-                    '&:hover': {
-                      backgroundColor: 'rgba(0,0,0,0.03)',
-                      transform: 'translateY(-2px)',
-                      boxShadow: 2,
-                    },
-                  } as any}
-                >
-                  <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                      <CalendarMonthRoundedIcon color="action" fontSize="small" />
-                      <Typography variant="subtitle1" fontWeight={600}>
-                        {schema.name}
-                      </Typography>
-                      {isThisWeek(schema) && (
-                        <Box
-                          component="span"
-                          sx={{
-                            px: 1,
-                            py: 0.25,
-                            borderRadius: '12px',
-                            bgcolor: '#000000',
-                            color: '#F2E4D3',
-                            fontSize: 12,
-                            fontWeight: 600,
-                            lineHeight: 1.4,
-                          }}
-                        >
-                          Deze week
-                        </Box>
-                      )}
-                    </Box>
-                    {(() => {
-                      const who = assigneeSummary(schema);
-                      return (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.75 }}>
-                          {who.avatars.length > 0 && (
-                            <Box sx={{ display: 'flex' }}>
-                              {who.avatars.map((p, i) => (
-                                <Box key={p.userId} sx={{ ml: i === 0 ? 0 : -0.75, borderRadius: '50%', border: '2px solid', borderColor: 'background.paper' }}>
-                                  <UserAvatar name={nameOf(p.userId)} photoURL={p.photoURL ?? null} size={22} />
-                                </Box>
-                              ))}
-                            </Box>
-                          )}
-                          <Typography variant="body2" color="text.secondary">
-                            {who.text}
-                          </Typography>
-                        </Box>
-                      );
-                    })()}
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                      {schema.days.length} {schema.days.length === 1 ? 'dag' : 'dagen'}
-                      {schema.isFormule7Template
-                        ? schema.formule7AssistMode === 'ai'
-                          ? ' · Formule 7 · AI'
-                          : ' · Formule 7'
-                        : ' · Vrij'}
-                    </Typography>
-                  </CardContent>
-                </Card>
+                />
               ))}
           </Box>
         )}
       </ContentCard>
 
-      <Dialog
+      <NewSchemaDialog
         open={openNewSchemaDialog}
         onClose={() => setOpenNewSchemaDialog(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Nieuwe workout aanmaken</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Kies hoe je wilt starten. Bij AI stelt de app eerst vragen om alles te vullen.
-          </Typography>
-          <Stack spacing={1.25}>
-            <Button variant="outlined" fullWidth onClick={handleCreateFreeSchema} sx={{ py: 1.25 }}>
-              Vrij
-            </Button>
-            <Button variant="contained" fullWidth onClick={handleCreateAiFormule7Schema} sx={{ py: 1.25 }}>
-              AI
-            </Button>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenNewSchemaDialog(false)}>Annuleren</Button>
-        </DialogActions>
-      </Dialog>
+        onCreateFree={handleCreateFreeSchema}
+        onCreateAi={handleCreateAiFormule7Schema}
+      />
 
-      <Dialog open={requestOpen} onClose={() => setRequestOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Workout aanvragen</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Je trainer krijgt je aanvraag te zien. Vertel eventueel wat je wilt trainen of je doel.
-          </Typography>
-          <TextField
-            label="Toelichting (optioneel)"
-            value={requestNote}
-            onChange={(e) => setRequestNote(e.target.value)}
-            fullWidth
-            multiline
-            minRows={3}
-            placeholder="Bijv. focus op kracht bovenlichaam, 3x per week"
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setRequestOpen(false)}>Annuleren</Button>
-          <Button
-            variant="contained"
-            onClick={handleSendRequest}
-            disabled={requestSending}
-            sx={{ bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}
-          >
-            {requestSending ? 'Versturen…' : 'Aanvraag versturen'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <WorkoutRequestDialog
+        open={requestOpen}
+        profile={profile?.profile ?? null}
+        onClose={() => setRequestOpen(false)}
+        onSent={handleRequestSent}
+      />
     </PageLayout>
     </Box>
       <Snackbar
