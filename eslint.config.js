@@ -13,7 +13,6 @@ export default tseslint.config(
       'android/**',
       'ios/**',
       'Van As Personal Training Logs/**',
-      'src/components/ui/**', // gegenereerde shadcn-wrappers
       'public/**',
     ],
   },
