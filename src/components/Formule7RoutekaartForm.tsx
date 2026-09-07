@@ -1,112 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-
-const NMT_TIP_STORAGE_KEY = 'liftlog.formule7NmtTipDismissed';
+import { Box } from '@mui/material';
+import type { Formule7Routekaart, SchemaDay, Profile } from '../types';
 import {
-  Alert,
-  Box,
-  Typography,
-  TextField,
-  Autocomplete,
-  IconButton,
-  Tooltip,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-} from '@mui/material';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import type { Formule7Routekaart, Formule7Stretch, SchemaDay, Profile } from '../types';
-import {
-  FORMULE7_GOAL_OPTIONS,
-  FORMULE7_MOVER_OPTIONS,
-  FORMULE7_MOVER_LEVELS_HELP,
   FORMULE7_ORGANISATION_OPTIONS,
-  FORMULE7_COOLDOWN_ORGANISATION_OPTIONS,
-  FORMULE7_STRENGTH_GOAL_OPTIONS,
   WARMUP_BY_MOVER_TYPE,
   NMT_PRESETS_BY_GOAL,
   ALLOWED_NMT_GOALS_BY_MOVER_TYPE,
   CARDIO_ORGANISATION_BY_MOVER_TYPE,
-  CARDIO_TRAINING_METHOD_OPTIONS_BY_MOVER,
   CARDIO_ZONE_HR_PERCENT,
   collectCardioOrganisationsUsed,
   pickWarmupOrganisationAvoidingCardio,
-  getFormule7MoverLabel,
 } from '../utils/formule7Defaults';
 import type { Formule7StrengthGoal } from '../types';
-import { getMuscleGroupsFromExerciseNames } from '../utils/stretchingSuggestions';
-import { EmptyState } from './layout';
-
-const SECTION_STYLE = {
-  margin: 0,
-  p: 1.5,
-  borderRadius: 2,
-  border: '1px solid rgba(0,0,0,0.08)',
-  backgroundColor: 'rgba(0,0,0,0.02)',
-  display: 'flex',
-  flexDirection: 'column' as const,
-  gap: 1.5,
-  '&.Mui-expanded': { margin: 0 },
-};
-
-/** Rij met invoervelden: vult de volle breedte; velden delen de ruimte gelijk. Op kleine schermen gestapeld. */
-const FORM_ROW = {
-  display: 'flex',
-  flexWrap: 'wrap' as const,
-  gap: 2,
-  alignItems: 'flex-start' as const,
-  width: '100%',
-  minWidth: 0,
-  '& > *': {
-    flex: '1 1 100%',
-    minWidth: 0,
-    '@media (min-width: 600px)': { flex: '1 1 0%', minWidth: 80 },
-  },
-};
-
-/** Rij voor stretching: volle breedte, Spiergroep groot, Duur/Herhalingen kleiner, delete-knop vast. */
-const STRETCH_ROW = {
-  display: 'flex',
-  flexWrap: 'wrap' as const,
-  gap: 2,
-  alignItems: 'center' as const,
-  minWidth: 0,
-  width: '100%',
-  '& > *:first-of-type': {
-    flex: '2 1 0%',
-    minWidth: 100,
-  },
-  '& > *:nth-of-type(2)': {
-    flex: '1 1 0%',
-    minWidth: 90,
-  },
-  '& > *:nth-of-type(3)': {
-    flex: '1 1 0%',
-    minWidth: 80,
-  },
-  '& > *:nth-of-type(4)': {
-    flex: '0 0 auto',
-    width: 40,
-    height: 40,
-  },
-};
-
-const HelperText = ({ children }: { children: React.ReactNode }) => (
-  <Typography variant="body2" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-    {children}
-  </Typography>
-);
-
-const SESSION_DURATION_OPTIONS = [
-  { value: '<30' as const, label: 'Korter dan 30 min' },
-  { value: '30-60' as const, label: '30–60 min' },
-  { value: '>60' as const, label: 'Langer dan 60 min' },
-];
+import { TrainingsdagSelect } from './formule7/TrainingsdagSelect';
+import { AnamneseSection } from './formule7/AnamneseSection';
+import { WarmingUpSection } from './formule7/WarmingUpSection';
+import { KrachtSection } from './formule7/KrachtSection';
+import { CardioSection } from './formule7/CardioSection';
+import { CoolingDownSection } from './formule7/CoolingDownSection';
+import { StretchingSection } from './formule7/StretchingSection';
+import { BijzonderhedenSection } from './formule7/BijzonderhedenSection';
 
 interface Formule7RoutekaartFormProps {
   formule7: Formule7Routekaart;
@@ -137,17 +50,6 @@ interface Formule7RoutekaartFormProps {
 
 const ROUTEKAART_SECTION_IDS = ['1', '2', '3', '4', '5', '6', '7'] as const;
 
-/** Leeftijd in jaren uit een geboortedatum (YYYY-MM-DD). */
-function ageFromBirthDate(iso?: string | null): number | null {
-  if (!iso) return null;
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return null;
-  const now = new Date();
-  let age = now.getFullYear() - y;
-  if (now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d)) age--;
-  return age >= 0 && age < 130 ? age : null;
-}
-
 export function Formule7RoutekaartForm({
   formule7,
   setFormule7,
@@ -167,9 +69,6 @@ export function Formule7RoutekaartForm({
 }: Formule7RoutekaartFormProps) {
   void _exerciseOptions; // passed for childrenAfterNeuromuscular / future use
   const isPerDay = days.length > 0 && typeof updateDay === 'function';
-  const [showNmtTip, setShowNmtTip] = useState(
-    () => !localStorage.getItem(NMT_TIP_STORAGE_KEY)
-  );
   const [expandedSections, setExpandedSections] = useState<string[]>(() => [...ROUTEKAART_SECTION_IDS]);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const toggleSection = (id: string) =>
@@ -206,23 +105,6 @@ export function Formule7RoutekaartForm({
     ? (next: Formule7Routekaart['stretching']) => updateDay(selectedDayIndex, { stretching: next })
     : (next: Formule7Routekaart['stretching']) => set({ stretching: next });
 
-  const dismissNmtTip = () => {
-    setShowNmtTip(false);
-    try {
-      localStorage.setItem(NMT_TIP_STORAGE_KEY, 'true');
-    } catch {
-      // ignore
-    }
-  };
-  const showNmtTipAgain = () => {
-    setShowNmtTip(true);
-    try {
-      localStorage.removeItem(NMT_TIP_STORAGE_KEY);
-    } catch {
-      // ignore
-    }
-  };
-
   const setNeuromuscular = (upd: Partial<Formule7Routekaart['neuromuscular']>) =>
     set({ neuromuscular: { ...formule7.neuromuscular, ...upd } });
 
@@ -232,13 +114,6 @@ export function Formule7RoutekaartForm({
     const zones = [...source.zones];
     zones[zoneIndex] = { ...zones[zoneIndex], ...upd };
     setter({ zones });
-  };
-
-  const stretchingRows = effectiveStretching ?? [];
-
-  const setStretch = (index: number, upd: Partial<Formule7Stretch>) => {
-    const next = stretchingRows.map((s, i) => (i === index ? { ...s, ...upd } : s));
-    setEffectiveStretching(next);
   };
 
   /** Warming-up opties: toegestaan voor activiteit, en niet dezelfde organisatie als cardio (hoofd/zones). */
@@ -258,14 +133,6 @@ export function Formule7RoutekaartForm({
     effectiveCardio.zones[1]?.organisation,
     effectiveCardio.zones[2]?.organisation,
   ]);
-
-  const addStretchRow = () => {
-    setEffectiveStretching([...stretchingRows, { muscleGroup: '', stretchDurationSeconds: null, repetitions: null }]);
-  };
-
-  const removeStretchRow = (index: number) => {
-    setEffectiveStretching(stretchingRows.filter((_, i) => i !== index));
-  };
 
   const computeTrainingHr = (percent?: number | null): number | null => {
     if (!formule7.ageYears || !percent || percent <= 0) return null;
@@ -481,1104 +348,92 @@ export function Formule7RoutekaartForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formule7.neuromuscular.goal]);
 
+
+  /** Stretching-rijen voor de sectie (per dag of algemeen). */
+  const stretchingRows = effectiveStretching ?? [];
+  /** Max. HF voor cardio-zones: theoretische max. HF, anders 220 − leeftijd. */
+  const cardioMaxHr = formule7.theoreticalMaxHr ?? (formule7.ageYears != null ? 220 - Number(formule7.ageYears) : null);
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, minWidth: 0 }}>
       {/* --- Anamnese / Intake (algemeen) --- */}
-      <Accordion
-        disableGutters
+      <AnamneseSection
+        value={formule7}
+        onChange={set}
+        computedMaxHr={computedMaxHr}
+        sporters={sporters}
+        selectedClientId={selectedClientId}
+        onClientIdChange={onClientIdChange}
+        startDate={startDate}
+        durationWeeks={durationWeeks}
+        onStartDateChange={onStartDateChange}
+        onDurationWeeksChange={onDurationWeeksChange}
         expanded={expandedSections.includes('1')}
-        onChange={() => toggleSection('1')}
-        sx={{
-          ...SECTION_STYLE,
-          '&:before': { display: 'none' },
-          boxShadow: 'none',
-          '& .MuiAccordionSummary-root': { py: 0.5, minHeight: 44, px: 0 },
-          '& .MuiAccordionSummary-content': { my: 0.75 },
-        }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="subtitle1" fontWeight={600}>
-            1. Anamnese / Intakegesprek
-          </Typography>
-        </AccordionSummary>
-        <AccordionDetails sx={{ py: 1.5, px: 0, minWidth: 0 }}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <HelperText>
-          Basisgegevens van de cliënt en doelstelling volgens de Formule 7.
-        </HelperText>
-        <Box sx={FORM_ROW}>
-          {sporters.length > 0 ? (
-            <Autocomplete
-              options={sporters}
-              value={sporters.find((s) => s.userId === selectedClientId) ?? null}
-              onChange={(_, profile) => {
-                if (profile) {
-                  // Vul de anamnese alvast met bekende profielgegevens
-                  const age = ageFromBirthDate(profile.birthDate);
-                  const genderVal = profile.gender === 'man' ? 'M' : profile.gender === 'vrouw' ? 'V' : null;
-                  set({
-                    clientName: profile.displayName || profile.email || '',
-                    ...(genderVal ? { gender: genderVal } : {}),
-                    ...(age != null ? { ageYears: age, theoreticalMaxHr: 220 - age } : {}),
-                    ...(profile.restingHrBpm != null ? { restingHr: profile.restingHrBpm } : {}),
-                  });
-                  onClientIdChange?.(profile.userId);
-                } else {
-                  set({ clientName: '' });
-                  onClientIdChange?.(null);
-                }
-              }}
-              getOptionLabel={(p) => p.displayName || p.email || p.userId}
-              renderInput={(params) => (
-                <TextField {...params} label="Naam cliënt (toewijzen aan profiel)" size="small" fullWidth placeholder="Kies een sporter" />
-              )}
-              sx={{ width: '100%' }}
-            />
-          ) : (
-            <TextField
-              label="Naam cliënt"
-              value={formule7.clientName}
-              onChange={(e) => set({ clientName: e.target.value })}
-              size="small"
-              fullWidth
-            />
-          )}
-        </Box>
-        <TextField
-          label="Casus"
-          value={formule7.casus}
-          onChange={(e) => set({ casus: e.target.value })}
-          size="small"
-          fullWidth
-          multiline
-          minRows={4}
-          maxRows={12}
-          placeholder="Korte omschrijving van de cliënt"
-        />
-        <Box sx={FORM_ROW}>
-          <TextField
-            label="Leeftijd (jaar)"
-            type="number"
-            value={formule7.ageYears ?? ''}
-            onChange={(e) => set({ ageYears: e.target.value === '' ? null : Number(e.target.value) || null })}
-            size="small"
-            fullWidth
-            inputProps={{ min: 0 }}
-          />
-          <Autocomplete
-            options={['M', 'V']}
-            value={formule7.gender}
-            onChange={(_, v) => set({ gender: (v as 'M' | 'V' | null) ?? null })}
-            renderInput={(params) => (
-              <TextField {...params} label="Geslacht" size="small" fullWidth />
-            )}
-            sx={{ width: '100%' }}
-          />
-          <Autocomplete
-            options={FORMULE7_MOVER_OPTIONS}
-            value={FORMULE7_MOVER_OPTIONS.find((o) => o.value === formule7.moverType) ?? null}
-            onChange={(_, v) => set({ moverType: v?.value ?? null })}
-            getOptionLabel={(o) => o.label}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Activiteit / belastbaarheid"
-                size="small"
-                fullWidth
-                InputProps={{
-                  ...params.InputProps,
-                  endAdornment: (
-                    <>
-                      {params.InputProps.endAdornment}
-                      <Tooltip
-                        title={FORMULE7_MOVER_LEVELS_HELP}
-                        placement="top"
-                        arrow
-                        componentsProps={{
-                          tooltip: {
-                            sx: {
-                              maxWidth: 320,
-                              whiteSpace: 'pre-line',
-                              textAlign: 'left',
-                            },
-                          },
-                        }}
-                      >
-                        <span
-                          style={{ display: 'inline-flex', cursor: 'help', marginRight: 4 }}
-                          aria-label="Uitleg activiteitsniveaus"
-                        >
-                          <InfoOutlinedIcon sx={{ fontSize: 20, opacity: 0.65 }} />
-                        </span>
-                      </Tooltip>
-                    </>
-                  ),
-                }}
-              />
-            )}
-            sx={{ width: '100%' }}
-          />
-          <Autocomplete
-            options={FORMULE7_GOAL_OPTIONS}
-            value={FORMULE7_GOAL_OPTIONS.find((o) => o.value === formule7.goal) ?? null}
-            onChange={(_, v) => set({ goal: v?.value ?? null })}
-            getOptionLabel={(o) => o.label}
-            renderInput={(params) => (
-              <TextField {...params} label="Doelstelling (Formule 7)" size="small" fullWidth />
-            )}
-            sx={{ width: '100%' }}
-          />
-        </Box>
-        <Box sx={FORM_ROW}>
-          <Autocomplete
-            options={[1, 2, 3, 4, 5, 6, 7] as const}
-            value={formule7.sessionsPerWeek ?? null}
-            onChange={(_, v) =>
-              set({ sessionsPerWeek: typeof v === 'number' && v >= 1 && v <= 7 ? v : null })
-            }
-            getOptionLabel={(v) => String(v)}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Trainingsfrequentie per week"
-                size="small"
-                fullWidth
-                InputProps={{
-                  ...params.InputProps,
-                  endAdornment: (
-                    <>
-                      {params.InputProps?.endAdornment}
-                      <Tooltip
-                        title="Hoe vaak de sporter per week wil trainen; hierop wordt het ideaal weekplan gebaseerd."
-                        placement="top"
-                      >
-                        <span style={{ display: 'inline-flex', cursor: 'help', marginLeft: 4 }} aria-label="Uitleg trainingsfrequentie">
-                          <InfoOutlinedIcon sx={{ fontSize: 18, opacity: 0.7 }} />
-                        </span>
-                      </Tooltip>
-                    </>
-                  ),
-                }}
-              />
-            )}
-            sx={{ width: '100%' }}
-          />
-          <Autocomplete
-            options={SESSION_DURATION_OPTIONS}
-            value={SESSION_DURATION_OPTIONS.find((o) => o.value === formule7.sessionDurationCategory) ?? null}
-            onChange={(_, v) => set({ sessionDurationCategory: v?.value ?? null })}
-            getOptionLabel={(o) => o.label}
-            renderInput={(params) => (
-              <TextField {...params} label="Trainingstijd per sessie" size="small" fullWidth />
-            )}
-            sx={{ width: '100%' }}
-          />
-          <TextField
-            label="Rusthartfrequentie (sl/min)"
-            type="number"
-            value={formule7.restingHr ?? ''}
-            onChange={(e) => set({ restingHr: e.target.value === '' ? null : Number(e.target.value) || null })}
-            size="small"
-            fullWidth
-            inputProps={{ min: 0 }}
-          />
-          <TextField
-            label="Theoretische max. hartfrequentie (sl/min)"
-            type="number"
-            value={formule7.theoreticalMaxHr ?? computedMaxHr ?? ''}
-            size="small"
-            fullWidth
-            inputProps={{ min: 0, readOnly: true }}
-            placeholder="Vul leeftijd in (220 − leeftijd)"
-            InputProps={{
-              endAdornment: (
-                <Tooltip title="Automatisch: 220 − leeftijd (slagen per minuut)" placement="top">
-                  <span style={{ display: 'inline-flex', cursor: 'help', marginLeft: 4 }} aria-label="Uitleg berekening">
-                    <InfoOutlinedIcon sx={{ fontSize: 18, opacity: 0.7 }} />
-                  </span>
-                </Tooltip>
-              ),
-            }}
-          />
-        </Box>
-        {onStartDateChange != null && onDurationWeeksChange != null && (
-          <Box sx={FORM_ROW}>
-            <TextField
-              label="Startdatum periode"
-              type="date"
-              value={startDate ?? ''}
-              onChange={(e) => onStartDateChange(e.target.value)}
-              size="small"
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-            />
-            <Autocomplete
-              options={[4, 5, 6, 7, 8]}
-              value={durationWeeks}
-              onChange={(_, v) => v != null && onDurationWeeksChange(v)}
-              getOptionLabel={(v) => `${v} weken`}
-              renderInput={(params) => (
-                <TextField {...params} label="Duur (weken)" size="small" fullWidth />
-              )}
-              sx={{ minWidth: 0 }}
-            />
-          </Box>
-        )}
-        </Box>
-        </AccordionDetails>
-      </Accordion>
+        onToggle={() => toggleSection('1')}
+      />
 
       {isPerDay && days.length > 0 && (
-        <Box sx={{ ...SECTION_STYLE, minWidth: 0, width: '100%' }}>
-          <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
-            Per trainingsdag
-          </Typography>
-          <FormControl
-            size="small"
-            fullWidth
-            sx={{
-              minWidth: 0,
-              '& .MuiSelect-select': {
-                minHeight: 40,
-                boxSizing: 'border-box',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              },
-            }}
-          >
-            <InputLabel id="formule7-day-select-label">Trainingsdag</InputLabel>
-            <Select
-              labelId="formule7-day-select-label"
-              value={selectedDayIndex}
-              label="Trainingsdag"
-              onChange={(e) => setSelectedDayIndex(Number(e.target.value))}
-              MenuProps={{
-                disableScrollLock: true,
-                PaperProps: { sx: { maxHeight: 'min(60vh, 400px)' } },
-              }}
-              renderValue={(v) => {
-                const d = days[Number(v)];
-                return d ? `Dag ${Number(v) + 1}${d.dayLabel ? `: ${d.dayLabel}` : ''}` : '';
-              }}
-            >
-              {days.map((d, idx) => (
-                <MenuItem key={idx} value={idx}>
-                  Dag {idx + 1}{d.dayLabel ? `: ${d.dayLabel}` : ''}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Box>
+        <TrainingsdagSelect days={days} selectedDayIndex={selectedDayIndex} onChange={setSelectedDayIndex} />
       )}
 
       {/* --- Warming-up --- */}
-      <Accordion
-        disableGutters
+      <WarmingUpSection
+        value={effectiveWarmup}
+        onChange={setEffectiveWarmup}
+        moverType={formule7.moverType}
+        organisationChoices={warmupOrganisationChoices}
+        computeTrainingHr={computeTrainingHr}
         expanded={expandedSections.includes('2')}
-        onChange={() => toggleSection('2')}
-        sx={{
-          ...SECTION_STYLE,
-          '&:before': { display: 'none' },
-          boxShadow: 'none',
-          '& .MuiAccordionSummary-root': { py: 0.5, minHeight: 44, px: 0 },
-          '& .MuiAccordionSummary-content': { my: 0.75 },
-        }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="subtitle1" fontWeight={600}>
-            2. Warming-up
-          </Typography>
-        </AccordionSummary>
-        <AccordionDetails sx={{ py: 1.5, px: 0, minWidth: 0 }}>
-        <HelperText>
-          Op basis van de gekozen activiteit worden organisatie, intensiteit en duur automatisch ingevuld.
-          De warming-up mag niet dezelfde organisatie (oefenvorm) hebben als de cardiotraining — die opties worden
-          daarom uitgesloten. Trainingshartfrequentie volgt uit leeftijd en rusthartslag.
-        </HelperText>
-        <Box sx={FORM_ROW}>
-          <Autocomplete
-            options={warmupOrganisationChoices}
-            value={warmupOrganisationChoices.find((o) => o.value === effectiveWarmup.organisation) ?? null}
-            onChange={(_, v) => setEffectiveWarmup({ organisation: v?.value ?? null })}
-            getOptionLabel={(o) => o.label}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Organisatie"
-                size="small"
-                fullWidth
-                placeholder={formule7.moverType ? undefined : 'Kies eerst activiteit (sectie 1)'}
-              />
-            )}
-            sx={{ width: '100%' }}
-          />
-          <TextField
-            label="Intensiteit (% HFmax)"
-            type="number"
-            value={effectiveWarmup.intensityPercentOfMaxHr ?? ''}
-            onChange={(e) => {
-              const raw = e.target.value === '' ? null : Number(e.target.value);
-              if (raw === null) {
-                setEffectiveWarmup({ intensityPercentOfMaxHr: null });
-                return;
-              }
-              if (formule7.moverType) {
-                const { intensityPercentMin, intensityPercentMax } = WARMUP_BY_MOVER_TYPE[formule7.moverType];
-                const clamped = Math.min(intensityPercentMax, Math.max(intensityPercentMin, raw));
-                setEffectiveWarmup({ intensityPercentOfMaxHr: clamped });
-              } else {
-                setEffectiveWarmup({ intensityPercentOfMaxHr: raw });
-              }
-            }}
-            size="small"
-            fullWidth
-            inputProps={
-              formule7.moverType
-                ? {
-                    min: WARMUP_BY_MOVER_TYPE[formule7.moverType].intensityPercentMin,
-                    max: WARMUP_BY_MOVER_TYPE[formule7.moverType].intensityPercentMax,
-                  }
-                : { min: 0, max: 100 }
-            }
-            InputProps={{
-              endAdornment: formule7.moverType ? (
-                <Tooltip
-                  title={`Intensiteit: ${WARMUP_BY_MOVER_TYPE[formule7.moverType].intensityLabel} (alleen dit bereik toegestaan)`}
-                  placement="left"
-                >
-                  <IconButton size="small" aria-label="Uitleg intensiteit">
-                    <InfoOutlinedIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              ) : undefined,
-            }}
-          />
-          <Box sx={FORM_ROW}>
-            <TextField
-              label="Trainingshartfrequentie (sl/min)"
-              type="text"
-              value={(() => {
-                const moverType = formule7.moverType;
-                const preset = moverType ? WARMUP_BY_MOVER_TYPE[moverType] : null;
-                if (preset && preset.intensityPercentMin !== preset.intensityPercentMax) {
-                  const hrMin = computeTrainingHr(preset.intensityPercentMin);
-                  const hrMax = computeTrainingHr(preset.intensityPercentMax);
-                  if (hrMin != null && hrMax != null) return `${hrMin}-${hrMax}`;
-                }
-                return effectiveWarmup.trainingHr ?? '';
-              })()}
-              size="small"
-              fullWidth
-              sx={{ minWidth: 0 }}
-              inputProps={{ readOnly: true }}
-              InputProps={{
-                endAdornment: (
-                  <Tooltip
-                    title={
-                      <>
-                        <Typography variant="caption" component="div" fontWeight={600}>
-                          Formule
-                        </Typography>
-                        <Typography variant="caption" component="div">
-                          ((220 − leeftijd − rustHF) × %HFmax) + rustHF
-                        </Typography>
-                        <Typography variant="caption" component="div" sx={{ mt: 0.5 }}>
-                          RustHF onbekend = 60 sl/min (fallback).
-                        </Typography>
-                        {formule7.moverType && (
-                          <>
-                            <Typography variant="caption" component="div" fontWeight={600} sx={{ mt: 1 }}>
-                              Intensiteit
-                            </Typography>
-                            <Typography variant="caption" component="div">
-                              {WARMUP_BY_MOVER_TYPE[formule7.moverType].intensityLabel}
-                            </Typography>
-                            {WARMUP_BY_MOVER_TYPE[formule7.moverType].intensityPercentMin !==
-                            WARMUP_BY_MOVER_TYPE[formule7.moverType].intensityPercentMax ? (
-                              <Typography variant="caption" component="div">
-                                Berekend: bij {WARMUP_BY_MOVER_TYPE[formule7.moverType].intensityPercentMin}% →{' '}
-                                {computeTrainingHr(WARMUP_BY_MOVER_TYPE[formule7.moverType].intensityPercentMin) ?? '–'} sl/min,
-                                bij {WARMUP_BY_MOVER_TYPE[formule7.moverType].intensityPercentMax}% →{' '}
-                                {computeTrainingHr(WARMUP_BY_MOVER_TYPE[formule7.moverType].intensityPercentMax) ?? '–'} sl/min.
-                              </Typography>
-                            ) : (
-                              <Typography variant="caption" component="div">
-                                Berekend: {effectiveWarmup.trainingHr ?? '–'} sl/min.
-                              </Typography>
-                            )}
-                          </>
-                        )}
-                      </>
-                    }
-                    placement="left"
-                  >
-                    <IconButton size="small" aria-label="Uitleg formule en uitkomst">
-                      <InfoOutlinedIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                ),
-              }}
-            />
-            <TextField
-              label="Duur (min)"
-              type="number"
-              value={effectiveWarmup.durationMinutes ?? ''}
-              onChange={(e) => {
-                const raw = e.target.value === '' ? null : Number(e.target.value);
-                if (raw === null) {
-                  setEffectiveWarmup({ durationMinutes: null });
-                  return;
-                }
-                if (formule7.moverType) {
-                  const { durationMin, durationMax } = WARMUP_BY_MOVER_TYPE[formule7.moverType];
-                  const clamped = Math.min(durationMax, Math.max(durationMin, raw));
-                  setEffectiveWarmup({ durationMinutes: clamped });
-                } else {
-                  setEffectiveWarmup({ durationMinutes: raw });
-                }
-              }}
-              size="small"
-              fullWidth
-              sx={{ minWidth: 0 }}
-              inputProps={
-              formule7.moverType
-                ? {
-                    min: WARMUP_BY_MOVER_TYPE[formule7.moverType].durationMin,
-                    max: WARMUP_BY_MOVER_TYPE[formule7.moverType].durationMax,
-                  }
-                : { min: 0 }
-            }
-            InputProps={{
-              endAdornment: formule7.moverType ? (
-                <Tooltip
-                  title={`Duur: ${WARMUP_BY_MOVER_TYPE[formule7.moverType].durationMin}-${WARMUP_BY_MOVER_TYPE[formule7.moverType].durationMax} min`}
-                  placement="left"
-                >
-                  <IconButton size="small" aria-label="Uitleg duur">
-                    <InfoOutlinedIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              ) : undefined,
-            }}
-          />
-        </Box>
-        </Box>
-        </AccordionDetails>
-      </Accordion>
+        onToggle={() => toggleSection('2')}
+      />
 
       {/* --- Krachttraining (neuromusculair) --- */}
-      <Accordion
-        disableGutters
+      <KrachtSection
+        value={formule7.neuromuscular}
+        onChange={setNeuromuscular}
+        moverType={formule7.moverType}
+        selectedDayIndex={selectedDayIndex}
+        slotBeforeDayCards={slotBeforeDayCards}
+        childrenAfterNeuromuscular={childrenAfterNeuromuscular}
         expanded={expandedSections.includes('3')}
-        onChange={() => toggleSection('3')}
-        sx={{
-          ...SECTION_STYLE,
-          '&:before': { display: 'none' },
-          boxShadow: 'none',
-          '& .MuiAccordionSummary-root': { py: 0.5, minHeight: 44, px: 0 },
-          '& .MuiAccordionSummary-content': { my: 0.75 },
-        }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="subtitle1" fontWeight={600}>
-            3. Krachttraining
-          </Typography>
-        </AccordionSummary>
-        <AccordionDetails sx={{ py: 1.5, px: 0, minWidth: 0 }}>
-        <HelperText>
-          Neuromusculair trainen (Formule 7). Kies eerst de activiteit in sectie 1; alleen doelen die bij die
-          belastbaarheid horen zijn beschikbaar. Bij keuze van een doel worden sets, reps, % 1RM, rusttijd en aantal
-          oefeningen automatisch ingevuld.
-        </HelperText>
-        <Box sx={{ ...FORM_ROW, mt: 0.5, mb: 2 }}>
-          <Autocomplete
-            options={
-              formule7.moverType
-                ? FORMULE7_STRENGTH_GOAL_OPTIONS.filter((o) =>
-                    ALLOWED_NMT_GOALS_BY_MOVER_TYPE[formule7.moverType!].includes(o.value)
-                  )
-                : FORMULE7_STRENGTH_GOAL_OPTIONS
-            }
-            value={
-              (() => {
-                const goal = formule7.neuromuscular.goal;
-                if (!goal) return null;
-                const allowed = formule7.moverType
-                  ? ALLOWED_NMT_GOALS_BY_MOVER_TYPE[formule7.moverType]
-                  : FORMULE7_STRENGTH_GOAL_OPTIONS.map((o) => o.value);
-                return allowed.includes(goal)
-                  ? FORMULE7_STRENGTH_GOAL_OPTIONS.find((o) => o.value === goal) ?? null
-                  : null;
-              })()
-            }
-            onChange={(_, v) => setNeuromuscular({ goal: (v?.value as Formule7StrengthGoal) ?? null })}
-            getOptionLabel={(o) => o.label}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Doel (S1–S4.3)"
-                size="small"
-                fullWidth
-                placeholder={formule7.moverType ? undefined : 'Kies eerst activiteit (sectie 1)'}
-                InputProps={{
-                  ...params.InputProps,
-                  endAdornment: (
-                    <>
-                      {params.InputProps.endAdornment}
-                      <Tooltip
-                        title={
-                          formule7.moverType
-                            ? `Toegestaan bij "${getFormule7MoverLabel(formule7.moverType)}": ${ALLOWED_NMT_GOALS_BY_MOVER_TYPE[formule7.moverType].join(', ')}`
-                            : 'Alle doelen; kies activiteit voor beperkte keuze op belastbaarheid.'
-                        }
-                        placement="top"
-                        arrow
-                      >
-                        <span style={{ display: 'inline-flex', cursor: 'help', marginLeft: 4 }}>
-                          <InfoOutlinedIcon sx={{ fontSize: 18, opacity: 0.6 }} />
-                        </span>
-                      </Tooltip>
-                    </>
-                  ),
-                }}
-              />
-            )}
-            sx={{ width: '100%' }}
-          />
-          {formule7.neuromuscular.goal && (
-            <Autocomplete
-              options={[4, 6, 7, 8, 9] as const}
-              value={formule7.neuromuscular.desiredExerciseCount ?? null}
-              onChange={(_, v) => setNeuromuscular({ desiredExerciseCount: (v as 4 | 6 | 7 | 8 | 9) ?? null })}
-              getOptionLabel={(v) => String(v)}
-              renderInput={(params) => {
-                const goal = formule7.neuromuscular.goal;
-                const preset = goal ? NMT_PRESETS_BY_GOAL[goal] : null;
-                return (
-                  <TextField
-                    {...params}
-                    label="Aantal oefeningen"
-                    size="small"
-                    fullWidth
-                    InputProps={{
-                      ...params.InputProps,
-                      endAdornment: preset ? (
-                        <>
-                          {params.InputProps.endAdornment}
-                          <Tooltip
-                            title={`${preset.minExercises}–${preset.maxExercises} oefeningen (standaard ${preset.desiredExerciseCount})`}
-                            placement="top"
-                            arrow
-                          >
-                            <span style={{ display: 'inline-flex', cursor: 'help', marginLeft: 4 }}>
-                              <InfoOutlinedIcon sx={{ fontSize: 18, opacity: 0.6 }} />
-                            </span>
-                          </Tooltip>
-                        </>
-                      ) : params.InputProps.endAdornment,
-                    }}
-                  />
-                );
-              }}
-              sx={{ width: '100%' }}
-            />
-          )}
-        </Box>
-        {!formule7.neuromuscular.goal ? (
-          <EmptyState>
-            Kies een doel (S1–S4.3) om de oefeningen te zien en in te vullen. Het aantal oefeningen en de parameters worden dan automatisch ingevuld.
-          </EmptyState>
-        ) : formule7.neuromuscular.desiredExerciseCount == null ? (
-          <EmptyState>
-            Selecteer aantal oefeningen in het veld hierboven (4–9 oefeningen).
-          </EmptyState>
-        ) : (
-          <Box sx={{ py: 1, mt: 0.5 }}>
-            {(() => {
-              const preset = formule7.neuromuscular.goal
-                ? NMT_PRESETS_BY_GOAL[formule7.neuromuscular.goal]
-                : null;
-              if (!preset) return null;
-              return showNmtTip ? (
-                <Alert
-                  severity="info"
-                  onClose={dismissNmtTip}
-                  sx={{ alignItems: 'flex-start', '& .MuiAlert-message': { flex: 1 } }}
-                >
-                  <Typography variant="body2" component="span">
-                    <strong>Voorschrift:</strong> {formule7.neuromuscular.desiredExerciseCount} oefeningen, standaard {preset.percent1RM}% 1RM, {preset.sets} sets, {preset.reps} reps, {preset.restSeconds} s rust (bereiken: sets {preset.setsMin}–{preset.setsMax}, reps {preset.repsMin}–{preset.repsMax}, rust {preset.restSecMin}–{preset.restSecMax} s).
-                  </Typography>
-                </Alert>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  <Box
-                    component="span"
-                    onClick={showNmtTipAgain}
-                    sx={{ cursor: 'pointer', textDecoration: 'underline', color: 'primary.main' }}
-                  >
-                    Uitleg tonen
-                  </Box>
-                  {' – voorschrift voor deze sectie.'}
-                </Typography>
-              );
-            })()}
-          </Box>
-        )}
-        {slotBeforeDayCards}
-        {typeof childrenAfterNeuromuscular === 'function'
-          ? childrenAfterNeuromuscular(selectedDayIndex)
-          : childrenAfterNeuromuscular}
-        </AccordionDetails>
-      </Accordion>
+        onToggle={() => toggleSection('3')}
+      />
 
       {/* --- Cardiotraining (cardiovasculair) --- */}
-      <Accordion
-        disableGutters
+      <CardioSection
+        value={effectiveCardio}
+        onChange={setEffectiveCardio}
+        onZoneChange={setCardioZone}
+        moverType={formule7.moverType}
+        maxHr={cardioMaxHr}
         expanded={expandedSections.includes('4')}
-        onChange={() => toggleSection('4')}
-        sx={{
-          ...SECTION_STYLE,
-          '&:before': { display: 'none' },
-          boxShadow: 'none',
-          '& .MuiAccordionSummary-root': { py: 0.5, minHeight: 44, px: 0 },
-          '& .MuiAccordionSummary-content': { my: 0.75 },
-        }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="subtitle1" fontWeight={600}>
-            4. Cardiotraining
-          </Typography>
-        </AccordionSummary>
-        <AccordionDetails sx={{ py: 1.5, px: 0, minWidth: 0 }}>
-        <HelperText>
-          Cardiovasculair trainen (Tabel 8, Formule 2): trainingsmethode, organisatie en per zone met
-          trainingshartslag en duur (min). Organisatie en methode volgen uit de gekozen activiteit. Max. HF: 220 −
-          leeftijd. De warming-up gebruikt een andere organisatie dan deze cardio.
-        </HelperText>
-        {!formule7.moverType && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Vul eerst sectie 1 (activiteit / belastbaarheid) in voor toegestane organisatie en trainingsmethodes.
-          </Typography>
-        )}
-        <Box sx={{ ...FORM_ROW, mb: 2 }}>
-          <Autocomplete
-            freeSolo
-            options={formule7.moverType ? CARDIO_TRAINING_METHOD_OPTIONS_BY_MOVER[formule7.moverType] : []}
-            value={
-              (() => {
-                const method = effectiveCardio.trainingMethod ?? '';
-                if (!method) return null;
-                const opts = formule7.moverType ? CARDIO_TRAINING_METHOD_OPTIONS_BY_MOVER[formule7.moverType] : [];
-                return opts.find((o) => o.value === method) ?? method;
-              })()
-            }
-            onInputChange={(_, v) => setEffectiveCardio({ trainingMethod: v })}
-            onChange={(_, v) => setEffectiveCardio({ trainingMethod: typeof v === 'string' ? v : (v as { value: string })?.value ?? '' })}
-            getOptionLabel={(o) => (typeof o === 'string' ? o : (o as { label: string })?.label ?? '')}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Trainingsmethode"
-                size="small"
-                fullWidth
-                placeholder={formule7.moverType ? 'Kies of typ' : 'Kies eerst activiteit (sectie 1)'}
-              />
-            )}
-            sx={{ minWidth: 0 }}
-          />
-          <Autocomplete
-            options={
-              formule7.moverType
-                ? CARDIO_ORGANISATION_BY_MOVER_TYPE[formule7.moverType].map((val) =>
-                    FORMULE7_ORGANISATION_OPTIONS.find((o) => o.value === val)
-                  ).filter(Boolean) as typeof FORMULE7_ORGANISATION_OPTIONS
-                : []
-            }
-            value={
-              formule7.moverType &&
-              effectiveCardio.organisation &&
-              CARDIO_ORGANISATION_BY_MOVER_TYPE[formule7.moverType].includes(effectiveCardio.organisation)
-                ? FORMULE7_ORGANISATION_OPTIONS.find((o) => o.value === effectiveCardio.organisation) ?? null
-                : null
-            }
-            onChange={(_, v) => setEffectiveCardio({ organisation: v?.value ?? null })}
-            getOptionLabel={(o) => o.label}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Organisatie"
-                size="small"
-                fullWidth
-                placeholder={formule7.moverType ? undefined : 'Kies eerst activiteit (sectie 1)'}
-              />
-            )}
-            sx={{ minWidth: 0 }}
-          />
-        </Box>
-        {([0, 1, 2] as const).map((i) => {
-          const zoneNum = (i + 1) as 1 | 2 | 3;
-          const zoneHrPreset = CARDIO_ZONE_HR_PERCENT[zoneNum];
-          const maxHr = formule7.theoreticalMaxHr ?? (formule7.ageYears != null ? 220 - Number(formule7.ageYears) : null);
-          const suggestedHr = maxHr != null ? Math.round((maxHr * zoneHrPreset.defaultPercent) / 100) : null;
-          const allowedOrgOptions =
-            formule7.moverType
-              ? CARDIO_ORGANISATION_BY_MOVER_TYPE[formule7.moverType].map((val) =>
-                  FORMULE7_ORGANISATION_OPTIONS.find((o) => o.value === val)
-                ).filter(Boolean) as typeof FORMULE7_ORGANISATION_OPTIONS
-              : [];
-          return (
-            <Box
-              key={i}
-              sx={{
-                p: 1.5,
-                borderRadius: 1,
-                bgcolor: 'rgba(0,0,0,0.03)',
-              }}
-            >
-              <Typography variant="body2" fontWeight={600} sx={{ mb: 1.5, display: 'block' }}>
-                Zone {zoneNum} ({zoneHrPreset.zoneName})
-              </Typography>
-              <Box sx={FORM_ROW}>
-                <Autocomplete
-                  options={allowedOrgOptions}
-                  value={
-                    formule7.moverType &&
-                    effectiveCardio.zones[i]?.organisation != null &&
-                    CARDIO_ORGANISATION_BY_MOVER_TYPE[formule7.moverType].includes(effectiveCardio.zones[i]!.organisation!)
-                      ? FORMULE7_ORGANISATION_OPTIONS.find((o) => o.value === effectiveCardio.zones[i]?.organisation) ?? null
-                      : null
-                  }
-                  onChange={(_, v) => setCardioZone(i, { organisation: v?.value ?? null })}
-                  getOptionLabel={(o) => o.label}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Organisatie"
-                      size="small"
-                      fullWidth
-                      placeholder={formule7.moverType ? undefined : 'Kies eerst activiteit (sectie 1)'}
-                    />
-                  )}
-                  sx={{ minWidth: 0 }}
-                />
-                <TextField
-                  label="Trainingshartslag (sl/min)"
-                  type="number"
-                  value={effectiveCardio.zones[i]?.trainingHr ?? ''}
-                  onChange={(e) => {
-                    const raw = e.target.value === '' ? null : Number(e.target.value) || null;
-                    if (raw == null) {
-                      setCardioZone(i, { trainingHr: null });
-                      return;
-                    }
-                    const minHr = maxHr != null ? Math.round((maxHr * zoneHrPreset.min) / 100) : 0;
-                    const maxHrZone = maxHr != null ? Math.round((maxHr * zoneHrPreset.max) / 100) : 300;
-                    setCardioZone(i, { trainingHr: Math.min(maxHrZone, Math.max(minHr, raw)) });
-                  }}
-                  size="small"
-                  fullWidth
-                  inputProps={{
-                    min: maxHr != null ? Math.round((maxHr * zoneHrPreset.min) / 100) : 0,
-                    max: maxHr != null ? Math.round((maxHr * zoneHrPreset.max) / 100) : 300,
-                  }}
-                  placeholder={suggestedHr != null ? `Standaard ${suggestedHr} (${zoneHrPreset.defaultPercent}% max HF)` : undefined}
-                  InputProps={{
-                    endAdornment: (
-                      <Tooltip
-                        title={
-                          <>
-                            <Typography variant="caption" component="div" fontWeight={600}>
-                              Trainingshartslag
-                            </Typography>
-                            <Typography variant="caption" component="div">
-                              {zoneHrPreset.zoneName}: {zoneHrPreset.min}–{zoneHrPreset.max}% HF-max. Berekening: 220 − leeftijd = max HF.
-                            </Typography>
-                            {maxHr != null && (
-                              <Typography variant="caption" component="div" sx={{ mt: 0.5 }}>
-                                Max HF ≈ {maxHr}. Standaard {zoneHrPreset.defaultPercent}% → {suggestedHr} sl/min (wordt automatisch ingevuld).
-                              </Typography>
-                            )}
-                          </>
-                        }
-                        placement="left"
-                      >
-                        <IconButton size="small" aria-label="Uitleg trainingshartslag zone">
-                          <InfoOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    ),
-                  }}
-                />
-                <TextField
-                  label="Duur (min)"
-                  type="number"
-                  value={effectiveCardio.zones[i]?.durationMinutes ?? ''}
-                  onChange={(e) =>
-                    setCardioZone(i, {
-                      durationMinutes: e.target.value === '' ? null : Number(e.target.value) || null,
-                    })
-                  }
-                  size="small"
-                  fullWidth
-                  inputProps={{ min: 0 }}
-                />
-              </Box>
-            </Box>
-          );
-        })}
-        </AccordionDetails>
-      </Accordion>
+        onToggle={() => toggleSection('4')}
+      />
 
       {/* --- Cooling-down --- */}
-      <Accordion
-        disableGutters
+      <CoolingDownSection
+        value={effectiveCooldown}
+        onChange={setEffectiveCooldown}
         expanded={expandedSections.includes('5')}
-        onChange={() => toggleSection('5')}
-        sx={{
-          ...SECTION_STYLE,
-          '&:before': { display: 'none' },
-          boxShadow: 'none',
-          '& .MuiAccordionSummary-root': { py: 0.5, minHeight: 44, px: 0 },
-          '& .MuiAccordionSummary-content': { my: 0.75 },
-        }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="subtitle1" fontWeight={600}>
-            5. Cooling-down
-          </Typography>
-        </AccordionSummary>
-        <AccordionDetails sx={{ py: 1.5, px: 0, minWidth: 0 }}>
-        <HelperText>
-          Vul intensiteit in % HFmax in; de trainingshartfrequentie wordt automatisch berekend met je leeftijd en
-          rusthartslag.
-        </HelperText>
-        <Box sx={FORM_ROW}>
-          <Autocomplete
-            options={FORMULE7_COOLDOWN_ORGANISATION_OPTIONS}
-            value={
-              FORMULE7_COOLDOWN_ORGANISATION_OPTIONS.find((o) => o.value === effectiveCooldown.organisation) ?? null
-            }
-            onChange={(_, v) => setEffectiveCooldown({ organisation: v?.value ?? null })}
-            getOptionLabel={(o) => o.label}
-            renderInput={(params) => (
-              <TextField {...params} label="Organisatie" size="small" fullWidth />
-            )}
-            sx={{ minWidth: 0 }}
-          />
-          <TextField
-            label="Intensiteit (% HFmax)"
-            type="number"
-            value={effectiveCooldown.intensityPercentOfMaxHr ?? ''}
-            onChange={(e) =>
-              setEffectiveCooldown({
-                intensityPercentOfMaxHr: e.target.value === '' ? null : Number(e.target.value) || null,
-              })
-            }
-            size="small"
-            fullWidth
-            sx={{ minWidth: 0 }}
-            inputProps={{ min: 0, max: 100 }}
-          />
-          <TextField
-            label="Trainingshartfrequentie (sl/min)"
-            type="text"
-            value={effectiveCooldown.trainingHr ?? ''}
-            size="small"
-            fullWidth
-            sx={{ minWidth: 0 }}
-            inputProps={{ readOnly: true }}
-            InputProps={{
-              endAdornment: (
-                <Tooltip
-                  title={
-                    <>
-                      <Typography variant="caption" component="div" fontWeight={600}>
-                        Formule
-                      </Typography>
-                      <Typography variant="caption" component="div">
-                        ((220 − leeftijd − rustHF) × %HFmax) + rustHF
-                      </Typography>
-                      <Typography variant="caption" component="div" sx={{ mt: 0.5 }}>
-                        RustHF onbekend = 60 sl/min (fallback). Berekend: {effectiveCooldown.trainingHr ?? '–'} sl/min.
-                      </Typography>
-                    </>
-                  }
-                  placement="left"
-                >
-                  <IconButton size="small" aria-label="Uitleg formule en uitkomst">
-                    <InfoOutlinedIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              ),
-            }}
-          />
-          <TextField
-            label="Duur (min)"
-            type="number"
-            value={effectiveCooldown.durationMinutes ?? ''}
-            onChange={(e) =>
-              setEffectiveCooldown({ durationMinutes: e.target.value === '' ? null : Number(e.target.value) || null })
-            }
-            size="small"
-            fullWidth
-            sx={{ minWidth: 0 }}
-            inputProps={{ min: 0 }}
-          />
-        </Box>
-        </AccordionDetails>
-      </Accordion>
+        onToggle={() => toggleSection('5')}
+      />
 
       {/* --- Stretching --- */}
-      <Accordion
-        disableGutters
+      <StretchingSection
+        value={stretchingRows}
+        onChange={setEffectiveStretching}
+        schemaExerciseNames={schemaExerciseNames}
         expanded={expandedSections.includes('6')}
-        onChange={() => toggleSection('6')}
-        sx={{
-          ...SECTION_STYLE,
-          '&:before': { display: 'none' },
-          boxShadow: 'none',
-          '& .MuiAccordionSummary-root': { py: 0.5, minHeight: 44, px: 0 },
-          '& .MuiAccordionSummary-content': { my: 0.75 },
-        }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="subtitle1" fontWeight={600}>
-            6. Stretching
-          </Typography>
-        </AccordionSummary>
-        <AccordionDetails sx={{ py: 1.5, px: 0, minWidth: 0 }}>
-        <HelperText>
-          Per spiergroep: duur van de stretch (sec) en aantal herhalingen. Je kunt de spiergroepen laten vullen op basis van de oefeningen in je workout.
-        </HelperText>
-        {schemaExerciseNames.length > 0 && (
-          <Box sx={{ mb: 1.5 }}>
-            <md-text-button
-              onClick={() => {
-                const groups = getMuscleGroupsFromExerciseNames(schemaExerciseNames);
-                const newStretching = groups.map((muscleGroup) => ({
-                  muscleGroup,
-                  stretchDurationSeconds: null as number | null,
-                  repetitions: null as number | null,
-                }));
-                setEffectiveStretching(newStretching);
-              }}
-            >
-              Vul stretching op basis van oefeningen
-            </md-text-button>
-          </Box>
-        )}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, minWidth: 0 }}>
-          {stretchingRows.map((row, idx) => (
-            <Box
-              key={idx}
-              sx={{
-                ...STRETCH_ROW,
-                p: 1.5,
-                borderRadius: 1,
-                bgcolor: 'rgba(0,0,0,0.03)',
-              }}
-            >
-              <TextField
-                label="Spiergroep"
-                value={row.muscleGroup}
-                onChange={(e) => setStretch(idx, { muscleGroup: e.target.value })}
-                size="small"
-                fullWidth
-                sx={{ minWidth: 0 }}
-                placeholder="Spiergroep"
-              />
-              <TextField
-                label="Duur stretch (sec)"
-                type="number"
-                value={row.stretchDurationSeconds ?? ''}
-                onChange={(e) =>
-                  setStretch(idx, {
-                    stretchDurationSeconds:
-                      e.target.value === '' ? null : Number(e.target.value) || null,
-                  })
-                }
-                size="small"
-                fullWidth
-                sx={{ minWidth: 0 }}
-                inputProps={{ min: 0 }}
-              />
-              <TextField
-                label="Herhalingen"
-                type="number"
-                value={row.repetitions ?? ''}
-                onChange={(e) =>
-                  setStretch(idx, {
-                    repetitions: e.target.value === '' ? null : Number(e.target.value) || null,
-                  })
-                }
-                size="small"
-                fullWidth
-                sx={{ minWidth: 0 }}
-                inputProps={{ min: 0 }}
-              />
-              <Box sx={{ flex: '0 0 40px', width: 40, height: 40, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <IconButton
-                  size="small"
-                  onClick={() => removeStretchRow(idx)}
-                  aria-label="Rij verwijderen"
-                  color="error"
-                  sx={{
-                    width: 40,
-                    height: 40,
-                    minWidth: 40,
-                    padding: 0,
-                    '& .MuiSvgIcon-root': { fontSize: 22 },
-                  }}
-                >
-                  <DeleteOutlineIcon />
-                </IconButton>
-              </Box>
-            </Box>
-          ))}
-          <Box sx={{ mt: 0.5 }}>
-            <md-text-button onClick={addStretchRow}>
-              Rij toevoegen
-            </md-text-button>
-          </Box>
-        </Box>
-        </AccordionDetails>
-      </Accordion>
+        onToggle={() => toggleSection('6')}
+      />
 
       {/* --- Bijzonderheden --- */}
-      <Accordion
-        disableGutters
+      <BijzonderhedenSection
+        value={formule7.notes}
+        onChange={(notes) => set({ notes })}
         expanded={expandedSections.includes('7')}
-        onChange={() => toggleSection('7')}
-        sx={{
-          ...SECTION_STYLE,
-          '&:before': { display: 'none' },
-          boxShadow: 'none',
-          '& .MuiAccordionSummary-root': { py: 0.5, minHeight: 44, px: 0 },
-          '& .MuiAccordionSummary-content': { my: 0.75 },
-        }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="subtitle1" fontWeight={600}>
-            7. Bijzonderheden
-          </Typography>
-        </AccordionSummary>
-        <AccordionDetails sx={{ py: 1.5, px: 0, minWidth: 0 }}>
-        <HelperText>
-          Eventuele opmerkingen, contra-indicaties of aandachtspunten voor deze workout.
-        </HelperText>
-        <TextField
-          label="Bijzonderheden"
-          value={formule7.notes}
-          onChange={(e) => set({ notes: e.target.value })}
-          size="small"
-          fullWidth
-          multiline
-          rows={3}
-          placeholder="Vrije notities…"
-        />
-        </AccordionDetails>
-      </Accordion>
+        onToggle={() => toggleSection('7')}
+      />
     </Box>
   );
 }
