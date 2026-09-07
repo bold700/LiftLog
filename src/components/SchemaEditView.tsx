@@ -1,27 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Card,
-  CardContent,
   Typography,
   Box,
   IconButton,
-  Button,
   Alert,
-  CircularProgress,
   TextField,
   Autocomplete,
-  Tooltip,
-  FormControl,
-  InputLabel,
-  Select,
   MenuItem,
-  Stepper,
-  Step,
-  StepLabel,
 } from '@mui/material';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { Schema, SchemaDay, SchemaExercise, Formule7Routekaart } from '../types';
 import type { Profile, SchemaAudience } from '../types';
 import { useProfile } from '../context/ProfileContext';
@@ -29,107 +16,23 @@ import { createEmptyFormule7, NMT_PRESETS_BY_GOAL } from '../utils/formule7Defau
 import type { Formule7StrengthGoal } from '../types';
 import { Formule7RoutekaartForm } from './Formule7RoutekaartForm';
 import { useExerciseDbSearch, type ExerciseDbEquipmentFilter } from '../hooks/useExerciseDbSearch';
-import { ExerciseGifThumb } from './ExerciseGifThumb';
-import { MUSCLE_GROUP_OPTIONS } from '../utils/exerciseMuscleFilter';
-import { designTokens } from '../theme/designTokens';
-import { addWeeks, getWeeksBetween } from '../utils/format';
+import { addWeeks } from '../utils/format';
 import { PageLayout, ContentCard } from './layout';
 import {
-  generateWorkoutFromPrompt,
-  getFormule7FollowUpQuestions,
-  type Formule7FollowUpQuestion,
-} from '../services/aiWorkoutService';
+  defaultSchemaExercise,
+  getDayCountFromSessions,
+  createExercisesFromPreset,
+  getDurationWeeksFromSchema,
+  type DurationWeeks,
+} from '../utils/formule7AiPostProcess';
+import { DayCard } from './schemaEdit/DayCard';
+import { AiFormule7Wizard, AiGenerationPanel } from './schemaEdit/AiPanels';
+import { useAiSchemaGeneration, type AiGeneratedResult } from './schemaEdit/useAiSchemaGeneration';
 import '@material/web/button/filled-button.js';
 import '@material/web/button/text-button.js';
 import '@material/web/icon/icon.js';
 
-const defaultSchemaExercise = (exerciseName: string): SchemaExercise => ({
-  exerciseId: exerciseName,
-  exerciseName,
-  setsTarget: 3,
-  repsTarget: 10,
-  restSeconds: 60,
-  notes: '',
-});
-
-
-/** Rij voor oefening-parameters: vult volle breedte; velden delen de ruimte gelijk. */
-const EXERCISE_PARAMS_ROW = {
-  display: 'flex',
-  flexWrap: 'wrap' as const,
-  gap: 2,
-  alignItems: 'flex-start' as const,
-  minWidth: 0,
-  width: '100%',
-  '& > *': {
-    flex: '1 1 100%',
-    minWidth: 0,
-    '@media (min-width: 360px)': { flex: '1 1 0%', minWidth: 64 },
-  },
-};
-
-const EQUIPMENT_FILTER_OPTIONS: { value: ExerciseDbEquipmentFilter; label: string }[] = [
-  { value: 'all', label: 'Alle oefeningen' },
-  { value: 'machine', label: 'Alleen machines' },
-  { value: 'free_weight', label: 'Alleen vrije gewichten' },
-  { value: 'cable', label: 'Alleen kabels' },
-  { value: 'bodyweight', label: 'Alleen bodyweight' },
-  { value: 'other', label: 'Overig' },
-];
-
-/** Aantal schemadagen op basis van trainingsfrequentie per week (Formule 7). */
-function getDayCountFromSessions(
-  sessionsPerWeek: Formule7Routekaart['sessionsPerWeek']
-): number | null {
-  if (sessionsPerWeek == null) return null;
-  return sessionsPerWeek;
-}
-
-/** Maakt lege oefeningen met standaard waarden uit het NMT-voorschrift (Tabel 4). */
-function createExercisesFromPreset(
-  goal: Formule7StrengthGoal,
-  count: number
-): SchemaExercise[] {
-  const preset = NMT_PRESETS_BY_GOAL[goal];
-  return Array.from({ length: count }, () => ({
-    exerciseId: '',
-    exerciseName: '',
-    setsTarget: preset.sets,
-    repsTarget: preset.reps,
-    restSeconds: preset.restSeconds,
-    intensityPercent1RM: preset.percent1RM,
-    notes: '',
-  }));
-}
-
-const F7_EXERCISE_COUNT_ORDER = [4, 6, 7, 8, 9] as const;
-
-/** Na AI: dagen inkorten tot sessionsPerWeek en desiredExerciseCount laten aansluiten op de langste dag (anders snijdt de F7-sync oefeningen weg). */
-function postProcessFormule7Ai(
-  formule7: Formule7Routekaart,
-  days: SchemaDay[]
-): { formule7: Formule7Routekaart; days: SchemaDay[] } {
-  const n = formule7.sessionsPerWeek;
-  let nextDays = days;
-  if (n != null && n > 0 && days.length > n) {
-    nextDays = days.slice(0, n);
-  }
-  const maxEx = Math.max(0, ...nextDays.map((d) => d.exercises.length));
-  const desired =
-    maxEx > 0
-      ? F7_EXERCISE_COUNT_ORDER.find((x) => x >= maxEx) ?? 9
-      : formule7.neuromuscular.desiredExerciseCount;
-  return {
-    formule7: {
-      ...formule7,
-      neuromuscular: {
-        ...formule7.neuromuscular,
-        desiredExerciseCount: desired ?? formule7.neuromuscular.desiredExerciseCount,
-      },
-    },
-    days: nextDays,
-  };
-}
+export type { DurationWeeks } from '../utils/formule7AiPostProcess';
 
 interface SchemaEditViewProps {
   schema: Schema;
@@ -142,25 +45,6 @@ interface SchemaEditViewProps {
 }
 
 const DURATION_WEEKS_OPTIONS = [4, 5, 6, 7, 8, 12, 26];
-export type DurationWeeks = number;
-
-/** Bestaande periode behouden (bijv. 26 weken groepsles), anders standaard 6 weken. */
-function getDurationWeeksFromSchema(schema: Schema): DurationWeeks {
-  if (schema.startDate && schema.endDate) {
-    const w = getWeeksBetween(schema.startDate, schema.endDate);
-    return Math.max(1, w);
-  }
-  return 6;
-}
-
-/** Genoeg ingevuld om de volledige editor te tonen i.p.v. alleen de AI-wizard. */
-function schemaHasMeaningfulF7Content(s: Schema): boolean {
-  const f7 = s.formule7;
-  if (s.days.some((d) => d.exercises.some((e) => e.exerciseName.trim().length > 0))) return true;
-  if (f7?.moverType != null || f7?.goal != null) return true;
-  if ((f7?.clientName?.trim().length ?? 0) > 0) return true;
-  return false;
-}
 
 export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], categories = [] }: SchemaEditViewProps) => {
   const me = useProfile()?.profile ?? null;
@@ -179,24 +63,6 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
   const [days, setDays] = useState<SchemaDay[]>(
     schema.days.length > 0 ? schema.days : [{ dayLabel: 'Dag 1', exercises: [] }]
   );
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [aiGenerating, setAiGenerating] = useState(false);
-  const [aiQuestionsLoading, setAiQuestionsLoading] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-  const [aiQuestions, setAiQuestions] = useState<Formule7FollowUpQuestion[]>([]);
-  const [aiAnswers, setAiAnswers] = useState<Record<string, string>>({});
-  const [aiRationale, setAiRationale] = useState<
-    | null
-    | {
-        overall?: string;
-        whyByDay: { dayLabel: string; why: string }[];
-      }
-  >(null);
-  const [aiWizardStep, setAiWizardStep] = useState(0);
-  const [aiEditorUnlocked, setAiEditorUnlocked] = useState(() => {
-    if (!schema.isFormule7Template || schema.formule7AssistMode !== 'ai') return true;
-    return schemaHasMeaningfulF7Content(schema);
-  });
   const [formule7, setFormule7] = useState<Formule7Routekaart | null>(() =>
     schema.formule7 ?? (schema.isFormule7Template ? createEmptyFormule7() : null)
   );
@@ -213,6 +79,16 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
   );
   const saveButtonRef = useRef<HTMLElement | null>(null);
   const cancelButtonRef = useRef<HTMLElement | null>(null);
+
+  // AI-resultaat in de editor-state zetten (state blijft hier eigenaar)
+  const applyAiGenerated = useCallback((result: AiGeneratedResult) => {
+    setName(result.name);
+    if (result.formule7) setFormule7(result.formule7);
+    setDays(result.days);
+    if (result.periodStartDate) setStartDate(result.periodStartDate);
+  }, []);
+  const ai = useAiSchemaGeneration({ schema, onApplyGenerated: applyAiGenerated });
+  const { aiEditorUnlocked } = ai;
 
   // Sync naam, clientId en datums wanneer schema wijzigt
   useEffect(() => {
@@ -232,16 +108,6 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
   useEffect(() => {
     setDays(
       schema.days.length > 0 ? schema.days : [{ dayLabel: 'Dag 1', exercises: [] }]
-    );
-    setAiQuestions([]);
-    setAiAnswers({});
-    setAiError(null);
-    setAiRationale(null);
-    setAiWizardStep(0);
-    setAiEditorUnlocked(
-      !schema.isFormule7Template || schema.formule7AssistMode !== 'ai'
-        ? true
-        : schemaHasMeaningfulF7Content(schema)
     );
   }, [schema.id]);
 
@@ -370,74 +236,6 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
     setDays((prev) => [...prev, { dayLabel: `Dag ${prev.length + 1}`, exercises: [] }]);
   }, []);
 
-  const handleGenerateWithAi = useCallback(async () => {
-    const text = aiPrompt.trim();
-    if (!text || aiGenerating) return;
-    setAiGenerating(true);
-    setAiError(null);
-    setAiRationale(null);
-    try {
-      const mode = schema.isFormule7Template ? 'formule7' : 'free';
-      const answersText =
-        mode === 'formule7'
-          ? aiQuestions
-              .map((q) => {
-                const answer = aiAnswers[q.id]?.trim() ?? '';
-                return answer ? `${q.question}\nAntwoord: ${answer}` : '';
-              })
-              .filter(Boolean)
-              .join('\n\n')
-          : '';
-      const mergedPrompt =
-        mode === 'formule7' && answersText
-          ? `${text}\n\nAanvullende antwoorden:\n${answersText}`
-          : text;
-      const generated = await generateWorkoutFromPrompt(mergedPrompt, { mode });
-      setName(
-        generated.name.trim() ||
-          (mode === 'formule7' ? 'Formule 7 workout' : 'AI Workout')
-      );
-      if (mode === 'formule7' && generated.formule7) {
-        const { formule7: f7, days: d } = postProcessFormule7Ai(
-          generated.formule7,
-          generated.days
-        );
-        setFormule7(f7);
-        setDays(d);
-        if (generated.periodStartDate) {
-          setStartDate(generated.periodStartDate);
-        }
-      } else {
-        setDays(generated.days);
-      }
-      setAiRationale(generated.rationale ?? null);
-      if (mode === 'formule7') setAiEditorUnlocked(true);
-    } catch (error) {
-      setAiError(error instanceof Error ? error.message : 'Genereren mislukt. Probeer opnieuw.');
-    } finally {
-      setAiGenerating(false);
-    }
-  }, [aiPrompt, aiGenerating, schema.isFormule7Template, aiQuestions, aiAnswers]);
-
-  const handleGetFollowUpQuestions = useCallback(async (): Promise<boolean> => {
-    const text = aiPrompt.trim();
-    if (!text || aiQuestionsLoading) return false;
-    setAiQuestionsLoading(true);
-    setAiError(null);
-    try {
-      const questions = await getFormule7FollowUpQuestions(text, aiAnswers);
-      setAiQuestions(questions);
-      return true;
-    } catch (error) {
-      setAiError(
-        error instanceof Error ? error.message : 'Aanvullende vragen ophalen mislukt.'
-      );
-      return false;
-    } finally {
-      setAiQuestionsLoading(false);
-    }
-  }, [aiPrompt, aiQuestionsLoading, aiAnswers]);
-
   const updateDay = useCallback((dayIndex: number, upd: Partial<SchemaDay>) => {
     setDays((prev) =>
       prev.map((d, i) => (i === dayIndex ? { ...d, ...upd } : d))
@@ -516,398 +314,32 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
     schema.isFormule7Template && formule7?.neuromuscular?.goal
       ? NMT_PRESETS_BY_GOAL[formule7.neuromuscular.goal as Formule7StrengthGoal]
       : null;
-  const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
   /** Eén trainingsdagkaart (label + oefeningen). Gebruikt in schemaDaysBlock en in Formule7 routekaart sectie 3. */
   const renderDayCard = (dayIndex: number) => {
     const day = days[dayIndex];
     if (!day) return null;
     return (
-      <Card
-        sx={{
-          backgroundColor: 'transparent',
-          borderRadius: `${designTokens.cardRadius}px`,
-          border: `1px solid ${designTokens.cardBorder}`,
-          boxShadow: 'none',
-          mb: 2,
-          minWidth: 0,
-          overflow: 'hidden',
-        }}
-      >
-        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 }, minWidth: 0 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-            <TextField
-              label="Dag (bijv. Maandag of Dag A)"
-              value={day.dayLabel}
-              onChange={(e) => updateDay(dayIndex, { dayLabel: e.target.value })}
-              size="small"
-              fullWidth
-              sx={{ minWidth: 0, flex: 1 }}
-            />
-            {!schema.isFormule7Template && (
-              <IconButton
-                size="small"
-                onClick={() => removeDay(dayIndex)}
-                disabled={days.length <= 1}
-                aria-label="Dag verwijderen"
-                color="error"
-              >
-                <DeleteOutlineIcon fontSize="small" />
-              </IconButton>
-            )}
-          </Box>
-          <TextField
-            label="Notitie bij deze dag (bijv. 10x10x8, Tabata, AMRAP 17 min)"
-            value={day.notes ?? ''}
-            onChange={(e) => updateDay(dayIndex, { notes: e.target.value })}
-            size="small"
-            fullWidth
-            sx={{ mb: 2 }}
-          />
-            {day.exercises.map((ex, exIndex) => (
-              <Box
-                key={exIndex}
-                sx={{
-                  p: 1.5,
-                  mb: 1,
-                  borderRadius: 1,
-                  backgroundColor: 'rgba(0,0,0,0.03)',
-                  border: '1px solid rgba(0,0,0,0.06)',
-                  minWidth: 0,
-                  width: '100%',
-                }}
-              >
-                {filtersRow}
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 1.5, minWidth: 0, width: '100%' }}>
-                  <Autocomplete
-                    freeSolo={false}
-                    options={exerciseOptions}
-                    groupBy={(option) => (option && option[0] ? option[0].toUpperCase() : '#')}
-                    autoHighlight
-                    selectOnFocus
-                    openOnFocus
-                    forcePopupIcon
-                    clearOnBlur={false}
-                    onOpen={() => setExerciseSearchTerm('')}
-                    value={ex.exerciseName}
-                    onChange={(_, v) => {
-                      const n = typeof v === 'string' ? v : v ?? '';
-                      setExerciseSearchTerm(n);
-                      if (n === '') {
-                        removeExerciseFromDay(dayIndex, exIndex);
-                      } else {
-                        updateExerciseInDay(dayIndex, exIndex, {
-                          exerciseId: n,
-                          exerciseName: n,
-                        });
-                      }
-                    }}
-                    onInputChange={(_, v) =>
-                      {
-                        setExerciseSearchTerm(v || '');
-                        updateExerciseInDay(dayIndex, exIndex, {
-                          exerciseId: v,
-                          exerciseName: v,
-                        });
-                      }
-                    }
-                    renderInput={(params) => (
-                      <TextField {...params} label="Oefening" size="small" fullWidth />
-                    )}
-                    renderOption={(props, option) => {
-                      // Naam links, klein GIF-plaatje rechts (alleen als de dataset er een heeft).
-                      const { key, ...rest } = props as typeof props & { key?: string };
-                      return (
-                        <Box
-                          component="li"
-                          key={key ?? option}
-                          {...rest}
-                          sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minHeight: 44 }}
-                        >
-                          <Box component="span" sx={{ flex: 1, minWidth: 0 }}>
-                            {option}
-                          </Box>
-                          <ExerciseGifThumb exerciseName={option} />
-                        </Box>
-                      );
-                    }}
-                    ListboxProps={{
-                      style: { maxHeight: 380 },
-                    }}
-                    sx={{ flex: 1, minWidth: 0 }}
-                  />
-                </Box>
-                <Box sx={{ ...EXERCISE_PARAMS_ROW, mt: 0.5 }}>
-                  {nmtPreset && (
-                    <TextField
-                      label="% 1RM"
-                      type="number"
-                      value={ex.intensityPercent1RM ?? ''}
-                      placeholder={String(nmtPreset.percent1RM)}
-                      onChange={(e) => {
-                        const raw = e.target.value === '' ? undefined : parseInt(e.target.value, 10);
-                        const val =
-                          raw == null
-                            ? undefined
-                            : clamp(raw, nmtPreset.percent1RMMin, nmtPreset.percent1RMMax);
-                        const targetWeight =
-                          ex.estimated1RMKg != null && val != null
-                            ? Math.round((ex.estimated1RMKg * val) / 100 * 10) / 10
-                            : undefined;
-                        updateExerciseInDay(dayIndex, exIndex, {
-                          intensityPercent1RM: val,
-                          ...(targetWeight !== undefined && { targetWeight }),
-                        });
-                      }}
-                      size="small"
-                      fullWidth
-                      InputProps={{
-                        endAdornment: (
-                          <Tooltip
-                            title={
-                              <>
-                                1RM = het zwaarste gewicht (kg) waarmee je precies 1 herhaling kunt doen. Dit percentage bepaalt hoe zwaar je traint.
-                                <br />
-                                <br />
-                                Standaard {nmtPreset.percent1RM}%. Toegestaan: {nmtPreset.percent1RMMin}–{nmtPreset.percent1RMMax}%.
-                              </>
-                            }
-                            placement="top"
-                            arrow
-                          >
-                            <span style={{ display: 'inline-flex', cursor: 'help' }}>
-                              <InfoOutlinedIcon sx={{ fontSize: 16, opacity: 0.6 }} />
-                            </span>
-                          </Tooltip>
-                        ),
-                      }}
-                      inputProps={{
-                        min: nmtPreset.percent1RMMin,
-                        max: nmtPreset.percent1RMMax,
-                      }}
-                    />
-                  )}
-                  <TextField
-                    label="Sets"
-                    type="number"
-                    value={ex.setsTarget}
-                    onChange={(e) => {
-                      const raw = parseInt(e.target.value, 10) || 0;
-                      const val = nmtPreset ? clamp(raw, nmtPreset.setsMin, nmtPreset.setsMax) : raw;
-                      updateExerciseInDay(dayIndex, exIndex, { setsTarget: val });
-                    }}
-                    size="small"
-                    fullWidth
-                    InputProps={
-                      nmtPreset
-                        ? {
-                            endAdornment: (
-                              <Tooltip
-                                title={`Standaard ${nmtPreset.sets}. Toegestaan: ${nmtPreset.setsMin}–${nmtPreset.setsMax}`}
-                                placement="top"
-                                arrow
-                              >
-                                <span style={{ display: 'inline-flex', cursor: 'help' }}>
-                                  <InfoOutlinedIcon sx={{ fontSize: 16, opacity: 0.6 }} />
-                                </span>
-                              </Tooltip>
-                            ),
-                          }
-                        : undefined
-                    }
-                    inputProps={
-                      nmtPreset ? { min: nmtPreset.setsMin, max: nmtPreset.setsMax } : { min: 1 }
-                    }
-                  />
-                  <TextField
-                    label="Reps"
-                    type="number"
-                    value={ex.repsTarget}
-                    onChange={(e) => {
-                      const raw = parseInt(e.target.value, 10) || 0;
-                      const val = nmtPreset ? clamp(raw, nmtPreset.repsMin, nmtPreset.repsMax) : raw;
-                      updateExerciseInDay(dayIndex, exIndex, { repsTarget: val });
-                    }}
-                    size="small"
-                    fullWidth
-                    InputProps={
-                      nmtPreset
-                        ? {
-                            endAdornment: (
-                              <Tooltip
-                                title={`Standaard ${nmtPreset.reps}. Toegestaan: ${nmtPreset.repsMin}–${nmtPreset.repsMax}`}
-                                placement="top"
-                                arrow
-                              >
-                                <span style={{ display: 'inline-flex', cursor: 'help' }}>
-                                  <InfoOutlinedIcon sx={{ fontSize: 16, opacity: 0.6 }} />
-                                </span>
-                              </Tooltip>
-                            ),
-                          }
-                        : undefined
-                    }
-                    inputProps={
-                      nmtPreset ? { min: nmtPreset.repsMin, max: nmtPreset.repsMax } : { min: 1 }
-                    }
-                  />
-                  <TextField
-                    label="Rust (sec)"
-                    type="number"
-                    value={ex.restSeconds ?? ''}
-                    onChange={(e) => {
-                      const raw = e.target.value === '' ? undefined : parseInt(e.target.value, 10) || 0;
-                      const val =
-                        raw == null
-                          ? undefined
-                          : nmtPreset
-                            ? clamp(raw, nmtPreset.restSecMin, nmtPreset.restSecMax)
-                            : raw;
-                      updateExerciseInDay(dayIndex, exIndex, { restSeconds: val });
-                    }}
-                    size="small"
-                    fullWidth
-                    placeholder="60"
-                    InputProps={
-                      nmtPreset
-                        ? {
-                            endAdornment: (
-                              <Tooltip
-                                title={`Standaard ${nmtPreset.restSeconds}s. Toegestaan: ${nmtPreset.restSecMin}–${nmtPreset.restSecMax}s`}
-                                placement="top"
-                                arrow
-                              >
-                                <span style={{ display: 'inline-flex', cursor: 'help' }}>
-                                  <InfoOutlinedIcon sx={{ fontSize: 16, opacity: 0.6 }} />
-                                </span>
-                              </Tooltip>
-                            ),
-                          }
-                        : undefined
-                    }
-                    inputProps={
-                      nmtPreset
-                        ? { min: nmtPreset.restSecMin, max: nmtPreset.restSecMax }
-                        : { min: 0 }
-                    }
-                  />
-                </Box>
-                {nmtPreset && (
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gap: 1.5,
-                      minWidth: 0,
-                      width: '100%',
-                      mt: 2,
-                      gridTemplateColumns: '1fr 1fr',
-                      '@media (max-width: 400px)': { gridTemplateColumns: '1fr' },
-                    }}
-                  >
-                    <TextField
-                      label="Mijn max (kg)"
-                      type="number"
-                      value={ex.estimated1RMKg ?? ''}
-                      onChange={(e) => {
-                        const raw = e.target.value === '' ? undefined : parseFloat(e.target.value);
-                        const val = raw != null && raw > 0 ? raw : undefined;
-                        const targetWeight =
-                          val != null && ex.intensityPercent1RM != null
-                            ? Math.round((val * ex.intensityPercent1RM) / 100 * 10) / 10
-                            : undefined;
-                        updateExerciseInDay(dayIndex, exIndex, {
-                          estimated1RMKg: val,
-                          ...(targetWeight !== undefined && { targetWeight }),
-                        });
-                      }}
-                      size="small"
-                      fullWidth
-                      placeholder="Vul je max in"
-                      InputLabelProps={{ shrink: true }}
-                      inputProps={{ min: 0, step: 0.5 }}
-                      sx={{ minWidth: 0 }}
-                    />
-                    <TextField
-                      label="Doelgewicht (kg)"
-                      type="number"
-                      value={ex.targetWeight ?? ''}
-                      onChange={(e) =>
-                        updateExerciseInDay(dayIndex, exIndex, {
-                          targetWeight: e.target.value === '' ? undefined : parseFloat(e.target.value) || undefined,
-                        })
-                      }
-                      size="small"
-                      fullWidth
-                      placeholder={ex.estimated1RMKg != null ? 'Berekend' : 'Vul eerst je max in'}
-                      InputLabelProps={{ shrink: true }}
-                      inputProps={{ min: 0, step: 0.5 }}
-                      sx={{ minWidth: 0 }}
-                    />
-                  </Box>
-                )}
-              </Box>
-            ))}
-            <Box
-              sx={{ mt: 1, cursor: 'pointer', display: 'inline-block' }}
-              onClick={() => addExerciseToDay(dayIndex)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === 'Enter' && addExerciseToDay(dayIndex)}
-            >
-              {/* @ts-ignore */}
-              <md-text-button>
-                <md-icon slot="start">add</md-icon>
-                Oefening toevoegen
-              </md-text-button>
-            </Box>
-          </CardContent>
-        </Card>
+      <DayCard
+        day={day}
+        dayIndex={dayIndex}
+        isFormule7Template={Boolean(schema.isFormule7Template)}
+        removeDayDisabled={days.length <= 1}
+        nmtPreset={nmtPreset}
+        exerciseOptions={exerciseOptions}
+        equipmentFilter={equipmentFilter}
+        onEquipmentFilterChange={setEquipmentFilter}
+        selectedMuscleGroup={selectedMuscleGroup}
+        onMuscleGroupChange={setSelectedMuscleGroup}
+        onExerciseSearchTermChange={setExerciseSearchTerm}
+        updateDay={updateDay}
+        removeDay={removeDay}
+        addExerciseToDay={addExerciseToDay}
+        updateExerciseInDay={updateExerciseInDay}
+        removeExerciseFromDay={removeExerciseFromDay}
+      />
     );
   };
-
-  /** Beide filters naast elkaar, direct boven Oefening in elke dagkaart. */
-  const filtersRow = (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 1.5 }}>
-      <FormControl size="small" sx={{ minWidth: 180, flex: '1 1 160px' }}>
-        <InputLabel id="equipment-filter-label">Oefeningen tonen</InputLabel>
-        <Select
-          labelId="equipment-filter-label"
-          value={equipmentFilter}
-          label="Oefeningen tonen"
-          onChange={(e) => setEquipmentFilter(e.target.value as ExerciseDbEquipmentFilter)}
-        >
-          {EQUIPMENT_FILTER_OPTIONS.map((opt) => (
-            <MenuItem key={opt.value} value={opt.value}>
-              {opt.label}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-      <FormControl size="small" sx={{ minWidth: 180, flex: '1 1 160px' }}>
-        <InputLabel id="muscle-group-filter-label" shrink>
-          Filter op spiergroep
-        </InputLabel>
-        <Select
-          labelId="muscle-group-filter-label"
-          value={selectedMuscleGroup ?? ''}
-          label="Filter op spiergroep"
-          onChange={(e) =>
-            setSelectedMuscleGroup(e.target.value === '' ? null : (e.target.value as string))
-          }
-          displayEmpty
-        >
-          <MenuItem value="">
-            <em>Geen filter</em>
-          </MenuItem>
-          {MUSCLE_GROUP_OPTIONS.map((muscle) => (
-            <MenuItem key={muscle} value={muscle}>
-              {muscle}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-    </Box>
-  );
 
   const schemaDaysBlock = (
     <>
@@ -950,14 +382,6 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
   const showFormule7RoutekaartBlock =
     schema.isFormule7Template && Boolean(formule7) && !showFormule7AiWizard;
 
-  const aiPanelShellSx = {
-    p: 2,
-    mb: 2,
-    borderRadius: 2,
-    backgroundColor: 'rgba(0,0,0,0.03)',
-    border: '1px solid rgba(0,0,0,0.08)',
-  } as const;
-
   return (
     <PageLayout>
       <ContentCard>
@@ -996,258 +420,10 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
             sx={{ mb: 2 }}
           />
 
-          {showFormule7AiWizard && (
-            <Box sx={aiPanelShellSx}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-                Stappenplan
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Eerst je casus, daarna eventuele aanvullende vragen, daarna vult de AI de routekaart en
-                het weekschema in — hetzelfde als bij een handmatige routekaart, maar sneller.
-              </Typography>
-              <Stepper activeStep={aiWizardStep} sx={{ mb: 3 }}>
-                <Step>
-                  <StepLabel>Casus</StepLabel>
-                </Step>
-                <Step>
-                  <StepLabel>Vragen & genereren</StepLabel>
-                </Step>
-              </Stepper>
-
-              {aiWizardStep === 0 && (
-                <Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                    Beschrijf cliënt, doel, activiteit/belastbaarheid, route (G/U/S/…), frequentie per week,
-                    duur sessie, rust- en max-hartslag, beperkingen en materiaal. Minimaal 10 tekens.
-                  </Typography>
-                  <TextField
-                    value={aiPrompt}
-                    onChange={(e) => setAiPrompt(e.target.value)}
-                    placeholder="Bijv. Man 42, casus obesitas, low mover, route GS, 3× per week, 45 min, rust-HF 75, max-HF 185, knie minder diep buigen, thuisgym met dumbbells en weerstandsband."
-                    multiline
-                    minRows={4}
-                    fullWidth
-                    disabled={aiGenerating}
-                    label="Casus voor de AI"
-                  />
-                  {aiError && (
-                    <Alert severity="error" sx={{ mt: 1.5 }}>
-                      {aiError}
-                    </Alert>
-                  )}
-                  <Box
-                    sx={{
-                      mt: 2,
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: 1,
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Button variant="text" color="inherit" onClick={() => setAiEditorUnlocked(true)}>
-                      Overslaan — zelf routekaart invullen
-                    </Button>
-                    <Button
-                      variant="contained"
-                      disabled={aiGenerating || aiQuestionsLoading || aiPrompt.trim().length < 10}
-                      onClick={async () => {
-                        const ok = await handleGetFollowUpQuestions();
-                        if (ok) setAiWizardStep(1);
-                      }}
-                      startIcon={
-                        aiQuestionsLoading ? (
-                          <CircularProgress size={16} color="inherit" />
-                        ) : undefined
-                      }
-                    >
-                      {aiQuestionsLoading ? 'Vragen ophalen…' : 'Volgende: aanvullende vragen'}
-                    </Button>
-                  </Box>
-                </Box>
-              )}
-
-              {aiWizardStep === 1 && (
-                <Box>
-                  <Button size="small" onClick={() => setAiWizardStep(0)} sx={{ mb: 2 }}>
-                    ← Terug naar casus
-                  </Button>
-                  {aiQuestions.length > 0 ? (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, mb: 2 }}>
-                      <Alert severity="info">
-                        Beantwoord deze vragen; daarna wordt de routekaart zo compleet mogelijk ingevuld.
-                      </Alert>
-                      {aiQuestions.map((q) => (
-                        <Box key={q.id} sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-                          <Typography
-                            variant="subtitle2"
-                            component="label"
-                            htmlFor={`ai-followup-${q.id}`}
-                            sx={{ fontWeight: 600, lineHeight: 1.45 }}
-                          >
-                            {q.question}
-                          </Typography>
-                          <TextField
-                            id={`ai-followup-${q.id}`}
-                            value={aiAnswers[q.id] ?? ''}
-                            onChange={(e) =>
-                              setAiAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
-                            }
-                            fullWidth
-                            multiline
-                            minRows={2}
-                            disabled={aiGenerating}
-                            placeholder="Typ je antwoord"
-                            inputProps={{ 'aria-label': q.question }}
-                          />
-                        </Box>
-                      ))}
-                    </Box>
-                  ) : (
-                    <Alert severity="info" sx={{ mb: 2 }}>
-                      Geen extra vragen nodig op basis van je casus. Je kunt direct genereren.
-                    </Alert>
-                  )}
-                  {aiError && (
-                    <Alert severity="error" sx={{ mt: 1.5 }}>
-                      {aiError}
-                    </Alert>
-                  )}
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'space-between' }}>
-                    <Button variant="text" color="inherit" onClick={() => setAiEditorUnlocked(true)}>
-                      Overslaan — zelf invullen
-                    </Button>
-                    <Button
-                      variant="contained"
-                      onClick={handleGenerateWithAi}
-                      disabled={aiGenerating || aiPrompt.trim().length < 10}
-                      startIcon={
-                        aiGenerating ? <CircularProgress size={16} color="inherit" /> : undefined
-                      }
-                    >
-                      {aiGenerating ? 'Genereren…' : 'Genereer routekaart & weekschema'}
-                    </Button>
-                  </Box>
-                </Box>
-              )}
-            </Box>
-          )}
+          {showFormule7AiWizard && <AiFormule7Wizard ai={ai} />}
 
           {showAiGenerationPanel && (
-            <Box sx={aiPanelShellSx}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                {schema.isFormule7Template
-                  ? 'Genereer opnieuw met AI (Formule 7)'
-                  : 'Genereer workout met AI'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                {schema.isFormule7Template
-                  ? 'Pas de casus of antwoorden aan en genereer opnieuw. De AI vult routekaart én trainingsdagen.'
-                  : 'Beschrijf doel, niveau, aantal dagen, beschikbare apparatuur en eventuele blessures.'}
-              </Typography>
-              <TextField
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder={
-                  schema.isFormule7Template
-                    ? 'Bijv. Man 42, casus obesitas, low mover, route GS, 3× per week, 45 min, rust-HF 75, max-HF 185, knie minder diep buigen, thuisgym met dumbbells en weerstandsband.'
-                    : 'Bijv. 3-daags schema voor spieropbouw, beginner, vooral dumbbells en kabels, geen squats i.v.m. knie.'
-                }
-                multiline
-                minRows={3}
-                fullWidth
-                disabled={aiGenerating}
-              />
-              {schema.isFormule7Template && (
-                <Box sx={{ mt: 1.25, display: 'flex', justifyContent: 'flex-end' }}>
-                  <Button
-                    variant="outlined"
-                    onClick={() => {
-                      void handleGetFollowUpQuestions();
-                    }}
-                    disabled={aiGenerating || aiQuestionsLoading || aiPrompt.trim().length < 10}
-                    startIcon={
-                      aiQuestionsLoading ? (
-                        <CircularProgress size={16} color="inherit" />
-                      ) : undefined
-                    }
-                  >
-                    {aiQuestionsLoading
-                      ? 'Vragen ophalen…'
-                      : 'Aanvullende vragen laten stellen'}
-                  </Button>
-                </Box>
-              )}
-              {schema.isFormule7Template && aiQuestions.length > 0 && (
-                <Box sx={{ mt: 1.5, display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-                  <Alert severity="info">
-                    Beantwoord deze vragen zodat AI zoveel mogelijk Formule 7-velden kan invullen.
-                  </Alert>
-                  {aiQuestions.map((q) => (
-                    <Box key={q.id} sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-                      <Typography
-                        variant="subtitle2"
-                        component="label"
-                        htmlFor={`ai-followup-panel-${q.id}`}
-                        sx={{ fontWeight: 600, lineHeight: 1.45 }}
-                      >
-                        {q.question}
-                      </Typography>
-                      <TextField
-                        id={`ai-followup-panel-${q.id}`}
-                        value={aiAnswers[q.id] ?? ''}
-                        onChange={(e) =>
-                          setAiAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
-                        }
-                        fullWidth
-                        multiline
-                        minRows={2}
-                        disabled={aiGenerating}
-                        placeholder="Typ je antwoord"
-                        inputProps={{ 'aria-label': q.question }}
-                      />
-                    </Box>
-                  ))}
-                </Box>
-              )}
-              {aiError && (
-                <Alert severity="error" sx={{ mt: 1.5 }}>
-                  {aiError}
-                </Alert>
-              )}
-              {aiRationale?.overall && (
-                <Box sx={{ mt: 1.5 }}>
-                  <Alert severity="info" sx={{ mb: 1.25 }}>
-                    Waarom dit schema:
-                  </Alert>
-                  <Typography variant="body2" color="text.secondary">
-                    {aiRationale.overall}
-                  </Typography>
-                  {aiRationale.whyByDay?.length > 0 && (
-                    <Box sx={{ mt: 1 }}>
-                      {aiRationale.whyByDay
-                        .filter((x) => x.why && x.why.trim().length > 0)
-                        .slice(0, 7)
-                        .map((x) => (
-                          <Typography key={x.dayLabel} variant="body2" sx={{ mt: 0.75 }}>
-                            <strong>{x.dayLabel}:</strong> {x.why}
-                          </Typography>
-                        ))}
-                    </Box>
-                  )}
-                </Box>
-              )}
-              <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'flex-end' }}>
-                <Button
-                  variant="contained"
-                  onClick={handleGenerateWithAi}
-                  disabled={aiGenerating || aiPrompt.trim().length < 10}
-                  startIcon={aiGenerating ? <CircularProgress size={16} color="inherit" /> : undefined}
-                >
-                  {aiGenerating ? 'Genereren…' : 'Genereer met AI'}
-                </Button>
-              </Box>
-            </Box>
+            <AiGenerationPanel ai={ai} isFormule7Template={Boolean(schema.isFormule7Template)} />
           )}
 
           {sporters.length > 0 && !showFormule7AiWizard ? (
