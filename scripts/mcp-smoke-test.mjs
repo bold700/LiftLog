@@ -28,6 +28,7 @@ const logs = [{ id: 'l1', userId: 'u1', exerciseName: 'Bankdrukken', weight: 77.
 const nutrition = []; const meas = [{ id: 'm1', date: '2026-08-01', weightKg: 86, bodyFatPct: null, waistCm: null, note: '' }];
 const store = {
   getProfile: async (id) => profiles[id] ?? null,
+  getProfileInOrg: async (id) => profiles[id] ?? null,
   getAllProfiles: async () => Object.values(profiles),
   getSchemasForUser: async (uid) =>
     uid === 'u1' ? [{ ...schema, source: 'client' }] : uid === 't1' ? [{ ...schema, source: 'authored' }, ...classes] : [],

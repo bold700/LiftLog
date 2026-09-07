@@ -40,6 +40,12 @@ export interface Message {
   id: string;
   orgId: string;
   threadId: string;
+  /**
+   * De twee uid's in het gesprek, gesorteerd. Firestore kan een leesregel alleen toepassen als de
+   * query er zelf op filtert; zonder dit veld wordt het ophalen van een gesprek geweigerd, ook voor
+   * een deelnemer. Zie de `messages`-regel in firestore.rules.
+   */
+  participants: string[];
   senderId: string;
   recipientId: string;
   text: string;
@@ -80,6 +86,7 @@ function toMessage(data: Record<string, unknown>, id: string): Message {
     id,
     orgId: String(data.orgId ?? ''),
     threadId: String(data.threadId ?? ''),
+    participants: Array.isArray(data.participants) ? data.participants.map(String) : [],
     senderId: String(data.senderId ?? ''),
     recipientId: String(data.recipientId ?? ''),
     text: String(data.text ?? ''),
@@ -111,6 +118,7 @@ export async function sendMessage(input: {
     id,
     orgId: requireOrgId(),
     threadId: threadIdFor(input.senderId, input.recipientId),
+    participants: [input.senderId, input.recipientId].sort(),
     senderId: input.senderId,
     recipientId: input.recipientId,
     text: text.slice(0, 4000),
@@ -125,10 +133,19 @@ export async function sendMessage(input: {
   return message;
 }
 
-/** Alle berichten in één gesprek, oud → nieuw. */
+/**
+ * Alle berichten in één gesprek, oud → nieuw.
+ *
+ * Het filter op `participants` is niet optioneel: de leesregel eist dat je deelnemer bent, en
+ * Firestore weigert een query waarvan het dat niet uit de filters kan afleiden.
+ */
 export async function getThread(a: string, b: string): Promise<Message[]> {
   if (!isFirebaseConfigured() || !db) return [];
-  const q = query(collection(db, COLLECTION), where('threadId', '==', threadIdFor(a, b)));
+  const q = query(
+    collection(db, COLLECTION),
+    where('participants', 'array-contains', a),
+    where('threadId', '==', threadIdFor(a, b))
+  );
   const snap = await getDocs(q);
   return snap.docs
     .map((d) => toMessage(d.data(), d.id))

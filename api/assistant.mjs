@@ -20,12 +20,20 @@ import { applyCors } from './cors.mjs';
  *  - Alles wat de assistent doet loopt via de gereedschapskist, die zelf de rechten bewaakt.
  */
 import { getAdmin } from './_lib/firebaseAdmin.mjs';
+import { enforceRateLimit } from './_lib/requireUser.mjs';
 import { createStore, todayNl } from './_lib/liftlogData.mjs';
 import { openToolbox } from './_lib/assistantTools.mjs';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
 const MODEL = (process.env.OPENAI_ASSISTANT_MODEL || process.env.OPENAI_MODEL || 'gpt-4.1-mini').trim().split(/\s+/)[0];
 const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
+
+/**
+ * Dagelijkse limiet per gebruiker. Dit is het duurste endpoint dat we hebben (tot zes modelrondes
+ * per vraag), dus zonder limiet kan één account het hele budget opmaken.
+ */
+const RATE_LIMIT_PER_DAY = 120;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Maximaal aantal rondes waarin het model functies mag aanroepen voordat we het antwoord afdwingen. */
 const MAX_ROUNDS = 6;
@@ -136,6 +144,8 @@ export default async function handler(req, res) {
   } catch {
     return json(res, 401, { error: 'Sessie verlopen. Log opnieuw in.', build: BUILD });
   }
+
+  if (!(await enforceRateLimit(admin.db, res, uid, 'assistant', RATE_LIMIT_PER_DAY, DAY_MS))) return;
 
   // 2) Profiel bepaalt de rol én de studio; daarna is alles tot die studio begrensd.
   const lookup = createStore(admin.db, admin.auth);

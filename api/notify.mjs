@@ -98,8 +98,22 @@ export default async function handler(req, res) {
   ]);
   if (!senderSnap.exists || !recipientSnap.exists) return json(res, 404, { error: 'Profiel niet gevonden.', build: BUILD });
 
-  const sender = { userId: uid, ...senderSnap.data() };
-  const recipient = { userId: recipientId, ...recipientSnap.data() };
+  // Alleen de velden overnemen die we nodig hebben, en het uid uit het token laten winnen.
+  // Een spread van de profieldata zou een veld `userId` uit het profiel over de geauthenticeerde
+  // identiteit heen schrijven — en dat veld kan een gebruiker zelf zetten.
+  const pick = (snap, userId) => {
+    const d = snap.data() ?? {};
+    return {
+      userId,
+      orgId: d.orgId,
+      role: d.role,
+      trainerId: typeof d.trainerId === 'string' ? d.trainerId : null,
+      displayName: d.displayName,
+      email: d.email,
+    };
+  };
+  const sender = pick(senderSnap, uid);
+  const recipient = pick(recipientSnap, recipientId);
   if (!mayNotify(sender, recipient)) return json(res, 403, { error: 'Geen toestemming.', build: BUILD });
 
   // Toestellen van de ontvanger ophalen.

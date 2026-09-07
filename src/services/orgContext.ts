@@ -14,10 +14,12 @@
 /**
  * Studio waar zelfregistratie in terechtkomt en waar documenten zonder `orgId` bij horen.
  * Documenten van vóór de multi-tenant migratie missen het veld; die worden als Van As gelezen.
- * Dezelfde waarde staat als `defaultOrg()` in firestore.rules — pas ze samen aan.
+ * Deze waarde staat ook als `defaultOrg()` in firestore.rules en als DEFAULT_ORG_ID in
+ * api/_lib/liftlogData.mjs. Bewust een vaste waarde en geen omgevingsvariabele: de Firestore-regels
+ * kunnen niet meebewegen met een env-var, en dan zouden app en regels documenten zonder `orgId`
+ * bij verschillende studio's indelen.
  */
-export const DEFAULT_ORG_ID =
-  (import.meta.env?.VITE_DEFAULT_ORG_ID as string | undefined)?.trim() || 'vanas';
+export const DEFAULT_ORG_ID = 'vanas';
 
 let currentOrgId: string | null = null;
 

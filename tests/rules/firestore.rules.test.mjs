@@ -5,7 +5,7 @@
  */
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'node:fs';
-import { doc, setDoc, updateDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, getDoc, deleteDoc, getDocs, collection, query, where } from 'firebase/firestore';
 
 const env = await initializeTestEnvironment({
   projectId: 'liftlog-rules-test',
@@ -123,7 +123,7 @@ await t('trainer studio B maakt workout in eigen studio → mag', true, setDoc(d
 
 console.log('Berichten');
 const msg = (from, to, extra = {}) => ({
-  orgId: 'vanas', threadId: [from, to].sort().join('__'),
+  orgId: 'vanas', threadId: [from, to].sort().join('__'), participants: [from, to].sort(),
   senderId: from, recipientId: to, text: 'Hoe ging de training?', kind: 'text', readAt: null, ...extra,
 });
 await t('trainer stuurt bericht aan sporter → mag', true, setDoc(doc(as('trainer1'), 'messages/m1'), msg('trainer1', 'sporter2')));
@@ -151,6 +151,42 @@ await t('eigen token lezen → mag', true, getDoc(doc(as('sporter2'), 'pushToken
 await t('token van een ander verwijderen → geweigerd', false, deleteDoc(doc(as('sporter3'), 'pushTokens/tokA')));
 await t('eigen token verwijderen → mag', true, deleteDoc(doc(as('sporter2'), 'pushTokens/tokA')));
 await t('token in een andere studio aanmelden → geweigerd', false, setDoc(doc(as('sporter3'), 'pushTokens/tokC'), tok('sporter3', { orgId: 'studiob' })));
+
+console.log('Gesprek ophalen (query moet door de leesregel komen)');
+// Zonder filter op participants kan Firestore de leesregel niet toepassen en weigert het de hele lijst.
+const threadQuery = (as_, a, b) =>
+  getDocs(query(collection(as_, 'messages'),
+    where('participants', 'array-contains', a),
+    where('threadId', '==', [a, b].sort().join('__'))));
+await t('deelnemer haalt zijn gesprek op → mag', true, threadQuery(as('trainer1'), 'trainer1', 'sporter2'));
+await t('deelnemer aan de andere kant → mag', true, threadQuery(as('sporter2'), 'sporter2', 'trainer1'));
+await t('derde haalt andermans gesprek op → geweigerd', false,
+  getDocs(query(collection(as('sporter3'), 'messages'), where('threadId', '==', ['trainer1', 'sporter2'].sort().join('__')))));
+await t('bericht zonder kloppende participants aanmaken → geweigerd', false,
+  setDoc(doc(as('sporter3'), 'messages/mBad'), msg('sporter3', 'trainer1', { participants: ['sporter3', 'sporter2'] })));
+
+console.log('Studio wisselen op een bestaand document');
+// Dit is het gat dat de review vond: bij update stond het orgId niet vast.
+await setDoc(doc(as('trainer1'), 'measurements/mMove'), { orgId: 'vanas', userId: 'sporter2', loggedBy: 'trainer1', trainerId: 'trainer1', weightKg: 80 });
+await t('meting naar een andere studio schrijven → geweigerd', false, updateDoc(doc(as('trainer1'), 'measurements/mMove'), { orgId: 'studiob' }));
+await setDoc(doc(as('sporter2'), 'logs/lMove'), { orgId: 'vanas', userId: 'sporter2', loggedBy: 'sporter2', exerciseName: 'Squat' });
+await t('eigen log naar een andere studio schrijven → geweigerd', false, updateDoc(doc(as('sporter2'), 'logs/lMove'), { orgId: 'studiob' }));
+await setDoc(doc(as('sporter2'), 'workoutRequests/rMove'), { orgId: 'vanas', userId: 'sporter2', status: 'pending' });
+await t('aanvraag naar een andere studio schrijven → geweigerd', false, updateDoc(doc(as('sporter2'), 'workoutRequests/rMove'), { orgId: 'studiob' }));
+await t('meting bijwerken binnen de eigen studio → mag', true, updateDoc(doc(as('trainer1'), 'measurements/mMove'), { weightKg: 81 }));
+
+console.log('Profiel: ontsnappen naar een andere studio');
+await t('eigen profiel verwijderen → geweigerd', false, deleteDoc(doc(as('sporter3'), 'profiles/sporter3')));
+await t('beheerder verwijdert profiel in de app → geweigerd', false, deleteDoc(doc(as('admin1'), 'profiles/sporter3')));
+await t('sporter hangt zichzelf aan een trainer → geweigerd', false, updateDoc(doc(as('sporter3'), 'profiles/sporter3'), { trainerId: 'trainer1' }));
+await t('trainer koppelt sporter wel → mag', true, updateDoc(doc(as('trainer1'), 'profiles/sporter3'), { trainerId: 'trainer1' }));
+await t('sporter leest profiel van zijn eigen trainer → mag', true, getDoc(doc(as('sporter3'), 'profiles/trainer1')));
+await t('sporter leest profiel van een andere trainer → geweigerd', false, getDoc(doc(as('sporter3'), 'profiles/admin1')));
+
+console.log('Pushtoken kapen');
+await setDoc(doc(as('sporter2'), 'pushTokens/tokVictim'), { token: 'tokVictim', userId: 'sporter2', orgId: 'vanas', platform: 'ios' });
+await t('andermans token naar jezelf omschrijven → geweigerd', false,
+  setDoc(doc(as('sporter3'), 'pushTokens/tokVictim'), { token: 'tokVictim', userId: 'sporter3', orgId: 'vanas', platform: 'ios' }, { merge: true }));
 
 await env.cleanup();
 console.log(`\n${passed} geslaagd, ${failed} mislukt`);

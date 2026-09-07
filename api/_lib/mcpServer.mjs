@@ -168,7 +168,8 @@ export function buildServer(ctx, store) {
       inputSchema: { ...athleteParam },
     },
     withTarget(async (t) => {
-      const trainer = t.trainerId ? await store.getProfile(t.trainerId) : null;
+      // Via de eigen studio: een `trainerId` dat naar een andere studio wijst mag geen naam prijsgeven.
+      const trainer = t.trainerId ? await store.getProfileInOrg(t.trainerId) : null;
       const meas = await store.getMeasurements(t.userId);
       const lastWeight = [...meas].reverse().find((m) => m.weightKg != null) ?? null;
       return text({

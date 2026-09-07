@@ -16,6 +16,7 @@ const profiles = {
 function fakeStore(orgId) {
   return {
     getProfile: async (id) => Object.values(profiles).find((p) => p.userId === id) ?? null,
+    getProfileInOrg: async (id) => Object.values(profiles).find((p) => p.userId === id && p.orgId === orgId) ?? null,
     getAllProfiles: async () => Object.values(profiles).filter((p) => p.orgId === orgId),
     getSchemasForUser: async () => [],
     saveSchema: async (sc) => ({ ...sc, id: 'schema_nieuw', createdAt: new Date().toISOString() }),

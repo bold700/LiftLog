@@ -61,7 +61,16 @@ service cloud.firestore {
      */
     function touchesProtectedProfileFields() {
       return request.resource.data.diff(resource.data).affectedKeys()
-        .hasAny(['role', 'createdByAdmin', 'orgId', 'platformAdmin']);
+        .hasAny(['role', 'createdByAdmin', 'orgId', 'platformAdmin', 'userId']);
+    }
+    /**
+     * Wat je op je eigen profiel nooit zelf mag zetten. Naast het bovenstaande ook `trainerId`:
+     * jezelf aan een willekeurige trainer hangen geeft die trainer je dossier te zien, en het is
+     * de basis voor misbruik van de meldingenroute. Koppelen doet een trainer of beheerder.
+     */
+    function touchesProtectedSelfFields() {
+      return touchesProtectedProfileFields()
+        || request.resource.data.diff(resource.data).affectedKeys().hasAny(['trainerId']);
     }
     /** Zelfs een beheerder mag `platformAdmin` niet vanuit de app zetten of wijzigen. */
     function touchesPlatformAdmin() {
@@ -88,7 +97,10 @@ service cloud.firestore {
       allow read: if isSignedIn()
         && (request.auth.uid == userId
             || (sameOrg()
-                && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin())));
+                && (resource.data.trainerId == request.auth.uid
+                    || isTrainerOrAdmin()
+                    // Je eigen trainer mag je zien: zonder dit blijft de berichtenlijst leeg.
+                    || myProfile().get('trainerId', '') == userId)));
       allow create: if (isAdmin() && writesMyOrg())
         || (isSignedIn()
             && request.auth.uid == userId
@@ -99,12 +111,14 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && !touchesPlatformAdmin()
         && ((isAdmin() && sameOrg() && writesMyOrg())
-            || (request.auth.uid == userId && !touchesProtectedProfileFields())
+            || (request.auth.uid == userId && !touchesProtectedSelfFields())
             || (isStaffInSameOrg()
                 && resource.data.role == 'sporter'
                 && !touchesProtectedProfileFields()));
-      allow delete: if isSignedIn()
-        && (request.auth.uid == userId || (isAdmin() && sameOrg()));
+      // Bewust niemand: verwijderen loopt via api/admin-account.mjs met de Admin SDK, dat het
+      // login-account en de bijbehorende gegevens in één keer opruimt. Kon je hier je eigen profiel
+      // weggooien, dan kon je jezelf daarna in een andere studio opnieuw aanmaken met dezelfde uid.
+      allow delete: if false;
     }
 
     // Koppelsleutels voor AI-chats (MCP). Doc-id = SHA-256 van de sleutel; alleen de eigenaar beheert ze.
@@ -167,7 +181,12 @@ service cloud.firestore {
         && writesMyOrg()
         && (request.resource.data.userId == request.auth.uid
             || (isTrainerOrAdmin() && request.resource.data.loggedBy == request.auth.uid));
-      allow update, delete: if isSignedIn()
+      // `writesMyOrg()` staat er ook bij update: zonder dat kan iemand het `orgId` van een
+      // bestaand document naar een andere studio schrijven en het daarmee overhevelen.
+      allow update: if isSignedIn()
+        && writesMyOrg()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow delete: if isSignedIn()
         && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
     }
 
@@ -181,7 +200,12 @@ service cloud.firestore {
         && writesMyOrg()
         && (request.resource.data.userId == request.auth.uid
             || (isTrainerOrAdmin() && request.resource.data.loggedBy == request.auth.uid));
-      allow update, delete: if isSignedIn()
+      // `writesMyOrg()` staat er ook bij update: zonder dat kan iemand het `orgId` van een
+      // bestaand document naar een andere studio schrijven en het daarmee overhevelen.
+      allow update: if isSignedIn()
+        && writesMyOrg()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow delete: if isSignedIn()
         && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
     }
 
@@ -195,7 +219,12 @@ service cloud.firestore {
         && writesMyOrg()
         && (request.resource.data.userId == request.auth.uid
             || (isTrainerOrAdmin() && request.resource.data.loggedBy == request.auth.uid));
-      allow update, delete: if isSignedIn()
+      // `writesMyOrg()` staat er ook bij update: zonder dat kan iemand het `orgId` van een
+      // bestaand document naar een andere studio schrijven en het daarmee overhevelen.
+      allow update: if isSignedIn()
+        && writesMyOrg()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow delete: if isSignedIn()
         && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
     }
 
@@ -206,7 +235,10 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && writesMyOrg()
         && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isSignedIn()
+      allow update: if isSignedIn()
+        && writesMyOrg()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow delete: if isSignedIn()
         && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
     }
 
@@ -216,7 +248,13 @@ service cloud.firestore {
     // De server (Admin SDK) leest ze om een melding te kunnen versturen.
     match /pushTokens/{token} {
       allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create, update: if isSignedIn()
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && writesMyOrg();
+      // Bij update ook het bestaande document controleren: het doc-id is het FCM-token, en wie
+      // dat token kent zou anders de melding van iemand anders naar zijn eigen toestel omleiden.
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
         && request.resource.data.userId == request.auth.uid
         && writesMyOrg();
     }
@@ -225,14 +263,21 @@ service cloud.firestore {
     // alleen de afzender en de ontvanger mogen het lezen, en alleen binnen dezelfde studio.
     // Niemand kan een bericht op naam van een ander versturen of de tekst achteraf veranderen.
     match /messages/{messageId} {
+      // Op `participants` wordt ook gequeryd. Firestore kan een lijst alleen toestaan als de regel
+      // op hetzelfde veld controleert als waarop de query filtert; met senderId/recipientId in twee
+      // losse takken lukt dat niet en wordt zelfs een deelnemer geweigerd.
       function amParticipant() {
-        return request.auth.uid == resource.data.senderId || request.auth.uid == resource.data.recipientId;
+        return request.auth.uid in resource.data.participants;
       }
       allow read: if isSignedIn() && sameOrg() && amParticipant();
       allow create: if isSignedIn()
         && writesMyOrg()
         && request.resource.data.senderId == request.auth.uid
         && request.resource.data.recipientId != request.auth.uid
+        // `participants` is waar de app op filtert bij het ophalen van een gesprek; het moet dus
+        // precies de twee betrokkenen bevatten, anders klopt de lijst niet met de leesregel.
+        && request.resource.data.participants.hasOnly([request.resource.data.senderId, request.resource.data.recipientId])
+        && request.resource.data.participants.hasAll([request.resource.data.senderId, request.resource.data.recipientId])
         && request.resource.data.text is string
         && request.resource.data.text.size() > 0
         && request.resource.data.text.size() <= 4000
@@ -256,7 +301,11 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && writesMyOrg()
         && request.resource.data.trainerId == request.auth.uid;
-      allow update, delete: if isSignedIn()
+      allow update: if isSignedIn()
+        && sameOrg()
+        && writesMyOrg()
+        && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin());
+      allow delete: if isSignedIn()
         && sameOrg()
         && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin());
     }

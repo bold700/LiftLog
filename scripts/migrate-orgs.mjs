@@ -36,6 +36,8 @@ const COLLECTIONS = [
   'sessions',
   'workoutRequests',
   'leaderboardPublic',
+  'messages',
+  'pushTokens',
 ];
 
 /** Firestore staat maximaal 500 schrijfacties per batch toe. */

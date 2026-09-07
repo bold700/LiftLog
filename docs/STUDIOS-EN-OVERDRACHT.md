@@ -25,6 +25,10 @@ De standaardstudio heet **`vanas`**. Die waarde staat op drie plekken en moet ge
 - `DEFAULT_ORG_ID` in `api/_lib/liftlogData.mjs`
 - `defaultOrg()` in `firestore.rules`
 
+Alle drie zijn bewust een vaste waarde en geen omgevingsvariabele: de Firestore-regels kunnen niet
+meebewegen met een env-var, en dan zouden app en regels documenten zonder `orgId` bij verschillende
+studio's indelen.
+
 Documenten zonder `orgId` (van vóór de migratie) worden gelezen als de standaardstudio. Dat is een
 vangnet, geen vervanging voor de migratie: **queries filteren op de exacte waarde**, dus zonder
 migratie is oude data onzichtbaar in de app.
@@ -111,6 +115,12 @@ Doe dit minimaal vóór elke migratie en verder maandelijks.
 ---
 
 ## 6. Wat te doen als er iets stukgaat
+
+**Account verwijderen loopt via de server.** In de app mag niemand een profiel verwijderen — ook
+een beheerder niet. Dat gaat via `api/admin-account.mjs`, dat het login-account, het profiel en de
+bijbehorende gegevens in één keer opruimt. De reden: kon je je eigen profiel weggooien, dan kon je
+jezelf daarna met dezelfde uid opnieuw aanmaken in een andere studio, inclusief de logs en metingen
+die op die uid blijven staan.
 
 | Symptoom | Waarschijnlijke oorzaak | Wat te doen |
 |----------|------------------------|-------------|

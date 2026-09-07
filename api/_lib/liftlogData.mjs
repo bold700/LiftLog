@@ -16,8 +16,9 @@ export const SCHEDULE_WEEKS = 26;
 /**
  * Studio waar documenten zonder `orgId` bij horen (data van vóór de multi-tenant migratie).
  * Zelfde waarde als DEFAULT_ORG_ID in src/services/orgContext.ts en defaultOrg() in firestore.rules.
+ * Bewust vast en niet via een omgevingsvariabele: de Firestore-regels kunnen daar niet in meebewegen.
  */
-export const DEFAULT_ORG_ID = process.env.DEFAULT_ORG_ID?.trim() || 'vanas';
+export const DEFAULT_ORG_ID = 'vanas';
 
 /** Studio van een document; ontbreekt het veld, dan de standaardstudio. */
 export function orgIdOf(raw) {
@@ -198,9 +199,21 @@ export function createStore(db, auth, orgId = null) {
       return String(userId);
     },
 
+    /**
+     * Profiel op uid. Bewust NIET begrensd: dit draait ook vóór de studio bekend is, want het
+     * profiel bepáált hem. Gebruik `getProfileInOrg` zodra het om iemand anders gaat.
+     */
     async getProfile(userId) {
       const snap = await db.collection('profiles').doc(userId).get();
       return snap.exists ? toProfile(snap.data(), snap.id) : null;
+    },
+
+    /** Profiel van een derde; geeft null als die persoon niet in de eigen studio zit. */
+    async getProfileInOrg(userId) {
+      const snap = await db.collection('profiles').doc(userId).get();
+      if (!snap.exists) return null;
+      const profile = toProfile(snap.data(), snap.id);
+      return profile.orgId === requireOrg() ? profile : null;
     },
 
     /**
@@ -305,7 +318,7 @@ export function createStore(db, auth, orgId = null) {
     },
 
     async getLogsForUser(userId) {
-      const snap = await db.collection('logs').where('userId', '==', userId).get();
+      const snap = await db.collection('logs').where('orgId', '==', requireOrg()).where('userId', '==', userId).get();
       return snap.docs.map((d) => toLog(d.data(), d.id)).sort((a, b) => (b.date > a.date ? 1 : -1));
     },
 
@@ -317,7 +330,12 @@ export function createStore(db, auth, orgId = null) {
     },
 
     async getNutritionForDay(userId, date) {
-      const snap = await db.collection('nutritionLogs').where('userId', '==', userId).where('date', '==', date).get();
+      const snap = await db
+        .collection('nutritionLogs')
+        .where('orgId', '==', requireOrg())
+        .where('userId', '==', userId)
+        .where('date', '==', date)
+        .get();
       return snap.docs.map((d) => toNutritionLog(d.data(), d.id)).sort((a, b) => (a.createdAt > b.createdAt ? 1 : -1));
     },
 
@@ -339,6 +357,8 @@ export function createStore(db, auth, orgId = null) {
         id,
         orgId: requireOrg(),
         threadId: [senderId, recipientId].sort().join('__'),
+        // Zie messageService.ts: de app filtert hierop bij het ophalen van een gesprek.
+        participants: [senderId, recipientId].sort(),
         senderId,
         recipientId,
         text: String(text).slice(0, 4000),
@@ -353,7 +373,7 @@ export function createStore(db, auth, orgId = null) {
     },
 
     async getMeasurements(userId) {
-      const snap = await db.collection('measurements').where('userId', '==', userId).get();
+      const snap = await db.collection('measurements').where('orgId', '==', requireOrg()).where('userId', '==', userId).get();
       return snap.docs.map((d) => toMeasurement(d.data(), d.id)).sort((a, b) => (a.date > b.date ? 1 : -1));
     },
 

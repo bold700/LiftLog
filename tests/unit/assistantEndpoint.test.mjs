@@ -14,13 +14,28 @@ const profiles = {
 
 /** Firebase Admin: token → uid, plus net genoeg Firestore voor het opzoeken van de studionaam. */
 let currentUid = 't1';
+/** Tellerstand van de dagelijkse limiet, zodat we die echt kunnen uitproberen. */
+let rateCount = 0;
+
 vi.mock('../../api/_lib/firebaseAdmin.mjs', () => ({
   getAdmin: () => ({
     auth: { verifyIdToken: async () => ({ uid: currentUid }) },
     db: {
-      collection: () => ({
-        doc: () => ({ get: async () => ({ exists: true, data: () => ({ name: 'Van As Personal Training' }) }) }),
+      collection: (name) => ({
+        doc: () => ({
+          get: async () =>
+            name === 'rateLimits'
+              ? { exists: rateCount > 0, data: () => ({ windowStart: Date.now(), count: rateCount }) }
+              : { exists: true, data: () => ({ name: 'Van As Personal Training' }) },
+        }),
       }),
+      runTransaction: async (fn) =>
+        fn({
+          get: async (ref) => ref.get(),
+          set: (_ref, value) => {
+            rateCount = value.count;
+          },
+        }),
     },
   }),
 }));
@@ -32,6 +47,7 @@ vi.mock('../../api/_lib/liftlogData.mjs', async (importOriginal) => {
     ...actual,
     createStore: () => ({
       getProfile: async (id) => profiles[id] ?? null,
+      getProfileInOrg: async (id) => profiles[id] ?? null,
       getAllProfiles: async () => Object.values(profiles),
       getSchemasForUser: async () => [],
       saveSchema: async (sc) => ({ ...sc, id: 'schema_1', createdAt: '2026-09-07T00:00:00.000Z' }),
@@ -82,6 +98,7 @@ let openAiCalls = [];
 
 beforeEach(() => {
   currentUid = 't1';
+  rateCount = 0;
   openAiCalls = [];
   openAiQueue = [];
   process.env.OPENAI_API_KEY = 'test-sleutel';
@@ -179,6 +196,16 @@ describe('assistent-endpoint', () => {
     expect(res.body.reply).toMatch(/kleinere stappen/i);
     // In de laatste ronde mag het model geen functies meer aangeboden krijgen.
     expect(openAiCalls.at(-1).body.tools).toEqual([]);
+  });
+
+  it('houdt de dagelijkse limiet aan', async () => {
+    rateCount = 10_000; // ruim over de limiet
+    const res = makeRes();
+    await handler(makeReq({ messages: [{ role: 'user', content: 'hoi' }] }), res);
+
+    expect(res.statusCode).toBe(429);
+    // Belangrijk: de limiet grijpt in vóór de dure modelaanroep.
+    expect(openAiCalls).toHaveLength(0);
   });
 
   it('geeft een nette fout als OpenAI eruit ligt', async () => {

@@ -30,6 +30,8 @@ const COLLECTIONS = [
   'sessions',
   'workoutRequests',
   'leaderboardPublic',
+  'messages',
+  'pushTokens',
   'mcpKeys',
 ];
 
@@ -50,15 +52,31 @@ async function main() {
   }
   mkdirSync(OUT_DIR, { recursive: true });
 
+  // Wie hoort er bij deze studio? Nodig om `mcpKeys` te kunnen filteren; die dragen geen orgId.
+  const orgUserIds = new Set();
+  if (ORG_FILTER) {
+    const profiles = await admin.db.collection('profiles').where('orgId', '==', ORG_FILTER).get();
+    for (const d of profiles.docs) orgUserIds.add(d.id);
+  }
+
   let total = 0;
   const summary = {};
   for (const name of COLLECTIONS) {
     let ref = admin.db.collection(name);
-    // mcpKeys en orgs hebben geen orgId-veld; die filteren we niet.
     if (ORG_FILTER && name !== 'orgs' && name !== 'mcpKeys') ref = ref.where('orgId', '==', ORG_FILTER);
 
     const snap = await ref.get();
-    const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    let docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+    // `orgs` en `mcpKeys` dragen zelf geen orgId. Zonder deze stap zou een export "voor één studio"
+    // alle studio's en alle koppelsleutels van iedereen bevatten — precies wat je niet wilt
+    // meegeven aan een klant.
+    if (ORG_FILTER && name === 'orgs') {
+      docs = docs.filter((d) => d.id === ORG_FILTER);
+    }
+    if (ORG_FILTER && name === 'mcpKeys') {
+      docs = docs.filter((d) => orgUserIds.has(String(d.userId ?? '')));
+    }
     writeFileSync(join(OUT_DIR, `${name}.json`), JSON.stringify(docs, null, 2), 'utf8');
     summary[name] = docs.length;
     total += docs.length;

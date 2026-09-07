@@ -13,7 +13,6 @@ import {
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
   signInWithPopup,
-  deleteUser,
   getAuth,
   GoogleAuthProvider,
   sendPasswordResetEmail,
@@ -26,7 +25,8 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured, firebaseConfig } from '../firebase/config';
-import { createProfile, deleteProfile } from '../services/profileService';
+import { createProfile } from '../services/profileService';
+import { deleteOwnAccount } from '../services/adminAccountService';
 import { getCurrentOrgId, requireOrgId } from '../services/orgContext';
 import type { ProfileRole } from '../types';
 
@@ -217,10 +217,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const deleteAccount = useCallback(async () => {
     setError(null);
     if (!auth?.currentUser) return;
-    const uid = auth.currentUser.uid;
     try {
-      await deleteProfile(uid);
-      await deleteUser(auth.currentUser);
+      // Via de server: de app mag geen profielen verwijderen, en de server ruimt in één keer
+      // ook de logs, metingen en het ranglijstdocument op.
+      await deleteOwnAccount(auth.currentUser);
+      await firebaseSignOut(auth);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Account verwijderen mislukt';
       setError(msg);
