@@ -865,6 +865,47 @@ export function buildServer(ctx, store) {
     }
   );
 
+  /**
+   * Bericht sturen aan je trainer (als sporter) of aan een van je sporters (als trainer).
+   * Zo hoeft iemand de chat niet uit om iets door te geven, en blijft het contact in het dossier.
+   */
+  server.registerTool(
+    'send_message',
+    {
+      title: 'Bericht sturen',
+      description: isStaff
+        ? 'Stuur een bericht aan een van je sporters. Geef "athlete" mee (naam of e-mail). Het bericht komt in LiftLog bij het dossier van die sporter te staan.'
+        : 'Stuur een bericht aan je trainer, bijvoorbeeld een vraag of je wekelijkse check-in. Het komt in LiftLog bij je dossier te staan.',
+      inputSchema: {
+        ...athleteParam,
+        message: z.string().min(1).describe('De tekst van het bericht.'),
+      },
+    },
+    async (args) => {
+      try {
+        const body = String(args?.message ?? '').trim();
+        if (!body) return fail('Het bericht is leeg.');
+
+        let recipientId;
+        if (isStaff) {
+          // Zonder "athlete" is niet duidelijk aan wie: liever vragen dan gokken.
+          if (!norm(args?.athlete)) return fail('Aan wie moet het bericht? Geef de naam of het e-mailadres van de sporter mee.');
+          const target = await resolveTarget(args.athlete);
+          if (target.userId === me.userId) return fail('Je kunt geen bericht aan jezelf sturen.');
+          recipientId = target.userId;
+        } else {
+          if (!me.trainerId) return fail('Je bent nog niet aan een trainer gekoppeld, dus er is niemand om te berichten.');
+          recipientId = me.trainerId;
+        }
+
+        const sent = await store.sendMessage({ senderId: me.userId, recipientId, text: body });
+        return text({ ok: true, messageId: sent.id, sentAt: sent.createdAt, note: 'Het bericht staat in LiftLog bij Berichten.' });
+      } catch (e) {
+        return fail(e instanceof Error ? e.message : 'Bericht versturen mislukt.');
+      }
+    }
+  );
+
   if (isStaff) {
     server.registerTool(
       'list_athletes',

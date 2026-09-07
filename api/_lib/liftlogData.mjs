@@ -328,6 +328,30 @@ export function createStore(db, auth, orgId = null) {
       return { ...log, id, createdAt };
     },
 
+    /**
+     * Stuurt een bericht namens iemand. De aanroeper heeft de rechten al gecontroleerd;
+     * hier stampen we alleen de studio en de vaste velden.
+     */
+    async sendMessage({ senderId, recipientId, text, kind = 'text', checkin = null }) {
+      const id = newId('msg');
+      const createdAt = new Date().toISOString();
+      const doc = {
+        id,
+        orgId: requireOrg(),
+        threadId: [senderId, recipientId].sort().join('__'),
+        senderId,
+        recipientId,
+        text: String(text).slice(0, 4000),
+        kind,
+        checkin,
+        createdAt,
+        readAt: null,
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      await db.collection('messages').doc(id).set(doc);
+      return { id, createdAt };
+    },
+
     async getMeasurements(userId) {
       const snap = await db.collection('measurements').where('userId', '==', userId).get();
       return snap.docs.map((d) => toMeasurement(d.data(), d.id)).sort((a, b) => (a.date > b.date ? 1 : -1));

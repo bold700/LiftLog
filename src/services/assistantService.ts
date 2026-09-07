@@ -36,6 +36,7 @@ const STEP_LABELS: Record<string, string> = {
   create_workout: 'schema aangemaakt',
   create_account: 'account aangemaakt',
   assign_workout: 'schema toegewezen',
+  send_message: 'bericht verstuurd',
 };
 
 export function labelForStep(tool: string): string {

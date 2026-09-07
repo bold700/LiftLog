@@ -28,8 +28,15 @@ function fakeStore(orgId) {
     saveNutritionLog: async (n) => n,
     getMeasurements: async () => [],
     saveMeasurement: async (m) => m,
+    sendMessage: async (m) => {
+      sentMessages.push(m);
+      return { id: 'msg_1', createdAt: '2026-09-07T10:00:00.000Z' };
+    },
   };
 }
+
+/** Wat er via `send_message` is weggeschreven, zodat we de ontvanger kunnen controleren. */
+let sentMessages = [];
 
 const withToolbox = async (who, fn) => {
   const toolbox = await openToolbox({ profile: profiles[who] }, fakeStore(profiles[who].orgId));
@@ -97,6 +104,35 @@ describe('gereedschapskist voor de assistent', () => {
       expect(r.ok).toBe(true);
       expect(r.text).toMatch(/Kenny/);
     });
+  });
+
+  it('een sporter bericht altijd zijn eigen trainer, wie hij ook noemt', async () => {
+    sentMessages = [];
+    await withToolbox('sporter', async (toolbox) => {
+      const r = await toolbox.call('send_message', { athlete: 'margot', message: 'Ik ben ziek deze week.' });
+      expect(r.ok).toBe(true);
+    });
+    // De sporter heeft geen athlete-parameter, dus de ontvanger is per definitie zijn trainer.
+    expect(sentMessages).toHaveLength(1);
+    expect(sentMessages[0].recipientId).toBe('t1');
+    expect(sentMessages[0].senderId).toBe('u1');
+  });
+
+  it('een trainer moet zeggen aan wie, en kan niet buiten zijn sporters', async () => {
+    sentMessages = [];
+    await withToolbox('trainer', async (toolbox) => {
+      const zonder = await toolbox.call('send_message', { message: 'Hoi' });
+      expect(zonder.ok).toBe(false);
+      expect(zonder.text).toMatch(/aan wie/i);
+
+      const vreemde = await toolbox.call('send_message', { athlete: 'margot', message: 'Hoi' });
+      expect(vreemde.ok).toBe(false);
+
+      const eigen = await toolbox.call('send_message', { athlete: 'danny', message: 'Goed bezig.' });
+      expect(eigen.ok).toBe(true);
+    });
+    expect(sentMessages).toHaveLength(1);
+    expect(sentMessages[0].recipientId).toBe('u1');
   });
 
   it('een onbekende functie geeft een nette fout in plaats van een crash', async () => {
