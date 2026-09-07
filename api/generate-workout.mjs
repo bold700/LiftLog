@@ -1,4 +1,5 @@
 import { applyCors } from './cors.mjs';
+import { requireUser, enforceRateLimit } from './_lib/requireUser.mjs';
 import { getExerciseCatalog } from './exerciseCatalog.mjs';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
@@ -638,6 +639,10 @@ function normalizeDayFormule7(day, index) {
   };
 }
 
+/** Maximaal aantal AI-generaties per gebruiker per dag (vragen ophalen telt niet mee). */
+const RATE_LIMIT_PER_DAY = 40;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 export default async function handler(req, res) {
   if (applyCors(req, res)) return;
   if (req.method !== 'POST') {
@@ -645,8 +650,13 @@ export default async function handler(req, res) {
   }
 
   if (!process.env.OPENAI_API_KEY) {
-    return json(res, 500, { error: 'OPENAI_API_KEY ontbreekt op de server.' });
+    console.error('[generate-workout] OPENAI_API_KEY ontbreekt');
+    return json(res, 500, { error: 'AI-generatie is niet geconfigureerd op de server.' });
   }
+
+  // Alleen ingelogde gebruikers, met een daglimiet: het endpoint kost geld per aanroep.
+  const user = await requireUser(req, res);
+  if (!user) return;
 
   const prompt = cleanText(req.body?.prompt);
   if (!prompt) {
@@ -670,11 +680,11 @@ export default async function handler(req, res) {
     }
 
     if (!exerciseCatalog.names.length) {
-      return json(res, 500, {
-        error:
-          'Oefencatalogus niet geladen. Controleer of src/data/mega_exercise_db.json op de server beschikbaar is.',
-      });
+      console.error('[generate-workout] oefencatalogus niet geladen (src/data/mega_exercise_db.json)');
+      return json(res, 500, { error: 'Oefencatalogus niet beschikbaar op de server.' });
     }
+
+    if (!(await enforceRateLimit(user.db, res, user.uid, 'generate-workout', RATE_LIMIT_PER_DAY, DAY_MS))) return;
 
     const parsed =
       mode === 'formule7'
@@ -728,12 +738,11 @@ export default async function handler(req, res) {
     return json(res, 200, { name, days, rationale });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+    // Details alleen in de serverlog; de client krijgt een neutrale melding.
+    console.error('[generate-workout]', msg);
     if (msg.startsWith('OpenAI HTTP')) {
-      return json(res, 502, { error: 'OpenAI API gaf een fout terug.', details: msg.slice(0, 600) });
+      return json(res, 502, { error: 'De AI-dienst gaf een fout terug. Probeer het later opnieuw.' });
     }
-    return json(res, 500, {
-      error: 'Onverwachte serverfout bij workoutgeneratie.',
-      details: msg,
-    });
+    return json(res, 500, { error: 'Onverwachte serverfout bij workoutgeneratie.' });
   }
 }

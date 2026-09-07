@@ -631,7 +631,7 @@ export function buildServer(ctx, store) {
       {
         title: 'Account aanmaken',
         description:
-          'Maakt een nieuw LiftLog-account aan voor een sporter of trainer, met een tijdelijk wachtwoord dat je één keer terugkrijgt en aan de persoon doorgeeft. E-mailverificatie is niet nodig; de gebruiker kan meteen inloggen en het wachtwoord later zelf wijzigen. Vraag altijd eerst om een echt e-mailadres en een naam: verzin die nooit zelf, want een verkeerd adres levert een account op dat niemand kan gebruiken. Beheerdersaccounts maak je niet hier maar in de app.',
+          'Maakt een nieuw LiftLog-account aan voor een sporter of trainer, met een tijdelijk wachtwoord dat je één keer terugkrijgt en aan de persoon doorgeeft. E-mailverificatie is niet nodig; de gebruiker kan meteen inloggen en het wachtwoord later zelf wijzigen. Vraag altijd eerst om een echt e-mailadres en een naam: verzin die nooit zelf, want een verkeerd adres levert een account op dat niemand kan gebruiken. Trainer-accounts kan alleen een beheerder aanmaken; beheerdersaccounts maak je niet hier maar in de app.',
         inputSchema: {
           email: z.string().email().describe('Het echte e-mailadres van de persoon; hiermee logt hij in.'),
           name: z.string().min(1).describe('Volledige naam, bijv. "Jan Jansen".'),
@@ -645,6 +645,9 @@ export function buildServer(ctx, store) {
       async (args) => {
         try {
           const role = args.role ?? 'sporter';
+          if (role === 'trainer' && me.role !== 'admin') {
+            return fail('Alleen een beheerder kan trainer-accounts aanmaken.');
+          }
           let trainerId = me.userId;
           if (role === 'sporter' && args.trainer) {
             const q = norm(args.trainer);

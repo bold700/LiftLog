@@ -95,7 +95,8 @@ export function BeheerPage() {
 
   const handleRoleChange = useCallback(
     async (userId: string, newRole: ProfileRole) => {
-      if (!profile?.isTrainer || !profile.profile?.userId) return;
+      // Rollen wijzigen mag alleen een beheerder (de Firestore-regels dwingen dit ook af).
+      if (profile?.profile?.role !== 'admin' || !profile.profile?.userId) return;
       setUpdatingRoleFor(userId);
       setMessage(null);
       try {
@@ -349,7 +350,7 @@ export function BeheerPage() {
                     <Select
                       value={p.role}
                       onChange={(e) => handleRoleChange(p.userId, e.target.value as ProfileRole)}
-                      disabled={updatingRoleFor === p.userId}
+                      disabled={!isAdmin || updatingRoleFor === p.userId}
                       displayEmpty
                     >
                       <MenuItem value="sporter">Sporter</MenuItem>

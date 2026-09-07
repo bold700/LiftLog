@@ -1,4 +1,5 @@
 import { applyCors } from './cors.mjs';
+import { requireUser, enforceRateLimit } from './_lib/requireUser.mjs';
 /**
  * Herkent voeding op een foto met een vision-model (OpenAI) en geeft per item een
  * naam + geschatte portie (gram) + geschatte voedingswaarde per 100 g terug.
@@ -49,15 +50,32 @@ const SYSTEM =
   'en de voedingswaarde per 100 gram (kcal, eiwit, koolhydraten, vet). Wees realistisch; verzin geen items. ' +
   'Antwoord ALLEEN met JSON: {"items":[{"name":string,"grams":number,"per100g":{"kcal":number,"protein":number,"carbs":number,"fat":number}}]}. Maximaal 4 items.';
 
+/** Maximaal aantal fotoherkenningen per gebruiker per dag. */
+const RATE_LIMIT_PER_DAY = 60;
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Data-URL van maximaal ~6 MB (ruim voldoende voor een verkleinde foto). */
+const MAX_IMAGE_CHARS = 6 * 1024 * 1024;
+
 export default async function handler(req, res) {
   if (applyCors(req, res)) return;
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
-  if (!process.env.OPENAI_API_KEY) return json(res, 500, { error: 'OPENAI_API_KEY ontbreekt op de server.' });
+  if (!process.env.OPENAI_API_KEY) {
+    console.error('[food-photo] OPENAI_API_KEY ontbreekt');
+    return json(res, 500, { error: 'Fotoherkenning is niet geconfigureerd op de server.' });
+  }
+
+  // Alleen ingelogde gebruikers, met een daglimiet: elke foto kost geld.
+  const user = await requireUser(req, res);
+  if (!user) return;
 
   const image = req.body?.image;
-  if (typeof image !== 'string' || !image.startsWith('data:image')) {
+  if (typeof image !== 'string' || !/^data:image\/(jpeg|png|webp|heic|heif);base64,/i.test(image)) {
     return json(res, 400, { error: 'Geen geldige afbeelding.' });
   }
+  if (image.length > MAX_IMAGE_CHARS) {
+    return json(res, 413, { error: 'Foto is te groot. Maak een kleinere foto.' });
+  }
+  if (!(await enforceRateLimit(user.db, res, user.uid, 'food-photo', RATE_LIMIT_PER_DAY, DAY_MS))) return;
 
   try {
     const response = await fetch(OPENAI_API_URL, {
@@ -85,7 +103,8 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const text = await response.text();
-      return json(res, 502, { error: 'Vision-model gaf een fout.', details: text.slice(0, 300) });
+      console.error('[food-photo] OpenAI HTTP', response.status, text.slice(0, 300));
+      return json(res, 502, { error: 'De AI-dienst gaf een fout terug. Probeer het later opnieuw.' });
     }
     const payload = await response.json();
     const raw = extractText(payload);
@@ -108,7 +127,7 @@ export default async function handler(req, res) {
       .slice(0, 4);
     return json(res, 200, { items });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return json(res, 502, { error: 'Fotoherkenning mislukt.', details: msg.slice(0, 300) });
+    console.error('[food-photo]', e instanceof Error ? e.message : String(e));
+    return json(res, 502, { error: 'Fotoherkenning mislukt. Probeer het opnieuw.' });
   }
 }

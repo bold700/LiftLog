@@ -18,6 +18,7 @@
     "build:ios": "npm run build && cp -r dist/* \"Van As Personal Training Logs/Van As Personal Training Logs/public/\" && echo \"✅ Build voltooid en bestanden gekopieerd naar iOS project!\"",
     "delete-all-accounts": "node scripts/delete-all-accounts.cjs",
     "test:mcp": "node scripts/mcp-smoke-test.mjs",
+    "test:rules": "npx --yes firebase-tools@13 emulators:exec --only firestore --project liftlog-rules-test \"node tests/rules/firestore.rules.test.mjs\"",
     "deploy:firestore": "npx --yes firebase-tools@13 deploy --only firestore:rules",
     "deploy:storage": "npx --yes firebase-tools@13 deploy --only storage",
     "import:groepslessen": "node scripts/import-groepslessen.mjs",
@@ -70,6 +71,7 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
