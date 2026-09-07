@@ -31,6 +31,7 @@ import { updateProfile } from '../services/profileService';
 import { uploadAvatar, deleteAvatar } from '../services/avatarService';
 import type { LeaderboardVisibility } from '../types';
 import { PageLayout, ContentCard } from './layout';
+import { PushNotificationsCard } from './PushNotificationsCard';
 import { UserAvatar } from './UserAvatar';
 import { AiChatConnectCard } from './AiChatConnectCard';
 import { ageOnDate } from '../utils/bodyFat';
@@ -407,6 +408,8 @@ export function ProfielPage() {
           </Button>
         </Box>
       </ContentCard>
+
+      {uid && <PushNotificationsCard userId={uid} />}
 
       {uid && <AiChatConnectCard userId={uid} />}
 

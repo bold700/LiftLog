@@ -210,6 +210,42 @@ service cloud.firestore {
         && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
     }
 
+    // Toesteltokens voor pushnotificaties. Het document-id is het token zelf, zodat hetzelfde
+    // toestel niet twee keer in de lijst komt. Alleen je eigen tokens; niemand mag de lijst van
+    // een ander lezen (dat zou verraden op welke toestellen iemand de app heeft staan).
+    // De server (Admin SDK) leest ze om een melding te kunnen versturen.
+    match /pushTokens/{token} {
+      allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create, update: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && writesMyOrg();
+    }
+
+    // Berichten tussen trainer en sporter. Een gesprek gaat altijd tussen precies twee mensen:
+    // alleen de afzender en de ontvanger mogen het lezen, en alleen binnen dezelfde studio.
+    // Niemand kan een bericht op naam van een ander versturen of de tekst achteraf veranderen.
+    match /messages/{messageId} {
+      function amParticipant() {
+        return request.auth.uid == resource.data.senderId || request.auth.uid == resource.data.recipientId;
+      }
+      allow read: if isSignedIn() && sameOrg() && amParticipant();
+      allow create: if isSignedIn()
+        && writesMyOrg()
+        && request.resource.data.senderId == request.auth.uid
+        && request.resource.data.recipientId != request.auth.uid
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 4000
+        && request.resource.data.readAt == null;
+      // Bijwerken kan alleen om een bericht als gelezen te markeren, en alleen door de ontvanger.
+      allow update: if isSignedIn()
+        && sameOrg()
+        && request.auth.uid == resource.data.recipientId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
+      // Je eigen bericht terugtrekken mag; dat van een ander niet.
+      allow delete: if isSignedIn() && sameOrg() && request.auth.uid == resource.data.senderId;
+    }
+
     // Groepsles-sessies. Trainer beheert; deelnemers mogen hun sessie lezen. Altijd binnen één studio.
     match /sessions/{sessionId} {
       allow read: if isSignedIn()

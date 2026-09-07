@@ -98,6 +98,35 @@ function newId(): string {
 }
 
 /** Nieuw meting-id vooraf (nodig om foto's te uploaden vóór het document bestaat). */
+/**
+ * Alle optionele meetvelden op null. Handig als je maar één waarde vastlegt (bijvoorbeeld het
+ * gewicht bij een check-in) en de rest niet wilt uitschrijven.
+ */
+export function emptyMeasurementFields(): Omit<Measurement, 'id' | 'createdAt' | 'userId' | 'loggedBy' | 'trainerId' | 'date'> {
+  return {
+    weightKg: null,
+    bodyFatPct: null,
+    chestCm: null,
+    waistCm: null,
+    bellyCm: null,
+    hipCm: null,
+    glutesCm: null,
+    thighLeftCm: null,
+    thighRightCm: null,
+    armCm: null,
+    skinfoldBicepsMm: null,
+    skinfoldTricepsMm: null,
+    skinfoldSubscapularMm: null,
+    skinfoldSuprailiacMm: null,
+    skinfoldAbdomenMm: null,
+    bodyFatMethod: null,
+    photoFrontUrl: null,
+    photoSideUrl: null,
+    photoBackUrl: null,
+    note: '',
+  };
+}
+
 export function newMeasurementId(): string {
   return newId();
 }

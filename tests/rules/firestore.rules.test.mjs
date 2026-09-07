@@ -121,6 +121,37 @@ await t('beheerder studio B leest eigen studio → mag', true, getDoc(doc(as('ad
 await t('beheerder studio B leest andere studio → geweigerd', false, getDoc(doc(as('adminB'), 'orgs/vanas')));
 await t('trainer studio B maakt workout in eigen studio → mag', true, setDoc(doc(as('trainerB'), 'workouts/wB2'), { orgId: 'studiob', trainerId: 'trainerB', name: 'ok' }));
 
+console.log('Berichten');
+const msg = (from, to, extra = {}) => ({
+  orgId: 'vanas', threadId: [from, to].sort().join('__'),
+  senderId: from, recipientId: to, text: 'Hoe ging de training?', kind: 'text', readAt: null, ...extra,
+});
+await t('trainer stuurt bericht aan sporter → mag', true, setDoc(doc(as('trainer1'), 'messages/m1'), msg('trainer1', 'sporter2')));
+await t('sporter antwoordt → mag', true, setDoc(doc(as('sporter2'), 'messages/m2'), msg('sporter2', 'trainer1')));
+await t('bericht op naam van een ander versturen → geweigerd', false, setDoc(doc(as('sporter3'), 'messages/m3'), msg('trainer1', 'sporter2')));
+await t('bericht aan jezelf → geweigerd', false, setDoc(doc(as('sporter3'), 'messages/m4'), msg('sporter3', 'sporter3')));
+await t('leeg bericht → geweigerd', false, setDoc(doc(as('sporter3'), 'messages/m5'), msg('sporter3', 'trainer1', { text: '' })));
+await t('bericht meteen als gelezen aanmaken → geweigerd', false, setDoc(doc(as('sporter3'), 'messages/m6'), msg('sporter3', 'trainer1', { readAt: '2026-09-07' })));
+await t('derde leest andermans gesprek → geweigerd', false, getDoc(doc(as('sporter3'), 'messages/m1')));
+await t('ontvanger leest het bericht → mag', true, getDoc(doc(as('sporter2'), 'messages/m1')));
+await t('afzender leest het eigen bericht → mag', true, getDoc(doc(as('trainer1'), 'messages/m1')));
+await t('ontvanger markeert als gelezen → mag', true, updateDoc(doc(as('sporter2'), 'messages/m1'), { readAt: '2026-09-07T10:00:00.000Z' }));
+await t('afzender markeert eigen bericht als gelezen → geweigerd', false, updateDoc(doc(as('trainer1'), 'messages/m1'), { readAt: '2026-09-07T10:00:00.000Z' }));
+await t('ontvanger wijzigt de tekst → geweigerd', false, updateDoc(doc(as('sporter2'), 'messages/m1'), { text: 'iets anders' }));
+await t('afzender trekt eigen bericht terug → mag', true, deleteDoc(doc(as('sporter2'), 'messages/m2')));
+await t('ontvanger verwijdert andermans bericht → geweigerd', false, deleteDoc(doc(as('sporter2'), 'messages/m1')));
+await t('studio B leest bericht uit studio A → geweigerd', false, getDoc(doc(as('trainerB'), 'messages/m1')));
+
+console.log('Pushtokens');
+const tok = (uid, extra = {}) => ({ token: 'tok', userId: uid, orgId: 'vanas', platform: 'ios', ...extra });
+await t('eigen toestel aanmelden → mag', true, setDoc(doc(as('sporter2'), 'pushTokens/tokA'), tok('sporter2')));
+await t('toestel op naam van een ander → geweigerd', false, setDoc(doc(as('sporter3'), 'pushTokens/tokB'), tok('sporter2')));
+await t('token van een ander lezen → geweigerd', false, getDoc(doc(as('sporter3'), 'pushTokens/tokA')));
+await t('eigen token lezen → mag', true, getDoc(doc(as('sporter2'), 'pushTokens/tokA')));
+await t('token van een ander verwijderen → geweigerd', false, deleteDoc(doc(as('sporter3'), 'pushTokens/tokA')));
+await t('eigen token verwijderen → mag', true, deleteDoc(doc(as('sporter2'), 'pushTokens/tokA')));
+await t('token in een andere studio aanmelden → geweigerd', false, setDoc(doc(as('sporter3'), 'pushTokens/tokC'), tok('sporter3', { orgId: 'studiob' })));
+
 await env.cleanup();
 console.log(`\n${passed} geslaagd, ${failed} mislukt`);
 process.exit(failed ? 1 : 0);
