@@ -314,7 +314,7 @@ function deriveMissingHeartRatesAndOrgs(f7) {
   }
 
   const mainOrg = f7.cardio?.organisation;
-  let zones = (f7.cardio?.zones ?? []).map((z, i) => {
+  let zones = (f7.cardio?.zones ?? []).map((z) => {
     const zoneNum = z.zone === 2 ? 2 : z.zone === 3 ? 3 : 1;
     const pct = ZONE_DEFAULT_PERCENT[zoneNum] ?? 55;
     let org = z.organisation;
@@ -396,8 +396,8 @@ function hasAny(text, words) {
 function mentionsGender(fullText, existingAnswers) {
   const t = fullText.toLowerCase();
   const gAns = existingAnswersLookup(existingAnswers, 'gender').toLowerCase().trim();
-  if (/^(m|v)([\s\.,]|$)/.test(gAns) || /^(man|vrouw)([\s\.,]|$)/.test(gAns)) return true;
-  if (/\bgeslacht\s*[:\-]?\s*(m|v|man|vrouw)\b/i.test(fullText)) return true;
+  if (/^(m|v)([\s.,]|$)/.test(gAns) || /^(man|vrouw)([\s.,]|$)/.test(gAns)) return true;
+  if (/\bgeslacht\s*[:-]?\s*(m|v|man|vrouw)\b/i.test(fullText)) return true;
   if (/\b(ik\s+ben\s+)?(een\s+)?(man|vrouw)\b/.test(t)) return true;
   if (/\b(male|female|mannetje|vrouwtje)\b/.test(t)) return true;
   if (/\bcli[eë]nt\s+is\s+(een\s+)?(man|vrouw|m|v)\b/.test(t)) return true;

@@ -34,6 +34,7 @@ const OVERRIDES: Record<string, string> = {
   'hip abductor machine': '0597',
   'hip adductor machine': '0598',
   'hyperextension machine back extension': '0489',
+  'hyperextension machine': '0489', // "Hyperextension Machine (Back Extension)": norm() haalt de haakjes weg
   'lower back extension machine': '0489',
   'barbell back squat': '0043',
   'lat pulldown': '0150',

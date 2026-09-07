@@ -526,7 +526,6 @@ const ALIASES = {
   'bicep curl ez': 'EZ-Bar Curl',
   'bicep curl ez curl': 'EZ-Bar Curl',
   'bicep curls ez bar': 'EZ-Bar Curl',
-  'bicep ez curl': 'EZ-Bar Curl',
   'pulley bicep curl': 'Cable Bicep Curl',
   'bicep pulley curl': 'Cable Bicep Curl',
   'cable bicep curl': 'Cable Bicep Curl',
@@ -782,8 +781,6 @@ const FORMAT_PATTERNS = [
   /^plank\\$/,
 ];
 
-const UNITS = /^(m|mtr|meter|sec|min)$/i;
-
 // ---------------------------------------------------------------------------
 // Parser
 // ---------------------------------------------------------------------------
@@ -834,7 +831,7 @@ function resolveName(rawName) {
   const cleaned = String(rawName).replace(/[’'`]/g, '');
   const key = normalizeExerciseKey(cleaned);
   if (!key) return null;
-  const keySpaced = key.replace(/\s*[-\/]\s*/g, ' ').replace(/\s+/g, ' ').trim();
+  const keySpaced = key.replace(/\s*[-/]\s*/g, ' ').replace(/\s+/g, ' ').trim();
   const candidates = [key, keySpaced, key.replace(/s$/, ''), keySpaced.replace(/s$/, '')];
   for (const k of candidates) {
     const hit = aliasMap.get(k);
@@ -940,7 +937,7 @@ function splitSuperset(name) {
   if (/\d\s*\/\s*\d/.test(protectedName) || protectedName.includes('->')) return [protectedName];
   // Staat de hele regel al in de vertaaltabel? Dan is het één oefening (bijv. "burpee + push up").
   if (resolveName(protectedName)?.via === 'alias') return [protectedName];
-  const parts = protectedName.split(/\s*[-\/+]\s*/).map((p) => p.trim()).filter(Boolean);
+  const parts = protectedName.split(/\s*[-/+]\s*/).map((p) => p.trim()).filter(Boolean);
   if (parts.length === 2 && parts.every((p) => isKnownExercise(parseExercise(p).name))) return parts;
   return [protectedName];
 }

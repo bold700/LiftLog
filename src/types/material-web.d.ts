@@ -1,4 +1,5 @@
-import { JSX } from 'react';
+// `export {}` maakt dit bestand een module, zodat `declare global` de globale JSX-namespace aanvult.
+export {};
 
 declare global {
   namespace JSX {

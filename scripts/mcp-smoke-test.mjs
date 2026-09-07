@@ -8,7 +8,6 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { buildServer } from '../api/_lib/mcpServer.mjs';
 
-const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Amsterdam' });
 const profiles = {
   u1: { userId: 'u1', role: 'sporter', email: 'danny@gmail.com', displayName: 'Danny', trainerId: 't1', birthDate: '1984-09-15', gender: 'man', weightGoalKg: 80, nutritionGoal: { kcal: 2400, protein: 160, carbs: 250, fat: 80 } },
   t1: { userId: 't1', role: 'trainer', email: 'kenny@x.nl', displayName: 'Kenny', trainerId: null },

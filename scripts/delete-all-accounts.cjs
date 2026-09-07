@@ -17,7 +17,6 @@ const path = require('path');
 const fs = require('fs');
 
 const credPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-const projectId = process.env.FIREBASE_PROJECT_ID;
 
 if (!credPath || !fs.existsSync(path.resolve(credPath))) {
   console.error('FOUT: Zet GOOGLE_APPLICATION_CREDENTIALS naar het pad van je Firebase service account JSON.');

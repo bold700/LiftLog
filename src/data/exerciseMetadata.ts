@@ -1254,7 +1254,7 @@ export const findExerciseMetadata = (exerciseName: string | undefined): Exercise
   const normalizedName = exerciseName.trim().toLowerCase();
   
   // Exact match op hoofdnaam
-  let match = exerciseMetadata.find(
+  const match = exerciseMetadata.find(
     meta => meta.name.toLowerCase() === normalizedName
   );
   
