@@ -18,6 +18,7 @@ import { addExercise, getAllExercisesByName } from '../utils/storage';
 import { Exercise } from '../types';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { useProfile } from '../context/ProfileContext';
+import { useNotify } from '../context/NotifyContext';
 import { saveExerciseLog, getLastLogForUserExercise } from '../services/logService';
 import { useExerciseDbSearch } from '../hooks/useExerciseDbSearch';
 import { getExerciseMuscleMapping } from '../utils/muscleMappingResolver';
@@ -175,6 +176,7 @@ const getPrimaryMuscleGroupFromExercise = (exerciseName: string): string | null 
 export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPageProps) => {
   const addFromSchema = useAddFromSchema();
   const profileCtx = useProfile();
+  const notify = useNotify();
   const isTrainer = profileCtx?.isTrainer ?? false;
   const sporters = profileCtx?.allSporters ?? [];
   const selfUid = profileCtx?.profile?.userId ?? null;
@@ -295,7 +297,7 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
         schemaId: exercise.schemaId ?? null,
         schemaDayIndex: exercise.schemaDayIndex ?? null,
         sessionId: null,
-      }).catch(() => {});
+      }).catch((err) => notify.error('Log opslaan voor de sporter mislukt. Probeer het opnieuw.', err));
     } else {
       addExercise(exercise);
     }

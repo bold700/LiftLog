@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  todayIso,
+  toIsoDate,
   addWeeks,
   getWeeksBetween,
   formatExerciseDetails,
@@ -10,6 +12,11 @@ import {
 } from '../../src/utils/format';
 
 describe('datums', () => {
+  it('toIsoDate gebruikt de lokale kalenderdag, niet UTC', () => {
+    expect(toIsoDate(new Date(2026, 0, 5, 0, 30))).toBe('2026-01-05');
+    expect(toIsoDate(new Date(2026, 11, 31, 23, 59))).toBe('2026-12-31');
+    expect(todayIso()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
   it('addWeeks blijft op kalenderdagen, ook over zomertijd en jaargrens', () => {
     expect(addWeeks('2026-03-23', 1)).toBe('2026-03-30'); // zomertijd 29 maart
     expect(addWeeks('2026-12-28', 1)).toBe('2027-01-04');

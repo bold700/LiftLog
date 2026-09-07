@@ -42,12 +42,7 @@ import {
   getExerciseProgressInPeriod,
   getDaysRemaining,
 } from '../utils/schemaProgressUtils';
-import {
-  formatWarmupSummary,
-  formatCardioSummary,
-  formatCooldownSummary,
-  formatStretchingSummary,
-} from '../utils/format';
+import { formatWarmupSummary, formatCardioSummary, formatCooldownSummary, formatStretchingSummary, todayIso } from '../utils/format';
 import { Schema } from '../types';
 import type { GroupSession } from '../types';
 import { createEmptyFormule7 } from '../utils/formule7Defaults';
@@ -73,7 +68,6 @@ import { createWorkoutRequest, getMyPendingRequest } from '../services/workoutRe
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { useProfile } from '../context/ProfileContext';
 import { designTokens } from '../theme/designTokens';
-import { exportSchemaToPdf } from '../utils/pdfExport';
 import { PageLayout, ContentCard, EmptyState } from './layout';
 import '@material/web/button/filled-button.js';
 import '@material/web/button/text-button.js';
@@ -81,10 +75,6 @@ import '@material/web/icon/icon.js';
 
 type View = 'list' | 'detail' | 'edit' | 'session' | 'groupSession';
 
-function todayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 export const SchemasPage = () => {
   const addFromSchema = useAddFromSchema();
@@ -632,6 +622,8 @@ export const SchemasPage = () => {
                           .map((uid) => nameOf(uid));
                         setPdfStatus('PDF maken…');
                         try {
+                          // jsPDF (~400 kB) pas laden als er echt een PDF gemaakt wordt.
+                          const { exportSchemaToPdf } = await import('../utils/pdfExport');
                           await exportSchemaToPdf(selectedSchema, {
                             clientName,
                             trainerName,

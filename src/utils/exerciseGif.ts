@@ -5,6 +5,7 @@
  * Bedoeld voor lijsten met veel rijen (autocomplete), waar per rij een fetch te duur is.
  */
 import exerciseGifIndex from '../data/exerciseGifIndex.json';
+import exerciseGifOverrides from '../data/exerciseGifOverrides.json';
 
 type IndexEntry = { id: string; name: string };
 
@@ -24,25 +25,10 @@ function norm(s: string): string {
     .replace(/\s+/g, ' ');
 }
 
-/** App-catalogusnaam → dataset-id, voor namen die de dataset anders noemt (zelfde lijst als de server). */
-const OVERRIDES: Record<string, string> = {
-  'leg extension machine': '0585',
-  'seated leg curl machine': '0599',
-  'lying leg curl machine': '0586',
-  'lateral raise machine': '0178',
-  'seated row machine': '0180',
-  'hip abductor machine': '0597',
-  'hip adductor machine': '0598',
-  'hyperextension machine back extension': '0489',
-  'hyperextension machine': '0489', // "Hyperextension Machine (Back Extension)": norm() haalt de haakjes weg
-  'lower back extension machine': '0489',
-  'barbell back squat': '0043',
-  'lat pulldown': '0150',
-  'trx row': '0808',
-  'bulgarian split squat': '0099',
-  'glute kickback machine': '0860',
-  'cable glute kickback': '0860',
-};
+/** App-catalogusnaam → dataset-id (gedeeld met de server via src/data/exerciseGifOverrides.json). */
+const OVERRIDES: Record<string, string> = Object.fromEntries(
+  Object.entries(exerciseGifOverrides as Record<string, string>).filter(([k]) => !k.startsWith('_'))
+);
 
 const idByNorm = new Map<string, string>();
 for (const e of exerciseGifIndex as IndexEntry[]) {

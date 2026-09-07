@@ -210,7 +210,7 @@ export const deleteExercise = (exerciseId: string): void => {
   
   if (found) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(workouts));
-    if (cloudSync) void deleteExerciseLog(exerciseId).catch(() => {});
+    if (cloudSync) void deleteExerciseLog(exerciseId).catch((err) => console.error('Log verwijderen in de cloud mislukt', err));
     window.dispatchEvent(new Event('workoutUpdated'));
   } else {
     console.warn('Exercise not found for deletion:', exerciseId);

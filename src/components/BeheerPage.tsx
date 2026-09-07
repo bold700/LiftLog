@@ -28,6 +28,7 @@ import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useProfile } from '../context/ProfileContext';
+import { useNotify } from '../context/NotifyContext';
 import { useAuth } from '../context/AuthContext';
 import { getProfileByEmail, assignTrainerToSporter, updateProfile, getAllProfiles } from '../services/profileService';
 import { deleteAccountAsAdmin, cleanupOrphanedLeaderboard } from '../services/adminAccountService';
@@ -38,6 +39,7 @@ import { GroepslessenImportCard } from './GroepslessenImportCard';
 
 export function BeheerPage() {
   const profile = useProfile();
+  const notify = useNotify();
   const auth = useAuth();
   const [allAccounts, setAllAccounts] = useState<Profile[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(true);
@@ -69,13 +71,20 @@ export function BeheerPage() {
   useEffect(() => {
     getPendingWorkoutRequests()
       .then(setRequests)
-      .catch(() => {});
-  }, []);
+      .catch((err) => notify.error('Workout-aanvragen laden mislukt.', err));
+  }, [notify]);
 
-  const handleResolveRequest = useCallback(async (id: string) => {
-    await resolveWorkoutRequest(id).catch(() => {});
-    setRequests((r) => r.filter((x) => x.id !== id));
-  }, []);
+  const handleResolveRequest = useCallback(
+    async (id: string) => {
+      try {
+        await resolveWorkoutRequest(id);
+        setRequests((r) => r.filter((x) => x.id !== id));
+      } catch (err) {
+        notify.error('Aanvraag afhandelen mislukt. Probeer het opnieuw.', err);
+      }
+    },
+    [notify]
+  );
 
   const loadAllAccounts = useCallback(async () => {
     setAccountsLoading(true);
