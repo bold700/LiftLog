@@ -3,10 +3,13 @@
  * De URL bevat een geheime sleutel; hij wordt één keer getoond (en op dit apparaat onthouden).
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Bot, Copy, Check, Trash2, Sparkles } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, Box, Button, IconButton, List, ListItem, ListItemText, Stack, Typography } from '@mui/material';
+import SmartToyRoundedIcon from '@mui/icons-material/SmartToyRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
+import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
+import { ContentCard } from './layout';
 import { createMcpKey, getCachedMcpUrl, listMcpKeys, revokeMcpKey, type McpKeyInfo } from '../services/mcpKeyService';
 
 interface Props {
@@ -85,93 +88,113 @@ export function AiChatConnectCard({ userId }: Props) {
   };
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="mb-1 flex items-center gap-2">
-          <Bot className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-base font-semibold">Koppel met ChatGPT, Claude of Gemini</h2>
-        </div>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Vraag in je AI-chat "wat is mijn workout vandaag", log sets of voeding, en bekijk je voortgang. Maak een koppel-URL en plak die
-          als MCP-server in de chat van je keuze.
-        </p>
+    <ContentCard>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+        <SmartToyRoundedIcon sx={{ color: 'text.secondary' }} />
+        <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
+          Koppel met ChatGPT, Claude of Gemini
+        </Typography>
+      </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Vraag in je AI-chat "wat is mijn workout vandaag", log sets of voeding, en bekijk je voortgang. Maak een koppel-URL en plak die
+        als MCP-server in de chat van je keuze.
+      </Typography>
 
-        {error && (
-          <Alert variant="destructive" className="mb-3">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+      {error && (
+        <Alert severity="error" sx={{ mb: 1.5 }}>
+          {error}
+        </Alert>
+      )}
 
-        {shown && (
-          <div className="mb-4 rounded-lg border bg-muted/40 p-3">
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Jouw koppel-URL</p>
-            <code className="block break-all text-xs">{shown.url}</code>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={handleCopy}>
-                {copied ? <Check className="mr-1 h-4 w-4" /> : <Copy className="mr-1 h-4 w-4" />}
-                {copied ? 'Gekopieerd' : 'Kopieer URL'}
-              </Button>
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Behandel deze URL als een wachtwoord: wie hem heeft, kan jouw gegevens lezen en loggen. Hij wordt alleen op dit apparaat
-              onthouden.
-            </p>
-          </div>
-        )}
+      {shown && (
+        <Box sx={{ mb: 2, p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'action.hover' }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Jouw koppel-URL
+          </Typography>
+          <Box component="code" sx={{ display: 'block', wordBreak: 'break-all', fontSize: 12, fontFamily: 'monospace' }}>
+            {shown.url}
+          </Box>
+          <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            <Button size="small" variant="outlined" onClick={handleCopy} startIcon={copied ? <CheckRoundedIcon /> : <ContentCopyRoundedIcon />}>
+              {copied ? 'Gekopieerd' : 'Kopieer URL'}
+            </Button>
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+            Behandel deze URL als een wachtwoord: wie hem heeft, kan jouw gegevens lezen en loggen. Hij wordt alleen op dit apparaat
+            onthouden.
+          </Typography>
+        </Box>
+      )}
 
-        <div className="mb-4 flex flex-wrap gap-2">
-          <Button size="sm" onClick={handleCreate} disabled={busy}>
-            <Sparkles className="mr-1 h-4 w-4" />
-            {busy ? 'Bezig…' : keys.length ? 'Nieuwe koppel-URL maken' : 'Koppel-URL maken'}
-          </Button>
-        </div>
+      <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+        <Button size="small" variant="contained" onClick={handleCreate} disabled={busy} startIcon={<AutoAwesomeRoundedIcon />}>
+          {busy ? 'Bezig…' : keys.length ? 'Nieuwe koppel-URL maken' : 'Koppel-URL maken'}
+        </Button>
+      </Box>
 
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Koppelingen laden…</p>
-        ) : keys.length > 0 ? (
-          <ul className="mb-4 divide-y rounded-lg border text-sm">
-            {keys.map((k) => (
-              <li key={k.id} className="flex items-center justify-between gap-2 px-3 py-2">
-                <div className="min-w-0">
-                  <div className="font-medium">{k.label}</div>
-                  <div className="text-xs text-muted-foreground">
-                    Aangemaakt {fmtDate(k.createdAt)}
-                    {k.lastUsedAt ? ` · laatst gebruikt ${fmtDate(k.lastUsedAt)}` : ' · nog niet gebruikt'}
-                  </div>
-                </div>
-                <Button size="sm" variant="ghost" onClick={() => handleRevoke(k.id)} disabled={busy} aria-label="Koppeling intrekken">
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+      {loading ? (
+        <Typography variant="body2" color="text.secondary">
+          Koppelingen laden…
+        </Typography>
+      ) : keys.length > 0 ? (
+        <List disablePadding sx={{ mb: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+          {keys.map((k, i) => (
+            <ListItem
+              key={k.id}
+              divider={i < keys.length - 1}
+              sx={{ px: 1.5, py: 1, gap: 1 }}
+              secondaryAction={
+                <IconButton size="small" edge="end" onClick={() => handleRevoke(k.id)} disabled={busy} aria-label="Koppeling intrekken">
+                  <DeleteOutlineRoundedIcon fontSize="small" color="error" />
+                </IconButton>
+              }
+            >
+              <ListItemText
+                primary={k.label}
+                secondary={`Aangemaakt ${fmtDate(k.createdAt)}${k.lastUsedAt ? ` · laatst gebruikt ${fmtDate(k.lastUsedAt)}` : ' · nog niet gebruikt'}`}
+                primaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
+                secondaryTypographyProps={{ variant: 'caption' }}
+                sx={{ minWidth: 0, my: 0 }}
+              />
+            </ListItem>
+          ))}
+        </List>
+      ) : null}
 
-        <details className="text-sm">
-          <summary className="cursor-pointer font-medium">Zo koppel je het</summary>
-          <div className="mt-2 space-y-3 text-muted-foreground">
-            <div>
-              <p className="font-medium text-foreground">ChatGPT (Plus, Pro of Team)</p>
-              <p>
-                Op de website: Instellingen → Connectors → Geavanceerd → Developer mode aan. Klik op "Create", geef een naam
-                (bijv. LiftLog), plak de koppel-URL bij "MCP Server URL", kies "No authentication" en sla op. Daarna werkt het ook in de
-                ChatGPT-app op je telefoon.
-              </p>
-            </div>
-            <div>
-              <p className="font-medium text-foreground">Claude (Pro of Max)</p>
-              <p>
-                Instellingen → Connectors → "Add custom connector". Naam LiftLog, plak de koppel-URL, en voeg toe. Daarna in een chat
-                LiftLog aanzetten onder de connector-knop.
-              </p>
-            </div>
-            <div>
-              <p className="font-medium text-foreground">Daarna</p>
-              <p>Vraag bijvoorbeeld: "Wat is mijn workout vandaag?", "Log 3×8 bankdrukken op 80 kg" of "Hoeveel eiwit heb ik vandaag gehad?"</p>
-            </div>
-          </div>
-        </details>
-      </CardContent>
-    </Card>
+      <Box component="details" sx={{ fontSize: 14 }}>
+        <Box component="summary" sx={{ cursor: 'pointer', fontWeight: 500 }}>
+          Zo koppel je het
+        </Box>
+        <Stack spacing={1.5} sx={{ mt: 1, color: 'text.secondary' }}>
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.primary' }}>
+              ChatGPT (Plus, Pro of Team)
+            </Typography>
+            <Typography variant="body2">
+              Op de website: Instellingen → Connectors → Geavanceerd → Developer mode aan. Klik op "Create", geef een naam
+              (bijv. LiftLog), plak de koppel-URL bij "MCP Server URL", kies "No authentication" en sla op. Daarna werkt het ook in de
+              ChatGPT-app op je telefoon.
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.primary' }}>
+              Claude (Pro of Max)
+            </Typography>
+            <Typography variant="body2">
+              Instellingen → Connectors → "Add custom connector". Naam LiftLog, plak de koppel-URL, en voeg toe. Daarna in een chat
+              LiftLog aanzetten onder de connector-knop.
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.primary' }}>
+              Daarna
+            </Typography>
+            <Typography variant="body2">
+              Vraag bijvoorbeeld: "Wat is mijn workout vandaag?", "Log 3×8 bankdrukken op 80 kg" of "Hoeveel eiwit heb ik vandaag gehad?"
+            </Typography>
+          </Box>
+        </Stack>
+      </Box>
+    </ContentCard>
   );
 }

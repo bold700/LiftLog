@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react';
-import { MailCheck, CheckCircle2, AlertCircle } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, Box, Button, Card, CardContent, Stack, Typography } from '@mui/material';
+import MarkEmailReadRoundedIcon from '@mui/icons-material/MarkEmailReadRounded';
+import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
+import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
 import { useAuth } from '../context/AuthContext';
 
 /** Blokkeert de app tot een e-mail/wachtwoord-account zijn e-mailadres heeft bevestigd. */
@@ -42,44 +42,84 @@ export function VerifyEmailScreen() {
   }, [auth]);
 
   return (
-    <div className="dark flex min-h-[100dvh] items-center justify-center bg-background px-4 py-6">
-      <Card className="w-full max-w-md rounded-3xl">
-        <CardContent className="p-6 text-center sm:p-8">
-          <MailCheck className="mx-auto mb-3 h-12 w-12 text-foreground" strokeWidth={1.75} />
-          <h1 className="mb-2 text-2xl font-semibold text-foreground">Bevestig je e-mail</h1>
-          <p className="mb-5 text-sm leading-relaxed text-muted-foreground">
+    <Box
+      sx={{
+        minHeight: '100dvh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        px: 2,
+        py: 3,
+        bgcolor: 'background.default',
+      }}
+    >
+      <Card
+        elevation={0}
+        sx={{
+          width: '100%',
+          maxWidth: 448,
+          borderRadius: 6,
+          bgcolor: 'background.paper',
+          border: '1px solid',
+          borderColor: 'divider',
+        }}
+      >
+        <CardContent sx={{ p: { xs: 3, sm: 4 }, '&:last-child': { pb: { xs: 3, sm: 4 } }, textAlign: 'center' }}>
+          <MarkEmailReadRoundedIcon sx={{ fontSize: 48, mb: 1.5, color: 'text.primary' }} />
+          <Typography variant="h5" component="h1" sx={{ fontWeight: 600, mb: 1 }}>
+            Bevestig je e-mail
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5, lineHeight: 1.625 }}>
             We hebben een verificatielink gestuurd naar{' '}
-            <strong className="font-semibold text-foreground">{email}</strong>. Klik die link om je account te
-            activeren.
-          </p>
+            <Box component="strong" sx={{ fontWeight: 600, color: 'text.primary' }}>
+              {email}
+            </Box>
+            . Klik die link om je account te activeren.
+          </Typography>
 
           {msg && (
             <Alert
-              variant={msg.type === 'error' ? 'destructive' : 'default'}
-              className="mb-5 text-left"
+              severity={msg.type}
+              icon={msg.type === 'success' ? <CheckCircleRoundedIcon fontSize="inherit" /> : <ErrorOutlineRoundedIcon fontSize="inherit" />}
+              sx={{ mb: 2.5, textAlign: 'left' }}
             >
-              {msg.type === 'success' ? (
-                <CheckCircle2 className="h-4 w-4 text-success" />
-              ) : (
-                <AlertCircle className="h-4 w-4" />
-              )}
-              <AlertDescription>{msg.text}</AlertDescription>
+              {msg.text}
             </Alert>
           )}
 
-          <div className="flex flex-col gap-3">
-            <Button size="lg" disabled={busy} onClick={handleReload} className="w-full">
+          <Stack spacing={1.5}>
+            <Button
+              variant="contained"
+              size="large"
+              disabled={busy}
+              onClick={handleReload}
+              fullWidth
+              sx={{ borderRadius: '24px', textTransform: 'none', fontWeight: 600, py: 1.25 }}
+            >
               Ik heb mijn e-mail bevestigd
             </Button>
-            <Button size="lg" variant="outline" disabled={busy} onClick={handleResend} className="w-full">
+            <Button
+              variant="outlined"
+              size="large"
+              disabled={busy}
+              onClick={handleResend}
+              fullWidth
+              sx={{ borderRadius: '24px', textTransform: 'none', fontWeight: 600, py: 1.25 }}
+            >
               Verstuur opnieuw
             </Button>
-            <Button size="lg" variant="ghost" onClick={() => auth?.logout()} className="w-full">
+            <Button
+              variant="text"
+              size="large"
+              onClick={() => auth?.logout()}
+              fullWidth
+              sx={{ borderRadius: '24px', textTransform: 'none', fontWeight: 600, py: 1.25 }}
+            >
               Uitloggen
             </Button>
-          </div>
+          </Stack>
         </CardContent>
       </Card>
-    </div>
+    </Box>
   );
 }

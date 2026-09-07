@@ -1,18 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pencil, Trash2, Loader2, Camera, X } from 'lucide-react';
-import { TextField, MenuItem, Accordion, AccordionSummary, AccordionDetails, Typography } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import {
+  Box,
+  Typography,
+  TextField,
+  MenuItem,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Button,
+  IconButton,
+  CircularProgress,
+  LinearProgress,
+  List,
+  ListItem,
+  ListItemText,
   Dialog,
-  DialogContent,
-  DialogHeader,
   DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from '@/components/ui/dialog';
+  DialogContent,
+  DialogActions,
+} from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import EditRoundedIcon from '@mui/icons-material/EditRounded';
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
+import { PageLayout, ContentCard, OutlineCard } from './layout';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
 import { updateProfile } from '../services/profileService';
@@ -66,6 +78,40 @@ const ACCORDION_SX = {
   '& .MuiAccordionSummary-content': { my: 0.75, minWidth: 0 },
 } as const;
 
+/** Omkaderd blok binnen de hoofdcard (statistieken, grafieken, foto's): compacte padding, kleine onderrand. */
+const PANEL_SX = {
+  mb: 2,
+  '& .MuiCardContent-root': { p: 2, '&:last-child': { pb: 2 } },
+} as const;
+
+/** Twee kolommen op tablet/desktop, één op mobiel (invoervelden). */
+const FIELD_GRID_SX = {
+  display: 'grid',
+  gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+  gap: 1.5,
+} as const;
+
+/** Zwarte primaire knop, zelfde look als de andere pagina's. */
+const PRIMARY_BUTTON_SX = {
+  bgcolor: '#000',
+  color: '#F2E4D3',
+  borderRadius: '24px',
+  textTransform: 'none',
+  fontWeight: 600,
+  '&:hover': { bgcolor: '#1a1a1a' },
+  '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.12)', color: 'rgba(29,27,26,0.38)' },
+} as const;
+
+/** Staande foto (3:4), afgerond, passend bijgesneden. */
+const PHOTO_IMG_SX = {
+  aspectRatio: '3 / 4',
+  width: '100%',
+  borderRadius: 2,
+  bgcolor: 'rgba(0,0,0,0.06)',
+  objectFit: 'cover',
+  display: 'block',
+} as const;
+
 type SectionKey = 'circ' | 'skin' | 'photos';
 
 
@@ -100,8 +146,8 @@ function TrendChart({ points, unit, goal }: { points: TrendPoint[]; unit: string
   const cy = (v: number) => CH - pad - ((v - min) / range) * (CH - 2 * pad);
   const line = pts.map((p, i) => `${cx(i)},${cy(p.value)}`).join(' ');
   return (
-    <div ref={ref} className="w-full text-primary">
-      <svg viewBox={`0 0 ${width} ${CH}`} className="block h-[130px] w-full">
+    <Box ref={ref} sx={{ width: '100%', color: 'primary.main' }}>
+      <svg viewBox={`0 0 ${width} ${CH}`} style={{ display: 'block', height: CH, width: '100%' }}>
         {goal != null && <line x1={0} y1={cy(goal)} x2={width} y2={cy(goal)} stroke="#9e9e9e" strokeWidth={1} strokeDasharray="4 4" />}
         <polyline points={line} fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
         {pts.map((p, i) => (
@@ -110,7 +156,7 @@ function TrendChart({ points, unit, goal }: { points: TrendPoint[]; unit: string
           </circle>
         ))}
       </svg>
-    </div>
+    </Box>
   );
 }
 
@@ -440,430 +486,559 @@ export function MetingenPage() {
   };
 
   return (
-    <div className="animate-fade-in-up mx-auto w-full max-w-3xl pb-6">
-      <Card>
-        <CardContent className="p-5 sm:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h1 className="text-2xl font-semibold">Metingen</h1>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setGoalInput(goalWeight != null ? String(goalWeight) : '');
-                setGoalOpen(true);
-              }}
-            >
-              {goalWeight != null ? `Doel: ${goalWeight} kg` : 'Doelgewicht instellen'}
-            </Button>
-          </div>
-          <p className="mb-4 text-sm text-muted-foreground">
-            Houd je gewicht, vetpercentage, omtrekmaten en huidplooien bij en volg je voortgang.
-          </p>
+    <PageLayout>
+      <ContentCard>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+          <Typography variant="h5" fontWeight={600}>
+            Metingen
+          </Typography>
+          <Button
+            size="small"
+            variant="text"
+            sx={{ textTransform: 'none' }}
+            onClick={() => {
+              setGoalInput(goalWeight != null ? String(goalWeight) : '');
+              setGoalOpen(true);
+            }}
+          >
+            {goalWeight != null ? `Doel: ${goalWeight} kg` : 'Doelgewicht instellen'}
+          </Button>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Houd je gewicht, vetpercentage, omtrekmaten en huidplooien bij en volg je voortgang.
+        </Typography>
 
-          {isTrainer && sporters.length > 0 && (
-            <TextField
-              select
-              fullWidth
-              size="small"
-              label="Voor wie?"
-              value={targetId || 'self'}
-              onChange={(e) => setTargetId(e.target.value === 'self' ? '' : e.target.value)}
-              sx={{ mb: 2 }}
-            >
-              <MenuItem value="self">Mijzelf</MenuItem>
-              {sporters.map((s) => (
-                <MenuItem key={s.userId} value={s.userId}>
-                  {s.displayName?.trim() || s.email || s.userId}
-                </MenuItem>
-              ))}
-            </TextField>
-          )}
+        {isTrainer && sporters.length > 0 && (
+          <TextField
+            select
+            fullWidth
+            size="small"
+            label="Voor wie?"
+            value={targetId || 'self'}
+            onChange={(e) => setTargetId(e.target.value === 'self' ? '' : e.target.value)}
+            sx={{ mb: 2 }}
+          >
+            <MenuItem value="self">Mijzelf</MenuItem>
+            {sporters.map((s) => (
+              <MenuItem key={s.userId} value={s.userId}>
+                {s.displayName?.trim() || s.email || s.userId}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
 
-          {/* Huidige waarden */}
-          <div className="mb-4 grid grid-cols-3 gap-x-2 gap-y-4 rounded-xl border border-border p-4 text-center sm:grid-cols-5">
-            <div>
-              <div className="text-lg font-bold">{latestWeight != null ? `${latestWeight} kg` : '—'}</div>
-              <div className="text-xs text-muted-foreground">
+        {/* Huidige waarden */}
+        <OutlineCard sx={PANEL_SX}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: 'repeat(3, 1fr)', sm: 'repeat(5, 1fr)' },
+              columnGap: 1,
+              rowGap: 2,
+              textAlign: 'center',
+            }}
+          >
+            <Box>
+              <Typography variant="h6" fontWeight={700}>
+                {latestWeight != null ? `${latestWeight} kg` : '—'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                 gewicht{weightDelta != null ? ` (${weightDelta > 0 ? '+' : ''}${weightDelta} kg)` : ''}
-              </div>
-            </div>
-            <div>
-              <div className="text-lg font-bold">{latestBf?.bodyFatPct != null ? `${latestBf.bodyFatPct}%` : '—'}</div>
-              <div className="text-xs text-muted-foreground">
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="h6" fontWeight={700}>
+                {latestBf?.bodyFatPct != null ? `${latestBf.bodyFatPct}%` : '—'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                 vetpercentage{latestBf?.bodyFatMethod === 'durnin-womersley' ? ' (berekend)' : ''}
-              </div>
-            </div>
-            <div>
-              <div className="text-lg font-bold">{latestFfm != null ? `${latestFfm} kg` : '—'}</div>
-              <div className="text-xs text-muted-foreground">
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="h6" fontWeight={700}>
+                {latestFfm != null ? `${latestFfm} kg` : '—'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                 vetvrije massa{ffmDelta != null ? ` (${ffmDelta > 0 ? '+' : ''}${ffmDelta} kg)` : ''}
-              </div>
-            </div>
-            <div>
-              <div className="text-lg font-bold">{latestBmi != null ? latestBmi : '—'}</div>
-              <div className="text-xs text-muted-foreground">BMI</div>
-            </div>
-            <div>
-              <div className="text-lg font-bold">{latestSkin != null ? `${latestSkin} mm` : '—'}</div>
-              <div className="text-xs text-muted-foreground">
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="h6" fontWeight={700}>
+                {latestBmi != null ? latestBmi : '—'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                BMI
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="h6" fontWeight={700}>
+                {latestSkin != null ? `${latestSkin} mm` : '—'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                 plooien{skinDelta != null ? ` (${skinDelta > 0 ? '+' : ''}${skinDelta} mm)` : ''}
-              </div>
-            </div>
-          </div>
+              </Typography>
+            </Box>
+          </Box>
+        </OutlineCard>
 
-          {/* Voortgang naar doel + tempo */}
-          {(goalWeight != null || perWeek != null) && (
-            <div className="mb-4 rounded-xl border border-border p-4">
-              {goalWeight != null && (
-                <>
-                  <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-                    <span>Naar doel ({goalWeight} kg)</span>
-                    <span>{toGoal != null ? (Math.abs(toGoal) < 0.05 ? 'behaald 🎉' : `nog ${Math.abs(toGoal)} kg`) : ''}</span>
-                  </div>
-                  {goalProgress != null && <Progress value={goalProgress} className={perWeek != null ? 'mb-2 h-2' : 'h-2'} />}
-                </>
-              )}
-              {perWeek != null && (
-                <div className="text-xs text-muted-foreground">
-                  Gemiddeld {perWeek > 0 ? '+' : ''}
-                  {perWeek} kg per week
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Gewicht-trend */}
-          {weightPoints.length >= 2 && (
-            <div className="mb-4 rounded-xl border border-border p-4">
-              <div className="mb-2 text-xs text-muted-foreground">
-                Gewicht ({wMin}–{wMax} kg)
-              </div>
-              <TrendChart points={weightPoints} unit="kg" goal={goalWeight} />
-            </div>
-          )}
-
-          {/* Huidplooi-trend: de som is betrouwbaarder dan het absolute vetpercentage */}
-          {skinPoints.length >= 2 && (
-            <div className="mb-4 rounded-xl border border-border p-4">
-              <div className="mb-2 text-xs text-muted-foreground">
-                Som huidplooien ({sMin}–{sMax} mm)
-              </div>
-              <TrendChart points={skinPoints} unit="mm" />
-            </div>
-          )}
-
-          {/* Foto-voortgang: eerste foto naast de laatste, per aanzicht */}
-          {photoProgress.length > 0 && (
-            <div className="mb-4 rounded-xl border border-border p-4">
-              <div className="mb-3 text-xs text-muted-foreground">Foto's: eerste naast laatste</div>
-              <div className="flex flex-col gap-4">
-                {photoProgress.map((p) => (
-                  <div key={p.view}>
-                    <div className="mb-1.5 text-sm font-medium">{p.label}aanzicht</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { m: p.first, tag: 'Eerste' },
-                        { m: p.last, tag: 'Laatste' },
-                      ].map(({ m, tag }) =>
-                        m ? (
-                          <a key={tag} href={m[p.key] as string} target="_blank" rel="noreferrer" className="block min-w-0">
-                            <img
-                              src={m[p.key] as string}
-                              alt={`${p.label}aanzicht, ${tag.toLowerCase()} foto van ${m.date}`}
-                              className="aspect-[3/4] w-full rounded-lg bg-muted object-cover"
-                              loading="lazy"
-                            />
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {tag} · {m.date}
-                            </div>
-                          </a>
-                        ) : (
-                          <div key={tag} className="flex aspect-[3/4] items-center justify-center rounded-lg border border-dashed border-border p-2 text-center text-xs text-muted-foreground">
-                            Nog geen tweede foto
-                          </div>
-                        )
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Invoer */}
-          <h2 className="mb-2 text-base font-semibold">{editingId ? 'Meting bewerken' : 'Nieuwe meting'}</h2>
-          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <TextField
-              label="Datum"
-              type="date"
-              size="small"
-              fullWidth
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-            />
-            <TextField
-              label="Gewicht (kg)"
-              type="number"
-              size="small"
-              fullWidth
-              inputProps={{ step: 0.1, min: 0, inputMode: 'decimal' }}
-              value={weight}
-              onChange={(e) => setWeight(e.target.value)}
-              helperText={formBmi != null ? `BMI ${formBmi}` : weightNum != null && !targetProfile?.heightCm ? 'Vul lengte in bij Profiel voor BMI' : ' '}
-            />
-          </div>
-
-          {/* Profiel van de sporter aanvullen (alleen trainer, alleen als het ontbreekt) */}
-          {canFixProfile && (
-            <div className="mb-3 rounded-xl border border-border p-3">
-              <div className="mb-1 text-sm font-medium">Profiel aanvullen</div>
-              <p className="mb-3 text-xs text-muted-foreground">
-                Voor het vetpercentage uit huidplooien zijn geboortedatum en geslacht van {targetProfile?.displayName?.trim() || 'deze sporter'} nodig. Je kunt ze hier direct invullen.
-              </p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <TextField label="Geboortedatum" type="date" size="small" fullWidth value={fixBirth} onChange={(e) => setFixBirth(e.target.value)} InputLabelProps={{ shrink: true }} />
-                <TextField select label="Geslacht" size="small" fullWidth value={fixGender || 'none'} onChange={(e) => setFixGender(e.target.value === 'none' ? '' : (e.target.value as typeof fixGender))}>
-                  <MenuItem value="none">Niet opgegeven</MenuItem>
-                  <MenuItem value="man">Man</MenuItem>
-                  <MenuItem value="vrouw">Vrouw</MenuItem>
-                  <MenuItem value="anders">Anders</MenuItem>
-                </TextField>
-                <Button className="h-10 w-full" variant="secondary" onClick={handleFixProfile} disabled={savingFix || (!fixBirth && !fixGender)}>
-                  {savingFix ? 'Bezig…' : 'Profiel opslaan'}
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Omtrekken, huidplooien en foto's ingeklapt: optioneel, samen 16 velden. Zelfde secties als de routekaart. */}
-          <div className="mb-3 flex flex-col gap-3">
-            <Accordion disableGutters expanded={openSections.includes('circ')} onChange={() => toggleSection('circ')} sx={ACCORDION_SX}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <div className="flex min-w-0 flex-1 items-center justify-between gap-2 pr-2">
-                  <Typography variant="subtitle1" fontWeight={600}>
-                    Omtrekken (cm)
+        {/* Voortgang naar doel + tempo */}
+        {(goalWeight != null || perWeek != null) && (
+          <OutlineCard sx={PANEL_SX}>
+            {goalWeight != null && (
+              <>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Naar doel ({goalWeight} kg)
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {circFilled > 0 ? `${circFilled} ingevuld` : 'optioneel'}
+                    {toGoal != null ? (Math.abs(toGoal) < 0.05 ? 'behaald 🎉' : `nog ${Math.abs(toGoal)} kg`) : ''}
                   </Typography>
-                </div>
-              </AccordionSummary>
-              <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {CIRCUMFERENCE_FIELDS.map((f) => (
-                    <TextField
-                      key={f.key}
-                      label={f.label}
-                      type="number"
-                      size="small"
-                      fullWidth
-                      inputProps={{ step: 0.5, min: 0, inputMode: 'decimal' }}
-                      value={circ[f.key]}
-                      onChange={(e) => setCirc((c) => ({ ...c, [f.key]: e.target.value }))}
-                    />
-                  ))}
-                </div>
-              </AccordionDetails>
-            </Accordion>
-
-            <Accordion disableGutters expanded={openSections.includes('skin')} onChange={() => toggleSection('skin')} sx={ACCORDION_SX}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <div className="flex min-w-0 flex-1 items-center justify-between gap-2 pr-2">
-                  <Typography variant="subtitle1" fontWeight={600}>
-                    Huidplooien (mm)
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {currentSkinSum != null ? `som ${currentSkinSum} mm${computedFat ? ` · ${computedFat.pct}%` : ''}` : 'optioneel'}
-                  </Typography>
-                </div>
-              </AccordionSummary>
-              <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
-                <p className="mb-3 text-xs text-muted-foreground">
-                  Meet rechts, met dezelfde caliper en op hetzelfde moment van de dag. Biceps, triceps, rug en heup samen geven het vetpercentage (Durnin &amp; Womersley); buik telt alleen mee in de som.
-                </p>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {SKINFOLD_FIELDS.map((f) => (
-                    <TextField
-                      key={f.key}
-                      label={f.label}
-                      type="number"
-                      size="small"
-                      fullWidth
-                      inputProps={{ step: 0.5, min: 0, inputMode: 'decimal' }}
-                      value={skin[f.key]}
-                      onChange={(e) => setSkin((s) => ({ ...s, [f.key]: e.target.value }))}
-                      helperText={f.hint}
-                    />
-                  ))}
-                </div>
-                <div className="mt-2 rounded-lg bg-muted p-3 text-sm" aria-live="polite">
-                  {computedFat ? (
-                    <>
-                      <span className="font-medium">Vetpercentage: {computedFat.pct}%</span>
-                      <span className="text-muted-foreground"> · som {computedFat.sumMm} mm · berekend</span>
-                      {formFfm != null ? (
-                        <div className="mt-1">
-                          <span className="font-medium">Vetvrije massa: {formFfm} kg</span>
-                          <span className="text-muted-foreground"> · gewicht min vet</span>
-                        </div>
-                      ) : (
-                        <div className="mt-1 text-xs text-muted-foreground">Vul gewicht in voor de vetvrije massa.</div>
-                      )}
-                    </>
-                  ) : formulaHint ? (
-                    <span className="text-muted-foreground">{formulaHint}</span>
-                  ) : (
-                    <span className="text-muted-foreground">
-                      {skinFilled > 0 ? `Som ${currentSkinSum} mm. ` : ''}Vul biceps, triceps, rug en heup in voor het vetpercentage.
-                    </span>
-                  )}
-                  {!computedFat && bodyFat && (
-                    <div className="mt-1 text-xs text-muted-foreground">Opgeslagen vetpercentage van deze meting: {bodyFat}% (blijft bewaard).</div>
-                  )}
-                </div>
-              </AccordionDetails>
-            </Accordion>
-
-            <Accordion disableGutters expanded={openSections.includes('photos')} onChange={() => toggleSection('photos')} sx={ACCORDION_SX}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <div className="flex min-w-0 flex-1 items-center justify-between gap-2 pr-2">
-                  <Typography variant="subtitle1" fontWeight={600}>
-                    Foto's
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {(() => {
-                      const n = PHOTO_VIEWS.filter((v) => photos[v.view].file || (photos[v.view].existingUrl && !photos[v.view].remove)).length;
-                      return n > 0 ? `${n} van 3` : 'optioneel';
-                    })()}
-                  </Typography>
-                </div>
-              </AccordionSummary>
-              <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
-                <p className="mb-3 text-xs text-muted-foreground">
-                  Voor, zij en achter. Zelfde plek, zelfde licht, zelfde houding: dan zie je het verschil echt.
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                  {PHOTO_VIEWS.map((v) => {
-                    const slot = photos[v.view];
-                    const shown = slot.previewUrl ?? (slot.remove ? null : slot.existingUrl);
-                    return (
-                      <div key={v.view} className="min-w-0">
-                        <input
-                          ref={(el) => {
-                            photoInputs.current[v.view] = el;
-                          }}
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          className="hidden"
-                          id={`photo-${v.view}`}
-                          onChange={(e) => pickPhoto(v.view, e.target.files?.[0] ?? null)}
-                        />
-                        <div className="mb-1 text-xs font-medium">{v.label}</div>
-                        {shown ? (
-                          <div className="relative">
-                            <img src={shown} alt={`${v.label}aanzicht`} className="aspect-[3/4] w-full rounded-lg bg-muted object-cover" />
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="icon"
-                              className="absolute right-1 top-1 h-8 w-8 rounded-full"
-                              aria-label={`${v.label}foto verwijderen`}
-                              onClick={() => clearPhoto(v.view)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <label
-                            htmlFor={`photo-${v.view}`}
-                            className="flex aspect-[3/4] cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border text-xs text-muted-foreground transition-colors hover:bg-muted focus-within:ring-2 focus-within:ring-ring"
-                          >
-                            <Camera className="h-5 w-5" />
-                            Kies foto
-                          </label>
-                        )}
-                        {shown && (
-                          <Button type="button" variant="ghost" size="sm" className="mt-1 h-8 w-full text-xs" onClick={() => photoInputs.current[v.view]?.click()}>
-                            Vervangen
-                          </Button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </AccordionDetails>
-            </Accordion>
-          </div>
-
-          <TextField label="Notitie (optioneel)" size="small" fullWidth value={note} onChange={(e) => setNote(e.target.value)} sx={{ mb: 2 }} />
-          <div className="flex gap-2">
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? 'Bezig…' : editingId ? 'Opslaan' : 'Toevoegen'}
-            </Button>
-            {editingId && (
-              <Button variant="ghost" onClick={resetForm}>
-                Annuleren
-              </Button>
+                </Box>
+                {goalProgress != null && (
+                  <LinearProgress variant="determinate" value={goalProgress} sx={{ height: 8, borderRadius: 1, mb: perWeek != null ? 1 : 0 }} />
+                )}
+              </>
             )}
-          </div>
+            {perWeek != null && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                Gemiddeld {perWeek > 0 ? '+' : ''}
+                {perWeek} kg per week
+              </Typography>
+            )}
+          </OutlineCard>
+        )}
 
-          {/* Historie */}
-          <h2 className="mb-2 mt-6 text-base font-semibold">Historie</h2>
-          {loading ? (
-            <div className="flex justify-center py-4">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nog geen metingen.</p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {[...items].reverse().map((m) => {
-                const circSummary = CIRCUMFERENCE_FIELDS.filter((f) => m[f.key] != null)
-                  .map((f) => `${f.label} ${m[f.key]}`)
-                  .join(' · ');
-                const sum = skinfoldSum(m);
-                const skinSummary = sum != null ? `Plooien ${sum} mm` : null;
-                const photoCount = PHOTO_VIEWS.filter((v) => m[v.key] != null).length;
-                const photoSummary = photoCount > 0 ? `${photoCount} foto${photoCount === 1 ? '' : "'s"}` : null;
-                const secondary = [circSummary || null, skinSummary, photoSummary, m.note || null].filter(Boolean).join(' — ');
-                const ffm = m.weightKg != null && m.bodyFatPct != null ? fatFreeMassKg(m.weightKg, m.bodyFatPct) : null;
-                const fatLabel =
-                  m.bodyFatPct != null
-                    ? `${m.bodyFatPct}%${m.bodyFatMethod === 'durnin-womersley' ? ' (berekend)' : ''}${ffm != null ? ` · VVM ${ffm} kg` : ''}`
-                    : '';
-                return (
-                  <li key={m.id} className="flex items-start justify-between gap-3 py-2.5">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium">
-                        {`${m.date} · ${m.weightKg != null ? `${m.weightKg} kg` : ''}${m.weightKg != null && fatLabel ? ' · ' : ''}${fatLabel}`}
-                      </div>
-                      {secondary && <div className="mt-0.5 text-xs text-muted-foreground">{secondary}</div>}
-                    </div>
-                    <div className="flex shrink-0 gap-0.5">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(m)} aria-label="Bewerken">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDelete(m.id)} aria-label="Verwijderen">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+        {/* Gewicht-trend */}
+        {weightPoints.length >= 2 && (
+          <OutlineCard sx={PANEL_SX}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Gewicht ({wMin}–{wMax} kg)
+            </Typography>
+            <TrendChart points={weightPoints} unit="kg" goal={goalWeight} />
+          </OutlineCard>
+        )}
+
+        {/* Huidplooi-trend: de som is betrouwbaarder dan het absolute vetpercentage */}
+        {skinPoints.length >= 2 && (
+          <OutlineCard sx={PANEL_SX}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Som huidplooien ({sMin}–{sMax} mm)
+            </Typography>
+            <TrendChart points={skinPoints} unit="mm" />
+          </OutlineCard>
+        )}
+
+        {/* Foto-voortgang: eerste foto naast de laatste, per aanzicht */}
+        {photoProgress.length > 0 && (
+          <OutlineCard sx={PANEL_SX}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+              Foto's: eerste naast laatste
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {photoProgress.map((p) => (
+                <Box key={p.view}>
+                  <Typography variant="body2" fontWeight={500} sx={{ mb: 0.75 }}>
+                    {p.label}aanzicht
+                  </Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
+                    {[
+                      { m: p.first, tag: 'Eerste' },
+                      { m: p.last, tag: 'Laatste' },
+                    ].map(({ m, tag }) =>
+                      m ? (
+                        <Box
+                          key={tag}
+                          component="a"
+                          href={m[p.key] as string}
+                          target="_blank"
+                          rel="noreferrer"
+                          sx={{ display: 'block', minWidth: 0, color: 'inherit', textDecoration: 'none' }}
+                        >
+                          <Box
+                            component="img"
+                            src={m[p.key] as string}
+                            alt={`${p.label}aanzicht, ${tag.toLowerCase()} foto van ${m.date}`}
+                            loading="lazy"
+                            sx={PHOTO_IMG_SX}
+                          />
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                            {tag} · {m.date}
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <Box
+                          key={tag}
+                          sx={{
+                            display: 'flex',
+                            aspectRatio: '3 / 4',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: 2,
+                            border: '1px dashed',
+                            borderColor: 'divider',
+                            p: 1,
+                            textAlign: 'center',
+                          }}
+                        >
+                          <Typography variant="caption" color="text.secondary">
+                            Nog geen tweede foto
+                          </Typography>
+                        </Box>
+                      )
+                    )}
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          </OutlineCard>
+        )}
+
+        {/* Invoer */}
+        <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
+          {editingId ? 'Meting bewerken' : 'Nieuwe meting'}
+        </Typography>
+        <Box sx={{ ...FIELD_GRID_SX, mb: 1.5 }}>
+          <TextField
+            label="Datum"
+            type="date"
+            size="small"
+            fullWidth
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField
+            label="Gewicht (kg)"
+            type="number"
+            size="small"
+            fullWidth
+            inputProps={{ step: 0.1, min: 0, inputMode: 'decimal' }}
+            value={weight}
+            onChange={(e) => setWeight(e.target.value)}
+            helperText={formBmi != null ? `BMI ${formBmi}` : weightNum != null && !targetProfile?.heightCm ? 'Vul lengte in bij Profiel voor BMI' : ' '}
+          />
+        </Box>
+
+        {/* Profiel van de sporter aanvullen (alleen trainer, alleen als het ontbreekt) */}
+        {canFixProfile && (
+          <Box sx={{ mb: 1.5, p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 3 }}>
+            <Typography variant="body2" fontWeight={500} sx={{ mb: 0.5 }}>
+              Profiel aanvullen
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+              Voor het vetpercentage uit huidplooien zijn geboortedatum en geslacht van {targetProfile?.displayName?.trim() || 'deze sporter'} nodig. Je kunt ze hier direct invullen.
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 1.5 }}>
+              <TextField label="Geboortedatum" type="date" size="small" fullWidth value={fixBirth} onChange={(e) => setFixBirth(e.target.value)} InputLabelProps={{ shrink: true }} />
+              <TextField select label="Geslacht" size="small" fullWidth value={fixGender || 'none'} onChange={(e) => setFixGender(e.target.value === 'none' ? '' : (e.target.value as typeof fixGender))}>
+                <MenuItem value="none">Niet opgegeven</MenuItem>
+                <MenuItem value="man">Man</MenuItem>
+                <MenuItem value="vrouw">Vrouw</MenuItem>
+                <MenuItem value="anders">Anders</MenuItem>
+              </TextField>
+              <Button
+                variant="outlined"
+                fullWidth
+                sx={{ height: 40, borderRadius: '24px', textTransform: 'none' }}
+                onClick={handleFixProfile}
+                disabled={savingFix || (!fixBirth && !fixGender)}
+              >
+                {savingFix ? 'Bezig…' : 'Profiel opslaan'}
+              </Button>
+            </Box>
+          </Box>
+        )}
+
+        {/* Omtrekken, huidplooien en foto's ingeklapt: optioneel, samen 16 velden. Zelfde secties als de routekaart. */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 1.5 }}>
+          <Accordion disableGutters expanded={openSections.includes('circ')} onChange={() => toggleSection('circ')} sx={ACCORDION_SX}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', minWidth: 0, flex: 1, alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
+                <Typography variant="subtitle1" fontWeight={600}>
+                  Omtrekken (cm)
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {circFilled > 0 ? `${circFilled} ingevuld` : 'optioneel'}
+                </Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
+              <Box sx={FIELD_GRID_SX}>
+                {CIRCUMFERENCE_FIELDS.map((f) => (
+                  <TextField
+                    key={f.key}
+                    label={f.label}
+                    type="number"
+                    size="small"
+                    fullWidth
+                    inputProps={{ step: 0.5, min: 0, inputMode: 'decimal' }}
+                    value={circ[f.key]}
+                    onChange={(e) => setCirc((c) => ({ ...c, [f.key]: e.target.value }))}
+                  />
+                ))}
+              </Box>
+            </AccordionDetails>
+          </Accordion>
+
+          <Accordion disableGutters expanded={openSections.includes('skin')} onChange={() => toggleSection('skin')} sx={ACCORDION_SX}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', minWidth: 0, flex: 1, alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
+                <Typography variant="subtitle1" fontWeight={600}>
+                  Huidplooien (mm)
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {currentSkinSum != null ? `som ${currentSkinSum} mm${computedFat ? ` · ${computedFat.pct}%` : ''}` : 'optioneel'}
+                </Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                Meet rechts, met dezelfde caliper en op hetzelfde moment van de dag. Biceps, triceps, rug en heup samen geven het vetpercentage (Durnin &amp; Womersley); buik telt alleen mee in de som.
+              </Typography>
+              <Box sx={FIELD_GRID_SX}>
+                {SKINFOLD_FIELDS.map((f) => (
+                  <TextField
+                    key={f.key}
+                    label={f.label}
+                    type="number"
+                    size="small"
+                    fullWidth
+                    inputProps={{ step: 0.5, min: 0, inputMode: 'decimal' }}
+                    value={skin[f.key]}
+                    onChange={(e) => setSkin((s) => ({ ...s, [f.key]: e.target.value }))}
+                    helperText={f.hint}
+                  />
+                ))}
+              </Box>
+              <Box sx={{ mt: 1, p: 1.5, borderRadius: 2, bgcolor: 'rgba(0,0,0,0.04)', fontSize: 14 }} aria-live="polite">
+                {computedFat ? (
+                  <>
+                    <Box component="span" sx={{ fontWeight: 500 }}>
+                      Vetpercentage: {computedFat.pct}%
+                    </Box>
+                    <Box component="span" sx={{ color: 'text.secondary' }}>
+                      {' '}
+                      · som {computedFat.sumMm} mm · berekend
+                    </Box>
+                    {formFfm != null ? (
+                      <Box sx={{ mt: 0.5 }}>
+                        <Box component="span" sx={{ fontWeight: 500 }}>
+                          Vetvrije massa: {formFfm} kg
+                        </Box>
+                        <Box component="span" sx={{ color: 'text.secondary' }}>
+                          {' '}
+                          · gewicht min vet
+                        </Box>
+                      </Box>
+                    ) : (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                        Vul gewicht in voor de vetvrije massa.
+                      </Typography>
+                    )}
+                  </>
+                ) : formulaHint ? (
+                  <Box component="span" sx={{ color: 'text.secondary' }}>
+                    {formulaHint}
+                  </Box>
+                ) : (
+                  <Box component="span" sx={{ color: 'text.secondary' }}>
+                    {skinFilled > 0 ? `Som ${currentSkinSum} mm. ` : ''}Vul biceps, triceps, rug en heup in voor het vetpercentage.
+                  </Box>
+                )}
+                {!computedFat && bodyFat && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                    Opgeslagen vetpercentage van deze meting: {bodyFat}% (blijft bewaard).
+                  </Typography>
+                )}
+              </Box>
+            </AccordionDetails>
+          </Accordion>
+
+          <Accordion disableGutters expanded={openSections.includes('photos')} onChange={() => toggleSection('photos')} sx={ACCORDION_SX}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', minWidth: 0, flex: 1, alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
+                <Typography variant="subtitle1" fontWeight={600}>
+                  Foto's
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {(() => {
+                    const n = PHOTO_VIEWS.filter((v) => photos[v.view].file || (photos[v.view].existingUrl && !photos[v.view].remove)).length;
+                    return n > 0 ? `${n} van 3` : 'optioneel';
+                  })()}
+                </Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                Voor, zij en achter. Zelfde plek, zelfde licht, zelfde houding: dan zie je het verschil echt.
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
+                {PHOTO_VIEWS.map((v) => {
+                  const slot = photos[v.view];
+                  const shown = slot.previewUrl ?? (slot.remove ? null : slot.existingUrl);
+                  return (
+                    <Box key={v.view} sx={{ minWidth: 0 }}>
+                      <input
+                        ref={(el) => {
+                          photoInputs.current[v.view] = el;
+                        }}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        hidden
+                        id={`photo-${v.view}`}
+                        onChange={(e) => pickPhoto(v.view, e.target.files?.[0] ?? null)}
+                      />
+                      <Typography variant="caption" fontWeight={500} sx={{ display: 'block', mb: 0.5 }}>
+                        {v.label}
+                      </Typography>
+                      {shown ? (
+                        <Box sx={{ position: 'relative' }}>
+                          <Box component="img" src={shown} alt={`${v.label}aanzicht`} sx={PHOTO_IMG_SX} />
+                          <IconButton
+                            type="button"
+                            size="small"
+                            aria-label={`${v.label}foto verwijderen`}
+                            onClick={() => clearPhoto(v.view)}
+                            sx={{
+                              position: 'absolute',
+                              top: 4,
+                              right: 4,
+                              width: 32,
+                              height: 32,
+                              bgcolor: 'background.paper',
+                              boxShadow: 1,
+                              '&:hover': { bgcolor: 'background.paper' },
+                            }}
+                          >
+                            <CloseRoundedIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      ) : (
+                        <Box
+                          component="label"
+                          htmlFor={`photo-${v.view}`}
+                          sx={{
+                            display: 'flex',
+                            aspectRatio: '3 / 4',
+                            cursor: 'pointer',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 0.5,
+                            borderRadius: 2,
+                            border: '1px dashed',
+                            borderColor: 'divider',
+                            color: 'text.secondary',
+                            fontSize: 12,
+                            transition: 'background-color 0.2s ease',
+                            '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' },
+                            '&:focus-within': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
+                          }}
+                        >
+                          <PhotoCameraRoundedIcon fontSize="small" />
+                          Kies foto
+                        </Box>
+                      )}
+                      {shown && (
+                        <Button
+                          type="button"
+                          variant="text"
+                          size="small"
+                          fullWidth
+                          sx={{ mt: 0.5, height: 32, fontSize: 12, textTransform: 'none' }}
+                          onClick={() => photoInputs.current[v.view]?.click()}
+                        >
+                          Vervangen
+                        </Button>
+                      )}
+                    </Box>
+                  );
+                })}
+              </Box>
+            </AccordionDetails>
+          </Accordion>
+        </Box>
+
+        <TextField label="Notitie (optioneel)" size="small" fullWidth value={note} onChange={(e) => setNote(e.target.value)} sx={{ mb: 2 }} />
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button variant="contained" onClick={handleSave} disabled={saving} sx={PRIMARY_BUTTON_SX}>
+            {saving ? 'Bezig…' : editingId ? 'Opslaan' : 'Toevoegen'}
+          </Button>
+          {editingId && (
+            <Button variant="text" onClick={resetForm} sx={{ textTransform: 'none' }}>
+              Annuleren
+            </Button>
           )}
-        </CardContent>
-      </Card>
+        </Box>
 
-      <Dialog open={goalOpen} onOpenChange={setGoalOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Doelgewicht</DialogTitle>
-            <DialogDescription>Vul je streefgewicht in. Laat leeg om geen doel te gebruiken.</DialogDescription>
-          </DialogHeader>
-          <div className="py-2">
+        {/* Historie */}
+        <Typography variant="subtitle1" fontWeight={600} sx={{ mt: 3, mb: 1 }}>
+          Historie
+        </Typography>
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+            <CircularProgress size={20} />
+          </Box>
+        ) : items.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            Nog geen metingen.
+          </Typography>
+        ) : (
+          <List disablePadding>
+            {[...items].reverse().map((m) => {
+              const circSummary = CIRCUMFERENCE_FIELDS.filter((f) => m[f.key] != null)
+                .map((f) => `${f.label} ${m[f.key]}`)
+                .join(' · ');
+              const sum = skinfoldSum(m);
+              const skinSummary = sum != null ? `Plooien ${sum} mm` : null;
+              const photoCount = PHOTO_VIEWS.filter((v) => m[v.key] != null).length;
+              const photoSummary = photoCount > 0 ? `${photoCount} foto${photoCount === 1 ? '' : "'s"}` : null;
+              const secondary = [circSummary || null, skinSummary, photoSummary, m.note || null].filter(Boolean).join(' — ');
+              const ffm = m.weightKg != null && m.bodyFatPct != null ? fatFreeMassKg(m.weightKg, m.bodyFatPct) : null;
+              const fatLabel =
+                m.bodyFatPct != null
+                  ? `${m.bodyFatPct}%${m.bodyFatMethod === 'durnin-womersley' ? ' (berekend)' : ''}${ffm != null ? ` · VVM ${ffm} kg` : ''}`
+                  : '';
+              return (
+                <ListItem
+                  key={m.id}
+                  disableGutters
+                  divider
+                  alignItems="flex-start"
+                  sx={{ py: 1.25, pr: 10, '&:last-child': { borderBottom: 0 } }}
+                  secondaryAction={
+                    <Box sx={{ display: 'flex', gap: 0.25 }}>
+                      <IconButton size="small" sx={{ width: 32, height: 32 }} onClick={() => handleEdit(m)} aria-label="Bewerken">
+                        <EditRoundedIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" sx={{ width: 32, height: 32 }} onClick={() => handleDelete(m.id)} aria-label="Verwijderen">
+                        <DeleteOutlineRoundedIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  }
+                >
+                  <ListItemText
+                    sx={{ my: 0, minWidth: 0 }}
+                    primary={`${m.date} · ${m.weightKg != null ? `${m.weightKg} kg` : ''}${m.weightKg != null && fatLabel ? ' · ' : ''}${fatLabel}`}
+                    primaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
+                    secondary={secondary || null}
+                    secondaryTypographyProps={{ variant: 'caption', sx: { display: 'block', mt: 0.25 } }}
+                  />
+                </ListItem>
+              );
+            })}
+          </List>
+        )}
+      </ContentCard>
+
+      <Dialog open={goalOpen} onClose={() => setGoalOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ pb: 0.5 }}>Doelgewicht</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Vul je streefgewicht in. Laat leeg om geen doel te gebruiken.
+          </Typography>
+          <Box sx={{ py: 1 }}>
             <TextField
               label="Doelgewicht (kg)"
               type="number"
@@ -874,15 +1049,17 @@ export function MetingenPage() {
               value={goalInput}
               onChange={(e) => setGoalInput(e.target.value)}
             />
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setGoalOpen(false)}>
-              Annuleren
-            </Button>
-            <Button onClick={handleSaveGoal}>Opslaan</Button>
-          </DialogFooter>
+          </Box>
         </DialogContent>
+        <DialogActions>
+          <Button variant="text" onClick={() => setGoalOpen(false)} sx={{ textTransform: 'none' }}>
+            Annuleren
+          </Button>
+          <Button variant="contained" onClick={handleSaveGoal} sx={PRIMARY_BUTTON_SX}>
+            Opslaan
+          </Button>
+        </DialogActions>
       </Dialog>
-    </div>
+    </PageLayout>
   );
 }
