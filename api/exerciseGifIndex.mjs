@@ -15,6 +15,7 @@ import { candidatesForExerciseDbLookup } from './exerciseCatalog.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const INDEX_PATH = join(__dirname, '..', 'src', 'data', 'exerciseGifIndex.json');
+const OVERRIDES_PATH = join(__dirname, '..', 'src', 'data', 'exerciseGifOverrides.json');
 
 /** [{ id, name, bodyPart, target, equipment, secondaryMuscles }] */
 export const EXERCISES = JSON.parse(readFileSync(INDEX_PATH, 'utf8'));
@@ -47,27 +48,11 @@ for (const e of EXERCISES) {
 const byId = new Map(EXERCISES.map((e) => [e.id, e]));
 
 /**
- * Handmatige overrides: app-catalogusnaam → exercisedb-id.
- * Nodig voor machine-/varianten die de dataset anders benoemt (bv. "lever ...").
+ * Handmatige overrides: app-catalogusnaam → exercisedb-id, gedeeld met de app (src/data/exerciseGifOverrides.json).
  */
-const OVERRIDES = {
-  'leg extension machine': '0585', // lever leg extension
-  'seated leg curl machine': '0599', // lever seated leg curl
-  'lying leg curl machine': '0586', // lever lying leg curl
-  'lateral raise machine': '0178', // cable lateral raise
-  'seated row machine': '0180', // cable low seated row
-  'hip abductor machine': '0597', // lever seated hip abduction
-  'hip adductor machine': '0598', // lever seated hip adduction
-  'hyperextension machine back extension': '0489', // hyperextension
-  'hyperextension machine': '0489', // "Hyperextension Machine (Back Extension)": norm() haalt de haakjes weg
-  'lower back extension machine': '0489', // hyperextension
-  'barbell back squat': '0043', // barbell full squat
-  'lat pulldown': '0150', // cable bar lateral pulldown
-  'trx row': '0808', // suspended row
-  'bulgarian split squat': '0099', // barbell single leg split squat
-  'glute kickback machine': '0860', // cable kickback
-  'cable glute kickback': '0860', // cable kickback
-};
+const OVERRIDES = Object.fromEntries(
+  Object.entries(JSON.parse(readFileSync(OVERRIDES_PATH, 'utf8'))).filter(([k]) => !k.startsWith('_'))
+);
 
 /** Zoek de beste dataset-oefening bij een (mogelijk NL/vrije) naam. Geeft null als niets past. */
 export function resolveExercise(name) {

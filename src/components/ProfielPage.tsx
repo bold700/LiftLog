@@ -24,6 +24,7 @@ import { UserAvatar } from './UserAvatar';
 import { AiChatConnectCard } from './AiChatConnectCard';
 import { ageOnDate } from '../utils/bodyFat';
 import { heartRateZones } from '../utils/heartRate';
+import { todayIso } from '../utils/format';
 
 export function ProfielPage() {
   const profile = useProfile();
@@ -186,8 +187,7 @@ export function ProfielPage() {
   const email = auth?.user?.email ?? p?.email ?? '';
 
   // Hartslagzones live uit de formulierwaarden (leeftijd uit geboortedatum, rusthartslag), zodat je ze meteen ziet.
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const ageNow = ageOnDate(birthDate || null, todayIso);
+  const ageNow = ageOnDate(birthDate || null, todayIso());
   const restingNum = restingHr.trim() !== '' && Number.isFinite(Number(restingHr)) ? Number(restingHr) : null;
   const hrZones = heartRateZones(ageNow, restingNum);
 

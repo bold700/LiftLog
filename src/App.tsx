@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { ThemeProvider, CssBaseline, Box, Fab, Menu, MenuItem, Alert, Button } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import FitnessCenterRoundedIcon from '@mui/icons-material/FitnessCenterRounded';
@@ -15,11 +15,15 @@ import { FullscreenMenu } from './components/FullscreenMenu';
 import { InzichtenPage } from './components/InzichtenPage';
 import { AddPage } from './components/AddPage';
 import { SchemasPage } from './components/SchemasPage';
-import { BeheerPage } from './components/BeheerPage';
-import { ProfielenPage } from './components/ProfielenPage';
-import { ProfielPage } from './components/ProfielPage';
-import { NutritionPage } from './components/NutritionPage';
-import { MetingenPage } from './components/MetingenPage';
+import { LoadingBlock } from './components/layout/LoadingBlock';
+import { NotifyProvider } from './context/NotifyContext';
+
+// Minder vaak gebruikte tabbladen pas laden als ze opengaan (kleinere eerste download).
+const BeheerPage = lazy(() => import('./components/BeheerPage').then((m) => ({ default: m.BeheerPage })));
+const ProfielenPage = lazy(() => import('./components/ProfielenPage').then((m) => ({ default: m.ProfielenPage })));
+const ProfielPage = lazy(() => import('./components/ProfielPage').then((m) => ({ default: m.ProfielPage })));
+const NutritionPage = lazy(() => import('./components/NutritionPage').then((m) => ({ default: m.NutritionPage })));
+const MetingenPage = lazy(() => import('./components/MetingenPage').then((m) => ({ default: m.MetingenPage })));
 import { LeaderboardAutoSync } from './components/LeaderboardAutoSync';
 import { AddFromSchemaProvider } from './context/AddFromSchemaContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -188,6 +192,7 @@ function AppContent() {
   return (
     <ThemeProvider theme={lightTheme}>
       <CssBaseline />
+      <NotifyProvider>
       <ProfileProvider>
       <VerificationGate>
       <LeaderboardAutoSync />
@@ -243,7 +248,7 @@ function AppContent() {
                 <strong>Je trainer-aanvraag wacht op goedkeuring.</strong> Een beheerder keurt de aanvraag goed onder Beheer.
               </Alert>
             )}
-            {renderPage()}
+            <Suspense fallback={<LoadingBlock />}>{renderPage()}</Suspense>
           </Box>
 
           {!addOpen && (
@@ -317,6 +322,7 @@ function AppContent() {
       </AddFromSchemaProvider>
       </VerificationGate>
       </ProfileProvider>
+      </NotifyProvider>
     </ThemeProvider>
   );
 }

@@ -1,0 +1,19 @@
+{
+  "_comment": "Handmatige koppeling app-catalogusnaam (genormaliseerd: kleine letters, geen haakjes/leestekens) -> exercisedb-id. Gebruikt door src/utils/exerciseGif.ts (app) en api/exerciseGifIndex.mjs (server): één bron, zodat app en server dezelfde GIF tonen.",
+  "leg extension machine": "0585",
+  "seated leg curl machine": "0599",
+  "lying leg curl machine": "0586",
+  "lateral raise machine": "0178",
+  "seated row machine": "0180",
+  "hip abductor machine": "0597",
+  "hip adductor machine": "0598",
+  "hyperextension machine back extension": "0489",
+  "hyperextension machine": "0489",
+  "lower back extension machine": "0489",
+  "barbell back squat": "0043",
+  "lat pulldown": "0150",
+  "trx row": "0808",
+  "bulgarian split squat": "0099",
+  "glute kickback machine": "0860",
+  "cable glute kickback": "0860"
+}

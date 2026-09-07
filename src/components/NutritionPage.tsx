@@ -30,9 +30,15 @@ import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
 import QrCodeScannerRoundedIcon from '@mui/icons-material/QrCodeScannerRounded';
 import AddCircleRoundedIcon from '@mui/icons-material/AddCircleRounded';
-import { BarcodeScannerDialog } from './BarcodeScannerDialog';
+import { lazy, Suspense } from 'react';
+
+// Barcode-scanner (zxing, ~150 kB) pas laden als de scanner opent.
+const BarcodeScannerDialog = lazy(() =>
+  import('./BarcodeScannerDialog').then((m) => ({ default: m.BarcodeScannerDialog }))
+);
 import { PageLayout, ContentCard } from './layout';
 import { useProfile } from '../context/ProfileContext';
+import { useNotify } from '../context/NotifyContext';
 import { updateProfile } from '../services/profileService';
 import type { NutritionGoal } from '../types';
 import {
@@ -47,6 +53,7 @@ import {
   type NutritionLog,
   type RecognizedFood,
 } from '../services/nutritionService';
+import { todayIso } from '../utils/format';
 
 type Period = 'day' | 'week' | 'month';
 
@@ -67,9 +74,6 @@ async function fileToDataUrl(file: File, max = 768, quality = 0.8): Promise<stri
 
 function isoDay(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-function todayIso(): string {
-  return isoDay(new Date());
 }
 /** Array van ISO-dagen van (count-1) dagen terug t/m de anker-dag. */
 function rangeDays(endIso: string, count: number): string[] {
@@ -117,6 +121,7 @@ const MACROS = [
 
 export function NutritionPage() {
   const profileCtx = useProfile();
+  const notify = useNotify();
   const isTrainer = profileCtx?.isTrainer ?? false;
   const sporters = profileCtx?.allSporters ?? [];
   const selfUid = profileCtx?.profile?.userId ?? '';
@@ -215,15 +220,16 @@ export function NutritionPage() {
     setLoading(true);
     try {
       setAllLogs(await getNutritionLogsForUser(effectiveUserId));
-    } catch {
+    } catch (err) {
       setAllLogs([]);
+      notify.error('Voedingslogs laden mislukt. Controleer je verbinding.', err);
     } finally {
       setLoading(false);
     }
-  }, [effectiveUserId]);
+  }, [effectiveUserId, notify]);
 
   useEffect(() => {
-    loadLogs();
+    void loadLogs();
   }, [loadLogs]);
 
   useEffect(() => {
@@ -321,7 +327,11 @@ export function NutritionPage() {
   };
 
   const handleDelete = async (id: string) => {
-    await deleteNutritionLog(id).catch(() => {});
+    try {
+      await deleteNutritionLog(id);
+    } catch (err) {
+      notify.error('Voedingslog verwijderen mislukt. Probeer het opnieuw.', err);
+    }
     await loadLogs();
   };
 
@@ -562,7 +572,11 @@ export function NutritionPage() {
         </DialogActions>
       </Dialog>
 
-      <BarcodeScannerDialog open={scannerOpen} onClose={() => setScannerOpen(false)} onDetected={handleBarcode} />
+      {scannerOpen && (
+        <Suspense fallback={null}>
+          <BarcodeScannerDialog open={scannerOpen} onClose={() => setScannerOpen(false)} onDetected={handleBarcode} />
+        </Suspense>
+      )}
 
       <AddDialog selected={selected} grams={grams} setGrams={setGrams} preview={preview} saving={saving} isEditing={editingLog != null} onClose={closeDialog} onSave={handleSave} />
       <GoalDialog
@@ -572,9 +586,13 @@ export function NutritionPage() {
         onClose={() => setGoalOpen(false)}
         onSave={async (g) => {
           if (!effectiveUserId) return;
-          await updateProfile(effectiveUserId, { nutritionGoal: g }).catch(() => {});
-          if (!targetId) await profileCtx?.refreshProfile();
-          else await profileCtx?.refreshProfile();
+          try {
+            await updateProfile(effectiveUserId, { nutritionGoal: g });
+          } catch (err) {
+            notify.error('Voedingsdoel opslaan mislukt. Probeer het opnieuw.', err);
+            return;
+          }
+          await profileCtx?.refreshProfile();
           setGoalOpen(false);
         }}
       />

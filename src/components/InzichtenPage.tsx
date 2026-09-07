@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Box, Tab, Tabs, useMediaQuery, useTheme } from '@mui/material';
-import { SpiergroepenPage } from './SpiergroepenPage';
-import { OefeningenPage } from './OefeningenPage';
+import { LoadingBlock } from './layout/LoadingBlock';
+
+// Grafiekpagina's (recharts) pas laden als het tabblad opent.
+const SpiergroepenPage = lazy(() => import('./SpiergroepenPage').then((m) => ({ default: m.SpiergroepenPage })));
+const OefeningenPage = lazy(() => import('./OefeningenPage').then((m) => ({ default: m.OefeningenPage })));
 import { LogsPage } from './LogsPage';
 import { LeaderboardPage } from './LeaderboardPage';
 import { NutritionInsights } from './NutritionInsights';
@@ -74,10 +77,18 @@ export const InzichtenPage = ({
         <Tab value={3} label="Ranglijst" id="inzichten-tab-3" aria-controls="inzichten-panel-3" />
       </Tabs>
       <Box role="tabpanel" id="inzichten-panel-0" hidden={subTab !== 0} sx={{ flex: 1, minHeight: 0 }}>
-        {subTab === 0 && <SpiergroepenPage />}
+        {subTab === 0 && (
+          <Suspense fallback={<LoadingBlock />}>
+            <SpiergroepenPage />
+          </Suspense>
+        )}
       </Box>
       <Box role="tabpanel" id="inzichten-panel-1" hidden={subTab !== 1} sx={{ flex: 1, minHeight: 0 }}>
-        {subTab === 1 && <OefeningenPage />}
+        {subTab === 1 && (
+          <Suspense fallback={<LoadingBlock />}>
+            <OefeningenPage />
+          </Suspense>
+        )}
       </Box>
       <Box role="tabpanel" id="inzichten-panel-2" hidden={subTab !== 2} sx={{ flex: 1, minHeight: 0 }}>
         {subTab === 2 && (

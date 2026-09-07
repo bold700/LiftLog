@@ -40,6 +40,7 @@ import { UserAvatar } from './UserAvatar';
 import { ageOnDate } from '../utils/bodyFat';
 import { heartRateZones } from '../utils/heartRate';
 import { HeartRateZonesTable } from './HeartRateZonesTable';
+import { todayIso } from '../utils/format';
 
 type Filter = 'all' | 'sporter' | 'trainer' | 'incomplete';
 
@@ -48,9 +49,6 @@ const FILTERS: Filter[] = ['all', 'sporter', 'trainer', 'incomplete'];
 
 const ROLE_LABEL: Record<ProfileRole, string> = { sporter: 'Sporter', trainer: 'Trainer', admin: 'Beheerder' };
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 /** Welke basisgegevens ontbreken; leeg = compleet. */
 function missingFields(p: Profile): string[] {

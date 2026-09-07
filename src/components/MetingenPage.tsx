@@ -14,6 +14,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { useProfile } from '../context/ProfileContext';
+import { useNotify } from '../context/NotifyContext';
 import { updateProfile } from '../services/profileService';
 import {
   saveMeasurement,
@@ -37,6 +38,7 @@ import {
   type PhotoUrlKey,
 } from '../services/progressPhotoService';
 import { ageOnDate, bodyFatDurninWomersley, toSkinfoldSex, DW_MIN_AGE, fatFreeMassKg, bmi } from '../utils/bodyFat';
+import { todayIso } from '../utils/format';
 
 const EMPTY_CIRC = Object.fromEntries(CIRCUMFERENCE_FIELDS.map((f) => [f.key, ''])) as Record<CircumferenceKey, string>;
 const EMPTY_SKIN = Object.fromEntries(SKINFOLD_FIELDS.map((f) => [f.key, ''])) as Record<SkinfoldKey, string>;
@@ -66,10 +68,6 @@ const ACCORDION_SX = {
 
 type SectionKey = 'circ' | 'skin' | 'photos';
 
-function todayIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 interface TrendPoint {
   id: string;
@@ -118,6 +116,7 @@ function TrendChart({ points, unit, goal }: { points: TrendPoint[]; unit: string
 
 export function MetingenPage() {
   const profileCtx = useProfile();
+  const notify = useNotify();
   const isTrainer = profileCtx?.isTrainer ?? false;
   const sporters = profileCtx?.allSporters ?? [];
   const selfUid = profileCtx?.profile?.userId ?? '';
@@ -157,15 +156,16 @@ export function MetingenPage() {
     setLoading(true);
     try {
       setItems(await getMeasurementsForUser(effectiveUserId));
-    } catch {
+    } catch (err) {
       setItems([]);
+      notify.error('Metingen laden mislukt. Controleer je verbinding.', err);
     } finally {
       setLoading(false);
     }
-  }, [effectiveUserId]);
+  }, [effectiveUserId, notify]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   const resetForm = () => {
@@ -362,8 +362,12 @@ export function MetingenPage() {
   const handleDelete = async (id: string) => {
     const m = items.find((x) => x.id === id);
     if (!window.confirm(`Meting van ${m?.date ?? 'deze datum'} verwijderen? Bijbehorende foto's worden ook verwijderd.`)) return;
-    await deleteMeasurement(id).catch(() => {});
-    if (m && PHOTO_VIEWS.some((v) => m[v.key] != null)) await deleteAllProgressPhotos(m.userId, id).catch(() => {});
+    try {
+      await deleteMeasurement(id);
+      if (m && PHOTO_VIEWS.some((v) => m[v.key] != null)) await deleteAllProgressPhotos(m.userId, id);
+    } catch (err) {
+      notify.error('Meting verwijderen mislukt. Probeer het opnieuw.', err);
+    }
     if (editingId === id) resetForm();
     await load();
   };
@@ -425,7 +429,12 @@ export function MetingenPage() {
   const handleSaveGoal = async () => {
     if (!effectiveUserId) return;
     const g = goalInput.trim() !== '' ? Number(goalInput) : null;
-    await updateProfile(effectiveUserId, { weightGoalKg: g && g > 0 ? g : null }).catch(() => {});
+    try {
+      await updateProfile(effectiveUserId, { weightGoalKg: g && g > 0 ? g : null });
+    } catch (err) {
+      notify.error('Doelgewicht opslaan mislukt. Probeer het opnieuw.', err);
+      return;
+    }
     await profileCtx?.refreshProfile();
     setGoalOpen(false);
   };

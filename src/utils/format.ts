@@ -11,6 +11,16 @@ import type {
 
 const LOCALE = 'nl-NL';
 
+/** Vandaag als YYYY-MM-DD in de lokale tijdzone (niet UTC: na middernacht is het hier al de volgende dag). */
+export function todayIso(): string {
+  return toIsoDate(new Date());
+}
+
+/** Datum als YYYY-MM-DD in de lokale tijdzone. */
+export function toIsoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /** Lange datum: "ma 7 mrt 2026" */
 export function formatExerciseDate(date: string | Date): string {
   const d = typeof date === 'string' ? new Date(date) : date;
