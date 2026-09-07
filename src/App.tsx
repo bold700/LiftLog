@@ -5,6 +5,7 @@ import FitnessCenterRoundedIcon from '@mui/icons-material/FitnessCenterRounded';
 import EventNoteRoundedIcon from '@mui/icons-material/EventNoteRounded';
 import MenuRoundedIcon from '@mui/icons-material/MenuRounded';
 import DonutLargeRoundedIcon from '@mui/icons-material/DonutLargeRounded';
+import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
@@ -21,6 +22,7 @@ import { NotifyProvider } from './context/NotifyContext';
 // Minder vaak gebruikte tabbladen pas laden als ze opengaan (kleinere eerste download).
 const BeheerPage = lazy(() => import('./components/BeheerPage').then((m) => ({ default: m.BeheerPage })));
 const ProfielenPage = lazy(() => import('./components/ProfielenPage').then((m) => ({ default: m.ProfielenPage })));
+const AssistentPage = lazy(() => import('./components/AssistentPage').then((m) => ({ default: m.AssistentPage })));
 const ProfielPage = lazy(() => import('./components/ProfielPage').then((m) => ({ default: m.ProfielPage })));
 const NutritionPage = lazy(() => import('./components/NutritionPage').then((m) => ({ default: m.NutritionPage })));
 const MetingenPage = lazy(() => import('./components/MetingenPage').then((m) => ({ default: m.MetingenPage })));
@@ -43,6 +45,7 @@ const TAB_BEHEER = 4;
 const TAB_VOEDING = 5;
 const TAB_METINGEN = 6;
 const TAB_PROFIELEN = 7;
+const TAB_ASSISTENT = 8;
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState(TAB_INZICHTEN);
@@ -110,6 +113,8 @@ function AppContent() {
 
   const tabs = [
     { label: 'Menu', icon: <MenuRoundedIcon fontSize="small" />, tabIndex: TAB_MENU },
+    // De assistent staat vooraan: hij is de snelste weg naar alles wat de app kan.
+    { label: 'Assistent', icon: <AutoAwesomeRoundedIcon fontSize="small" />, tabIndex: TAB_ASSISTENT },
     { label: 'Inzichten', icon: <DonutLargeRoundedIcon fontSize="small" />, tabIndex: TAB_INZICHTEN },
     { label: 'Workouts', icon: <CalendarMonthRoundedIcon fontSize="small" />, tabIndex: TAB_SCHEMAS },
     ...(isTrainer ? [{ label: 'Beheer', icon: <FitnessCenterRoundedIcon fontSize="small" />, tabIndex: TAB_BEHEER }] : []),
@@ -131,6 +136,7 @@ function AppContent() {
           <FullscreenMenu
             onClose={() => setActiveTab(TAB_INZICHTEN)}
             navItems={[
+              { label: 'Assistent', tabIndex: TAB_ASSISTENT, icon: <AutoAwesomeRoundedIcon fontSize="small" /> },
               { label: 'Inzichten', tabIndex: TAB_INZICHTEN, icon: <DonutLargeRoundedIcon fontSize="small" /> },
               { label: 'Workouts', tabIndex: TAB_SCHEMAS, icon: <CalendarMonthRoundedIcon fontSize="small" /> },
               { label: 'Voeding', tabIndex: TAB_VOEDING, icon: <RestaurantRoundedIcon fontSize="small" /> },
@@ -157,6 +163,8 @@ function AppContent() {
         return <BeheerPage />;
       case TAB_PROFIELEN:
         return <ProfielenPage />;
+      case TAB_ASSISTENT:
+        return <AssistentPage />;
       case TAB_PROFIEL:
         return <ProfielPage />;
       case TAB_VOEDING:
