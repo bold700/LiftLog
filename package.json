@@ -26,10 +26,13 @@
     "delete-all-accounts": "node scripts/delete-all-accounts.cjs",
     "test:mcp": "node scripts/mcp-smoke-test.mjs",
     "test:rules": "npx --yes firebase-tools@13 emulators:exec --only firestore --project liftlog-rules-test \"node tests/rules/firestore.rules.test.mjs\"",
+    "test:isolatie": "npm run test:rules && npm run test:mcp:rechten",
     "deploy:firestore": "npx --yes firebase-tools@13 deploy --only firestore:rules",
     "deploy:storage": "npx --yes firebase-tools@13 deploy --only storage",
     "import:groepslessen": "node scripts/import-groepslessen.mjs",
-    "test:mcp:rechten": "node scripts/mcp-permission-test.mjs"
+    "test:mcp:rechten": "node scripts/mcp-permission-test.mjs",
+    "migrate:orgs": "node scripts/migrate-orgs.mjs",
+    "backup": "node scripts/backup-firestore.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",

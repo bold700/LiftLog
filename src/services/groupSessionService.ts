@@ -14,6 +14,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
+import { requireOrgId } from './orgContext';
 import type { GroupSession } from '../types';
 
 const COLLECTION = 'sessions';
@@ -41,7 +42,12 @@ export async function createGroupSession(
 ): Promise<GroupSession> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
   const id = session.id ?? newId();
-  const full: GroupSession = { ...session, id, createdAt: new Date().toISOString() };
+  const full: GroupSession = {
+    ...session,
+    id,
+    orgId: session.orgId || requireOrgId(),
+    createdAt: new Date().toISOString(),
+  };
   await setDoc(doc(db, COLLECTION, id), { ...full, updatedAt: serverTimestamp() }, { merge: true });
   return full;
 }
@@ -59,7 +65,11 @@ export async function getGroupSession(id: string): Promise<GroupSession | null> 
 
 export async function getGroupSessionsForTrainer(trainerId: string): Promise<GroupSession[]> {
   if (!isFirebaseConfigured() || !db) return [];
-  const q = query(collection(db, COLLECTION), where('trainerId', '==', trainerId));
+  const q = query(
+    collection(db, COLLECTION),
+    where('orgId', '==', requireOrgId()),
+    where('trainerId', '==', trainerId)
+  );
   const snap = await getDocs(q);
   return snap.docs.map((d) => toSession(d.data(), d.id)).sort((a, b) => (b.date > a.date ? 1 : -1));
 }

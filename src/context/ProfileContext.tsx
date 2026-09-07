@@ -14,6 +14,7 @@ import {
   createProfile,
 } from '../services/profileService';
 import type { Profile, ProfileRole } from '../types';
+import { setCurrentOrgId } from '../services/orgContext';
 import { setCloudSync, hydrateFromCloud } from '../utils/storage';
 
 type ProfileState = {
@@ -43,6 +44,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   const refreshProfile = useCallback(async () => {
     if (!auth?.user?.uid) {
+      setCurrentOrgId(null);
       setProfile(null);
       setSporters([]);
       setAllSporters([]);
@@ -62,6 +64,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         );
         p = await getProfile(auth.user.uid);
       }
+      // Studio vastzetten vóór elke query: services stampen en filteren hierop.
+      setCurrentOrgId(p?.orgId ?? null);
       setProfile(p);
       if (p?.role === 'trainer' || p?.role === 'admin') {
         const [mySporters, all] = await Promise.all([
@@ -77,6 +81,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg.includes('permission') || msg.includes('Permission') ? 'Geen toegang tot database. Controleer Firestore-regels (zie docs). ' + msg : msg);
+      setCurrentOrgId(null);
       setProfile(null);
       setSporters([]);
       setAllSporters([]);

@@ -39,11 +39,15 @@ export default async function handler(req, res) {
   const key = keyFromRequest(req);
   if (!key || key.length < 20) return json(res, 401, { error: 'Koppelsleutel ontbreekt. Maak er een aan in LiftLog onder Profiel.' });
 
-  const store = createStore(admin.db, admin.auth);
-  const userId = await store.findUserByKey(key);
+  // Eerst zonder studio: de sleutel wijst één gebruiker aan, en pas diens profiel bepaalt de studio.
+  const lookup = createStore(admin.db, admin.auth);
+  const userId = await lookup.findUserByKey(key);
   if (!userId) return json(res, 401, { error: 'Koppelsleutel is ongeldig of ingetrokken.' });
-  const profile = await store.getProfile(userId);
+  const profile = await lookup.getProfile(userId);
   if (!profile) return json(res, 401, { error: 'Profiel niet gevonden.' });
+
+  // Vanaf hier is alles begrensd tot de studio van deze gebruiker.
+  const store = createStore(admin.db, admin.auth, profile.orgId);
 
   // Stateless: per aanvraag een verse server + transport (Vercel-functies houden geen sessies vast).
   const server = buildServer({ profile }, store);

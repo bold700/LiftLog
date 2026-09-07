@@ -13,8 +13,11 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
+import { requireOrgId } from './orgContext';
 
 export interface Measurement {
+  /** Studio waar dit document bij hoort (multi-tenant). */
+  orgId?: string;
   id: string;
   userId: string;
   loggedBy: string;
@@ -145,7 +148,12 @@ export async function saveMeasurement(
 ): Promise<Measurement> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
   const id = input.id ?? newId();
-  const full: Measurement = { ...input, id, createdAt: input.createdAt ?? new Date().toISOString() };
+  const full: Measurement = {
+    ...input,
+    id,
+    orgId: input.orgId || requireOrgId(),
+    createdAt: input.createdAt ?? new Date().toISOString(),
+  };
   await setDoc(doc(db, COLLECTION, id), { ...full, updatedAt: serverTimestamp() }, { merge: true });
   return full;
 }

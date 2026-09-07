@@ -19,6 +19,23 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(db, 'profiles/sporter1'), { userId: 'sporter1', role: 'sporter', trainerId: 'trainer1', displayName: 'Bas' });
   await setDoc(doc(db, 'profiles/sporter2'), { userId: 'sporter2', role: 'sporter', trainerId: null, displayName: 'Sumit' });
   await setDoc(doc(db, 'profiles/sporter3'), { userId: 'sporter3', role: 'sporter', trainerId: null, displayName: 'Eva' });
+
+  // Studio's. Studio A (Van As) laat zelfregistratie toe, studio B niet.
+  // De profielen hierboven hebben bewust geen orgId: dat test meteen de terugval voor data
+  // van vóór de migratie, die als de standaardstudio moet worden gelezen.
+  await setDoc(doc(db, 'orgs/vanas'), { name: 'Van As Personal Training', allowSelfSignup: true });
+  await setDoc(doc(db, 'orgs/studiob'), { name: 'Studio B', allowSelfSignup: false });
+
+  // Tweede studio, volledig eigen bezetting.
+  await setDoc(doc(db, 'profiles/adminB'), { userId: 'adminB', orgId: 'studiob', role: 'admin', trainerId: null });
+  await setDoc(doc(db, 'profiles/trainerB'), { userId: 'trainerB', orgId: 'studiob', role: 'trainer', trainerId: null });
+  await setDoc(doc(db, 'profiles/sporterB'), { userId: 'sporterB', orgId: 'studiob', role: 'sporter', trainerId: 'trainerB', displayName: 'Nora' });
+  await setDoc(doc(db, 'logs/lB1'), { orgId: 'studiob', userId: 'sporterB', loggedBy: 'sporterB', exerciseName: 'Bench' });
+  await setDoc(doc(db, 'measurements/mB1'), { orgId: 'studiob', userId: 'sporterB', loggedBy: 'sporterB', weightKg: 70 });
+  await setDoc(doc(db, 'workouts/wB1'), { orgId: 'studiob', trainerId: 'trainerB', clientId: 'sporterB', name: 'B-schema' });
+  await setDoc(doc(db, 'workouts/wOpenA'), { trainerId: 'trainer1', clientId: null, audience: 'open', name: 'Open A' });
+  await setDoc(doc(db, 'leaderboardPublic/sporterB'), { orgId: 'studiob', userId: 'sporterB', displayLabel: 'Nora', visibility: 'named', photoURL: '' });
+  await setDoc(doc(db, 'measurements/mA1'), { userId: 'sporter2', loggedBy: 'sporter2', weightKg: 80 });
 });
 const as = (uid) => env.authenticatedContext(uid).firestore();
 let passed = 0, failed = 0;
@@ -72,6 +89,37 @@ await t('sporter maakt workout op naam van trainer → geweigerd', false, setDoc
 await t('trainer maakt workout → mag', true, setDoc(doc(as('trainer1'), 'workouts/w2'), { trainerId: 'trainer1', clientId: 'sporter1', name: 'x' }));
 await t('toegewezen sporter leest workout → mag', true, getDoc(doc(as('sporter1'), 'workouts/w2')));
 await t('andere sporter leest workout → geweigerd', false, getDoc(doc(as('sporter2'), 'workouts/w2')));
+
+console.log('Studio-isolatie (multi-tenant)');
+// Lezen over de studiogrens heen mag nooit, ook niet als trainer of beheerder.
+await t('trainer studio B leest profiel studio A → geweigerd', false, getDoc(doc(as('trainerB'), 'profiles/sporter2')));
+await t('beheerder studio B leest profiel studio A → geweigerd', false, getDoc(doc(as('adminB'), 'profiles/sporter2')));
+await t('trainer studio A leest profiel studio B → geweigerd', false, getDoc(doc(as('trainer1'), 'profiles/sporterB')));
+await t('trainer studio B leest log studio A → geweigerd', false, getDoc(doc(as('trainerB'), 'logs/l1')));
+await t('beheerder studio B leest meting studio A → geweigerd', false, getDoc(doc(as('adminB'), 'measurements/mA1')));
+await t('trainer studio B leest workout studio A → geweigerd', false, getDoc(doc(as('trainerB'), 'workouts/w2')));
+await t('sporter studio B leest open workout studio A → geweigerd', false, getDoc(doc(as('sporterB'), 'workouts/wOpenA')));
+await t('sporter studio B leest ranglijst studio A → geweigerd', false, getDoc(doc(as('sporterB'), 'leaderboardPublic/sporter1')));
+await t('sporter studio A leest ranglijst studio B → geweigerd', false, getDoc(doc(as('sporter2'), 'leaderboardPublic/sporterB')));
+
+// Schrijven over de studiogrens heen mag ook niet.
+await t('beheerder studio B wijzigt profiel studio A → geweigerd', false, updateDoc(doc(as('adminB'), 'profiles/sporter2'), { displayName: 'gekaapt' }));
+await t('beheerder studio B maakt account in studio A → geweigerd', false, setDoc(doc(as('adminB'), 'profiles/nieuwX'), { userId: 'nieuwX', orgId: 'vanas', role: 'sporter', createdByAdmin: true }));
+await t('trainer studio B maakt workout in studio A → geweigerd', false, setDoc(doc(as('trainerB'), 'workouts/wX'), { orgId: 'vanas', trainerId: 'trainerB', name: 'x' }));
+await t('trainer studio B logt in studio A → geweigerd', false, setDoc(doc(as('trainerB'), 'logs/lX'), { orgId: 'vanas', userId: 'sporterB', loggedBy: 'trainerB', exerciseName: 'Squat' }));
+await t('sporter zet zichzelf in andere studio → geweigerd', false, updateDoc(doc(as('sporter2'), 'profiles/sporter2'), { orgId: 'studiob' }));
+await t('sporter zet zichzelf platformbeheerder → geweigerd', false, updateDoc(doc(as('sporter2'), 'profiles/sporter2'), { platformAdmin: true }));
+await t('beheerder zet zichzelf platformbeheerder → geweigerd', false, updateDoc(doc(as('admin1'), 'profiles/admin1'), { platformAdmin: true }));
+await t('registratie in studio zonder open aanmelding → geweigerd', false, setDoc(doc(as('nieuwB'), 'profiles/nieuwB'), { userId: 'nieuwB', orgId: 'studiob', role: 'sporter' }));
+
+// Binnen de eigen studio moet alles gewoon blijven werken (controle dat we niet te veel dichtzetten).
+await t('trainer studio B leest eigen sporter → mag', true, getDoc(doc(as('trainerB'), 'profiles/sporterB')));
+await t('trainer studio B leest eigen log → mag', true, getDoc(doc(as('trainerB'), 'logs/lB1')));
+await t('trainer studio B leest eigen workout → mag', true, getDoc(doc(as('trainerB'), 'workouts/wB1')));
+await t('sporter studio B leest ranglijst eigen studio → mag', true, getDoc(doc(as('sporterB'), 'leaderboardPublic/sporterB')));
+await t('beheerder studio B leest eigen studio → mag', true, getDoc(doc(as('adminB'), 'orgs/studiob')));
+await t('beheerder studio B leest andere studio → geweigerd', false, getDoc(doc(as('adminB'), 'orgs/vanas')));
+await t('trainer studio B maakt workout in eigen studio → mag', true, setDoc(doc(as('trainerB'), 'workouts/wB2'), { orgId: 'studiob', trainerId: 'trainerB', name: 'ok' }));
 
 await env.cleanup();
 console.log(`\n${passed} geslaagd, ${failed} mislukt`);

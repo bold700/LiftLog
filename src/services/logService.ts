@@ -13,6 +13,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
+import { requireOrgId } from './orgContext';
 import type { ExerciseLog } from '../types';
 
 const COLLECTION = 'logs';
@@ -53,6 +54,7 @@ export async function saveExerciseLog(
   const full: ExerciseLog = {
     ...log,
     id,
+    orgId: log.orgId || requireOrgId(),
     createdAt: log.createdAt ?? new Date().toISOString(),
   };
   // Firestore accepteert geen undefined

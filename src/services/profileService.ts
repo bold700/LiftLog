@@ -18,6 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
 import type { Profile, ProfileRole, LeaderboardVisibility } from '../types';
+import { DEFAULT_ORG_ID, orgIdOf, requireOrgId } from './orgContext';
 
 const COLLECTION = 'profiles';
 
@@ -45,6 +46,7 @@ function toProfile(data: Record<string, unknown>, userId: string): Profile {
     rawVis === 'anonymous' || rawVis === 'named' || rawVis === 'hidden' ? rawVis : 'named';
   return {
     userId,
+    orgId: orgIdOf(data.orgId),
     role: role as ProfileRole,
     email: toStr(data.email),
     displayName: toStr(data.displayName),
@@ -69,13 +71,16 @@ export async function createProfile(
   role: ProfileRole,
   email: string | null,
   displayName?: string | null,
-  trainerRequested?: boolean
+  trainerRequested?: boolean,
+  /** Studio waar dit account bij hoort. Standaard de studio voor zelfregistratie. */
+  orgId: string = DEFAULT_ORG_ID
 ): Promise<Profile> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
   const normalizedEmail = email?.trim().toLowerCase() ?? null;
   const now = new Date().toISOString();
   const profile: Profile = {
     userId,
+    orgId,
     role,
     email: normalizedEmail,
     displayName: displayName ?? null,
@@ -142,6 +147,7 @@ export async function getSportersByTrainerId(trainerId: string): Promise<Profile
   if (!isFirebaseConfigured() || !db) return [];
   const q = query(
     collection(db, COLLECTION),
+    where('orgId', '==', requireOrgId()),
     where('trainerId', '==', trainerId)
   );
   const snap = await getDocs(q);
@@ -153,6 +159,7 @@ export async function getAllSporters(): Promise<Profile[]> {
   if (!isFirebaseConfigured() || !db) return [];
   const q = query(
     collection(db, COLLECTION),
+    where('orgId', '==', requireOrgId()),
     where('role', '==', 'sporter')
   );
   const snap = await getDocs(q);
@@ -173,6 +180,7 @@ export async function getProfileByEmail(email: string): Promise<Profile | null> 
   if (!normalized) return null;
   const q = query(
     collection(db, COLLECTION),
+    where('orgId', '==', requireOrgId()),
     where('email', '==', normalized)
   );
   const snap = await getDocs(q);
@@ -185,10 +193,11 @@ export async function assignTrainerToSporter(sporterUserId: string, trainerId: s
   return updateProfile(sporterUserId, { trainerId });
 }
 
-/** Alle profielen (voor trainers en beheerders; vereist Firestore-read op collectie). */
+/** Alle profielen binnen de eigen studio (voor trainers en beheerders). */
 export async function getAllProfiles(): Promise<Profile[]> {
   if (!isFirebaseConfigured() || !db) return [];
-  const snap = await getDocs(collection(db, COLLECTION));
+  const q = query(collection(db, COLLECTION), where('orgId', '==', requireOrgId()));
+  const snap = await getDocs(q);
   return snap.docs.map((d) => toProfile(d.data(), d.id));
 }
 
@@ -197,6 +206,7 @@ export async function getProfilesWithTrainerRequest(): Promise<Profile[]> {
   if (!isFirebaseConfigured() || !db) return [];
   const q = query(
     collection(db, COLLECTION),
+    where('orgId', '==', requireOrgId()),
     where('trainerRequested', '==', true)
   );
   const snap = await getDocs(q);

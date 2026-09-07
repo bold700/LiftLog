@@ -27,6 +27,7 @@ import {
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured, firebaseConfig } from '../firebase/config';
 import { createProfile, deleteProfile } from '../services/profileService';
+import { getCurrentOrgId, requireOrgId } from '../services/orgContext';
 import type { ProfileRole } from '../types';
 
 type AuthState = {
@@ -132,10 +133,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (isFirebaseConfigured()) {
         try {
           const name = (displayName?.trim() || cred.user.displayName) ?? null;
+          // Zelfregistratie komt in de studio voor open aanmelding terecht (zie orgContext).
+          const signupOrgId = getCurrentOrgId() ?? undefined;
           if (role === 'trainer') {
-            await createProfile(cred.user.uid, 'sporter', cred.user.email ?? email, name, true);
+            await createProfile(cred.user.uid, 'sporter', cred.user.email ?? email, name, true, signupOrgId);
           } else {
-            await createProfile(cred.user.uid, role, cred.user.email ?? email, name);
+            await createProfile(cred.user.uid, role, cred.user.email ?? email, name, false, signupOrgId);
           }
         } catch (profileErr) {
           // Account bestaat al in Auth; profiel wordt bij eerste laden alsnog aangemaakt door ProfileContext
@@ -172,6 +175,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!db) throw new Error('Firebase niet geconfigureerd');
         await setDoc(doc(db, 'profiles', uid), {
           userId: uid,
+          // Nieuw account hoort bij de studio van de beheerder die het aanmaakt.
+          orgId: requireOrgId(),
           role,
           email: (cred.user.email ?? email).trim().toLowerCase(),
           displayName: name,

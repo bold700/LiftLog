@@ -15,6 +15,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
+import { requireOrgId } from './orgContext';
 import { apiUrl } from '../utils/apiOrigin';
 import { authHeaders } from '../utils/authHeaders';
 
@@ -30,6 +31,8 @@ export interface FoodProduct {
 }
 
 export interface NutritionLog {
+  /** Studio waar dit document bij hoort (multi-tenant). */
+  orgId?: string;
   id: string;
   userId: string;
   loggedBy: string;
@@ -246,7 +249,12 @@ export async function saveNutritionLog(
 ): Promise<NutritionLog> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
   const id = logInput.id ?? newId();
-  const full: NutritionLog = { ...logInput, id, createdAt: logInput.createdAt ?? new Date().toISOString() };
+  const full: NutritionLog = {
+    ...logInput,
+    id,
+    orgId: logInput.orgId || requireOrgId(),
+    createdAt: logInput.createdAt ?? new Date().toISOString(),
+  };
   await setDoc(doc(db, COLLECTION, id), { ...full, updatedAt: serverTimestamp() }, { merge: true });
   return full;
 }
@@ -262,6 +270,7 @@ function toLog(data: Record<string, unknown>, id: string): NutritionLog {
     userId: String(data.userId ?? ''),
     loggedBy: String(data.loggedBy ?? ''),
     trainerId: data.trainerId != null ? String(data.trainerId) : null,
+    orgId: typeof data.orgId === 'string' ? data.orgId : undefined,
     date: String(data.date ?? ''),
     productName: String(data.productName ?? ''),
     brand: String(data.brand ?? ''),

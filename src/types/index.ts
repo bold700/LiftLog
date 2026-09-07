@@ -24,6 +24,8 @@ export interface Workout {
  */
 export interface ExerciseLog {
   id: string;
+  /** Studio waar deze log bij hoort. */
+  orgId?: string;
   /** Voor wie de log is (de sporter/deelnemer). */
   userId: string;
   /** Wie de log invoerde: trainer-uid of de sporter zelf. */
@@ -50,6 +52,8 @@ export interface ExerciseLog {
  */
 export interface GroupSession {
   id: string;
+  /** Studio waar deze sessie bij hoort. */
+  orgId?: string;
   trainerId: string;
   schemaId: string;
   schemaName: string;
@@ -224,8 +228,29 @@ export interface NutritionGoal {
   fat: number;
 }
 
+/**
+ * Een studio (organisatie). Alle gegevens van een studio zijn strikt gescheiden van andere studio's:
+ * elk document draagt een `orgId` en de Firestore-regels dwingen af dat je alleen je eigen studio ziet.
+ */
+export interface Org {
+  id: string;
+  /** Weergavenaam, bijv. "Van As Personal Training". */
+  name: string;
+  /** Uid van de eigenaar (rol `admin` binnen deze studio). */
+  ownerId: string | null;
+  /**
+   * True wanneer iemand zich zelf mag registreren en dan in deze studio terechtkomt.
+   * Staat dit uit, dan kunnen accounts alleen door een beheerder worden aangemaakt.
+   */
+  allowSelfSignup: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Profile {
   userId: string;
+  /** Studio waar dit account bij hoort. Ontbreekt bij data van vóór de multi-tenant migratie. */
+  orgId: string;
   role: ProfileRole;
   email: string | null;
   displayName: string | null;
@@ -269,6 +294,8 @@ export type SchemaAudience = 'single' | 'multiple' | 'open' | 'group';
 export interface Schema {
   id: string;
   name: string;
+  /** Studio waar dit schema bij hoort. */
+  orgId?: string;
   trainerId: string;
   clientId: string | null;
   /** Type/doelgroep van de workout. Ontbreekt = legacy 'single'. */

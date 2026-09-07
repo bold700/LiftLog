@@ -8,34 +8,45 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { buildServer } from '../api/_lib/mcpServer.mjs';
 
+// Studio A is Van As; studio B is een tweede klant op hetzelfde systeem.
 const profiles = {
-  sporter:  { userId: 'u1', role: 'sporter', email: 'danny@x.nl',  displayName: 'Danny',  trainerId: 't1' },
-  ander:    { userId: 'u2', role: 'sporter', email: 'margot@x.nl', displayName: 'Margot', trainerId: 't2' },
-  trainer:  { userId: 't1', role: 'trainer', email: 'kenny@x.nl',  displayName: 'Kenny',  trainerId: null },
-  trainer2: { userId: 't2', role: 'trainer', email: 'ander@x.nl',  displayName: 'Ander',  trainerId: null },
-  admin:    { userId: 'a1', role: 'admin',   email: 'kenny@bold.nl', displayName: 'Kenny Timmer', trainerId: null },
+  sporter:  { userId: 'u1', orgId: 'vanas', role: 'sporter', email: 'danny@x.nl',  displayName: 'Danny',  trainerId: 't1' },
+  ander:    { userId: 'u2', orgId: 'vanas', role: 'sporter', email: 'margot@x.nl', displayName: 'Margot', trainerId: 't2' },
+  trainer:  { userId: 't1', orgId: 'vanas', role: 'trainer', email: 'kenny@x.nl',  displayName: 'Kenny',  trainerId: null },
+  trainer2: { userId: 't2', orgId: 'vanas', role: 'trainer', email: 'ander@x.nl',  displayName: 'Ander',  trainerId: null },
+  admin:    { userId: 'a1', orgId: 'vanas', role: 'admin',   email: 'kenny@bold.nl', displayName: 'Kenny Timmer', trainerId: null },
+  adminB:   { userId: 'b1', orgId: 'studiob', role: 'admin',   email: 'nora@studiob.nl', displayName: 'Nora', trainerId: null },
+  sporterB: { userId: 'b2', orgId: 'studiob', role: 'sporter', email: 'iris@studiob.nl', displayName: 'Iris', trainerId: 'b1' },
 };
-const store = {
-  getProfile: async (id) => Object.values(profiles).find((p) => p.userId === id) ?? null,
-  getAllProfiles: async () => Object.values(profiles),
-  getSchemasForUser: async () => [],
-  saveSchema: async (sc) => ({ ...sc, id: 'schema_nieuw', createdAt: new Date().toISOString() }),
-  assignSchema: async () => {},
-  createAccount: async (a) => ({ userId: 'u_nieuw', email: a.email, password: 'GeheimTest1' }),
-  updateProfileFields: async (uid, f) => { Object.assign(profiles.u1 ?? {}, {}); return f; },
-  getLogsForUser: async () => [],
-  saveLog: async (l) => l,
-  getNutritionForDay: async () => [],
-  saveNutritionLog: async (n) => n,
-  getMeasurements: async () => [],
-  saveMeasurement: async (m) => m,
-};
+
+/**
+ * Datalaag zoals `createStore` hem oplevert: begrensd tot één studio.
+ * Zo test deze rooktest dezelfde grens als de echte server.
+ */
+function makeStore(orgId) {
+  const inOrg = () => Object.values(profiles).filter((p) => p.orgId === orgId);
+  return {
+    getProfile: async (id) => Object.values(profiles).find((p) => p.userId === id) ?? null,
+    getAllProfiles: async () => inOrg(),
+    getSchemasForUser: async () => [],
+    saveSchema: async (sc) => ({ ...sc, id: 'schema_nieuw', orgId, createdAt: new Date().toISOString() }),
+    assignSchema: async () => {},
+    createAccount: async (a) => ({ userId: 'u_nieuw', email: a.email, password: 'GeheimTest1' }),
+    updateProfileFields: async (uid, f) => f,
+    getLogsForUser: async () => [],
+    saveLog: async (l) => l,
+    getNutritionForDay: async () => [],
+    saveNutritionLog: async (n) => n,
+    getMeasurements: async () => [],
+    saveMeasurement: async (m) => m,
+  };
+}
 
 async function connect(who) {
   const srv = http.createServer(async (req, res) => {
     let raw = ''; for await (const c of req) raw += c;
     req.body = raw ? JSON.parse(raw) : undefined;
-    const server = buildServer({ profile: profiles[who] }, store);
+    const server = buildServer({ profile: profiles[who] }, makeStore(profiles[who].orgId));
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on('close', () => { transport.close(); server.close(); });
     await server.connect(transport);
@@ -90,6 +101,31 @@ const check = (label, ok, detail = '') => {
   check('beheerder kan elke sporter opvragen', !r.isError && r.content[0].text.includes('Margot'));
   const list = await client.callTool({ name: 'list_athletes', arguments: {} });
   check('beheerder ziet alle sporters', list.content[0].text.includes('Danny') && list.content[0].text.includes('Margot'));
+  await client.close(); close();
+}
+
+// --- Studio-isolatie: een beheerder van studio B mag niets van studio A ---
+{
+  const { client, close } = await connect('adminB');
+  const r = await client.callTool({ name: 'get_profile', arguments: { athlete: 'danny' } });
+  check('beheerder studio B kan sporter van studio A NIET opvragen', r.isError === true, (r.content[0].text || '').replace(/\s+/g, ' ').slice(0, 70));
+  const list = await client.callTool({ name: 'list_athletes', arguments: {} });
+  const listText = list.content[0].text;
+  check('beheerder studio B ziet GEEN sporters van studio A', !listText.includes('Danny') && !listText.includes('Margot'), listText.replace(/\s+/g, ' ').slice(0, 90));
+  check('beheerder studio B ziet wel de eigen sporter', listText.includes('Iris'));
+  const mk = await client.callTool({ name: 'create_workout', arguments: { name: 'Test', athlete: 'danny', days: [{ dayLabel: 'A', exercises: [{ name: 'Squat', sets: 3, reps: 10 }] }] } });
+  check('beheerder studio B maakt GEEN workout voor sporter van studio A', mk.isError === true);
+  const log = await client.callTool({ name: 'log_exercise', arguments: { athlete: 'danny', exercise: 'squat', sets: 3 } });
+  check('beheerder studio B logt NIET op naam van sporter uit studio A', log.isError === true);
+  await client.close(); close();
+}
+// --- Andersom: beheerder van studio A ziet studio B niet ---
+{
+  const { client, close } = await connect('admin');
+  const r = await client.callTool({ name: 'get_profile', arguments: { athlete: 'iris' } });
+  check('beheerder studio A kan sporter van studio B NIET opvragen', r.isError === true, (r.content[0].text || '').replace(/\s+/g, ' ').slice(0, 70));
+  const list = await client.callTool({ name: 'list_athletes', arguments: {} });
+  check('beheerder studio A ziet GEEN sporters van studio B', !list.content[0].text.includes('Iris'));
   await client.close(); close();
 }
 
