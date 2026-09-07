@@ -358,15 +358,16 @@ interface ExerciseLayout {
   extraSetsNote: string | null;
   detail: string | null;
   noteLines: string[];
-  hasImage: boolean;
   textX: number;
   textW: number;
   height: number;
   headH: number;
 }
 
-function measureExercise(doc: jsPDF, ex: SchemaExercise, hasImage: boolean): ExerciseLayout {
-  const textX = MARGIN_X + BLOCK_PAD + (hasImage ? IMAGE_SIZE + 3 : 0);
+function measureExercise(doc: jsPDF, ex: SchemaExercise): ExerciseLayout {
+  // De plaatjeskolom is er altijd, ook zonder afbeelding: anders schuift de tekst
+  // per oefening op en lopen de setrijen en kolommen niet meer gelijk.
+  const textX = MARGIN_X + BLOCK_PAD + IMAGE_SIZE + 3;
   const textW = SESSION_X - textX - 2;
   setText(doc, INK, 10.5, 'bold');
   const nameLines = wrap(doc, ex.exerciseName || 'Oefening', textW);
@@ -383,7 +384,7 @@ function measureExercise(doc: jsPDF, ex: SchemaExercise, hasImage: boolean): Exe
   const setsH = setRows * SET_ROW_H;
   const detailH = detail ? lineHeight(8.5) + 0.5 : 0;
   const leftH = headH + setsH + detailH;
-  const bodyH = Math.max(leftH, hasImage ? IMAGE_SIZE + 1 : 0);
+  const bodyH = Math.max(leftH, IMAGE_SIZE + 1);
   const notesH = noteLines.length ? noteLines.length * lineHeight(8.5) + 2 : 0;
   return {
     nameLines,
@@ -392,7 +393,6 @@ function measureExercise(doc: jsPDF, ex: SchemaExercise, hasImage: boolean): Exe
     extraSetsNote,
     detail,
     noteLines,
-    hasImage,
     textX,
     textW,
     headH,
@@ -410,13 +410,20 @@ function drawExercise(w: PdfWriter, ex: SchemaExercise, layout: ExerciseLayout, 
   setFill(doc, [255, 255, 255]);
   doc.roundedRect(MARGIN_X, top, CONTENT_W, height, 1.5, 1.5, 'FD');
 
-  // Plaatje
+  // Plaatje, of een leeg vakje van dezelfde maat zodat de uitlijning klopt.
+  let imageDrawn = false;
   if (image) {
     try {
       doc.addImage(image, 'PNG', MARGIN_X + BLOCK_PAD, top + BLOCK_PAD, IMAGE_SIZE, IMAGE_SIZE, undefined, 'FAST');
+      imageDrawn = true;
     } catch {
-      // Plaatje overslaan als jsPDF het niet kan lezen.
+      // Plaatje overslaan als jsPDF het niet kan lezen; het lege vakje vangt dit op.
     }
+  }
+  if (!imageDrawn) {
+    setLine(doc, LINE_SOFT);
+    setFill(doc, FILL_SOFT);
+    doc.roundedRect(MARGIN_X + BLOCK_PAD, top + BLOCK_PAD, IMAGE_SIZE, IMAGE_SIZE, 1, 1, 'FD');
   }
 
   // Naam + spiergroepen
@@ -481,7 +488,7 @@ function drawDay(w: PdfWriter, day: SchemaDay, dayIndex: number, dayCount: numbe
   const headerH = 8.5 + 2 + 7.5 + 2;
   // Dagkop nooit onderaan een pagina zonder minstens één blok eronder.
   const firstLayout = day.exercises[0]
-    ? measureExercise(doc, day.exercises[0], images.has(day.exercises[0].exerciseName.trim()))
+    ? measureExercise(doc, day.exercises[0])
     : null;
   w.ensure(headerH + (firstLayout ? Math.min(firstLayout.height, 60) : 12));
   drawDayHeader(w, day, dayIndex, dayCount, false);
@@ -522,7 +529,7 @@ function drawDay(w: PdfWriter, day: SchemaDay, dayIndex: number, dayCount: numbe
   day.exercises.forEach((ex, i) => {
     const name = ex.exerciseName?.trim() ?? '';
     const image = images.get(name) ?? null;
-    const layout = i === 0 && firstLayout ? firstLayout : measureExercise(doc, ex, Boolean(image));
+    const layout = i === 0 && firstLayout ? firstLayout : measureExercise(doc, ex);
     if (w.ensure(layout.height)) drawDayHeader(w, day, dayIndex, dayCount, true);
     drawExercise(w, ex, layout, image);
   });
