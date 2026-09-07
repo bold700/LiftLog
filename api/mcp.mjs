@@ -31,7 +31,10 @@ function keyFromRequest(req) {
 export default async function handler(req, res) {
   if (applyCors(req, res)) return;
   const admin = getAdmin();
-  if (admin.error) return json(res, 500, { error: admin.error });
+  if (admin.error) {
+    console.error('[mcp] Firebase Admin niet beschikbaar:', admin.error);
+    return json(res, 500, { error: 'Serverconfiguratie onvolledig. Neem contact op met de beheerder.' });
+  }
 
   const key = keyFromRequest(req);
   if (!key || key.length < 20) return json(res, 401, { error: 'Koppelsleutel ontbreekt. Maak er een aan in LiftLog onder Profiel.' });

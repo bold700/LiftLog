@@ -24,9 +24,9 @@ import {
   sendEmailVerification,
   type User,
 } from 'firebase/auth';
-import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, isFirebaseConfigured, firebaseConfig } from '../firebase/config';
-import { createProfile, deleteProfile, updateProfile } from '../services/profileService';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db, isFirebaseConfigured, firebaseConfig } from '../firebase/config';
+import { createProfile, deleteProfile } from '../services/profileService';
 import type { ProfileRole } from '../types';
 
 type AuthState = {
@@ -157,7 +157,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const secondary = initializeApp(firebaseConfig, `admin-create-${Date.now()}`);
       try {
         const secAuth = getAuth(secondary);
-        const secDb = getFirestore(secondary);
         let cred;
         try {
           cred = await createUserWithEmailAndPassword(secAuth, email.trim(), password);
@@ -166,10 +165,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         const uid = cred.user.uid;
         const name = displayName?.trim() || null;
-        // Profiel schrijven terwijl we als de nieuwe user zijn ingelogd (uid == doc): geen extra Firestore-rule nodig.
-        await setDoc(doc(secDb, 'profiles', uid), {
+        // Geen verificatiemail: account is meteen bruikbaar.
+        await firebaseSignOut(secAuth);
+        // Profiel schrijven met de beheerderssessie: alleen een beheerder mag een profiel met een rol
+        // en de verificatie-bypass aanmaken (Firestore-regels).
+        if (!db) throw new Error('Firebase niet geconfigureerd');
+        await setDoc(doc(db, 'profiles', uid), {
           userId: uid,
-          role: 'sporter',
+          role,
           email: (cred.user.email ?? email).trim().toLowerCase(),
           displayName: name,
           trainerId,
@@ -180,12 +183,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
-        // Geen verificatiemail: account is meteen bruikbaar.
-        await firebaseSignOut(secAuth);
-        // Trainer-rol zetten via de admin-sessie (bestaand, toegestaan pad).
-        if (role === 'trainer') {
-          await updateProfile(uid, { role: 'trainer' }).catch(() => {});
-        }
         return { uid, email: cred.user.email ?? email };
       } finally {
         await deleteApp(secondary).catch(() => {});

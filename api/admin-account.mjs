@@ -47,7 +47,8 @@ export default async function handler(req, res) {
   }
   const admin = getAdmin();
   if (admin.error) {
-    return json(res, 500, { error: admin.error });
+    console.error('[admin-account] Firebase Admin niet beschikbaar:', admin.error);
+    return json(res, 500, { error: 'Serverconfiguratie onvolledig. Neem contact op met de beheerder.' });
   }
   const { auth, db } = admin;
 

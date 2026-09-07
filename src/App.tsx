@@ -28,7 +28,6 @@ import { INZICHTEN_SUB } from './components/InzichtenPage';
 import { LoginPage } from './components/LoginPage';
 import { VerifyEmailScreen } from './components/VerifyEmailScreen';
 import { isFirebaseConfigured } from './firebase/config';
-import { updateProfile } from './services/profileService';
 import './styles/material-web-theme.css';
 import './styles/animations.css';
 
@@ -54,20 +53,6 @@ function AppContent() {
   const role = (profile?.profile?.role ?? profile?.role ?? 'sporter') as 'sporter' | 'trainer' | 'admin';
   const isAdmin = role === 'admin';
   const isTrainer = role === 'trainer' || isAdmin;
-  const [approvingSelf, setApprovingSelf] = useState(false);
-
-  const handleSelfApproveTrainer = useCallback(async () => {
-    const uid = auth?.user?.uid ?? profile?.profile?.userId;
-    if (!uid || !profile) return;
-    setApprovingSelf(true);
-    try {
-      await updateProfile(uid, { role: 'trainer', trainerRequested: false });
-      await profile.refreshProfile();
-    } finally {
-      setApprovingSelf(false);
-    }
-  }, [auth?.user?.uid, profile]);
-
   const openAdd = useCallback(() => setAddOpen(true), []);
   const closeAdd = useCallback(() => setAddOpen(false), []);
   const switchToSchemasTab = useCallback(() => setActiveTab(TAB_SCHEMAS), []);
@@ -250,23 +235,12 @@ function AppContent() {
                 sx={{ mb: 2 }}
                 icon={false}
                 action={
-                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      color="inherit"
-                      onClick={handleSelfApproveTrainer}
-                      disabled={approvingSelf}
-                    >
-                      {approvingSelf ? 'Bezig…' : 'Direct trainerrechten'}
-                    </Button>
-                    <Button color="inherit" size="small" onClick={() => profile?.refreshProfile()}>
-                      Vernieuwen
-                    </Button>
-                  </Box>
+                  <Button color="inherit" size="small" onClick={() => profile?.refreshProfile()}>
+                    Vernieuwen
+                  </Button>
                 }
               >
-                <strong>Je trainer-aanvraag wacht op goedkeuring.</strong> Geen beheerder? Klik op <strong>Direct trainerrechten</strong> om jezelf nu trainer te maken.
+                <strong>Je trainer-aanvraag wacht op goedkeuring.</strong> Een beheerder keurt de aanvraag goed onder Beheer.
               </Alert>
             )}
             {renderPage()}

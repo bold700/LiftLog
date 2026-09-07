@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { apiUrl } from '../utils/apiOrigin';
+import { authHeaders } from '../utils/authHeaders';
 
 export interface FoodProduct {
   code: string;
@@ -215,7 +216,7 @@ export interface RecognizedFood {
 export async function recognizeFoodPhoto(image: string): Promise<RecognizedFood[]> {
   const res = await fetch(apiUrl('/api/food-photo'), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await authHeaders(),
     body: JSON.stringify({ image }),
   });
   const data = await res.json().catch(() => null);
