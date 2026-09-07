@@ -8,23 +8,9 @@ import {
   AccordionSummary,
   AccordionDetails,
   Button,
-  IconButton,
-  CircularProgress,
-  LinearProgress,
-  List,
-  ListItem,
-  ListItemText,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import EditRoundedIcon from '@mui/icons-material/EditRounded';
-import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
-import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
-import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
-import { PageLayout, ContentCard, OutlineCard } from './layout';
+import { PageLayout, ContentCard } from './layout';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
 import { updateProfile } from '../services/profileService';
@@ -51,17 +37,17 @@ import {
 } from '../services/progressPhotoService';
 import { ageOnDate, bodyFatDurninWomersley, toSkinfoldSex, DW_MIN_AGE, fatFreeMassKg, bmi } from '../utils/bodyFat';
 import { todayIso } from '../utils/format';
+import { PRIMARY_BUTTON_SX } from './metingen/styles';
+import { MeasurementOverview } from './metingen/MeasurementOverview';
+import { PhotoProgressPanel } from './metingen/PhotoProgressPanel';
+import { SporterProfileFix } from './metingen/SporterProfileFix';
+import { ProgressPhotoSlots, type PhotoSlot } from './metingen/ProgressPhotoSlots';
+import { MeasurementHistory } from './metingen/MeasurementHistory';
+import { WeightGoalDialog } from './metingen/WeightGoalDialog';
 
 const EMPTY_CIRC = Object.fromEntries(CIRCUMFERENCE_FIELDS.map((f) => [f.key, ''])) as Record<CircumferenceKey, string>;
 const EMPTY_SKIN = Object.fromEntries(SKINFOLD_FIELDS.map((f) => [f.key, ''])) as Record<SkinfoldKey, string>;
 
-/** Per aanzicht: bestaande URL (uit de meting), nieuw gekozen bestand, en of de bestaande foto weg moet. */
-interface PhotoSlot {
-  existingUrl: string | null;
-  file: File | null;
-  previewUrl: string | null;
-  remove: boolean;
-}
 const EMPTY_PHOTO: PhotoSlot = { existingUrl: null, file: null, previewUrl: null, remove: false };
 const EMPTY_PHOTOS = Object.fromEntries(PHOTO_VIEWS.map((v) => [v.view, EMPTY_PHOTO])) as Record<PhotoView, PhotoSlot>;
 
@@ -78,12 +64,6 @@ const ACCORDION_SX = {
   '& .MuiAccordionSummary-content': { my: 0.75, minWidth: 0 },
 } as const;
 
-/** Omkaderd blok binnen de hoofdcard (statistieken, grafieken, foto's): compacte padding, kleine onderrand. */
-const PANEL_SX = {
-  mb: 2,
-  '& .MuiCardContent-root': { p: 2, '&:last-child': { pb: 2 } },
-} as const;
-
 /** Twee kolommen op tablet/desktop, één op mobiel (invoervelden). */
 const FIELD_GRID_SX = {
   display: 'grid',
@@ -91,74 +71,7 @@ const FIELD_GRID_SX = {
   gap: 1.5,
 } as const;
 
-/** Zwarte primaire knop, zelfde look als de andere pagina's. */
-const PRIMARY_BUTTON_SX = {
-  bgcolor: '#000',
-  color: '#F2E4D3',
-  borderRadius: '24px',
-  textTransform: 'none',
-  fontWeight: 600,
-  '&:hover': { bgcolor: '#1a1a1a' },
-  '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.12)', color: 'rgba(29,27,26,0.38)' },
-} as const;
-
-/** Staande foto (3:4), afgerond, passend bijgesneden. */
-const PHOTO_IMG_SX = {
-  aspectRatio: '3 / 4',
-  width: '100%',
-  borderRadius: 2,
-  bgcolor: 'rgba(0,0,0,0.06)',
-  objectFit: 'cover',
-  display: 'block',
-} as const;
-
 type SectionKey = 'circ' | 'skin' | 'photos';
-
-
-interface TrendPoint {
-  id: string;
-  date: string;
-  value: number;
-}
-
-/** Lijngrafiek (viewBox = echte pixelbreedte, geen vervorming). Optionele stippellijn voor een doel. */
-function TrendChart({ points, unit, goal }: { points: TrendPoint[]; unit: string; goal?: number | null }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [width, setWidth] = useState(320);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width;
-      if (w && w > 0) setWidth(Math.round(w));
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const pts = points.slice(-20);
-  const CH = 130;
-  const pad = 14;
-  const values = pts.map((p) => p.value);
-  const min = Math.min(...values, goal ?? Infinity);
-  const max = Math.max(...values, goal ?? -Infinity);
-  const range = max - min || 1;
-  const cx = (i: number) => (pts.length > 1 ? (i * (width - 2 * pad)) / (pts.length - 1) : (width - 2 * pad) / 2) + pad;
-  const cy = (v: number) => CH - pad - ((v - min) / range) * (CH - 2 * pad);
-  const line = pts.map((p, i) => `${cx(i)},${cy(p.value)}`).join(' ');
-  return (
-    <Box ref={ref} sx={{ width: '100%', color: 'primary.main' }}>
-      <svg viewBox={`0 0 ${width} ${CH}`} style={{ display: 'block', height: CH, width: '100%' }}>
-        {goal != null && <line x1={0} y1={cy(goal)} x2={width} y2={cy(goal)} stroke="#9e9e9e" strokeWidth={1} strokeDasharray="4 4" />}
-        <polyline points={line} fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-        {pts.map((p, i) => (
-          <circle key={p.id} cx={cx(i)} cy={cy(p.value)} r={3} fill="currentColor">
-            <title>{`${p.date}: ${p.value} ${unit}`}</title>
-          </circle>
-        ))}
-      </svg>
-    </Box>
-  );
-}
 
 export function MetingenPage() {
   const profileCtx = useProfile();
@@ -188,10 +101,6 @@ export function MetingenPage() {
   const [saving, setSaving] = useState(false);
   const [goalOpen, setGoalOpen] = useState(false);
   const [goalInput, setGoalInput] = useState('');
-  // Trainer vult geboortedatum/geslacht van de gekozen sporter in als die ontbreken (anders wachten op de sporter).
-  const [fixBirth, setFixBirth] = useState('');
-  const [fixGender, setFixGender] = useState<'man' | 'vrouw' | 'anders' | ''>('');
-  const [savingFix, setSavingFix] = useState(false);
 
   const effectiveUserId = targetId || selfUid;
   const targetProfile = targetId ? sporters.find((s) => s.userId === targetId) ?? null : profileCtx?.profile ?? null;
@@ -301,24 +210,6 @@ export function MetingenPage() {
   const profileIncomplete = !!targetProfile && (!targetProfile.birthDate || !targetProfile.gender);
   const canFixProfile = isTrainer && !!targetId && profileIncomplete;
 
-  useEffect(() => {
-    setFixBirth(targetProfile?.birthDate ?? '');
-    setFixGender(targetProfile?.gender ?? '');
-  }, [targetProfile?.userId, targetProfile?.birthDate, targetProfile?.gender]);
-
-  const handleFixProfile = async () => {
-    if (!targetId) return;
-    setSavingFix(true);
-    try {
-      await updateProfile(targetId, { birthDate: fixBirth || null, gender: fixGender || null });
-      await profileCtx?.refreshProfile();
-    } catch {
-      /* ignore */
-    } finally {
-      setSavingFix(false);
-    }
-  };
-
   const handleSave = async () => {
     if (!effectiveUserId) return;
     const w = weight.trim() !== '' ? Number(weight) : null;
@@ -418,59 +309,7 @@ export function MetingenPage() {
     await load();
   };
 
-  const weightPoints = useMemo(
-    () => items.filter((m) => m.weightKg != null).map((m) => ({ id: m.id, date: m.date, value: m.weightKg as number })),
-    [items]
-  );
-  const latestWeight = weightPoints.length ? weightPoints[weightPoints.length - 1].value : null;
-  const firstWeight = weightPoints.length ? weightPoints[0].value : null;
-  const weightDelta = latestWeight != null && firstWeight != null ? Math.round((latestWeight - firstWeight) * 10) / 10 : null;
-  const bfPoints = items.filter((m) => m.bodyFatPct != null);
-  const latestBf = bfPoints.length ? bfPoints[bfPoints.length - 1] : null;
-  const skinPoints = useMemo(
-    () =>
-      items
-        .map((m) => ({ id: m.id, date: m.date, value: skinfoldSum(m) }))
-        .filter((p): p is TrendPoint => p.value != null),
-    [items]
-  );
-  /** Per aanzicht: eerste en laatste foto (items zijn oud → nieuw gesorteerd). */
-  const photoProgress = useMemo(
-    () =>
-      PHOTO_VIEWS.map((v) => {
-        const withPhoto = items.filter((m) => m[v.key] != null);
-        const first = withPhoto[0] ?? null;
-        const last = withPhoto.length > 1 ? withPhoto[withPhoto.length - 1] : null;
-        return { ...v, first, last, count: withPhoto.length };
-      }).filter((p) => p.first != null),
-    [items]
-  );
-  const latestSkin = skinPoints.length ? skinPoints[skinPoints.length - 1].value : null;
-  // Vetvrije massa uit de laatste meting die gewicht én vetpercentage heeft; BMI uit laatste gewicht + lengte (profiel).
-  const latestWithBoth = [...items].reverse().find((m) => m.weightKg != null && m.bodyFatPct != null) ?? null;
-  const latestFfm = latestWithBoth ? fatFreeMassKg(latestWithBoth.weightKg as number, latestWithBoth.bodyFatPct as number) : null;
-  const firstWithBoth = items.find((m) => m.weightKg != null && m.bodyFatPct != null) ?? null;
-  const firstFfm = firstWithBoth ? fatFreeMassKg(firstWithBoth.weightKg as number, firstWithBoth.bodyFatPct as number) : null;
-  const ffmDelta = latestFfm != null && firstFfm != null && latestWithBoth !== firstWithBoth ? Math.round((latestFfm - firstFfm) * 10) / 10 : null;
-  const latestBmi = latestWeight != null ? bmi(latestWeight, targetProfile?.heightCm) : null;
-  const firstSkin = skinPoints.length ? skinPoints[0].value : null;
-  const skinDelta = latestSkin != null && firstSkin != null ? Math.round((latestSkin - firstSkin) * 10) / 10 : null;
-
-  const wMin = weightPoints.length ? Math.min(...weightPoints.map((p) => p.value)) : 0;
-  const wMax = weightPoints.length ? Math.max(...weightPoints.map((p) => p.value)) : 1;
-  const sMin = skinPoints.length ? Math.min(...skinPoints.map((p) => p.value)) : 0;
-  const sMax = skinPoints.length ? Math.max(...skinPoints.map((p) => p.value)) : 1;
-
   const goalWeight = targetId ? targetProfile?.weightGoalKg ?? null : profileCtx?.profile?.weightGoalKg ?? null;
-  const toGoal = goalWeight != null && latestWeight != null ? Math.round((latestWeight - goalWeight) * 10) / 10 : null;
-  const firstDate = weightPoints.length ? weightPoints[0].date : null;
-  const lastDate = weightPoints.length ? weightPoints[weightPoints.length - 1].date : null;
-  const spanDays = firstDate && lastDate ? Math.max(1, (Date.parse(lastDate) - Date.parse(firstDate)) / 86400000) : 0;
-  const perWeek = weightDelta != null && spanDays >= 1 ? Math.round((weightDelta / (spanDays / 7)) * 10) / 10 : null;
-  const goalProgress =
-    goalWeight != null && firstWeight != null && latestWeight != null && firstWeight !== goalWeight
-      ? Math.max(0, Math.min(100, ((firstWeight - latestWeight) / (firstWeight - goalWeight)) * 100))
-      : null;
 
   const handleSaveGoal = async () => {
     if (!effectiveUserId) return;
@@ -527,171 +366,11 @@ export function MetingenPage() {
           </TextField>
         )}
 
-        {/* Huidige waarden */}
-        <OutlineCard sx={PANEL_SX}>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: 'repeat(3, 1fr)', sm: 'repeat(5, 1fr)' },
-              columnGap: 1,
-              rowGap: 2,
-              textAlign: 'center',
-            }}
-          >
-            <Box>
-              <Typography variant="h6" fontWeight={700}>
-                {latestWeight != null ? `${latestWeight} kg` : '—'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                gewicht{weightDelta != null ? ` (${weightDelta > 0 ? '+' : ''}${weightDelta} kg)` : ''}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="h6" fontWeight={700}>
-                {latestBf?.bodyFatPct != null ? `${latestBf.bodyFatPct}%` : '—'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                vetpercentage{latestBf?.bodyFatMethod === 'durnin-womersley' ? ' (berekend)' : ''}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="h6" fontWeight={700}>
-                {latestFfm != null ? `${latestFfm} kg` : '—'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                vetvrije massa{ffmDelta != null ? ` (${ffmDelta > 0 ? '+' : ''}${ffmDelta} kg)` : ''}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="h6" fontWeight={700}>
-                {latestBmi != null ? latestBmi : '—'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                BMI
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="h6" fontWeight={700}>
-                {latestSkin != null ? `${latestSkin} mm` : '—'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                plooien{skinDelta != null ? ` (${skinDelta > 0 ? '+' : ''}${skinDelta} mm)` : ''}
-              </Typography>
-            </Box>
-          </Box>
-        </OutlineCard>
-
-        {/* Voortgang naar doel + tempo */}
-        {(goalWeight != null || perWeek != null) && (
-          <OutlineCard sx={PANEL_SX}>
-            {goalWeight != null && (
-              <>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                  <Typography variant="caption" color="text.secondary">
-                    Naar doel ({goalWeight} kg)
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {toGoal != null ? (Math.abs(toGoal) < 0.05 ? 'behaald 🎉' : `nog ${Math.abs(toGoal)} kg`) : ''}
-                  </Typography>
-                </Box>
-                {goalProgress != null && (
-                  <LinearProgress variant="determinate" value={goalProgress} sx={{ height: 8, borderRadius: 1, mb: perWeek != null ? 1 : 0 }} />
-                )}
-              </>
-            )}
-            {perWeek != null && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                Gemiddeld {perWeek > 0 ? '+' : ''}
-                {perWeek} kg per week
-              </Typography>
-            )}
-          </OutlineCard>
-        )}
-
-        {/* Gewicht-trend */}
-        {weightPoints.length >= 2 && (
-          <OutlineCard sx={PANEL_SX}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              Gewicht ({wMin}–{wMax} kg)
-            </Typography>
-            <TrendChart points={weightPoints} unit="kg" goal={goalWeight} />
-          </OutlineCard>
-        )}
-
-        {/* Huidplooi-trend: de som is betrouwbaarder dan het absolute vetpercentage */}
-        {skinPoints.length >= 2 && (
-          <OutlineCard sx={PANEL_SX}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              Som huidplooien ({sMin}–{sMax} mm)
-            </Typography>
-            <TrendChart points={skinPoints} unit="mm" />
-          </OutlineCard>
-        )}
+        {/* Huidige waarden, voortgang naar doel + tempo, gewicht- en huidplooi-trend */}
+        <MeasurementOverview items={items} goalWeight={goalWeight} heightCm={targetProfile?.heightCm} />
 
         {/* Foto-voortgang: eerste foto naast de laatste, per aanzicht */}
-        {photoProgress.length > 0 && (
-          <OutlineCard sx={PANEL_SX}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-              Foto's: eerste naast laatste
-            </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {photoProgress.map((p) => (
-                <Box key={p.view}>
-                  <Typography variant="body2" fontWeight={500} sx={{ mb: 0.75 }}>
-                    {p.label}aanzicht
-                  </Typography>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
-                    {[
-                      { m: p.first, tag: 'Eerste' },
-                      { m: p.last, tag: 'Laatste' },
-                    ].map(({ m, tag }) =>
-                      m ? (
-                        <Box
-                          key={tag}
-                          component="a"
-                          href={m[p.key] as string}
-                          target="_blank"
-                          rel="noreferrer"
-                          sx={{ display: 'block', minWidth: 0, color: 'inherit', textDecoration: 'none' }}
-                        >
-                          <Box
-                            component="img"
-                            src={m[p.key] as string}
-                            alt={`${p.label}aanzicht, ${tag.toLowerCase()} foto van ${m.date}`}
-                            loading="lazy"
-                            sx={PHOTO_IMG_SX}
-                          />
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                            {tag} · {m.date}
-                          </Typography>
-                        </Box>
-                      ) : (
-                        <Box
-                          key={tag}
-                          sx={{
-                            display: 'flex',
-                            aspectRatio: '3 / 4',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderRadius: 2,
-                            border: '1px dashed',
-                            borderColor: 'divider',
-                            p: 1,
-                            textAlign: 'center',
-                          }}
-                        >
-                          <Typography variant="caption" color="text.secondary">
-                            Nog geen tweede foto
-                          </Typography>
-                        </Box>
-                      )
-                    )}
-                  </Box>
-                </Box>
-              ))}
-            </Box>
-          </OutlineCard>
-        )}
+        <PhotoProgressPanel items={items} />
 
         {/* Invoer */}
         <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
@@ -720,34 +399,7 @@ export function MetingenPage() {
         </Box>
 
         {/* Profiel van de sporter aanvullen (alleen trainer, alleen als het ontbreekt) */}
-        {canFixProfile && (
-          <Box sx={{ mb: 1.5, p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 3 }}>
-            <Typography variant="body2" fontWeight={500} sx={{ mb: 0.5 }}>
-              Profiel aanvullen
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-              Voor het vetpercentage uit huidplooien zijn geboortedatum en geslacht van {targetProfile?.displayName?.trim() || 'deze sporter'} nodig. Je kunt ze hier direct invullen.
-            </Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 1.5 }}>
-              <TextField label="Geboortedatum" type="date" size="small" fullWidth value={fixBirth} onChange={(e) => setFixBirth(e.target.value)} InputLabelProps={{ shrink: true }} />
-              <TextField select label="Geslacht" size="small" fullWidth value={fixGender || 'none'} onChange={(e) => setFixGender(e.target.value === 'none' ? '' : (e.target.value as typeof fixGender))}>
-                <MenuItem value="none">Niet opgegeven</MenuItem>
-                <MenuItem value="man">Man</MenuItem>
-                <MenuItem value="vrouw">Vrouw</MenuItem>
-                <MenuItem value="anders">Anders</MenuItem>
-              </TextField>
-              <Button
-                variant="outlined"
-                fullWidth
-                sx={{ height: 40, borderRadius: '24px', textTransform: 'none' }}
-                onClick={handleFixProfile}
-                disabled={savingFix || (!fixBirth && !fixGender)}
-              >
-                {savingFix ? 'Bezig…' : 'Profiel opslaan'}
-              </Button>
-            </Box>
-          </Box>
-        )}
+        {canFixProfile && <SporterProfileFix targetId={targetId} targetProfile={targetProfile} />}
 
         {/* Omtrekken, huidplooien en foto's ingeklapt: optioneel, samen 16 velden. Zelfde secties als de routekaart. */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 1.5 }}>
@@ -872,90 +524,7 @@ export function MetingenPage() {
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
                 Voor, zij en achter. Zelfde plek, zelfde licht, zelfde houding: dan zie je het verschil echt.
               </Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
-                {PHOTO_VIEWS.map((v) => {
-                  const slot = photos[v.view];
-                  const shown = slot.previewUrl ?? (slot.remove ? null : slot.existingUrl);
-                  return (
-                    <Box key={v.view} sx={{ minWidth: 0 }}>
-                      <input
-                        ref={(el) => {
-                          photoInputs.current[v.view] = el;
-                        }}
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        hidden
-                        id={`photo-${v.view}`}
-                        onChange={(e) => pickPhoto(v.view, e.target.files?.[0] ?? null)}
-                      />
-                      <Typography variant="caption" fontWeight={500} sx={{ display: 'block', mb: 0.5 }}>
-                        {v.label}
-                      </Typography>
-                      {shown ? (
-                        <Box sx={{ position: 'relative' }}>
-                          <Box component="img" src={shown} alt={`${v.label}aanzicht`} sx={PHOTO_IMG_SX} />
-                          <IconButton
-                            type="button"
-                            size="small"
-                            aria-label={`${v.label}foto verwijderen`}
-                            onClick={() => clearPhoto(v.view)}
-                            sx={{
-                              position: 'absolute',
-                              top: 4,
-                              right: 4,
-                              width: 32,
-                              height: 32,
-                              bgcolor: 'background.paper',
-                              boxShadow: 1,
-                              '&:hover': { bgcolor: 'background.paper' },
-                            }}
-                          >
-                            <CloseRoundedIcon fontSize="small" />
-                          </IconButton>
-                        </Box>
-                      ) : (
-                        <Box
-                          component="label"
-                          htmlFor={`photo-${v.view}`}
-                          sx={{
-                            display: 'flex',
-                            aspectRatio: '3 / 4',
-                            cursor: 'pointer',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 0.5,
-                            borderRadius: 2,
-                            border: '1px dashed',
-                            borderColor: 'divider',
-                            color: 'text.secondary',
-                            fontSize: 12,
-                            transition: 'background-color 0.2s ease',
-                            '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' },
-                            '&:focus-within': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
-                          }}
-                        >
-                          <PhotoCameraRoundedIcon fontSize="small" />
-                          Kies foto
-                        </Box>
-                      )}
-                      {shown && (
-                        <Button
-                          type="button"
-                          variant="text"
-                          size="small"
-                          fullWidth
-                          sx={{ mt: 0.5, height: 32, fontSize: 12, textTransform: 'none' }}
-                          onClick={() => photoInputs.current[v.view]?.click()}
-                        >
-                          Vervangen
-                        </Button>
-                      )}
-                    </Box>
-                  );
-                })}
-              </Box>
+              <ProgressPhotoSlots photos={photos} inputsRef={photoInputs} onPick={pickPhoto} onClear={clearPhoto} />
             </AccordionDetails>
           </Accordion>
         </Box>
@@ -973,93 +542,10 @@ export function MetingenPage() {
         </Box>
 
         {/* Historie */}
-        <Typography variant="subtitle1" fontWeight={600} sx={{ mt: 3, mb: 1 }}>
-          Historie
-        </Typography>
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-            <CircularProgress size={20} />
-          </Box>
-        ) : items.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            Nog geen metingen.
-          </Typography>
-        ) : (
-          <List disablePadding>
-            {[...items].reverse().map((m) => {
-              const circSummary = CIRCUMFERENCE_FIELDS.filter((f) => m[f.key] != null)
-                .map((f) => `${f.label} ${m[f.key]}`)
-                .join(' · ');
-              const sum = skinfoldSum(m);
-              const skinSummary = sum != null ? `Plooien ${sum} mm` : null;
-              const photoCount = PHOTO_VIEWS.filter((v) => m[v.key] != null).length;
-              const photoSummary = photoCount > 0 ? `${photoCount} foto${photoCount === 1 ? '' : "'s"}` : null;
-              const secondary = [circSummary || null, skinSummary, photoSummary, m.note || null].filter(Boolean).join(' — ');
-              const ffm = m.weightKg != null && m.bodyFatPct != null ? fatFreeMassKg(m.weightKg, m.bodyFatPct) : null;
-              const fatLabel =
-                m.bodyFatPct != null
-                  ? `${m.bodyFatPct}%${m.bodyFatMethod === 'durnin-womersley' ? ' (berekend)' : ''}${ffm != null ? ` · VVM ${ffm} kg` : ''}`
-                  : '';
-              return (
-                <ListItem
-                  key={m.id}
-                  disableGutters
-                  divider
-                  alignItems="flex-start"
-                  sx={{ py: 1.25, pr: 10, '&:last-child': { borderBottom: 0 } }}
-                  secondaryAction={
-                    <Box sx={{ display: 'flex', gap: 0.25 }}>
-                      <IconButton size="small" sx={{ width: 32, height: 32 }} onClick={() => handleEdit(m)} aria-label="Bewerken">
-                        <EditRoundedIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton size="small" sx={{ width: 32, height: 32 }} onClick={() => handleDelete(m.id)} aria-label="Verwijderen">
-                        <DeleteOutlineRoundedIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  }
-                >
-                  <ListItemText
-                    sx={{ my: 0, minWidth: 0 }}
-                    primary={`${m.date} · ${m.weightKg != null ? `${m.weightKg} kg` : ''}${m.weightKg != null && fatLabel ? ' · ' : ''}${fatLabel}`}
-                    primaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
-                    secondary={secondary || null}
-                    secondaryTypographyProps={{ variant: 'caption', sx: { display: 'block', mt: 0.25 } }}
-                  />
-                </ListItem>
-              );
-            })}
-          </List>
-        )}
+        <MeasurementHistory loading={loading} items={items} onEdit={handleEdit} onDelete={handleDelete} />
       </ContentCard>
 
-      <Dialog open={goalOpen} onClose={() => setGoalOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ pb: 0.5 }}>Doelgewicht</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Vul je streefgewicht in. Laat leeg om geen doel te gebruiken.
-          </Typography>
-          <Box sx={{ py: 1 }}>
-            <TextField
-              label="Doelgewicht (kg)"
-              type="number"
-              size="small"
-              fullWidth
-              autoFocus
-              inputProps={{ step: 0.1, min: 0, inputMode: 'decimal' }}
-              value={goalInput}
-              onChange={(e) => setGoalInput(e.target.value)}
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button variant="text" onClick={() => setGoalOpen(false)} sx={{ textTransform: 'none' }}>
-            Annuleren
-          </Button>
-          <Button variant="contained" onClick={handleSaveGoal} sx={PRIMARY_BUTTON_SX}>
-            Opslaan
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <WeightGoalDialog open={goalOpen} value={goalInput} onChange={setGoalInput} onClose={() => setGoalOpen(false)} onSave={handleSaveGoal} />
     </PageLayout>
   );
 }
