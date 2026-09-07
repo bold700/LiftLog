@@ -31,6 +31,10 @@ const COLLECTIONS = [
   'workoutRequests',
   'leaderboardPublic',
   'messages',
+  'classes',
+  'bookings',
+  'creditAccounts',
+  'creditLedger',
   'pushTokens',
   'mcpKeys',
 ];

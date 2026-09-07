@@ -20,7 +20,8 @@ Van As Personal Training is de eerste studio en tegelijk de proeftuin.
 - **Assistent in de app**: dezelfde gereedschapskist als de AI-koppeling, maar zonder connector of ChatGPT-abonnement (`/api/assistant`).
 - **Berichten en check-ins**: contact tussen trainer en sporter bij het dossier, met een wekelijkse check-in die het gewicht meteen als meting vastlegt.
 - **Meldingen**: pushnotificaties per toestel bij een bericht, een check-in of een nieuw schema.
-- **Meerdere studio's**: elke studio is strikt gescheiden (zie [docs/STUDIOS-EN-OVERDRACHT.md](docs/STUDIOS-EN-OVERDRACHT.md)).
+- **Meerdere studio's**: elke studio is strikt gescheiden; een trainer kan bij meerdere studio's werken en wisselt bovenin (zie [docs/STUDIOS-EN-OVERDRACHT.md](docs/STUDIOS-EN-OVERDRACHT.md)).
+- **Lessen en credits**: rooster met capaciteit en wachtlijst; sporters reserveren met credits, de trainer kent ze toe. Reserveren loopt via een transactie op de server, zodat plek en saldo altijd kloppen.
 
 ## Ontwikkelen
 

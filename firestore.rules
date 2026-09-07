@@ -60,9 +60,13 @@ service cloud.firestore {
     function isTrainerOrAdmin() {
       return isSignedIn() && (myProfile().role == 'trainer' || myProfile().role == 'admin');
     }
-    /** Trainer of beheerder binnen dezelfde studio als het document. */
+    /** Trainer of beheerder binnen dezelfde studio als het bestaande document. */
     function isStaffInSameOrg() {
       return isTrainerOrAdmin() && sameOrg();
+    }
+    /** Idem, maar voor een document dat nog niet bestaat: dan telt de studio in de aanvraag. */
+    function isStaffInSameOrgForNew() {
+      return isTrainerOrAdmin() && writesMyOrg();
     }
     /**
      * Velden die alleen een beheerder mag zetten: rol en de verificatie-bypass.
@@ -306,6 +310,55 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
       // Je eigen bericht terugtrekken mag; dat van een ander niet.
       allow delete: if isSignedIn() && sameOrg() && request.auth.uid == resource.data.senderId;
+    }
+
+    // Lessen op het rooster. Een trainer of beheerder van de studio maakt en beheert ze; iedereen
+    // in de studio mag ze zien om te kunnen reserveren.
+    //
+    // `bookedCount` en `waitlistCount` worden alleen door de server bijgewerkt (api/booking.mjs).
+    // Kon een trainer die tellers zelf zetten, dan klopt de capaciteit niet meer en kunnen er meer
+    // mensen in de zaal staan dan er plek is.
+    match /classes/{classId} {
+      function touchesCounters() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['bookedCount', 'waitlistCount']);
+      }
+      allow read: if isSignedIn() && sameOrg();
+      allow create: if isStaffInSameOrgForNew()
+        && request.resource.data.get('bookedCount', 0) == 0
+        && request.resource.data.get('waitlistCount', 0) == 0
+        && request.resource.data.capacity is int
+        && request.resource.data.capacity > 0;
+      allow update: if isSignedIn()
+        && sameOrg()
+        && writesMyOrg()
+        && isTrainerOrAdmin()
+        && !touchesCounters();
+      allow delete: if isSignedIn() && sameOrg() && isTrainerOrAdmin();
+    }
+
+    // Reserveringen. Alleen te lezen door de sporter zelf en door de staf van die studio.
+    // Schrijven kan uitsluitend de server: reserveren moet plek, saldo en reservering in één
+    // transactie regelen, en dat kan een regel niet.
+    match /bookings/{bookingId} {
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow write: if false;
+    }
+
+    // Creditsaldo per persoon per studio. Lezen: jezelf, of de staf van je studio.
+    // Schrijven: alleen de server, zodat saldo en grootboek nooit uit elkaar lopen.
+    match /creditAccounts/{accountId} {
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow write: if false;
+    }
+
+    // Grootboek van creditmutaties: waar komt elk saldo vandaan. Zelfde leesrechten, nooit schrijven.
+    match /creditLedger/{entryId} {
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow write: if false;
     }
 
     // Groepsles-sessies. Trainer beheert; deelnemers mogen hun sessie lezen. Altijd binnen één studio.

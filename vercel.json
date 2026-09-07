@@ -26,6 +26,9 @@
     },
     "api/notify.mjs": {
       "maxDuration": 15
+    },
+    "api/booking.mjs": {
+      "maxDuration": 20
     }
   },
   "rewrites": [

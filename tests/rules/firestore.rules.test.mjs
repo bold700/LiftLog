@@ -215,6 +215,42 @@ await t('beheerder haalt een trainer bij zijn studio → mag', true,
 await t('beheerder zet iemand in een studio die niet de zijne is → geweigerd', false,
   updateDoc(doc(as('admin1'), 'profiles/trainer1'), { orgIds: ['studiob'] }));
 
+console.log('Lessen, reserveringen en credits');
+const les = (extra = {}) => ({
+  orgId: 'vanas', title: 'Small Group', date: '2026-09-10', startTime: '09:00',
+  trainerId: 'trainer1', capacity: 8, creditCost: 1, bookedCount: 0, waitlistCount: 0, ...extra,
+});
+await t('trainer maakt een les → mag', true, setDoc(doc(as('trainer1'), 'classes/c1'), les()));
+await t('sporter maakt een les → geweigerd', false, setDoc(doc(as('sporter2'), 'classes/c2'), les()));
+await t('les aanmaken met de teller al gevuld → geweigerd', false, setDoc(doc(as('trainer1'), 'classes/c3'), les({ bookedCount: 5 })));
+await t('les zonder capaciteit → geweigerd', false, setDoc(doc(as('trainer1'), 'classes/c4'), les({ capacity: 0 })));
+await t('sporter leest het rooster → mag', true, getDoc(doc(as('sporter2'), 'classes/c1')));
+await t('studio B leest het rooster van studio A → geweigerd', false, getDoc(doc(as('trainerB'), 'classes/c1')));
+await t('trainer wijzigt de capaciteit → mag', true, updateDoc(doc(as('trainer1'), 'classes/c1'), { capacity: 10 }));
+await t('trainer draait zelf aan de bezettingsteller → geweigerd', false, updateDoc(doc(as('trainer1'), 'classes/c1'), { bookedCount: 7 }));
+await t('trainer draait aan de wachtlijstteller → geweigerd', false, updateDoc(doc(as('trainer1'), 'classes/c1'), { waitlistCount: 3 }));
+await t('sporter wijzigt de les → geweigerd', false, updateDoc(doc(as('sporter2'), 'classes/c1'), { capacity: 99 }));
+
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore();
+  await setDoc(doc(db, 'bookings/b1'), { orgId: 'vanas', classId: 'c1', userId: 'sporter2', status: 'booked', creditsSpent: 1 });
+  await setDoc(doc(db, 'creditAccounts/vanas__sporter2'), { orgId: 'vanas', userId: 'sporter2', balance: 9 });
+  await setDoc(doc(db, 'creditLedger/le1'), { orgId: 'vanas', userId: 'sporter2', delta: -1, reason: 'booking' });
+});
+
+await t('sporter leest zijn eigen reservering → mag', true, getDoc(doc(as('sporter2'), 'bookings/b1')));
+await t('andere sporter leest die reservering → geweigerd', false, getDoc(doc(as('sporter3'), 'bookings/b1')));
+await t('trainer leest de reservering → mag', true, getDoc(doc(as('trainer1'), 'bookings/b1')));
+await t('reserveren buiten de server om → geweigerd', false, setDoc(doc(as('sporter2'), 'bookings/bZelf'), { orgId: 'vanas', classId: 'c1', userId: 'sporter2', status: 'booked' }));
+await t('eigen reservering wijzigen → geweigerd', false, updateDoc(doc(as('sporter2'), 'bookings/b1'), { status: 'cancelled' }));
+
+await t('sporter leest zijn eigen saldo → mag', true, getDoc(doc(as('sporter2'), 'creditAccounts/vanas__sporter2')));
+await t('andere sporter leest dat saldo → geweigerd', false, getDoc(doc(as('sporter3'), 'creditAccounts/vanas__sporter2')));
+await t('sporter zet zijn eigen saldo hoger → geweigerd', false, setDoc(doc(as('sporter2'), 'creditAccounts/vanas__sporter2'), { orgId: 'vanas', userId: 'sporter2', balance: 999 }, { merge: true }));
+await t('beheerder zet een saldo buiten de server om → geweigerd', false, setDoc(doc(as('admin1'), 'creditAccounts/vanas__sporter2'), { balance: 999 }, { merge: true }));
+await t('sporter leest zijn eigen grootboek → mag', true, getDoc(doc(as('sporter2'), 'creditLedger/le1')));
+await t('grootboekregel toevoegen buiten de server om → geweigerd', false, setDoc(doc(as('sporter2'), 'creditLedger/leZelf'), { orgId: 'vanas', userId: 'sporter2', delta: 50, reason: 'manual' }));
+
 await env.cleanup();
 console.log(`\n${passed} geslaagd, ${failed} mislukt`);
 process.exit(failed ? 1 : 0);

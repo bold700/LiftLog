@@ -60,9 +60,50 @@ Daarna zet je de eigenaar handmatig op `role: admin` met `orgId: studionaam` in 
 kunnen accounts alleen door de beheerder van die studio worden aangemaakt. Voor een nieuwe klant is
 uit de veilige stand.
 
+### Iemand bij een tweede studio halen
+
+Een freelance trainer kan bij meerdere studio's werken. Lidmaatschap staat als `orgIds` op het
+profiel en is bewust **niet** vanuit de app te wijzigen — anders kon iemand zichzelf bij een studio
+naar keuze inschrijven. Toevoegen doe je met het script:
+
+```bash
+FIREBASE_SERVICE_ACCOUNT="$(cat service-account.json)" \
+  node scripts/migrate-orgs.mjs --add-member trainer@voorbeeld.nl --org studionaam --apply
+```
+
+`--remove-member` haalt iemand er weer uit; de thuisstudio blijft altijd staan. In de app verschijnt
+bovenin een wisselaar zodra iemand bij meer dan één studio hoort.
+
 ---
 
-## 3. Uitrollen (volgorde is belangrijk)
+## 3. Credits en lesreservering
+
+Sporters reserveren lessen met credits. De trainer kent ze toe (Lessen → Credits toekennen); elke
+mutatie komt in `creditLedger` te staan, zodat later te herleiden is waar een saldo vandaan komt.
+
+**Waarom dit via de server loopt.** Reserveren moet drie dingen tegelijk doen: kijken of er plek is,
+een credit afschrijven en de reservering vastleggen. Firestore-regels kunnen niet tellen en niet
+meerdere documenten samen bewaken. Zonder transactie zouden twee mensen op hetzelfde moment de
+laatste plek pakken, of zou iemand kunnen reserveren zonder saldo. Daarom kan de app zelf níets
+schrijven in `bookings`, `creditAccounts` en `creditLedger` — alleen `api/booking.mjs` doet dat.
+
+Ook de tellers `bookedCount` en `waitlistCount` op een les zijn afgeschermd: kon een trainer die
+zelf zetten, dan klopt de capaciteit niet meer.
+
+**Regels van het huis, in code vastgelegd:**
+
+- Zit een les vol, dan kom je op de wachtlijst. Daar gaat nog geen credit af.
+- Meldt iemand zich af, dan schuift de eerste van de wachtlijst door en betaalt op dat moment.
+  Heeft die geen saldo, dan komt de plek gewoon vrij en blijft de wachtlijst staan.
+- Tot **12 uur** voor aanvang afmelden geeft de credit terug; daarna niet. Wordt de les afgelast,
+  dan altijd terug.
+- Een sporter meldt alleen zichzelf af; een trainer mag dat ook voor een ander doen.
+
+De annuleertermijn staat als `FREE_CANCEL_HOURS` in `api/booking.mjs`.
+
+---
+
+## 4. Uitrollen (volgorde is belangrijk)
 
 De volgorde ligt vast omdat de app op `orgId` filtert. Draai je de migratie ná het uitrollen, dan
 lijkt alle data even weg.
@@ -88,7 +129,7 @@ Het migratiescript is **idempotent**: twee keer draaien verandert niets extra. D
 
 ---
 
-## 4. Controleren of het klopt
+## 5. Controleren of het klopt
 
 ```bash
 npm run check           # typecheck, lint, unit-tests
@@ -102,7 +143,7 @@ aan de regels sleutelt en die tests blijven groen, controleer dan of ze nog wel 
 
 ---
 
-## 5. Back-ups
+## 6. Back-ups
 
 `npm run backup` schrijft elke collectie als JSON naar `backups/<datum-tijd>/`. Die map staat in
 `.gitignore` en hoort **niet** in Git.
@@ -114,7 +155,7 @@ Doe dit minimaal vóór elke migratie en verder maandelijks.
 
 ---
 
-## 6. Wat te doen als er iets stukgaat
+## 7. Wat te doen als er iets stukgaat
 
 **Account verwijderen loopt via de server.** In de app mag niemand een profiel verwijderen — ook
 een beheerder niet. Dat gaat via `api/admin-account.mjs`, dat het login-account, het profiel en de
@@ -144,13 +185,13 @@ De code staat er; de configuratie bij Apple en Google niet. Eenmalig nodig:
 
 ---
 
-## 7. Wie moet wat kunnen
+## 8. Wie moet wat kunnen
 
 Voor de overdracht is dit het minimum dat een tweede persoon moet kunnen:
 
 - **Inloggen op Vercel** en zien of de laatste deploy is gelukt.
 - **Inloggen op de Firebase-console** en een profiel opzoeken.
-- **Een back-up draaien** (stap 5 hierboven).
+- **Een back-up draaien** (hoofdstuk 6).
 - **Een account aanmaken of verwijderen** — zie `docs/ACCOUNTS-VERWIJDEREN.md` en Profielen in de app.
 - **Weten waar het service-account staat.** Dat bestand is een sleutel tot alle klantgegevens:
   het hoort in een wachtwoordkluis, nooit in Git, nooit in een chat of screenshot.
