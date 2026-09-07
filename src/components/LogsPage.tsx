@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -7,16 +7,6 @@ import {
   IconButton,
   Menu,
   MenuItem,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Autocomplete,
-  FormControl,
-  InputLabel,
-  Select,
-  Button,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -29,9 +19,12 @@ import { getSchemas, getSchemaById } from '../utils/schemaStorage';
 import { Exercise, TrainingSessionLog } from '../types';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { formatExerciseDateShort, formatExerciseDetails } from '../utils/format';
-import { useExerciseSuggestions } from '../hooks/useExerciseSuggestions';
 import { designTokens } from '../theme/designTokens';
 import { PageLayout, ContentCard, PageTitle, EmptyState } from './layout';
+import { ExerciseEditDialog } from './logs/ExerciseEditDialog';
+import { DeleteExerciseDialog } from './logs/DeleteExerciseDialog';
+import { SessionLogDialog } from './logs/SessionLogDialog';
+import { DeleteSessionDialog } from './logs/DeleteSessionDialog';
 
 // Import Material Web Components buttons
 import '@material/web/button/filled-button.js';
@@ -60,11 +53,6 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
   const [sets, setSets] = useState('');
   const [reps, setReps] = useState('');
   const [notes, setNotes] = useState('');
-  const exerciseSuggestions = useExerciseSuggestions();
-  const editCancelButtonRef = useRef<any>(null);
-  const editSaveButtonRef = useRef<any>(null);
-  const deleteCancelButtonRef = useRef<any>(null);
-  const deleteConfirmButtonRef = useRef<any>(null);
 
   // Sessie-logs (trainingen)
   const [sessionLogs, setSessionLogs] = useState<TrainingSessionLog[]>(() => getSessionLogs());
@@ -102,19 +90,19 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
     };
 
     loadAllExercises();
-    
+
     // Luister naar storage events voor updates
     const handleStorageChange = () => {
       loadAllExercises();
     };
     window.addEventListener('storage', handleStorageChange);
-    
+
     // Ook luisteren naar custom storage events (voor updates binnen dezelfde tab)
     const handleCustomStorageChange = () => {
       loadAllExercises();
     };
     window.addEventListener('workoutUpdated', handleCustomStorageChange);
-    
+
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('workoutUpdated', handleCustomStorageChange);
@@ -182,9 +170,9 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
     setSets('');
     setReps('');
     setNotes('');
-    
+
     await new Promise(resolve => setTimeout(resolve, 50));
-    
+
     // Herlaad exercises
     const exercises = getAllExercises();
     setAllExercises(exercises);
@@ -204,12 +192,12 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
     if (!deletingExerciseId) return;
 
     deleteExercise(deletingExerciseId);
-    
+
     setOpenDeleteDialog(false);
     setDeletingExerciseId(null);
-    
+
     await new Promise(resolve => setTimeout(resolve, 50));
-    
+
     // Herlaad exercises
     const exercises = getAllExercises();
     setAllExercises(exercises);
@@ -219,107 +207,6 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
     setOpenDeleteDialog(false);
     setDeletingExerciseId(null);
   }, []);
-
-  // Event listeners voor edit dialog
-  useEffect(() => {
-    if (!openEditDialog) return;
-
-    requestAnimationFrame(() => {
-      const cancelButton = editCancelButtonRef.current;
-      const saveButton = editSaveButtonRef.current;
-
-      if (saveButton) {
-        const isDisabled = !exerciseName.trim() || !weight.trim();
-        saveButton.disabled = isDisabled;
-        
-        const updateDisabled = () => {
-          const isDisabled = !exerciseName.trim() || !weight.trim();
-          saveButton.disabled = isDisabled;
-        };
-        
-        const intervalId = setInterval(updateDisabled, 100);
-        (saveButton as any)._intervalId = intervalId;
-      }
-
-      if (cancelButton) {
-        const cancelClickHandler = () => handleCloseEditDialog();
-        cancelButton.addEventListener('click', cancelClickHandler);
-        (cancelButton as any)._clickHandler = cancelClickHandler;
-      }
-      if (saveButton) {
-        const saveClickHandler = async () => {
-          if (!saveButton?.disabled) {
-            await handleSaveEdit();
-          }
-        };
-        saveButton.addEventListener('click', saveClickHandler);
-        (saveButton as any)._clickHandler = saveClickHandler;
-      }
-    });
-
-    return () => {
-      requestAnimationFrame(() => {
-        const cancelButton = editCancelButtonRef.current;
-        const saveButton = editSaveButtonRef.current;
-        
-        if (cancelButton && (cancelButton as any)._clickHandler) {
-          cancelButton.removeEventListener('click', (cancelButton as any)._clickHandler);
-          delete (cancelButton as any)._clickHandler;
-        }
-        if (saveButton) {
-          if ((saveButton as any)._clickHandler) {
-            saveButton.removeEventListener('click', (saveButton as any)._clickHandler);
-            delete (saveButton as any)._clickHandler;
-          }
-          if ((saveButton as any)._intervalId) {
-            clearInterval((saveButton as any)._intervalId);
-            delete (saveButton as any)._intervalId;
-          }
-        }
-      });
-    };
-  }, [openEditDialog, exerciseName, weight, handleCloseEditDialog, handleSaveEdit]);
-
-  // Event listeners voor delete dialog
-  useEffect(() => {
-    if (!openDeleteDialog) return;
-
-    requestAnimationFrame(() => {
-      const cancelButton = deleteCancelButtonRef.current;
-      const confirmButton = deleteConfirmButtonRef.current;
-
-      if (cancelButton) {
-        const cancelClickHandler = () => handleCloseDeleteDialog();
-        cancelButton.addEventListener('click', cancelClickHandler);
-        (cancelButton as any)._clickHandler = cancelClickHandler;
-      }
-      if (confirmButton) {
-        const confirmClickHandler = async () => {
-          await handleConfirmDelete();
-        };
-        confirmButton.addEventListener('click', confirmClickHandler);
-        (confirmButton as any)._clickHandler = confirmClickHandler;
-      }
-    });
-
-    return () => {
-      requestAnimationFrame(() => {
-        const cancelButton = deleteCancelButtonRef.current;
-        const confirmButton = deleteConfirmButtonRef.current;
-        
-        if (cancelButton && (cancelButton as any)._clickHandler) {
-          cancelButton.removeEventListener('click', (cancelButton as any)._clickHandler);
-          delete (cancelButton as any)._clickHandler;
-        }
-        if (confirmButton && (confirmButton as any)._clickHandler) {
-          confirmButton.removeEventListener('click', (confirmButton as any)._clickHandler);
-          delete (confirmButton as any)._clickHandler;
-        }
-      });
-    };
-  }, [openDeleteDialog, handleCloseDeleteDialog, handleConfirmDelete]);
-
-  const selectedSchemaForSessionLog = sessionLogSchemaId ? getSchemaById(sessionLogSchemaId) : null;
 
   const openAddSessionLog = useCallback(() => {
     setEditingSessionLog(null);
@@ -375,6 +262,8 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
       setOpenDeleteSessionLogDialog(false);
     }
   }, [deletingSessionLogId, refreshSessionLogs]);
+
+  const closeDeleteSessionLogDialog = () => { setOpenDeleteSessionLogDialog(false); setDeletingSessionLogId(null); };
 
   return (
     <PageLayout>
@@ -468,12 +357,12 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
                         {formatExerciseDetails(exercise)}
                       </Typography>
                           {exercise.notes && String(exercise.notes).trim() && (
-                            <Typography 
-                              variant="body2" 
-                              color="text.secondary" 
-                              sx={{ 
-                                mt: 1.5, 
-                                fontStyle: 'italic', 
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{
+                                mt: 1.5,
+                                fontStyle: 'italic',
                                 display: 'block',
                                 opacity: 0.75,
                                 fontSize: '0.875rem',
@@ -552,251 +441,44 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
       </Menu>
 
       {/* Dialog voor bewerken oefening */}
-      <Dialog 
-        open={openEditDialog} 
+      <ExerciseEditDialog
+        open={openEditDialog}
+        isMobile={isMobile}
+        exerciseName={exerciseName}
+        weight={weight}
+        sets={sets}
+        reps={reps}
+        notes={notes}
+        onExerciseNameChange={setExerciseName}
+        onWeightChange={setWeight}
+        onSetsChange={setSets}
+        onRepsChange={setReps}
+        onNotesChange={setNotes}
         onClose={handleCloseEditDialog}
-        maxWidth="sm"
-        fullWidth
-        fullScreen={isMobile}
-      >
-        <DialogTitle>Oefening Bewerken</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            <Autocomplete
-              freeSolo
-              options={exerciseSuggestions}
-              value={exerciseName}
-              onChange={(_, newValue) => {
-                if (typeof newValue === 'string') {
-                  setExerciseName(newValue);
-                } else if (newValue) {
-                  setExerciseName(newValue);
-                }
-              }}
-              onInputChange={(_, newValue) => setExerciseName(newValue)}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Oefening"
-                  placeholder="Zoek of kies een oefening..."
-                  autoFocus
-                />
-              )}
-            />
-
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                label="Gewicht (kg)"
-                type="number"
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-                sx={{ flex: 1 }}
-                inputProps={{ min: 0, step: 0.5 }}
-              />
-              
-              <TextField
-                label="Sets"
-                type="number"
-                value={sets}
-                onChange={(e) => setSets(e.target.value)}
-                sx={{ flex: 1 }}
-                inputProps={{ min: 1 }}
-              />
-              
-              <TextField
-                label="Reps"
-                type="number"
-                value={reps}
-                onChange={(e) => setReps(e.target.value)}
-                sx={{ flex: 1 }}
-                inputProps={{ min: 1 }}
-              />
-            </Box>
-
-            <TextField
-              label="Notitie (optioneel)"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Bijv. last van mn schouder, ging goed, was te zwaar"
-              multiline
-              rows={2}
-            />
-            
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2, pt: 2 }}>
-              {/* @ts-ignore - Material Web Components are web components */}
-              <md-text-button ref={editCancelButtonRef}>
-                Annuleren
-              </md-text-button>
-              {/* @ts-ignore - Material Web Components are web components */}
-              <md-filled-button ref={editSaveButtonRef}>
-                {/* @ts-ignore */}
-                <md-icon slot="start">save</md-icon>
-                Opslaan
-              </md-filled-button>
-            </Box>
-          </Box>
-        </DialogContent>
-      </Dialog>
+        onSave={handleSaveEdit}
+      />
 
       {/* Dialog voor verwijderen bevestiging */}
-      <Dialog 
-        open={openDeleteDialog} 
-        onClose={handleCloseDeleteDialog}
-        maxWidth="sm"
-      >
-        <DialogTitle>Oefening Verwijderen</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1">
-            Weet je zeker dat je deze oefening wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          {/* @ts-ignore - Material Web Components are web components */}
-          <md-text-button ref={deleteCancelButtonRef}>
-            Annuleren
-          </md-text-button>
-          {/* @ts-ignore - Material Web Components are web components */}
-          <md-filled-button
-            ref={deleteConfirmButtonRef}
-            style={{ '--md-filled-button-container-color': '#BA1A1A' } as any}
-          >
-            {/* @ts-ignore */}
-            <md-icon slot="start">delete</md-icon>
-            Verwijderen
-          </md-filled-button>
-        </DialogActions>
-      </Dialog>
+      <DeleteExerciseDialog open={openDeleteDialog} onClose={handleCloseDeleteDialog} onConfirm={handleConfirmDelete} />
 
       {/* Dialog training log toevoegen/bewerken */}
-      <Dialog
-        open={openSessionLogDialog !== null}
+      <SessionLogDialog
+        mode={openSessionLogDialog}
+        schemas={schemas}
+        date={sessionLogDate}
+        schemaId={sessionLogSchemaId}
+        dayIndex={sessionLogDayIndex}
+        notes={sessionLogNotes}
+        onDateChange={setSessionLogDate}
+        onSchemaIdChange={setSessionLogSchemaId}
+        onDayIndexChange={setSessionLogDayIndex}
+        onNotesChange={setSessionLogNotes}
         onClose={closeSessionLogDialog}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>{openSessionLogDialog === 'edit' ? 'Training log bewerken' : 'Training log toevoegen'}</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            <TextField
-              label="Datum"
-              type="date"
-              value={sessionLogDate}
-              onChange={(e) => setSessionLogDate(e.target.value)}
-              size="small"
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-            />
-            <FormControl size="small" fullWidth>
-              <InputLabel id="session-log-schema-label">Workout</InputLabel>
-              <Select
-                labelId="session-log-schema-label"
-                label="Workout"
-                value={sessionLogSchemaId}
-                onChange={(e) => {
-                  setSessionLogSchemaId(e.target.value);
-                  setSessionLogDayIndex(0);
-                }}
-              >
-                {schemas.map((s) => (
-                  <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {selectedSchemaForSessionLog && selectedSchemaForSessionLog.days.length > 0 && (
-              <FormControl size="small" fullWidth>
-                <InputLabel id="session-log-day-label">Trainingsdag</InputLabel>
-                <Select
-                  labelId="session-log-day-label"
-                  label="Trainingsdag"
-                  value={sessionLogDayIndex}
-                  onChange={(e) => setSessionLogDayIndex(Number(e.target.value))}
-                >
-                  {selectedSchemaForSessionLog.days.map((d, idx) => (
-                    <MenuItem key={idx} value={idx}>{d.dayLabel}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-            <TextField
-              label="Notitie (optioneel)"
-              value={sessionLogNotes}
-              onChange={(e) => setSessionLogNotes(e.target.value)}
-              placeholder="Bijv. goede sessie, moe aan het eind"
-              multiline
-              rows={3}
-              size="small"
-              fullWidth
-            />
-            <Box sx={{ display: 'flex', gap: 2, mt: 3, justifyContent: 'flex-end' }}>
-              <Button
-                variant="text"
-                onClick={closeSessionLogDialog}
-                disableElevation
-                sx={{
-                  color: '#000000',
-                  borderRadius: '20px',
-                  textTransform: 'none',
-                  fontWeight: 500,
-                  minHeight: 40,
-                  px: 2,
-                  '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' },
-                }}
-              >
-                Annuleren
-              </Button>
-              <Button
-                variant="contained"
-                onClick={saveSessionLogFromDialog}
-                disabled={!sessionLogSchemaId}
-                disableElevation
-                sx={{
-                  bgcolor: '#000000',
-                  color: '#F2E4D3',
-                  borderRadius: '20px',
-                  textTransform: 'none',
-                  fontWeight: 500,
-                  minHeight: 40,
-                  px: 2,
-                  '&:hover': { bgcolor: '#1a1a1a' },
-                  '&.Mui-disabled': {
-                    bgcolor: 'rgba(0,0,0,0.12)',
-                    color: 'rgba(29,27,26,0.38)',
-                  },
-                }}
-              >
-                Opslaan
-              </Button>
-            </Box>
-          </Box>
-        </DialogContent>
-      </Dialog>
+        onSave={saveSessionLogFromDialog}
+      />
 
       {/* Dialog sessie-log verwijderen */}
-      <Dialog
-        open={openDeleteSessionLogDialog}
-        onClose={() => { setOpenDeleteSessionLogDialog(false); setDeletingSessionLogId(null); }}
-        maxWidth="sm"
-      >
-        <DialogTitle>Training log verwijderen</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1">
-            Weet je zeker dat je deze training log wilt verwijderen?
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <md-text-button onClick={() => { setOpenDeleteSessionLogDialog(false); setDeletingSessionLogId(null); }}>
-            Annuleren
-          </md-text-button>
-          <md-filled-button
-            onClick={confirmDeleteSessionLog}
-            style={{ '--md-filled-button-container-color': '#BA1A1A' } as any}
-          >
-            <md-icon slot="start">delete</md-icon>
-            Verwijderen
-          </md-filled-button>
-        </DialogActions>
-      </Dialog>
+      <DeleteSessionDialog open={openDeleteSessionLogDialog} onClose={closeDeleteSessionLogDialog} onConfirm={confirmDeleteSessionLog} />
     </PageLayout>
   );
 };
-
