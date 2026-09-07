@@ -30,7 +30,7 @@ export default defineConfig({
         background_color: '#F2E4D3',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/LiftLog/',
+        start_url: '/',
         icons: [
           {
             src: '/app-icon.svg',
@@ -53,9 +53,9 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        // Bundel is > 2MB; verhoog limiet voor precache zodat de hoofdchunk wordt meegenomen
-        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        // De service worker wordt bewust niet geregistreerd (zie src/main.tsx): de plugin dient alleen
+        // voor het manifest ("Zet op beginscherm"). Daarom géén precache van de hele bundel.
+        globPatterns: ['index.html'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

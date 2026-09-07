@@ -1,150 +1,71 @@
-# 💪 LiftLog - Fitness Progressie Tracker
+# Van As Personal Training Logs (LiftLog)
 
-Een moderne Progressive Web App (PWA) voor het bijhouden van je fitness workouts en progressie, gebouwd met React, TypeScript en Material Design 3.
+Web- en mobiele app voor Van As Personal Training: trainers maken workouts en groepslessen, sporters loggen hun trainingen, voeding en metingen en zien hun voortgang.
 
-## ✨ Features
+- **Live**: https://lift-log-phi.vercel.app (Vercel bouwt automatisch vanaf `main`)
+- **Native**: iOS/Android via Capacitor (`ios/App`, `android/`)
+- **Stack**: React 18 + TypeScript + Vite, MUI (Material 3), Firebase Auth/Firestore/Storage, Vercel serverless-functies (`api/`), OpenAI voor workoutgeneratie en fotoherkenning, MCP-server voor AI-chats
 
-- 📊 **Progressie Tracking**: Volg je gewicht progressie per oefening over tijd
-- 📈 **Volume Tracking**: Bereken en volg totaal volume (sets × reps × gewicht)
-- 💾 **Offline First**: Alle data wordt lokaal opgeslagen - werkt zonder internet
-- 🎯 **Oefening Database**: 80+ oefeningen met metadata (spiergroepen, bewegingstypes)
-- 📱 **Mobiel App**: Installeer als app op je telefoon (PWA)
-- 🎨 **Material Design 3**: Moderne, beige-themed UI
-- 📸 **Exercise Images**: Automatische oefening afbeeldingen via ExerciseDB API
+## Functies
 
-## 🚀 Quick Start
+- **Rollen**: sporter, trainer, beheerder (zie [docs/ROLLEN-EN-RECHTEN.md](docs/ROLLEN-EN-RECHTEN.md)). Rollen zet alleen een beheerder.
+- **Workouts**: per sporter, voor meerdere sporters, open, of groepsles; Formule 7-routekaart (AALO); AI-generatie; PDF-export als invulbaar schema met plaatjes.
+- **Groepslessen**: halfjaarschema per lesmoment (week 1–26 volgt het ISO-weeknummer), import vanuit het lesrooster (`scripts/import-groepslessen.mjs`, Beheer → Groepslessen importeren).
+- **Loggen**: sets/reps/gewicht per oefening, groepslessessies, Apple Health-workouts (native).
+- **Inzichten**: progressie, spiergroepen, ranglijst (opt-in), hartslagzones, vetpercentage (Durnin & Womersley).
+- **Voeding en metingen**: Open Food Facts, barcode-scanner, fotoherkenning, gewicht/huidplooien/voortgangsfoto's.
+- **AI-chat koppeling**: MCP-server op `/api/mcp` met een persoonlijke koppelsleutel (Profiel → Koppel met AI-chat).
 
-### Installatie
+## Ontwikkelen
 
 ```bash
-# Installeer dependencies
 npm install
-
-# Start development server
-npm run dev
-
-# Build voor productie
-npm run build
-
-# Preview productie build
-npm run preview
+cp .env.example .env        # Firebase-config invullen (zie .env.example)
+npm run dev                 # app op http://localhost:5173
+node scripts/local-api-server.mjs   # optioneel: /api lokaal (poort 3001)
 ```
 
-## 📱 App Installeren
+Kwaliteitscontroles (draaien ook in CI bij elke pull request):
 
-### Als PWA (Progressive Web App):
-**Android:**
-1. Open in Chrome browser
-2. Menu → "Toevoegen aan startscherm"
-3. Bevestig installatie
-
-**iOS:**
-1. Open in Safari browser
-2. Deel-knop → "Voeg toe aan beginscherm"
-3. Bevestig met "Toevoegen"
-
-### Als Native App:
-De app kan ook worden geïnstalleerd als native app via de App Store (iOS) en Play Store (Android). Zie [APP_STORE_DEPLOYMENT.md](./APP_STORE_DEPLOYMENT.md) voor instructies.
-
-## 🌐 Deployment
-
-### Web Deployment (PWA)
-Zie [DEPLOYMENT.md](./DEPLOYMENT.md) voor gedetailleerde instructies voor web deployment.
-
-**Snelle opties:**
-- **Vercel**: `vercel` (aanbevolen)
-- **Netlify**: `netlify deploy --prod --dir=dist`
-- **GitHub Pages**: `npm run deploy` (na setup)
-
-### Native App Deployment (App Store & Play Store)
-Zie [APP_STORE_DEPLOYMENT.md](./APP_STORE_DEPLOYMENT.md) voor complete instructies om de app te publiceren in de Apple App Store en Google Play Store.
-
-**Quick start voor native apps:**
 ```bash
-# Build en sync naar native platforms
-npm run cap:sync
-
-# Open iOS project (Mac vereist)
-npm run cap:open:ios
-
-# Open Android project
-npm run cap:open:android
+npm run check        # typecheck + lint + unit-tests
+npm run test:rules   # Firestore-regels testen in de emulator (Java vereist)
+npm run build
 ```
 
-## 🛠️ Tech Stack
-
-- **React 18** - UI library
-- **TypeScript** - Type safety
-- **Vite** - Build tool
-- **Material UI (MUI)** - Component library
-- **Material Web Components** - M3 buttons & navigation
-- **Recharts** - Data visualisatie
-- **PWA** - Progressive Web App support
-- **Capacitor** - Native app wrapper (iOS & Android)
-- **ExerciseDB API** - Oefening afbeeldingen
-
-## 📦 Project Structuur
+## Structuur
 
 ```
-src/
-├── components/
-│   └── Statistics.tsx    # Hoofdcomponent met alle functionaliteit
-├── data/
-│   ├── exercises.ts     # Oefening database
-│   └── exerciseMetadata.ts  # Gedetailleerde metadata
-├── utils/
-│   ├── storage.ts       # LocalStorage helpers
-│   └── exercisedb.ts    # ExerciseDB API integratie
-├── styles/
-│   └── material-web-theme.css  # Material Web Components styling
-└── theme.ts            # MUI theme configuratie
+api/                 Vercel serverless-functies (AI, GIF-proxy, admin, MCP) en api/_lib helpers
+src/components/      Schermen en componenten (MUI)
+src/context/         Auth- en profielcontext
+src/services/        Firestore-toegang per collectie
+src/utils/           Pure logica (filters, hartslag, vetpercentage, PDF-export, …)
+src/data/            Oefeningcatalogus, GIF-index, spiergroepmapping, lesrooster
+scripts/             Import- en beheerscripts
+tests/unit/          Unit-tests (vitest)
+tests/rules/         Firestore-regeltests (emulator)
+docs/                Documentatie; docs/archief bevat oude probleemnotities
 ```
 
-## 📝 Features Uitleg
+## Deploy
 
-### Statistieken
-- **Overzicht**: Algemene stats wanneer geen oefening geselecteerd
-- **Specifiek**: Gedetailleerde progressie per oefening met grafieken
-- **Inzichten**: Spiergroep analyse, push/pull ratio, bewegingstype verdeling
+- **Web**: elke merge naar `main` deployt naar Vercel. Omgevingsvariabelen staan in Vercel (zie `.env.example`; `OPENAI_API_KEY` en `FIREBASE_SERVICE_ACCOUNT` zijn server-side).
+- **Firestore- en Storage-regels** worden **niet** door Vercel gedeployed. Na een wijziging in `firestore.rules` of `storage.rules`:
 
-### Oefeningen
-- **Toevoegen**: FAB button → snel nieuwe workout loggen
-- **Bewerken**: Klik op edit icon bij elke log entry
-- **Verwijderen**: Klik op delete icon met bevestiging
+  ```bash
+  npm run deploy:firestore
+  npm run deploy:storage
+  ```
 
-### Data
-- Alle data wordt opgeslagen in browser localStorage
-- Geen server of account nodig
-- Privacy-vriendelijk - data blijft op je device
+- **Native**: `npm run cap:sync`, daarna `npm run cap:open:ios` / `npm run cap:open:android`. Zie [docs/APP_STORE_DEPLOYMENT.md](docs/APP_STORE_DEPLOYMENT.md).
 
-## 🔥 Firebase (optioneel)
+## Data en beveiliging
 
-Voor cloud-opslag kun je Firebase/Firestore aanzetten. **Geen keys in Git:**
+- Alle gegevens staan in Firestore; toegang wordt afgedwongen in `firestore.rules` (getest in `tests/rules`).
+- Oefening-GIF's staan in Firebase Storage (`exercises/720/{id}.gif`, publiek leesbaar); `/api/exercise-gif` levert er een stilstaand beeld van voor de PDF.
+- Geen geheimen in Git: `.env` en service-accounts staan in `.gitignore`.
 
-1. Kopieer `.env.example` naar `.env`
-2. Vul in `.env` je Firebase-waarden in (uit de Firebase Console)
-3. Het bestand `.env` staat in `.gitignore` en wordt **niet** geüpload naar Git
+## Licentie
 
-Commit alleen `.env.example` (met placeholders); je echte keys blijven lokaal in `.env`.
-
-## 🎨 Customization
-
-### Kleuren Aanpassen
-Bewerk `src/theme.json` of `src/theme.ts` voor kleuraanpassingen.
-
-### Oefeningen Toevoegen
-Bewerk `src/data/exerciseMetadata.ts` om nieuwe oefeningen toe te voegen met metadata.
-
-## 📄 Licentie
-
-Privé project - Alle rechten voorbehouden.
-
-## 🙏 Credits
-
-- **ExerciseDB API** voor oefening afbeeldingen
-- **Material Design 3** voor UI guidelines
-- **Recharts** voor data visualisatie
-
----
-
-Gemaakt met ❤️ voor fitness enthousiastelingen
+Privé project, alle rechten voorbehouden.

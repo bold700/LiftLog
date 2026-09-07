@@ -2,7 +2,6 @@ import { createTheme } from '@mui/material/styles';
 import themeData from './theme.json';
 
 const lightScheme = themeData.schemes.light;
-const darkScheme = themeData.schemes.dark;
 
 // Light theme - alleen Material 3 tokens gebruiken
 export const lightTheme = createTheme({
@@ -55,52 +54,3 @@ export const lightTheme = createTheme({
     },
   },
 });
-
-// Dark theme - alleen Material 3 tokens gebruiken
-export const darkTheme = createTheme({
-  palette: {
-    mode: 'dark',
-    primary: {
-      main: darkScheme.primary,
-      light: darkScheme.primaryFixed,
-      dark: darkScheme.primaryContainer,
-      contrastText: darkScheme.onPrimary,
-    },
-    secondary: {
-      main: darkScheme.secondary,
-      light: darkScheme.secondaryFixed,
-      dark: darkScheme.secondaryContainer,
-      contrastText: darkScheme.onSecondary,
-    },
-    error: {
-      main: darkScheme.error,
-      light: darkScheme.errorContainer,
-      dark: darkScheme.error,
-      contrastText: darkScheme.onError,
-    },
-    background: {
-      default: darkScheme.background,
-      paper: darkScheme.surface,
-    },
-    text: {
-      primary: darkScheme.onSurface,
-      secondary: darkScheme.onSurfaceVariant,
-    },
-    divider: darkScheme.outlineVariant,
-  },
-  typography: {
-    fontFamily: 'Roboto, sans-serif',
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          borderRadius: '9999999999px',
-        },
-      },
-    },
-  },
-});
-
-// Default export voor backward compatibility
-export const theme = lightTheme;
