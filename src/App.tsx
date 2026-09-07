@@ -13,6 +13,7 @@ import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
 import MonitorWeightRoundedIcon from '@mui/icons-material/MonitorWeightRounded';
 import { lightTheme } from './theme';
 import { NavigationBar } from './components/NavigationBar';
+import { StudioSwitcher } from './components/StudioSwitcher';
 import { FullscreenMenu } from './components/FullscreenMenu';
 import { InzichtenPage } from './components/InzichtenPage';
 import { AddPage } from './components/AddPage';
@@ -100,7 +101,7 @@ function AppContent() {
   }, [handleFabMenuClose]);
 
   useEffect(() => {
-    document.title = 'Van As Personal Training Logs';
+    document.title = 'VORM';
   }, []);
 
   const handleExerciseAdded = useCallback((opts?: { returnToSchema?: boolean }) => {
@@ -262,6 +263,7 @@ function AppContent() {
                 <strong>Je trainer-aanvraag wacht op goedkeuring.</strong> Een beheerder keurt de aanvraag goed onder Beheer.
               </Alert>
             )}
+            <StudioSwitcher />
             <Suspense fallback={<LoadingBlock />}>{renderPage()}</Suspense>
           </Box>
 

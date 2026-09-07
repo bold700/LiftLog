@@ -1,6 +1,8 @@
-# Van As Personal Training Logs (LiftLog)
+# VORM
 
-Web- en mobiele app voor Van As Personal Training: trainers maken workouts en groepslessen, sporters loggen hun trainingen, voeding en metingen en zien hun voortgang.
+Trainingsplatform voor personal trainers en boutique studio's: trainers maken workouts en groepslessen, sporters loggen hun trainingen, voeding en metingen en zien hun voortgang. Meerdere studio's draaien naast elkaar op hetzelfde systeem, strikt van elkaar gescheiden.
+
+Van As Personal Training is de eerste studio en tegelijk de proeftuin.
 
 - **Live**: https://lift-log-phi.vercel.app (Vercel bouwt automatisch vanaf `main`)
 - **Native**: iOS/Android via Capacitor (`ios/App`, `android/`)

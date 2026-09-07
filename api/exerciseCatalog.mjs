@@ -1,5 +1,5 @@
 /**
- * LiftLog-oefencatalogus (zelfde bron als src/data/mega_exercise_db.json).
+ * VORM-oefencatalogus (zelfde bron als src/data/mega_exercise_db.json).
  * AI-workouts mogen alleen deze namen gebruiken zodat loggen en metadata kloppen.
  */
 import { readFileSync, existsSync } from 'node:fs';

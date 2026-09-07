@@ -37,7 +37,7 @@ export default async function handler(req, res) {
   }
 
   const key = keyFromRequest(req);
-  if (!key || key.length < 20) return json(res, 401, { error: 'Koppelsleutel ontbreekt. Maak er een aan in LiftLog onder Profiel.' });
+  if (!key || key.length < 20) return json(res, 401, { error: 'Koppelsleutel ontbreekt. Maak er een aan in VORM onder Profiel.' });
 
   // Eerst zonder studio: de sleutel wijst één gebruiker aan, en pas diens profiel bepaalt de studio.
   const lookup = createStore(admin.db, admin.auth);
@@ -49,8 +49,12 @@ export default async function handler(req, res) {
   // Vanaf hier is alles begrensd tot de studio van deze gebruiker.
   const store = createStore(admin.db, admin.auth, profile.orgId);
 
+  // Naam van de studio, zodat de assistent zich niet als de verkeerde studio voorstelt.
+  const orgSnap = await admin.db.collection('orgs').doc(profile.orgId).get().catch(() => null);
+  const orgName = orgSnap?.exists ? orgSnap.data()?.name || null : null;
+
   // Stateless: per aanvraag een verse server + transport (Vercel-functies houden geen sessies vast).
-  const server = buildServer({ profile }, store);
+  const server = buildServer({ profile, orgName }, store);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   res.on('close', () => {
     transport.close().catch(() => {});

@@ -249,8 +249,14 @@ export interface Org {
 
 export interface Profile {
   userId: string;
-  /** Studio waar dit account bij hoort. Ontbreekt bij data van vóór de multi-tenant migratie. */
+  /** Thuisstudio: waar dit account is aangemaakt en standaard mee begint. */
   orgId: string;
+  /**
+   * Alle studio's waar dit account lid van is. Bevat altijd `orgId`.
+   * Een sporter zit doorgaans bij één studio; een trainer kan bij meerdere werken en wisselt
+   * daartussen in de app. Documenten horen altijd bij precies één studio.
+   */
+  orgIds: string[];
   role: ProfileRole;
   email: string | null;
   displayName: string | null;

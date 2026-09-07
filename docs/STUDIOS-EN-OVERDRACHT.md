@@ -1,6 +1,6 @@
 # Studio's, uitrollen en overdracht
 
-Dit document beschrijft twee dingen die bij elkaar horen: hoe LiftLog meerdere studio's gescheiden
+Dit document beschrijft twee dingen die bij elkaar horen: hoe VORM meerdere studio's gescheiden
 houdt, en wat iemand anders moet weten om de boel draaiend te houden als Kenny er een week niet is.
 
 Het tweede is geen bijzaak. Het hele argument tegenover Virtuagym is "onze data is van onszelf", en

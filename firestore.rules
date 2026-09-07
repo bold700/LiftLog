@@ -21,17 +21,27 @@ service cloud.firestore {
     function orgOf(data) {
       return data.get('orgId', defaultOrg());
     }
-    /** Studio van de ingelogde gebruiker. */
+    /** Thuisstudio van de ingelogde gebruiker. */
     function myOrg() {
       return orgOf(myProfile());
     }
-    /** Waar voor een bestaand document in mijn eigen studio. */
-    function sameOrg() {
-      return orgOf(resource.data) == myOrg();
+    /**
+     * Alle studio's waar de ingelogde gebruiker lid van is.
+     *
+     * Een sporter zit meestal bij één studio, maar een trainer kan bij meerdere werken. Daarom is
+     * lidmaatschap een lijst en geen enkele waarde. Ontbreekt `orgIds` (profiel van vóór deze
+     * wijziging), dan telt alleen de thuisstudio.
+     */
+    function myOrgs() {
+      return myProfile().get('orgIds', [myOrg()]);
     }
-    /** Waar wanneer het binnenkomende document mijn eigen studio draagt. */
+    /** Waar voor een bestaand document in een studio waar ik lid van ben. */
+    function sameOrg() {
+      return orgOf(resource.data) in myOrgs();
+    }
+    /** Waar wanneer het binnenkomende document een studio draagt waar ik lid van ben. */
     function writesMyOrg() {
-      return request.resource.data.get('orgId', defaultOrg()) == myOrg();
+      return request.resource.data.get('orgId', defaultOrg()) in myOrgs();
     }
     /**
      * Mag hier zelf een account worden aangemaakt? Alleen als de studio dat aan heeft staan.
@@ -61,7 +71,7 @@ service cloud.firestore {
      */
     function touchesProtectedProfileFields() {
       return request.resource.data.diff(resource.data).affectedKeys()
-        .hasAny(['role', 'createdByAdmin', 'orgId', 'platformAdmin', 'userId']);
+        .hasAny(['role', 'createdByAdmin', 'orgId', 'orgIds', 'platformAdmin', 'userId']);
     }
     /**
      * Wat je op je eigen profiel nooit zelf mag zetten. Naast het bovenstaande ook `trainerId`:
@@ -107,10 +117,17 @@ service cloud.firestore {
             && request.resource.data.get('role', 'sporter') == 'sporter'
             && request.resource.data.get('createdByAdmin', false) == false
             && request.resource.data.get('platformAdmin', false) == false
+            // Je meldt je aan bij één studio; lid worden van een tweede doet een beheerder daar.
+            && request.resource.data.get('orgIds', [request.resource.data.get('orgId', defaultOrg())])
+                 .hasOnly([request.resource.data.get('orgId', defaultOrg())])
             && orgAllowsSelfSignup(request.resource.data.get('orgId', defaultOrg())));
+      // Een beheerder beheert profielen binnen zijn eigen studio, inclusief lidmaatschap
+      // (een trainer erbij halen of eruit halen). Hij kan niemand bij een andere studio zetten:
+      // `writesMyOrg()` controleert de thuisstudio en `orgIds` moet zijn eigen studio bevatten.
       allow update: if isSignedIn()
         && !touchesPlatformAdmin()
-        && ((isAdmin() && sameOrg() && writesMyOrg())
+        && ((isAdmin() && sameOrg() && writesMyOrg()
+             && request.resource.data.get('orgIds', [myOrg()]).hasAny(myOrgs()))
             || (request.auth.uid == userId && !touchesProtectedSelfFields())
             || (isStaffInSameOrg()
                 && resource.data.role == 'sporter'

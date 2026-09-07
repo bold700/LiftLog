@@ -6,6 +6,7 @@
  */
 import { auth } from '../firebase/config';
 import { apiUrl } from '../utils/apiOrigin';
+import { getCurrentOrgId } from './orgContext';
 
 export interface AssistantMessage {
   role: 'user' | 'assistant';
@@ -54,7 +55,9 @@ export async function askAssistant(messages: AssistantMessage[]): Promise<Assist
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ messages }),
+    // Studio meesturen: een trainer die bij meerdere studio's werkt bedoelt de studio waar
+    // hij nu in staat. De server controleert of hij daar echt lid van is.
+    body: JSON.stringify({ messages, orgId: getCurrentOrgId() }),
   });
 
   const data = (await res.json().catch(() => ({}))) as {

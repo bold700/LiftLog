@@ -54,11 +54,11 @@ function fakeDb(seed) {
 }
 
 const seed = {
-  'profiles/adminA': { userId: 'adminA', orgId: 'vanas', role: 'admin', displayName: 'Kenny' },
-  'profiles/sporterA': { userId: 'sporterA', orgId: 'vanas', role: 'sporter', displayName: 'Bas', trainerId: 'adminA' },
+  'profiles/adminA': { userId: 'adminA', orgId: 'vanas', orgIds: ['vanas'], role: 'admin', displayName: 'Kenny' },
+  'profiles/sporterA': { userId: 'sporterA', orgId: 'vanas', orgIds: ['vanas'], role: 'sporter', displayName: 'Bas', trainerId: 'adminA' },
   'profiles/legacy': { userId: 'legacy', role: 'sporter', displayName: 'Oud account', trainerId: 'adminA' },
-  'profiles/adminB': { userId: 'adminB', orgId: 'studiob', role: 'admin', displayName: 'Nora' },
-  'profiles/sporterB': { userId: 'sporterB', orgId: 'studiob', role: 'sporter', displayName: 'Iris', trainerId: 'adminB' },
+  'profiles/adminB': { userId: 'adminB', orgId: 'studiob', orgIds: ['studiob'], role: 'admin', displayName: 'Nora' },
+  'profiles/sporterB': { userId: 'sporterB', orgId: 'studiob', orgIds: ['studiob'], role: 'sporter', displayName: 'Iris', trainerId: 'adminB' },
   'workouts/wA': { id: 'wA', orgId: 'vanas', trainerId: 'adminA', clientId: 'sporterA', name: 'Schema A', days: [] },
   'workouts/wOpenA': { id: 'wOpenA', orgId: 'vanas', trainerId: 'adminA', audience: 'open', name: 'Open A', days: [] },
   'workouts/wB': { id: 'wB', orgId: 'studiob', trainerId: 'adminB', clientId: 'sporterB', name: 'Schema B', days: [] },
@@ -134,6 +134,33 @@ describe('studio-isolatie in de AI-gegevenslaag', () => {
     expect(saved.orgId).toBe('vanas');
     expect(saved.role).toBe('sporter');
     expect(saved.platformAdmin).toBeUndefined();
+  });
+
+  it('een trainer die bij twee studio\'s werkt staat in beide ledenlijsten', async () => {
+    // Een trainer die bij twee studio's hoort verschijnt in beide ledenlijsten, maar de
+    // gegevens van de sporters blijven per studio gescheiden.
+    const db = fakeDb({
+      ...seed,
+      'profiles/duo': { userId: 'duo', orgId: 'vanas', orgIds: ['vanas', 'studiob'], role: 'trainer', displayName: 'Sam' },
+    });
+
+    const inA = (await createStore(db, null, 'vanas').getAllProfiles()).map((p) => p.displayName);
+    const inB = (await createStore(db, null, 'studiob').getAllProfiles()).map((p) => p.displayName);
+    // Sam staat in beide ledenlijsten; hij werkt er immers bij allebei.
+    expect(inA).toContain('Sam');
+    expect(inB).toContain('Sam');
+    // De sporters blijven wel strikt gescheiden.
+    expect(inA).not.toContain('Iris');
+    expect(inB).not.toContain('Bas');
+  });
+
+  it('leest het lidmaatschap van een profiel, met terugval op de thuisstudio', async () => {
+    const db = fakeDb(seed);
+    const store = createStore(db, null, 'vanas');
+    const met = await store.getProfile('adminA');
+    const zonder = await store.getProfile('legacy');
+    expect(met.orgIds).toEqual(['vanas']);
+    expect(zonder.orgIds).toEqual([DEFAULT_ORG_ID]);
   });
 
   it('documenten zonder orgId horen bij de standaardstudio', () => {

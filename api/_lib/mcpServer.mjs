@@ -1,5 +1,5 @@
 /**
- * LiftLog MCP-server: de tools die ChatGPT, Claude en Gemini kunnen aanroepen.
+ * VORM MCP-server: de tools die ChatGPT, Claude en Gemini kunnen aanroepen.
  * `ctx` = de ingelogde gebruiker (via koppelsleutel); `store` = datalaag (zie liftlogData.mjs).
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -105,12 +105,15 @@ function lastPerExercise(logs) {
 export function buildServer(ctx, store) {
   const me = ctx.profile;
   const isStaff = me.role === 'trainer' || me.role === 'admin';
+  // Naam van de studio waar deze gebruiker bij hoort. VORM bedient meerdere studio's, dus die
+  // naam mag niet vastgeschroefd zijn; ontbreekt hij, dan houden we het neutraal.
+  const orgName = ctx.orgName || 'je studio';
 
   const server = new McpServer(
     { name: 'liftlog', version: '1.0.0' },
     {
       instructions: [
-        `Je bent gekoppeld aan LiftLog, de trainingsapp van Van As Personal Training.`,
+        `Je bent gekoppeld aan VORM, de trainingsapp van ${orgName}.`,
         `De ingelogde gebruiker is ${displayName(me)} (${ROLE_LABEL[me.role]}). Vandaag is ${todayNl()} (Nederlandse tijd).`,
         `Antwoord in het Nederlands, kort en praktisch, alsof je in de sportschool naast iemand staat.`,
         `Gewichten in kg. Gebruik "log_exercise" pas als de gebruiker duidelijk sets heeft gedaan en die wil vastleggen.`,
@@ -632,7 +635,7 @@ export function buildServer(ctx, store) {
       {
         title: 'Account aanmaken',
         description:
-          'Maakt een nieuw LiftLog-account aan voor een sporter of trainer, met een tijdelijk wachtwoord dat je één keer terugkrijgt en aan de persoon doorgeeft. E-mailverificatie is niet nodig; de gebruiker kan meteen inloggen en het wachtwoord later zelf wijzigen. Vraag altijd eerst om een echt e-mailadres en een naam: verzin die nooit zelf, want een verkeerd adres levert een account op dat niemand kan gebruiken. Trainer-accounts kan alleen een beheerder aanmaken; beheerdersaccounts maak je niet hier maar in de app.',
+          'Maakt een nieuw VORM-account aan voor een sporter of trainer, met een tijdelijk wachtwoord dat je één keer terugkrijgt en aan de persoon doorgeeft. E-mailverificatie is niet nodig; de gebruiker kan meteen inloggen en het wachtwoord later zelf wijzigen. Vraag altijd eerst om een echt e-mailadres en een naam: verzin die nooit zelf, want een verkeerd adres levert een account op dat niemand kan gebruiken. Trainer-accounts kan alleen een beheerder aanmaken; beheerdersaccounts maak je niet hier maar in de app.',
         inputSchema: {
           email: z.string().email().describe('Het echte e-mailadres van de persoon; hiermee logt hij in.'),
           name: z.string().min(1).describe('Volledige naam, bijv. "Jan Jansen".'),
@@ -689,7 +692,7 @@ export function buildServer(ctx, store) {
       {
         title: 'Workout aanmaken',
         description:
-          'Maakt een nieuw trainingsschema aan in LiftLog en wijst het toe aan een sporter, of aan jezelf als je geen sporter noemt. Gebruik dit als de gebruiker vraagt om een programma "in de app te zetten". Maakt altijd een nieuw schema; bestaande schema\'s worden nooit overschreven of gewijzigd. Vul per oefening sets en herhalingen in; laat gewicht leeg als dat nog niet vaststaat.',
+          'Maakt een nieuw trainingsschema aan in VORM en wijst het toe aan een sporter, of aan jezelf als je geen sporter noemt. Gebruik dit als de gebruiker vraagt om een programma "in de app te zetten". Maakt altijd een nieuw schema; bestaande schema\'s worden nooit overschreven of gewijzigd. Vul per oefening sets en herhalingen in; laat gewicht leeg als dat nog niet vaststaat.',
         inputSchema: {
           name: z.string().min(1).describe('Naam van het schema, bijv. "Full body kracht - 12 weken".'),
           ...athleteParam,
@@ -757,7 +760,7 @@ export function buildServer(ctx, store) {
           name: saved.name,
           forAthlete: displayName(t),
           days: saved.days.map((d) => ({ dayLabel: d.dayLabel, exerciseCount: d.exercises.length })),
-          note: 'Het schema staat nu in LiftLog onder Workouts. Wijzigen of verwijderen doe je in de app.',
+          note: 'Het schema staat nu in VORM onder Workouts. Wijzigen of verwijderen doe je in de app.',
         });
       })
     );
@@ -875,8 +878,8 @@ export function buildServer(ctx, store) {
     {
       title: 'Bericht sturen',
       description: isStaff
-        ? 'Stuur een bericht aan een van je sporters. Geef "athlete" mee (naam of e-mail). Het bericht komt in LiftLog bij het dossier van die sporter te staan.'
-        : 'Stuur een bericht aan je trainer, bijvoorbeeld een vraag of je wekelijkse check-in. Het komt in LiftLog bij je dossier te staan.',
+        ? 'Stuur een bericht aan een van je sporters. Geef "athlete" mee (naam of e-mail). Het bericht komt in VORM bij het dossier van die sporter te staan.'
+        : 'Stuur een bericht aan je trainer, bijvoorbeeld een vraag of je wekelijkse check-in. Het komt in VORM bij je dossier te staan.',
       inputSchema: {
         ...athleteParam,
         message: z.string().min(1).describe('De tekst van het bericht.'),
@@ -900,7 +903,7 @@ export function buildServer(ctx, store) {
         }
 
         const sent = await store.sendMessage({ senderId: me.userId, recipientId, text: body });
-        return text({ ok: true, messageId: sent.id, sentAt: sent.createdAt, note: 'Het bericht staat in LiftLog bij Berichten.' });
+        return text({ ok: true, messageId: sent.id, sentAt: sent.createdAt, note: 'Het bericht staat in VORM bij Berichten.' });
       } catch (e) {
         return fail(e instanceof Error ? e.message : 'Bericht versturen mislukt.');
       }

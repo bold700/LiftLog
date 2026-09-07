@@ -1,7 +1,7 @@
 /**
  * Brug tussen de MCP-gereedschapskist en de assistent in de app.
  *
- * De AI-koppeling (api/mcp.mjs) en de assistent in LiftLog moeten precies dezelfde dingen kunnen,
+ * De AI-koppeling (api/mcp.mjs) en de assistent in VORM moeten precies dezelfde dingen kunnen,
  * met precies dezelfde rechten. In plaats van die 17 functies twee keer te schrijven, verbinden we
  * hier een MCP-client rechtstreeks met de bestaande server via een verbinding binnen hetzelfde
  * proces. De rolregels (welke functies een sporter ziet, over wie een trainer mag gaan) en de

@@ -157,7 +157,7 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
           Oude API-server
         </Typography>
         <Typography variant="caption" component="div" color="warning.contrastText" sx={{ mt: 0.5, display: 'block' }}>
-          Stop Node op poort 3001 en start opnieuw in de LiftLog-map:{' '}
+          Stop Node op poort 3001 en start opnieuw in de VORM-map:{' '}
           <strong>node scripts/local-api-server.mjs</strong>
         </Typography>
       </Box>
@@ -182,7 +182,7 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
           /api niet bereikbaar
         </Typography>
         <Typography variant="caption" component="div" color="warning.contrastText" sx={{ mt: 0.5, display: 'block' }}>
-          Stop Vite (Ctrl+C), ga naar de LiftLog-map en start opnieuw <strong>npm run dev</strong>. Laat{' '}
+          Stop Vite (Ctrl+C), ga naar de VORM-map en start opnieuw <strong>npm run dev</strong>. Laat{' '}
           <strong>node scripts/local-api-server.mjs</strong> op 3001 draaien.
         </Typography>
       </Box>

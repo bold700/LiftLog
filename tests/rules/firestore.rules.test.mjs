@@ -27,9 +27,11 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(db, 'orgs/studiob'), { name: 'Studio B', allowSelfSignup: false });
 
   // Tweede studio, volledig eigen bezetting.
-  await setDoc(doc(db, 'profiles/adminB'), { userId: 'adminB', orgId: 'studiob', role: 'admin', trainerId: null });
-  await setDoc(doc(db, 'profiles/trainerB'), { userId: 'trainerB', orgId: 'studiob', role: 'trainer', trainerId: null });
+  await setDoc(doc(db, 'profiles/adminB'), { userId: 'adminB', orgId: 'studiob', orgIds: ['studiob'], role: 'admin', trainerId: null });
+  await setDoc(doc(db, 'profiles/trainerB'), { userId: 'trainerB', orgId: 'studiob', orgIds: ['studiob'], role: 'trainer', trainerId: null });
   await setDoc(doc(db, 'profiles/sporterB'), { userId: 'sporterB', orgId: 'studiob', role: 'sporter', trainerId: 'trainerB', displayName: 'Nora' });
+  // Freelance trainer die bij beide studio's werkt: thuisstudio A, lid van A én B.
+  await setDoc(doc(db, 'profiles/duo'), { userId: 'duo', orgId: 'vanas', orgIds: ['vanas', 'studiob'], role: 'trainer', trainerId: null, displayName: 'Sam' });
   await setDoc(doc(db, 'logs/lB1'), { orgId: 'studiob', userId: 'sporterB', loggedBy: 'sporterB', exerciseName: 'Bench' });
   await setDoc(doc(db, 'measurements/mB1'), { orgId: 'studiob', userId: 'sporterB', loggedBy: 'sporterB', weightKg: 70 });
   await setDoc(doc(db, 'workouts/wB1'), { orgId: 'studiob', trainerId: 'trainerB', clientId: 'sporterB', name: 'B-schema' });
@@ -187,6 +189,31 @@ console.log('Pushtoken kapen');
 await setDoc(doc(as('sporter2'), 'pushTokens/tokVictim'), { token: 'tokVictim', userId: 'sporter2', orgId: 'vanas', platform: 'ios' });
 await t('andermans token naar jezelf omschrijven → geweigerd', false,
   setDoc(doc(as('sporter3'), 'pushTokens/tokVictim'), { token: 'tokVictim', userId: 'sporter3', orgId: 'vanas', platform: 'ios' }, { merge: true }));
+
+console.log('Trainer bij meerdere studio\'s');
+await t('schrijft in studio A → mag', true, setDoc(doc(as('duo'), 'workouts/wDuoA'), { orgId: 'vanas', trainerId: 'duo', name: 'A' }));
+await t('schrijft in studio B → mag', true, setDoc(doc(as('duo'), 'workouts/wDuoB'), { orgId: 'studiob', trainerId: 'duo', name: 'B' }));
+await t('leest zijn werk in studio A → mag', true, getDoc(doc(as('duo'), 'workouts/wDuoA')));
+await t('leest zijn werk in studio B → mag', true, getDoc(doc(as('duo'), 'workouts/wDuoB')));
+await t('leest de open workout van studio A → mag', true, getDoc(doc(as('duo'), 'workouts/wOpenA')));
+// Lid zijn van een studio is geen vrijbrief: andermans schema blijft dicht, ook binnen je eigen studio.
+await t('leest het schema van een andere trainer → geweigerd', false, getDoc(doc(as('duo'), 'workouts/w2')));
+await t('schrijft in een studio waar hij NIET werkt → geweigerd', false, setDoc(doc(as('duo'), 'workouts/wDuoC'), { orgId: 'studioc', trainerId: 'duo', name: 'C' }));
+await t('trainer met één studio komt niet bij de andere', false, getDoc(doc(as('trainer1'), 'workouts/wB1')));
+
+console.log('Lidmaatschap kan niemand zichzelf geven');
+await t('sporter voegt zichzelf toe aan een tweede studio → geweigerd', false,
+  updateDoc(doc(as('sporter2'), 'profiles/sporter2'), { orgIds: ['vanas', 'studiob'] }));
+await t('trainer voegt zichzelf toe aan een tweede studio → geweigerd', false,
+  updateDoc(doc(as('trainer1'), 'profiles/trainer1'), { orgIds: ['vanas', 'studiob'] }));
+await t('registratie met twee studio\'s ineens → geweigerd', false,
+  setDoc(doc(as('nieuwD'), 'profiles/nieuwD'), { userId: 'nieuwD', orgId: 'vanas', orgIds: ['vanas', 'studiob'], role: 'sporter' }));
+await t('registratie met één studio → mag', true,
+  setDoc(doc(as('nieuwE'), 'profiles/nieuwE'), { userId: 'nieuwE', orgId: 'vanas', orgIds: ['vanas'], role: 'sporter' }));
+await t('beheerder haalt een trainer bij zijn studio → mag', true,
+  updateDoc(doc(as('admin1'), 'profiles/trainer1'), { orgIds: ['vanas'] }));
+await t('beheerder zet iemand in een studio die niet de zijne is → geweigerd', false,
+  updateDoc(doc(as('admin1'), 'profiles/trainer1'), { orgIds: ['studiob'] }));
 
 await env.cleanup();
 console.log(`\n${passed} geslaagd, ${failed} mislukt`);

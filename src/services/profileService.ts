@@ -18,7 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
 import type { Profile, ProfileRole, LeaderboardVisibility } from '../types';
-import { DEFAULT_ORG_ID, orgIdOf, requireOrgId } from './orgContext';
+import { DEFAULT_ORG_ID, orgIdOf, orgIdsOf, requireOrgId } from './orgContext';
 
 const COLLECTION = 'profiles';
 
@@ -44,9 +44,11 @@ function toProfile(data: Record<string, unknown>, userId: string): Profile {
   const rawVis = data.leaderboardVisibility;
   const leaderboardVisibility: LeaderboardVisibility =
     rawVis === 'anonymous' || rawVis === 'named' || rawVis === 'hidden' ? rawVis : 'named';
+  const orgId = orgIdOf(data.orgId);
   return {
     userId,
-    orgId: orgIdOf(data.orgId),
+    orgId,
+    orgIds: orgIdsOf(data.orgIds, orgId),
     role: role as ProfileRole,
     email: toStr(data.email),
     displayName: toStr(data.displayName),
@@ -81,6 +83,7 @@ export async function createProfile(
   const profile: Profile = {
     userId,
     orgId,
+    orgIds: [orgId],
     role,
     email: normalizedEmail,
     displayName: displayName ?? null,
@@ -142,28 +145,16 @@ export async function updateProfile(
   });
 }
 
-/** Sporters die aan deze trainer zijn gekoppeld. */
+/** Sporters die aan deze trainer zijn gekoppeld, binnen de actieve studio. */
 export async function getSportersByTrainerId(trainerId: string): Promise<Profile[]> {
-  if (!isFirebaseConfigured() || !db) return [];
-  const q = query(
-    collection(db, COLLECTION),
-    where('orgId', '==', requireOrgId()),
-    where('trainerId', '==', trainerId)
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => toProfile(d.data(), d.id));
+  const all = await getAllProfiles();
+  return all.filter((p) => p.trainerId === trainerId);
 }
 
-/** Alle sporters (voor workout-toewijzing: elke trainer kan elke sporter toewijzen). */
+/** Alle sporters van de actieve studio (voor workout-toewijzing). */
 export async function getAllSporters(): Promise<Profile[]> {
-  if (!isFirebaseConfigured() || !db) return [];
-  const q = query(
-    collection(db, COLLECTION),
-    where('orgId', '==', requireOrgId()),
-    where('role', '==', 'sporter')
-  );
-  const snap = await getDocs(q);
-  const list = snap.docs.map((d) => toProfile(d.data(), d.id));
+  const all = await getAllProfiles();
+  const list = all.filter((p) => p.role === 'sporter');
   return list.sort((a, b) =>
     (a.displayName || a.email || a.userId).localeCompare(
       b.displayName || b.email || b.userId,
@@ -173,19 +164,21 @@ export async function getAllSporters(): Promise<Profile[]> {
   );
 }
 
-/** Zoek profiel op e-mail (om sporter aan trainer te koppelen). */
+/**
+ * Zoek profiel op e-mail binnen de actieve studio.
+ * E-mail is uniek, dus we zoeken daarop en controleren daarna het lidmaatschap — dat scheelt
+ * een samengestelde index en houdt het antwoord scherp.
+ */
 export async function getProfileByEmail(email: string): Promise<Profile | null> {
   if (!isFirebaseConfigured() || !db) return null;
   const normalized = email.trim().toLowerCase();
   if (!normalized) return null;
-  const q = query(
-    collection(db, COLLECTION),
-    where('orgId', '==', requireOrgId()),
-    where('email', '==', normalized)
-  );
+  const q = query(collection(db, COLLECTION), where('email', '==', normalized));
   const snap = await getDocs(q);
   const first = snap.docs[0];
-  return first ? toProfile(first.data(), first.id) : null;
+  if (!first) return null;
+  const profile = toProfile(first.data(), first.id);
+  return profile.orgIds.includes(requireOrgId()) ? profile : null;
 }
 
 /** Sporter koppelen aan trainer (trainerId zetten). */
@@ -193,24 +186,24 @@ export async function assignTrainerToSporter(sporterUserId: string, trainerId: s
   return updateProfile(sporterUserId, { trainerId });
 }
 
-/** Alle profielen binnen de eigen studio (voor trainers en beheerders). */
+/**
+ * Alle profielen binnen de actieve studio (voor trainers en beheerders).
+ *
+ * Let op het filter: `orgIds` en niet `orgId`. Een trainer die bij twee studio's werkt heeft er
+ * één als thuisstudio; zocht je op die ene, dan was hij in de andere studio onzichtbaar — ook al
+ * werkt hij daar. Lidmaatschap bepaalt wie erbij hoort, niet waar iemand ooit is aangemaakt.
+ */
 export async function getAllProfiles(): Promise<Profile[]> {
   if (!isFirebaseConfigured() || !db) return [];
-  const q = query(collection(db, COLLECTION), where('orgId', '==', requireOrgId()));
+  const q = query(collection(db, COLLECTION), where('orgIds', 'array-contains', requireOrgId()));
   const snap = await getDocs(q);
   return snap.docs.map((d) => toProfile(d.data(), d.id));
 }
 
-/** Profielen met openstaande trainer-aanvraag (voor beheerders). */
+/** Profielen met openstaande trainer-aanvraag binnen de actieve studio (voor beheerders). */
 export async function getProfilesWithTrainerRequest(): Promise<Profile[]> {
-  if (!isFirebaseConfigured() || !db) return [];
-  const q = query(
-    collection(db, COLLECTION),
-    where('orgId', '==', requireOrgId()),
-    where('trainerRequested', '==', true)
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => toProfile(d.data(), d.id));
+  const all = await getAllProfiles();
+  return all.filter((p) => p.trainerRequested === true);
 }
 
 /** Profiel verwijderen (o.a. bij account verwijderen). */

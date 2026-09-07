@@ -173,10 +173,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Profiel schrijven met de beheerderssessie: alleen een beheerder mag een profiel met een rol
         // en de verificatie-bypass aanmaken (Firestore-regels).
         if (!db) throw new Error('Firebase niet geconfigureerd');
+        const orgId = requireOrgId();
         await setDoc(doc(db, 'profiles', uid), {
           userId: uid,
-          // Nieuw account hoort bij de studio van de beheerder die het aanmaakt.
-          orgId: requireOrgId(),
+          // Nieuw account hoort bij de studio van de beheerder die het aanmaakt. Lid worden van
+          // een tweede studio doet de beheerder daar, later, via Profielen.
+          orgId,
+          orgIds: [orgId],
           role,
           email: (cred.user.email ?? email).trim().toLowerCase(),
           displayName: name,

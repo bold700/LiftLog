@@ -69,9 +69,12 @@ function str(v) {
 
 export function toProfile(data, userId) {
   const rawRole = String(data.role ?? '').toLowerCase().trim();
+  const orgId = orgIdOf(data.orgId);
   return {
     userId,
-    orgId: orgIdOf(data.orgId),
+    orgId,
+    // Studio's waar deze persoon lid van is; een trainer kan er bij meerdere werken.
+    orgIds: Array.isArray(data.orgIds) && data.orgIds.length ? data.orgIds.map(String) : [orgId],
     role: rawRole === 'admin' || rawRole === 'trainer' ? rawRole : 'sporter',
     email: str(data.email),
     displayName: str(data.displayName),
@@ -208,12 +211,12 @@ export function createStore(db, auth, orgId = null) {
       return snap.exists ? toProfile(snap.data(), snap.id) : null;
     },
 
-    /** Profiel van een derde; geeft null als die persoon niet in de eigen studio zit. */
+    /** Profiel van een derde; geeft null als die persoon niet bij de eigen studio hoort. */
     async getProfileInOrg(userId) {
       const snap = await db.collection('profiles').doc(userId).get();
       if (!snap.exists) return null;
       const profile = toProfile(snap.data(), snap.id);
-      return profile.orgId === requireOrg() ? profile : null;
+      return profile.orgIds.includes(requireOrg()) ? profile : null;
     },
 
     /**
@@ -227,9 +230,13 @@ export function createStore(db, auth, orgId = null) {
       await db.collection('profiles').doc(userId).set({ ...safe, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     },
 
-    /** Alle profielen binnen de eigen studio. Nooit daarbuiten. */
+    /**
+     * Alle profielen binnen de eigen studio. Nooit daarbuiten.
+     * Filtert op `orgIds` (lidmaatschap), niet op `orgId` (thuisstudio): een trainer die bij twee
+     * studio's werkt hoort in beide lijsten thuis.
+     */
     async getAllProfiles() {
-      const snap = await db.collection('profiles').where('orgId', '==', requireOrg()).get();
+      const snap = await db.collection('profiles').where('orgIds', 'array-contains', requireOrg()).get();
       return snap.docs.map((d) => toProfile(d.data(), d.id));
     },
 

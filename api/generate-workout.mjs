@@ -20,7 +20,7 @@ const EX_COUNTS = new Set([4, 6, 7, 8, 9]);
 const exerciseCatalog = getExerciseCatalog();
 const resolveExerciseName = (raw) => exerciseCatalog.resolve(raw);
 const EXERCISE_CATALOG_APPEND =
-  '\n\n=== LiftLog-oefencatalogus (VERPLICHT: alleen deze namen, exact zoals geschreven, voor exerciseName en formule7.neuromuscular.exercises[].name) ===\n' +
+  '\n\n=== VORM-oefencatalogus (VERPLICHT: alleen deze namen, exact zoals geschreven, voor exerciseName en formule7.neuromuscular.exercises[].name) ===\n' +
   (exerciseCatalog.catalogMarkdown || '(catalogus leeg — controleer mega_exercise_db.json op de server)') +
   '\n=== Einde catalogus ===\n';
 
@@ -531,7 +531,7 @@ const SYSTEM_FORMULE7 =
   'Vul per dag oefeningen in die passen bij die trainingsdag (split/total body). Gebruik Nederlandse labels waar logisch. Geen extra velden buiten dit schema. ' +
   'moverType (data): Non = lang niet gesport (≥ jaar niet of nauwelijks); Low = soms sport; High = vaak sport / regelmatig. ' +
   'warmup.organisation moet ALTIJD verschillen van cardio.organisation én van elke ingevulde cardio.zones[].organisation (andere oefenvorm voor warming-up kiezen). Cooling-down mag wél dezelfde organisatie hebben als cardio. ' +
-  'days[].exercises[].exerciseName en formule7.neuromuscular.exercises[].name MOET exact overeenkomen met een naam uit de LiftLog-catalogus (zie onderaan); geen vrije oefennamen. ' +
+  'days[].exercises[].exerciseName en formule7.neuromuscular.exercises[].name MOET exact overeenkomen met een naam uit de VORM-catalogus (zie onderaan); geen vrije oefennamen. ' +
   EXERCISE_CATALOG_APPEND;
 
 function parsePeriodStartDate(value) {
@@ -712,7 +712,7 @@ export default async function handler(req, res) {
       if (!days.length) {
         return json(res, 422, {
           error:
-            'Geen bruikbare trainingsdagen: elke oefening moet een naam uit de LiftLog-oefencatalogus hebben (zie mega_exercise_db). Probeer opnieuw of vul handmatig aan.',
+            'Geen bruikbare trainingsdagen: elke oefening moet een naam uit de VORM-oefencatalogus hebben (zie mega_exercise_db). Probeer opnieuw of vul handmatig aan.',
         });
       }
 
@@ -729,7 +729,7 @@ export default async function handler(req, res) {
     if (!days.length) {
       return json(res, 422, {
         error:
-          'Geen bruikbare workout: oefennamen moeten exact uit de LiftLog-database komen. Probeer de prompt opnieuw of kies oefeningen handmatig.',
+          'Geen bruikbare workout: oefennamen moeten exact uit de VORM-database komen. Probeer de prompt opnieuw of kies oefeningen handmatig.',
       });
     }
 

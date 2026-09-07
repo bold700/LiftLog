@@ -1,6 +1,6 @@
 import { applyCors } from './cors.mjs';
 /**
- * De assistent in LiftLog zelf.
+ * De assistent in VORM zelf.
  *
  * Waarom dit naast de MCP-koppeling bestaat: die koppeling vraagt van iedere gebruiker een betaald
  * ChatGPT-account plus het plakken van een koppel-URL. Dat doet vrijwel geen enkele sporter. Hier
@@ -65,7 +65,7 @@ const ROLE_LABEL = { sporter: 'sporter', trainer: 'trainer', admin: 'beheerder' 
 function systemPrompt(profile, orgName) {
   const isStaff = profile.role === 'trainer' || profile.role === 'admin';
   return [
-    `Je bent de assistent in LiftLog, de trainingsapp van ${orgName}.`,
+    `Je bent de assistent in VORM, de trainingsapp van ${orgName}.`,
     `Je praat met ${profile.displayName || profile.email || 'de gebruiker'} (${ROLE_LABEL[profile.role] ?? 'sporter'}).`,
     `Vandaag is ${todayNl()} (Nederlandse tijd).`,
     `Antwoord in het Nederlands, kort en praktisch, alsof je naast iemand in de sportschool staat.`,
@@ -151,7 +151,6 @@ export default async function handler(req, res) {
   const lookup = createStore(admin.db, admin.auth);
   const profile = await lookup.getProfile(uid);
   if (!profile) return json(res, 401, { error: 'Profiel niet gevonden.', build: BUILD });
-  const store = createStore(admin.db, admin.auth, profile.orgId);
 
   let body;
   try {
@@ -162,10 +161,17 @@ export default async function handler(req, res) {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   if (messages.length === 0) return json(res, 400, { error: 'Geen bericht meegegeven.', build: BUILD });
 
-  const orgSnap = await admin.db.collection('orgs').doc(profile.orgId).get().catch(() => null);
+  // De app stuurt mee in welke studio de gebruiker werkt. Een trainer kan bij meerdere studio's
+  // horen, en dan moet de assistent over de juiste gaan. We controleren het lidmaatschap hier:
+  // wat de client meestuurt is een wens, geen bewijs.
+  const requestedOrgId = typeof body?.orgId === 'string' ? body.orgId.trim() : '';
+  const activeOrgId = requestedOrgId && profile.orgIds.includes(requestedOrgId) ? requestedOrgId : profile.orgId;
+  const store = createStore(admin.db, admin.auth, activeOrgId);
+
+  const orgSnap = await admin.db.collection('orgs').doc(activeOrgId).get().catch(() => null);
   const orgName = orgSnap?.exists ? orgSnap.data()?.name || 'je studio' : 'je studio';
 
-  const toolbox = await openToolbox({ profile }, store);
+  const toolbox = await openToolbox({ profile, orgName }, store);
   const steps = [];
   try {
     let input = toInput(messages);
