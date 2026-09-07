@@ -562,16 +562,18 @@ export const SchemasPage = () => {
             </Box>
 
             {/* Normale scherm-layout */}
-            <Box className="workout-detail-screen" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 1 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <IconButton size="small" onClick={handleBack} sx={{ p: 0.5 }} aria-label="Terug">
+            {/* Eén regel: de titel kort af met … zodat het menu rechts blijft staan. */}
+            <Box className="workout-detail-screen" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'nowrap', gap: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: '1 1 auto', minWidth: 0 }}>
+                <IconButton size="small" onClick={handleBack} sx={{ p: 0.5, flexShrink: 0 }} aria-label="Terug">
                   <ArrowBackIosNewIcon fontSize="small" />
                 </IconButton>
                 <Typography
                   variant="h6"
                   sx={{
                     fontWeight: 600,
-                    maxWidth: '100%',
+                    // minWidth 0 is nodig: een flex-item krimpt anders niet onder zijn tekstbreedte.
+                    minWidth: 0,
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -587,6 +589,7 @@ export const SchemasPage = () => {
                     size="small"
                     aria-label="Meer acties"
                     onClick={handleOpenActions}
+                    sx={{ flexShrink: 0 }}
                   >
                     <MoreVertIcon fontSize="small" />
                   </IconButton>
