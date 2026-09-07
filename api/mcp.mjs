@@ -1,4 +1,4 @@
-import { applyCors } from './cors.mjs';
+import { applyCors } from './_lib/cors.mjs';
 /**
  * MCP-endpoint (Streamable HTTP, stateless) voor ChatGPT, Claude en Gemini.
  * URL: /api/mcp/<koppelsleutel> (via rewrite in vercel.json naar /api/mcp?key=…), of /api/mcp met

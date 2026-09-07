@@ -1,4 +1,4 @@
-import { applyCors } from './cors.mjs';
+import { applyCors } from './_lib/cors.mjs';
 /**
  * De assistent in VORM zelf.
  *

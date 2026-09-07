@@ -1,6 +1,6 @@
-import { applyCors } from './cors.mjs';
+import { applyCors } from './_lib/cors.mjs';
 import { requireUser, enforceRateLimit } from './_lib/requireUser.mjs';
-import { getExerciseCatalog } from './exerciseCatalog.mjs';
+import { getExerciseCatalog } from './_lib/exerciseCatalog.mjs';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
 // Robuust tegen onbedoelde extra tekst in .env (bijv. "gpt-4.1-mini (optioneel)")

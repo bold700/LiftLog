@@ -102,8 +102,10 @@ export function normalizeExerciseKey(s) {
 export function loadMegaExerciseNamesFromDisk() {
   const cwd = process.cwd();
   const candidates = [
-    join(__dirname, '../src/data/mega_exercise_db.json'),
+    // Twee mappen omhoog: dit bestand staat in api/_lib/, de data in src/data/.
+    join(__dirname, '../../src/data/mega_exercise_db.json'),
     join(cwd, 'src/data/mega_exercise_db.json'),
+    join(__dirname, '../src/data/mega_exercise_db.json'),
     join(__dirname, 'data/mega_exercise_db.json'),
   ];
   for (const p of candidates) {

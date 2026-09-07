@@ -1,4 +1,4 @@
-import { applyCors } from './cors.mjs';
+import { applyCors } from './_lib/cors.mjs';
 /**
  * Admin-endpoint: een beheerder verwijdert een account definitief (Auth + profiel + persoonlijke data
  * + ranglijstdocument), of ruimt ranglijstdocumenten op van accounts die al weg zijn.
