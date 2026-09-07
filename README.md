@@ -15,6 +15,10 @@ Web- en mobiele app voor Van As Personal Training: trainers maken workouts en gr
 - **Inzichten**: progressie, spiergroepen, ranglijst (opt-in), hartslagzones, vetpercentage (Durnin & Womersley).
 - **Voeding en metingen**: Open Food Facts, barcode-scanner, fotoherkenning, gewicht/huidplooien/voortgangsfoto's.
 - **AI-chat koppeling**: MCP-server op `/api/mcp` met een persoonlijke koppelsleutel (Profiel → Koppel met AI-chat).
+- **Assistent in de app**: dezelfde gereedschapskist als de AI-koppeling, maar zonder connector of ChatGPT-abonnement (`/api/assistant`).
+- **Berichten en check-ins**: contact tussen trainer en sporter bij het dossier, met een wekelijkse check-in die het gewicht meteen als meting vastlegt.
+- **Meldingen**: pushnotificaties per toestel bij een bericht, een check-in of een nieuw schema.
+- **Meerdere studio's**: elke studio is strikt gescheiden (zie [docs/STUDIOS-EN-OVERDRACHT.md](docs/STUDIOS-EN-OVERDRACHT.md)).
 
 ## Ontwikkelen
 
