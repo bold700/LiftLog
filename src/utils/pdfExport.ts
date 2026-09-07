@@ -580,6 +580,6 @@ export async function buildSchemaPdf(schema: Schema, options: PdfExportOptions =
 
 export async function exportSchemaToPdf(schema: Schema, options: PdfExportOptions = {}): Promise<void> {
   const doc = await buildSchemaPdf(schema, options);
-  const safeName = (schema.name || 'workout').replace(/[^\w\-]+/g, '_');
+  const safeName = (schema.name || 'workout').replace(/[^\w-]+/g, '_');
   doc.save(`${safeName}.pdf`);
 }

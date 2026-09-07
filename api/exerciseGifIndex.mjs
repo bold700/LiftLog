@@ -59,6 +59,7 @@ const OVERRIDES = {
   'hip abductor machine': '0597', // lever seated hip abduction
   'hip adductor machine': '0598', // lever seated hip adduction
   'hyperextension machine back extension': '0489', // hyperextension
+  'hyperextension machine': '0489', // "Hyperextension Machine (Back Extension)": norm() haalt de haakjes weg
   'lower back extension machine': '0489', // hyperextension
   'barbell back squat': '0043', // barbell full squat
   'lat pulldown': '0150', // cable bar lateral pulldown
