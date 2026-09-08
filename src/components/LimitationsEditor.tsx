@@ -8,6 +8,7 @@ import { Box, Button, Chip, MenuItem, TextField, ToggleButton, ToggleButtonGroup
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import type { Limitation, LimitationArea } from '../types';
 import { LIMITATION_AREAS, describeLimitation } from '../utils/exerciseLimitations';
+import { segmentedToggleSx } from '../theme/segmentedToggle';
 
 interface LimitationsEditorProps {
   value: Limitation[];
@@ -90,10 +91,7 @@ export function LimitationsEditor({ value, onChange, disabled }: LimitationsEdit
             value={severity}
             onChange={(_, next: Limitation['severity'] | null) => next && setSeverity(next)}
             aria-label="Hoe streng"
-            sx={{
-              '& .MuiToggleButton-root': { textTransform: 'none', borderRadius: '20px' },
-              '& .MuiToggleButton-root.Mui-selected': { bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } },
-            }}
+            sx={segmentedToggleSx}
           >
             <ToggleButton value="let-op">Let op</ToggleButton>
             <ToggleButton value="vermijden">Vermijden</ToggleButton>
