@@ -565,6 +565,9 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
               onKeyPress={handleKeyPress}
               multiline
               rows={2}
+              // Label altijd bovenaan: het veld heeft toch een placeholder, en zo hoeft de uitsparing
+              // in de rand niet pas bij het focussen te verschijnen (iOS-weergavefout).
+              slotProps={{ inputLabel: { shrink: true } }}
               placeholder={
                 addFromSchema?.prefill
                   ? 'Bijv. maar 4 reps gehaald, zwaar gevoeld'
