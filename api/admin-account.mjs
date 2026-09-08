@@ -1,13 +1,13 @@
 import { applyCors } from './_lib/cors.mjs';
 /**
  * Admin-endpoint: een beheerder verwijdert een account definitief (Auth + profiel + persoonlijke data
- * + ranglijstdocument), of ruimt ranglijstdocumenten op van accounts die al weg zijn.
+ * + ranglijstdocument). De ranglijst wordt daarbij automatisch opgeschoond.
  *
- * Acties (POST, JSON):
- *  - { action: 'delete', targetUid }   verwijdert login, profiel, logs, voeding, metingen,
+ * Actie (POST, JSON):
+ *  - { action: 'delete', targetUid }   verwijdert login, profiel, logs, check-ins, voeding, metingen,
  *                                       workout-aanvragen en het ranglijstdocument van die persoon.
- *  - { action: 'cleanup-orphans' }      verwijdert ranglijstdocumenten zonder bijbehorend profiel
- *                                       (achtergebleven van eerder verwijderde accounts).
+ *                                       Daarna wordt de ranglijst automatisch nagelopen op documenten
+ *                                       van accounts die al eerder zijn verwijderd.
  *
  * Beveiliging:
  *  - Vereist een geldig Firebase ID-token in de Authorization-header (Bearer).
@@ -103,15 +103,6 @@ export default async function handler(req, res) {
     return json(res, 403, { error: 'Alleen beheerders mogen accounts verwijderen.' });
   }
 
-  if (action === 'cleanup-orphans') {
-    try {
-      const removed = await deleteOrphanedLeaderboardDocs(db);
-      return json(res, 200, { ok: true, removed });
-    } catch {
-      return json(res, 500, { error: 'Opschonen van de ranglijst mislukte.' });
-    }
-  }
-
   const targetUid = String(body?.targetUid || '').trim();
   if (action !== 'delete' || !targetUid) {
     return json(res, 400, { error: 'Ongeldige actie of ontbrekende targetUid.' });
@@ -143,8 +134,17 @@ export default async function handler(req, res) {
     cleaned = await deleteUserData(db, targetUid);
   } catch {
     return json(res, 500, {
-      error: 'Login en profiel verwijderd, maar het opruimen van logs/ranglijst mislukte. Gebruik "Ranglijst opschonen".',
+      error: 'Login en profiel verwijderd, maar het opruimen van logs/ranglijst mislukte. Probeer het account opnieuw te verwijderen.',
     });
+  }
+
+  // 7) Ranglijst nalopen op documenten van accounts die eerder al zijn verwijderd. Dit hoort bij het
+  //    verwijderen zelf, zodat niemand dat handmatig hoeft te doen. Mislukt dit, dan is de eigenlijke
+  //    verwijdering al gelukt en heeft een volgende verwijdering opnieuw een kans.
+  try {
+    cleaned.orphansRemoved = (await deleteOrphanedLeaderboardDocs(db)).length;
+  } catch (e) {
+    console.error('[admin-account] Ranglijst nalopen mislukte:', e);
   }
 
   return json(res, 200, { ok: true, deletedUid: targetUid, cleaned });
@@ -167,7 +167,7 @@ async function deleteQueryInBatches(db, query) {
 /** Alles wat aan één persoon hangt: per-user collecties op userId, plus het ranglijstdocument. */
 async function deleteUserData(db, uid) {
   const result = {};
-  for (const name of ['logs', 'nutritionLogs', 'measurements', 'workoutRequests']) {
+  for (const name of ['logs', 'checkins', 'nutritionLogs', 'measurements', 'workoutRequests']) {
     result[name] = await deleteQueryInBatches(db, db.collection(name).where('userId', '==', uid));
   }
   const lb = db.collection('leaderboardPublic').doc(uid);
@@ -177,7 +177,8 @@ async function deleteUserData(db, uid) {
   return result;
 }
 
-/** Ranglijstdocumenten waarvan het profiel niet meer bestaat (document-id = uid). */
+/** Ranglijstdocumenten waarvan het profiel niet meer bestaat (document-id = uid): resten van
+ *  verwijderingen van voor deze automatische opschoning. */
 async function deleteOrphanedLeaderboardDocs(db) {
   const [lbSnap, profilesSnap] = await Promise.all([
     db.collection('leaderboardPublic').get(),

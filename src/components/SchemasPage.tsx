@@ -49,6 +49,7 @@ import { SchemaDeleteDialog } from './schemas/SchemaDeleteDialog';
 import { GroupSessionSetupDialog } from './schemas/GroupSessionSetupDialog';
 import { WorkoutRequestDialog } from './schemas/WorkoutRequestDialog';
 import { NewSchemaDialog } from './schemas/NewSchemaDialog';
+import { LesroosterImportDialog } from './schemas/LesroosterImportDialog';
 import { SchemaPrintView } from './schemas/SchemaPrintView';
 import { SchemaPeriodSummary } from './schemas/SchemaPeriodSummary';
 import { SchemaDayCard } from './schemas/SchemaDayCard';
@@ -154,6 +155,7 @@ export const SchemasPage = () => {
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [justLoggedExerciseId, setJustLoggedExerciseId] = useState<string | null>(null);
   const [openNewSchemaDialog, setOpenNewSchemaDialog] = useState(false);
+  const [openLesroosterImport, setOpenLesroosterImport] = useState(false);
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
   /** Statusmelding tijdens het maken van de PDF (plaatjes ophalen kan even duren). */
   const [pdfStatus, setPdfStatus] = useState<string | null>(null);
@@ -640,18 +642,28 @@ export const SchemasPage = () => {
             {activeCategory || 'Workouts'}
           </Typography>
           {canCreateWorkouts && (
-            <Box
-              sx={{ display: 'inline-block' }}
-              onClick={handleNewSchemaClick}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === 'Enter' && handleNewSchemaClick()}
-            >
-              {/* @ts-ignore */}
-              <md-filled-button>
-                <md-icon slot="start">add</md-icon>
-                Nieuwe workout aanmaken
-              </md-filled-button>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              {isTrainer && (
+                <Button
+                  onClick={() => setOpenLesroosterImport(true)}
+                  sx={{ textTransform: 'none', color: 'text.secondary' }}
+                >
+                  Lesrooster importeren
+                </Button>
+              )}
+              <Box
+                sx={{ display: 'inline-block' }}
+                onClick={handleNewSchemaClick}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && handleNewSchemaClick()}
+              >
+                {/* @ts-ignore */}
+                <md-filled-button>
+                  <md-icon slot="start">add</md-icon>
+                  Nieuwe workout aanmaken
+                </md-filled-button>
+              </Box>
             </Box>
           )}
         </Box>
@@ -722,6 +734,14 @@ export const SchemasPage = () => {
           </Box>
         )}
       </ContentCard>
+
+      <LesroosterImportDialog
+        open={openLesroosterImport}
+        onClose={() => {
+          setOpenLesroosterImport(false);
+          loadSchemas();
+        }}
+      />
 
       <NewSchemaDialog
         open={openNewSchemaDialog}

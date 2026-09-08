@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react'
 import { ThemeProvider, CssBaseline, Box, Fab, Menu, MenuItem, Alert, Button } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import FitnessCenterRoundedIcon from '@mui/icons-material/FitnessCenterRounded';
+import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
 import EventNoteRoundedIcon from '@mui/icons-material/EventNoteRounded';
 import MenuRoundedIcon from '@mui/icons-material/MenuRounded';
 import DonutLargeRoundedIcon from '@mui/icons-material/DonutLargeRounded';
@@ -24,7 +25,6 @@ import { NotifyProvider } from './context/NotifyContext';
 
 // Minder vaak gebruikte tabbladen pas laden als ze opengaan (kleinere eerste download).
 const BeheerPage = lazy(() => import('./components/BeheerPage').then((m) => ({ default: m.BeheerPage })));
-const ProfielenPage = lazy(() => import('./components/ProfielenPage').then((m) => ({ default: m.ProfielenPage })));
 const AssistentPage = lazy(() => import('./components/AssistentPage').then((m) => ({ default: m.AssistentPage })));
 const BerichtenPage = lazy(() => import('./components/BerichtenPage').then((m) => ({ default: m.BerichtenPage })));
 const LessenPage = lazy(() => import('./components/LessenPage').then((m) => ({ default: m.LessenPage })));
@@ -49,10 +49,9 @@ const TAB_PROFIEL = 3;
 const TAB_BEHEER = 4;
 const TAB_VOEDING = 5;
 const TAB_METINGEN = 6;
-const TAB_PROFIELEN = 7;
-const TAB_ASSISTENT = 8;
-const TAB_BERICHTEN = 9;
-const TAB_LESSEN = 10;
+const TAB_ASSISTENT = 7;
+const TAB_BERICHTEN = 8;
+const TAB_LESSEN = 9;
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState(TAB_INZICHTEN);
@@ -124,7 +123,7 @@ function AppContent() {
     { label: 'Assistent', icon: <AutoAwesomeRoundedIcon fontSize="small" />, tabIndex: TAB_ASSISTENT },
     { label: 'Inzichten', icon: <DonutLargeRoundedIcon fontSize="small" />, tabIndex: TAB_INZICHTEN },
     { label: 'Workouts', icon: <CalendarMonthRoundedIcon fontSize="small" />, tabIndex: TAB_SCHEMAS },
-    ...(isTrainer ? [{ label: 'Beheer', icon: <FitnessCenterRoundedIcon fontSize="small" />, tabIndex: TAB_BEHEER }] : []),
+    ...(isTrainer ? [{ label: 'Beheer', icon: <GroupRoundedIcon fontSize="small" />, tabIndex: TAB_BEHEER }] : []),
   ];
 
   const barIndexForActiveTab = tabs.findIndex((t) => t.tabIndex === activeTab);
@@ -154,7 +153,6 @@ function AppContent() {
             ]}
             onNavigateToTab={setActiveTab}
             beheerTabIndex={TAB_BEHEER}
-            profielenTabIndex={TAB_PROFIELEN}
           />
         );
       case TAB_INZICHTEN:
@@ -169,9 +167,7 @@ function AppContent() {
       case TAB_SCHEMAS:
         return <SchemasPage />;
       case TAB_BEHEER:
-        return <BeheerPage onOpenProfielen={() => setActiveTab(TAB_PROFIELEN)} />;
-      case TAB_PROFIELEN:
-        return <ProfielenPage />;
+        return <BeheerPage />;
       case TAB_ASSISTENT:
         return <AssistentPage />;
       case TAB_BERICHTEN:
