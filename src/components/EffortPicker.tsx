@@ -4,6 +4,7 @@
  */
 import { Box, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import type { ExerciseEffort } from '../types';
+import { segmentedToggleSx } from '../theme/segmentedToggle';
 import { EFFORT_LABELS } from '../utils/trainingFeedback';
 
 interface EffortPickerProps {
@@ -28,19 +29,7 @@ export function EffortPicker({ value, onChange, disabled }: EffortPickerProps) {
         disabled={disabled}
         onChange={(_, next: ExerciseEffort | null) => onChange(next)}
         aria-label="Hoe ging het"
-        sx={{
-          '& .MuiToggleButton-root': {
-            textTransform: 'none',
-            fontWeight: 500,
-            borderRadius: '20px',
-            py: 0.75,
-          },
-          '& .MuiToggleButton-root.Mui-selected': {
-            bgcolor: '#000',
-            color: '#F2E4D3',
-            '&:hover': { bgcolor: '#1a1a1a' },
-          },
-        }}
+        sx={segmentedToggleSx}
       >
         {OPTIONS.map((opt) => (
           <ToggleButton key={opt} value={opt} aria-label={EFFORT_LABELS[opt]}>

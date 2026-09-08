@@ -16,6 +16,7 @@ import {
   Typography,
 } from '@mui/material';
 import { FEELING_LABELS } from '../utils/trainingFeedback';
+import { segmentedToggleItemSx, segmentedToggleSx } from '../theme/segmentedToggle';
 
 export type Feeling = 1 | 2 | 3 | 4 | 5;
 
@@ -47,9 +48,9 @@ export function CheckinDialog({ open, dayLabel, saving, onSkip, onSave }: Checki
           onChange={(_, next: Feeling | null) => setFeeling(next)}
           aria-label="Hoe voelde de training"
           sx={{
+            ...segmentedToggleSx,
             mb: 2,
-            '& .MuiToggleButton-root': { textTransform: 'none', flexDirection: 'column', py: 1, lineHeight: 1.2 },
-            '& .MuiToggleButton-root.Mui-selected': { bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } },
+            '& .MuiToggleButtonGroup-grouped': { ...segmentedToggleItemSx, flexDirection: 'column', py: 1, lineHeight: 1.2 },
           }}
         >
           {FEELINGS.map((f) => (
