@@ -17,9 +17,14 @@ import {
   type Timestamp,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
-import type { Profile, ProfileRole, LeaderboardVisibility } from '../types';
+import type { Profile, ProfileRole, LeaderboardVisibility, Limitation, LimitationArea } from '../types';
 
 const COLLECTION = 'profiles';
+
+/** Toegestane lichaamsdelen bij een bijzonderheid (zelfde lijst als src/utils/exerciseLimitations.ts). */
+const LIMITATION_AREA_VALUES: LimitationArea[] = [
+  'schouder', 'nek', 'elleboog', 'pols', 'onderrug', 'bovenrug', 'borst', 'buik', 'heup', 'knie', 'hamstring', 'enkel', 'overig',
+];
 
 function numOrNull(v: unknown): number | null {
   if (v == null || v === '') return null;
@@ -33,6 +38,27 @@ function parseGoal(v: unknown): Profile['nutritionGoal'] {
   const n = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : Number(x) || 0);
   const goal = { kcal: n(g.kcal), protein: n(g.protein), carbs: n(g.carbs), fat: n(g.fat) };
   return goal.kcal || goal.protein || goal.carbs || goal.fat ? goal : null;
+}
+
+/** Bijzonderheden uit Firestore, met alleen bekende waarden (onbekende regels vallen weg). */
+function parseLimitations(raw: unknown): Limitation[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: Limitation[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const o = item as Record<string, unknown>;
+    const area = LIMITATION_AREA_VALUES.includes(String(o.area) as LimitationArea) ? (String(o.area) as LimitationArea) : null;
+    if (!area) continue;
+    out.push({
+      id: String(o.id ?? `lim_${out.length}`),
+      area,
+      severity: o.severity === 'vermijden' ? 'vermijden' : 'let-op',
+      note: o.note == null || o.note === '' ? null : String(o.note),
+      alternative: o.alternative == null || o.alternative === '' ? null : String(o.alternative),
+      createdAt: typeof o.createdAt === 'string' ? o.createdAt : new Date().toISOString(),
+    });
+  }
+  return out;
 }
 
 function toProfile(data: Record<string, unknown>, userId: string): Profile {
@@ -55,6 +81,7 @@ function toProfile(data: Record<string, unknown>, userId: string): Profile {
     birthDate: toStr(data.birthDate),
     gender: data.gender === 'man' || data.gender === 'vrouw' || data.gender === 'anders' ? data.gender : null,
     restingHrBpm: numOrNull(data.restingHrBpm),
+    limitations: parseLimitations(data.limitations),
     trainerId: toStr(data.trainerId),
     trainerRequested: data.trainerRequested === true,
     createdByAdmin: data.createdByAdmin === true,
@@ -123,6 +150,7 @@ export async function updateProfile(
       | 'birthDate'
       | 'gender'
       | 'restingHrBpm'
+      | 'limitations'
       | 'trainerId'
       | 'trainerRequested'
       | 'leaderboardVisibility'

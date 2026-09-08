@@ -237,6 +237,36 @@ export interface Formule7Routekaart {
   notes: string;
 }
 
+/** Lichaamsdeel waarop een sporter een bijzonderheid (blessure, pijntje) heeft. */
+export type LimitationArea =
+  | 'schouder'
+  | 'nek'
+  | 'elleboog'
+  | 'pols'
+  | 'onderrug'
+  | 'bovenrug'
+  | 'borst'
+  | 'buik'
+  | 'heup'
+  | 'knie'
+  | 'hamstring'
+  | 'enkel'
+  | 'overig';
+
+/**
+ * Bijzonderheid van een sporter: waar het zit, hoe streng ("let op" of "vermijden"), een toelichting
+ * en wat die sporter in plaats daarvan doet. De app waarschuwt bij oefeningen die dat gebied belasten.
+ */
+export interface Limitation {
+  id: string;
+  area: LimitationArea;
+  severity: 'let-op' | 'vermijden';
+  note?: string | null;
+  /** Wat deze sporter in plaats daarvan doet, bijv. "geen pressen boven schouderhoogte, floor press". */
+  alternative?: string | null;
+  createdAt: string;
+}
+
 // --- Profiel (sporter / trainer / beheerder) ---
 export type ProfileRole = 'sporter' | 'trainer' | 'admin';
 
@@ -270,6 +300,8 @@ export interface Profile {
   gender?: 'man' | 'vrouw' | 'anders' | null;
   /** Rusthartslag in bpm. */
   restingHrBpm?: number | null;
+  /** Blessures en pijntjes; zichtbaar voor de trainer bij het inplannen en tijdens de les. */
+  limitations?: Limitation[];
   /** Alleen bij sporters: uid van de trainer die hen beheert. */
   trainerId: string | null;
   /** True als deze gebruiker als trainer wil en op goedkeuring wacht. */
