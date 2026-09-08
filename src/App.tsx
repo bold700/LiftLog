@@ -21,7 +21,6 @@ import { NotifyProvider } from './context/NotifyContext';
 
 // Minder vaak gebruikte tabbladen pas laden als ze opengaan (kleinere eerste download).
 const BeheerPage = lazy(() => import('./components/BeheerPage').then((m) => ({ default: m.BeheerPage })));
-const OnderhoudPage = lazy(() => import('./components/OnderhoudPage').then((m) => ({ default: m.OnderhoudPage })));
 const ProfielPage = lazy(() => import('./components/ProfielPage').then((m) => ({ default: m.ProfielPage })));
 const NutritionPage = lazy(() => import('./components/NutritionPage').then((m) => ({ default: m.NutritionPage })));
 const MetingenPage = lazy(() => import('./components/MetingenPage').then((m) => ({ default: m.MetingenPage })));
@@ -43,7 +42,6 @@ const TAB_PROFIEL = 3;
 const TAB_BEHEER = 4;
 const TAB_VOEDING = 5;
 const TAB_METINGEN = 6;
-const TAB_ONDERHOUD = 7;
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState(TAB_INZICHTEN);
@@ -140,7 +138,6 @@ function AppContent() {
             ]}
             onNavigateToTab={setActiveTab}
             beheerTabIndex={TAB_BEHEER}
-            onderhoudTabIndex={TAB_ONDERHOUD}
           />
         );
       case TAB_INZICHTEN:
@@ -156,8 +153,6 @@ function AppContent() {
         return <SchemasPage />;
       case TAB_BEHEER:
         return <BeheerPage />;
-      case TAB_ONDERHOUD:
-        return <OnderhoudPage />;
       case TAB_PROFIEL:
         return <ProfielPage />;
       case TAB_VOEDING:

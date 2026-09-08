@@ -1,6 +1,6 @@
 /**
  * Beheer: alle accounts en sporters op één plek. Aanvragen, sporters koppelen, accounts aanmaken,
- * profielen inzien en bijwerken (trainers en beheerders). Onderhoudsacties staan op Onderhoud.
+ * profielen inzien en bijwerken (trainers en beheerders). Het lesrooster importeer je bij Workouts.
  * Zoeken, filteren op rol/volledigheid, per profiel alle velden bewerken in één dialoog,
  * en nieuwe accounts aanmaken (zonder e-mailverificatie) om voor sporters bij te houden.
  */
