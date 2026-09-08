@@ -6,6 +6,7 @@ import generateHandler from '../api/generate-workout.mjs';
 import exerciseDemoHandler from '../api/exercise-demo.mjs';
 import exerciseSearchHandler from '../api/exercise-search.mjs';
 import foodPhotoHandler from '../api/food-photo.mjs';
+import foodSearchHandler from '../api/food-search.mjs';
 
 function loadDotEnvIfMissing() {
   // Simple .env loader voor lokale dev/test (zonder extra dependencies).
@@ -103,6 +104,13 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname === '/api/food-search' && req.method === 'GET') {
+    const reqAdapter = { method: req.method, query };
+    const resAdapter = new ServerResponseAdapter(res);
+    await foodSearchHandler(reqAdapter, resAdapter);
+    return;
+  }
+
   if (pathname === '/api/generate-workout') {
     const body = await readJsonBody(req);
     const reqAdapter = {
@@ -132,7 +140,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(
-    `[local-api-server] Luistert op http://localhost:${PORT} — /api/generate-workout, /api/exercise-demo, /api/exercise-search`
+    `[local-api-server] Luistert op http://localhost:${PORT} — /api/generate-workout, /api/exercise-demo, /api/exercise-search, /api/food-search, /api/food-photo`
   );
 });
 
