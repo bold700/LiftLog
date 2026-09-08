@@ -67,6 +67,12 @@ await t('te lange naam → geweigerd', false, setDoc(doc(as('sporter1'), 'leader
 await t('merge-update van eigen document (zoals de app doet) → mag', true, setDoc(doc(as('sporter1'), 'leaderboardPublic/sporter1'), lb('sporter1', { weightKg7d: 120 }), { merge: true }));
 await t('andere ingelogde gebruiker leest ranglijst → mag', true, getDoc(doc(as('sporter2'), 'leaderboardPublic/sporter1')));
 
+console.log('Check-ins');
+await t('sporter slaat eigen check-in op → mag', true, setDoc(doc(as('sporter2'), 'checkins/c1'), { userId: 'sporter2', loggedBy: 'sporter2', trainerId: 'trainer1', feeling: 4, note: 'Arnold press lastig' }));
+await t('sporter schrijft check-in voor ander → geweigerd', false, setDoc(doc(as('sporter2'), 'checkins/c2'), { userId: 'sporter1', loggedBy: 'sporter2', feeling: 3 }));
+await t('trainer leest check-in van sporter → mag', true, getDoc(doc(as('trainer1'), 'checkins/c1')));
+await t('andere sporter leest check-in → geweigerd', false, getDoc(doc(as('sporter3'), 'checkins/c1')));
+
 console.log('Workouts');
 await t('sporter maakt workout op naam van trainer → geweigerd', false, setDoc(doc(as('sporter1'), 'workouts/w1'), { trainerId: 'trainer1', clientId: 'sporter1', name: 'x' }));
 await t('trainer maakt workout → mag', true, setDoc(doc(as('trainer1'), 'workouts/w2'), { trainerId: 'trainer1', clientId: 'sporter1', name: 'x' }));

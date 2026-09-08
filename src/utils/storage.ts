@@ -1,4 +1,4 @@
-import { Exercise, Workout } from '../types';
+import { Exercise, Workout, ExerciseEffort } from '../types';
 import { saveExerciseLog, deleteExerciseLog, getLogsForUser } from '../services/logService';
 
 const STORAGE_KEY = 'liftlog_workouts';
@@ -23,6 +23,7 @@ function logToExercise(log: {
   sets: number | null;
   reps: number | null;
   notes?: string | null;
+  effort?: ExerciseEffort | null;
   date: string;
   schemaId?: string | null;
   schemaDayIndex?: number | null;
@@ -35,6 +36,7 @@ function logToExercise(log: {
     sets: log.sets ?? undefined,
     reps: log.reps ?? undefined,
     notes: log.notes ?? undefined,
+    effort: log.effort ?? undefined,
     schemaId: log.schemaId ?? null,
     schemaDayIndex: log.schemaDayIndex ?? null,
   };
@@ -53,6 +55,7 @@ function mirrorToCloud(ex: Exercise): void {
     sets: ex.sets ?? null,
     reps: ex.reps ?? null,
     notes: ex.notes ?? null,
+    effort: ex.effort ?? null,
     date: ex.date,
     schemaId: ex.schemaId ?? null,
     schemaDayIndex: ex.schemaDayIndex ?? null,
