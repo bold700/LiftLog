@@ -31,17 +31,17 @@ export interface FullscreenMenuProps {
   /** Tab-index voor Beheer (wordt alleen getoond als profiel trainer of admin). */
   beheerTabIndex: number;
   /** Tab-index voor Profielen (alle accounts inzien en bijwerken; alleen trainer of admin). */
-  profielenTabIndex?: number;
+  onderhoudTabIndex?: number;
 }
 
-export const FullscreenMenu = ({ onClose, navItems, onNavigateToTab, beheerTabIndex, profielenTabIndex }: FullscreenMenuProps) => {
+export const FullscreenMenu = ({ onClose, navItems, onNavigateToTab, beheerTabIndex, onderhoudTabIndex }: FullscreenMenuProps) => {
   const auth = useAuth();
   const profile = useProfile();
   const isTrainer = profile?.isTrainer ?? false;
   const menuItems: FullscreenMenuNavItem[] = [
     ...navItems,
-    ...(isTrainer && profielenTabIndex != null ? [{ label: 'Profielen', tabIndex: profielenTabIndex, icon: <GroupRoundedIcon fontSize="small" /> }] : []),
-    ...(isTrainer ? [{ label: 'Beheer', tabIndex: beheerTabIndex, icon: <FitnessCenterRoundedIcon fontSize="small" /> }] : []),
+    ...(isTrainer ? [{ label: 'Beheer', tabIndex: beheerTabIndex, icon: <GroupRoundedIcon fontSize="small" /> }] : []),
+    ...(isTrainer && onderhoudTabIndex != null ? [{ label: 'Onderhoud', tabIndex: onderhoudTabIndex, icon: <FitnessCenterRoundedIcon fontSize="small" /> }] : []),
   ];
 
   const handleLogout = async () => {
