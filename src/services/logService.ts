@@ -35,6 +35,7 @@ function toLog(data: Record<string, unknown>, id: string): ExerciseLog {
     sets: num(data.sets),
     reps: num(data.reps),
     notes: str(data.notes),
+    effort: data.effort === 'light' || data.effort === 'good' || data.effort === 'heavy' ? data.effort : null,
     date: typeof data.date === 'string' ? data.date : new Date().toISOString(),
     schemaId: str(data.schemaId),
     schemaDayIndex:

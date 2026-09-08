@@ -34,12 +34,13 @@ import { useProfile } from '../context/ProfileContext';
 import { useAuth } from '../context/AuthContext';
 import { getAllProfiles, updateProfile } from '../services/profileService';
 import { deleteAccountAsAdmin } from '../services/adminAccountService';
-import type { LeaderboardVisibility, Profile, ProfileRole } from '../types';
+import type { LeaderboardVisibility, Profile, ProfileRole, Limitation } from '../types';
 import { PageLayout, ContentCard } from './layout';
 import { UserAvatar } from './UserAvatar';
 import { ageOnDate } from '../utils/bodyFat';
 import { heartRateZones } from '../utils/heartRate';
 import { HeartRateZonesTable } from './HeartRateZonesTable';
+import { LimitationsEditor } from './LimitationsEditor';
 import { todayIso } from '../utils/format';
 
 type Filter = 'all' | 'sporter' | 'trainer' | 'incomplete';
@@ -82,6 +83,7 @@ interface EditState {
   restingHr: string;
   weightGoalKg: string;
   leaderboardVisibility: LeaderboardVisibility;
+  limitations: Limitation[];
 }
 
 function toEditState(p: Profile): EditState {
@@ -95,6 +97,7 @@ function toEditState(p: Profile): EditState {
     restingHr: p.restingHrBpm != null ? String(p.restingHrBpm) : '',
     weightGoalKg: p.weightGoalKg != null ? String(p.weightGoalKg) : '',
     leaderboardVisibility: p.leaderboardVisibility ?? 'named',
+    limitations: p.limitations ?? [],
   };
 }
 
@@ -268,6 +271,7 @@ export function ProfielenPage() {
         birthDate: edit.birthDate || null,
         gender: edit.gender || null,
         restingHrBpm: num(edit.restingHr),
+        limitations: edit.limitations,
         weightGoalKg: num(edit.weightGoalKg),
         leaderboardVisibility: edit.leaderboardVisibility,
       });
@@ -540,6 +544,14 @@ export function ProfielenPage() {
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
               Geboortedatum en geslacht zijn nodig voor het vetpercentage uit huidplooien; lengte voor BMI; rusthartslag voor hartslagzones op maat.
             </Typography>
+            <Box sx={{ mt: 2 }}>
+              <LimitationsEditor
+                value={edit.limitations}
+                onChange={(limitations) => setEdit({ ...edit, limitations })}
+                disabled={saving}
+              />
+            </Box>
+
             <HeartRateZonesTable
               zones={editZones}
               emptyText="Vul de geboortedatum in om de hartslagzones van deze sporter te zien. Met rusthartslag worden ze op maat berekend."

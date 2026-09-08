@@ -27,6 +27,10 @@ import {
   formatStretchingSummary,
 } from '../utils/format';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
+import { useProfile } from '../context/ProfileContext';
+import { useNotify } from '../context/NotifyContext';
+import { saveCheckin } from '../services/checkinService';
+import { CheckinDialog, type Feeling } from './CheckinDialog';
 import { designTokens } from '../theme/designTokens';
 import { PageLayout, ContentCard } from './layout';
 import { AppleHealthWorkoutCard } from './AppleHealthWorkoutCard';
@@ -69,7 +73,48 @@ export const TrainingSessionView = ({
   onClearJustLogged,
 }: TrainingSessionViewProps) => {
   const addFromSchema = useAddFromSchema();
+  const profileCtx = useProfile();
+  const notify = useNotify();
+  const [checkinOpen, setCheckinOpen] = useState(false);
+  const [checkinSaving, setCheckinSaving] = useState(false);
   const day = schema.days[dayIndex];
+
+  const completeDay = useCallback(() => {
+    markDayComplete(schema.id, dayIndex);
+    setDayMarkedComplete(true);
+    setCheckinOpen(false);
+  }, [schema.id, dayIndex]);
+
+  /** Check-in opslaan voor de trainer (alleen met account); daarna de dag afronden. */
+  const handleCheckinSave = useCallback(
+    async (feeling: Feeling, note: string) => {
+      const me = profileCtx?.profile;
+      if (!me) {
+        completeDay();
+        return;
+      }
+      setCheckinSaving(true);
+      try {
+        await saveCheckin({
+          userId: me.userId,
+          loggedBy: me.userId,
+          trainerId: me.trainerId ?? schema.trainerId ?? null,
+          schemaId: schema.id,
+          schemaDayIndex: dayIndex,
+          dayLabel: day?.dayLabel ?? null,
+          feeling,
+          note: note || null,
+          date: new Date().toISOString(),
+        });
+      } catch (err) {
+        notify.error('Check-in opslaan mislukt. De training is wel afgerond.', err);
+      } finally {
+        setCheckinSaving(false);
+      }
+      completeDay();
+    },
+    [profileCtx?.profile, schema.id, schema.trainerId, dayIndex, day?.dayLabel, notify, completeDay]
+  );
   const [loggedExercises, setLoggedExercises] = useState<Exercise[]>(() =>
     getLoggedExercisesForSchemaDayInLast12Hours(schema.id, dayIndex)
   );
@@ -226,11 +271,8 @@ export const TrainingSessionView = ({
             <Button
               variant="outlined"
               color="inherit"
-              onClick={() => {
-                markDayComplete(schema.id, dayIndex);
-                setDayMarkedComplete(true);
-              }}
-              aria-label="Training in één keer als voltooid markeren"
+              onClick={() => setCheckinOpen(true)}
+              aria-label="Training afronden en check-in invullen"
               sx={{
                 mb: 2,
                 borderRadius: '20px',
@@ -459,6 +501,13 @@ export const TrainingSessionView = ({
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         sx={{ mb: 8 }}
       />
-    </PageLayout>
+    <CheckinDialog
+        open={checkinOpen}
+        dayLabel={day?.dayLabel || 'de training'}
+        saving={checkinSaving}
+        onSkip={completeDay}
+        onSave={handleCheckinSave}
+      />
+      </PageLayout>
   );
 };

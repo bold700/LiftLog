@@ -1,3 +1,6 @@
+/** Hoe een oefening ging volgens de sporter: te licht, goed of te zwaar. */
+export type ExerciseEffort = 'light' | 'good' | 'heavy';
+
 export interface Exercise {
   id: string;
   name?: string; // Optioneel: kan leeg zijn voor alleen notities
@@ -6,6 +9,8 @@ export interface Exercise {
   sets?: number;
   reps?: number;
   notes?: string; // Optionele notitie bijv. "last van mn schouder", "ging goed", "was te zwaar"
+  /** Signaal van de sporter: te licht / goed / te zwaar (voor de trainer bij de volgende sessie). */
+  effort?: ExerciseEffort;
   /** Alleen gezet wanneer log vanuit een schema wordt aangemaakt */
   schemaId?: string | null;
   /** Welke dag van het schema (0-based index) */
@@ -36,11 +41,33 @@ export interface ExerciseLog {
   sets: number | null;
   reps: number | null;
   notes?: string | null;
+  /** Signaal van de sporter: te licht / goed / te zwaar. */
+  effort?: ExerciseEffort | null;
   date: string; // ISO date-time string
   schemaId?: string | null;
   schemaDayIndex?: number | null;
   /** Koppeling aan een groepssessie (optioneel). */
   sessionId?: string | null;
+  createdAt: string;
+}
+
+/**
+ * Check-in na een training (Firestore-collectie `checkins`): hoe voelde het en waar moet de
+ * trainer op letten. Vervangt het WhatsApp-verslagje na een thuistraining.
+ */
+export interface SessionCheckin {
+  id: string;
+  userId: string;
+  loggedBy: string;
+  trainerId: string | null;
+  schemaId: string | null;
+  schemaDayIndex: number | null;
+  /** Label van de trainingsdag, voor weergave zonder het schema op te halen. */
+  dayLabel: string | null;
+  /** 1 (slecht) t/m 5 (top). */
+  feeling: 1 | 2 | 3 | 4 | 5;
+  note: string | null;
+  date: string; // ISO date-time string
   createdAt: string;
 }
 
@@ -210,6 +237,36 @@ export interface Formule7Routekaart {
   notes: string;
 }
 
+/** Lichaamsdeel waarop een sporter een bijzonderheid (blessure, pijntje) heeft. */
+export type LimitationArea =
+  | 'schouder'
+  | 'nek'
+  | 'elleboog'
+  | 'pols'
+  | 'onderrug'
+  | 'bovenrug'
+  | 'borst'
+  | 'buik'
+  | 'heup'
+  | 'knie'
+  | 'hamstring'
+  | 'enkel'
+  | 'overig';
+
+/**
+ * Bijzonderheid van een sporter: waar het zit, hoe streng ("let op" of "vermijden"), een toelichting
+ * en wat die sporter in plaats daarvan doet. De app waarschuwt bij oefeningen die dat gebied belasten.
+ */
+export interface Limitation {
+  id: string;
+  area: LimitationArea;
+  severity: 'let-op' | 'vermijden';
+  note?: string | null;
+  /** Wat deze sporter in plaats daarvan doet, bijv. "geen pressen boven schouderhoogte, floor press". */
+  alternative?: string | null;
+  createdAt: string;
+}
+
 // --- Profiel (sporter / trainer / beheerder) ---
 export type ProfileRole = 'sporter' | 'trainer' | 'admin';
 
@@ -243,6 +300,8 @@ export interface Profile {
   gender?: 'man' | 'vrouw' | 'anders' | null;
   /** Rusthartslag in bpm. */
   restingHrBpm?: number | null;
+  /** Blessures en pijntjes; zichtbaar voor de trainer bij het inplannen en tijdens de les. */
+  limitations?: Limitation[];
   /** Alleen bij sporters: uid van de trainer die hen beheert. */
   trainerId: string | null;
   /** True als deze gebruiker als trainer wil en op goedkeuring wacht. */

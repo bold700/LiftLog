@@ -15,10 +15,11 @@ import {
 } from '@mui/material';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import { addExercise, getAllExercisesByName } from '../utils/storage';
-import { Exercise } from '../types';
+import { Exercise, ExerciseEffort } from '../types';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
+import { EffortPicker } from './EffortPicker';
 import { saveExerciseLog, getLastLogForUserExercise } from '../services/logService';
 import { useExerciseDbSearch } from '../hooks/useExerciseDbSearch';
 import { getExerciseMuscleMapping } from '../utils/muscleMappingResolver';
@@ -189,6 +190,7 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
   const [sets, setSets] = useState('');
   const [reps, setReps] = useState('');
   const [notes, setNotes] = useState('');
+  const [effort, setEffort] = useState<ExerciseEffort | null>(null);
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<string | null>(null);
   const [exerciseMuscleGroups, setExerciseMuscleGroups] = useState<string[]>([]);
   const exerciseDbOptions = useExerciseDbSearch(exerciseName, 10000, 'all', selectedMuscleGroup);
@@ -269,6 +271,7 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
       sets: sets ? parseInt(sets) : undefined,
       reps: reps ? parseInt(reps) : undefined,
       notes: notes.trim() || undefined,
+      effort: effort ?? undefined,
     };
 
     const wasFromSchema =
@@ -293,6 +296,7 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
         sets: exercise.sets ?? null,
         reps: exercise.reps ?? null,
         notes: exercise.notes ?? null,
+        effort: exercise.effort ?? null,
         date: exercise.date,
         schemaId: exercise.schemaId ?? null,
         schemaDayIndex: exercise.schemaDayIndex ?? null,
@@ -307,6 +311,7 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
     setSets('');
     setReps('');
     setNotes('');
+    setEffort(null);
     setSelectedMuscleGroup(null);
     // logTargetId bewust laten staan: makkelijk meerdere oefeningen voor dezelfde sporter loggen
 
@@ -355,6 +360,7 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
         setSets('');
         setReps('');
         setNotes('');
+    setEffort(null);
         setSelectedMuscleGroup(null);
       };
       cancelButton.addEventListener('click', cancelClickHandler);
@@ -430,6 +436,7 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
                   setSets('');
                   setReps('');
                   setNotes('');
+    setEffort(null);
                   return;
                 }
 
@@ -557,6 +564,8 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
                 inputProps={{ min: 1 }}
               />
             </Box>
+
+            <EffortPicker value={effort} onChange={setEffort} />
 
             <TextField
               label="Notitie (optioneel)"
