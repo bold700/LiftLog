@@ -212,7 +212,21 @@ die op die uid blijven staan.
 | "Geen toegang tot database" | Firestore-regels niet uitgerold | `npm run deploy:firestore` |
 | Assistent antwoordt niet | `OPENAI_API_KEY` ontbreekt op Vercel | Zie `docs/VERCEL-FIREBASE.md` |
 | AI-koppeling geeft 401 | Koppelsleutel ingetrokken of ongeldig | Nieuwe sleutel maken onder Profiel |
+| "Google inloggen mislukt" of "The requested action is invalid" | Domein staat niet bij Firebase → Authentication → Settings → Authorized domains | Domein toevoegen; zie hieronder |
 | Meldingen komen niet aan | APNs-sleutel of Play-configuratie ontbreekt in Firebase | Zie hieronder |
+
+### Inloggen met Google
+
+Vanaf het beginscherm en in de native app is er geen bruikbare popup: iOS opent die als een los
+venster dat niets kan teruggeven aan de app, en Firebase toont dan alleen *The requested action is
+invalid*. De app stuurt daarom door in plaats van een popup te openen zodra hij zonder adresbalk
+draait (`src/utils/appMode.ts`); in een gewoon tabblad blijft de popup, want dan raak je de pagina
+niet kwijt.
+
+Blijft het misgaan, kijk dan in de Firebase-console onder **Authentication → Settings → Authorized
+domains**. Elk domein waar de app op draait moet daar staan — het Vercel-domein, een eigen domein,
+en `localhost` voor de native app. Ontbreekt er één, dan weigert de inlogpagina zonder dat de app
+er iets zinnigs over kan zeggen.
 
 ### Pushnotificaties: wat er nog handmatig moet
 
