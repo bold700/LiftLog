@@ -211,6 +211,27 @@ service cloud.firestore {
         && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
     }
 
+    // Check-ins na een training (hoe voelde het, waar moet de trainer op letten). Dezelfde regels
+    // als `logs`, inclusief de studiogrens: een check-in vertelt iets over iemands gezondheid en
+    // hoort dus nooit buiten de eigen studio zichtbaar te zijn.
+    match /checkins/{checkinId} {
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid
+            || (sameOrg()
+                && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin())));
+      allow create: if isSignedIn()
+        && writesMyOrg()
+        && (request.resource.data.userId == request.auth.uid
+            || (isTrainerOrAdmin() && request.resource.data.loggedBy == request.auth.uid));
+      // `writesMyOrg()` staat er ook bij update: zonder dat kan iemand het `orgId` van een
+      // bestaand document naar een andere studio schrijven en het daarmee overhevelen.
+      allow update: if isSignedIn()
+        && writesMyOrg()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow delete: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+    }
+
     // Voeding-logs per persoon (Open Food Facts). Eigen logs of via je trainer/beheerder in dezelfde studio.
     match /nutritionLogs/{logId} {
       allow read: if isSignedIn()

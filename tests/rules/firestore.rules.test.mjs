@@ -34,6 +34,7 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(db, 'profiles/duo'), { userId: 'duo', orgId: 'vanas', orgIds: ['vanas', 'studiob'], role: 'trainer', trainerId: null, displayName: 'Sam' });
   await setDoc(doc(db, 'logs/lB1'), { orgId: 'studiob', userId: 'sporterB', loggedBy: 'sporterB', exerciseName: 'Bench' });
   await setDoc(doc(db, 'measurements/mB1'), { orgId: 'studiob', userId: 'sporterB', loggedBy: 'sporterB', weightKg: 70 });
+  await setDoc(doc(db, 'checkins/cB1'), { orgId: 'studiob', userId: 'sporterB', loggedBy: 'sporterB', trainerId: 'trainerB', feeling: 4 });
   await setDoc(doc(db, 'workouts/wB1'), { orgId: 'studiob', trainerId: 'trainerB', clientId: 'sporterB', name: 'B-schema' });
   await setDoc(doc(db, 'workouts/wOpenA'), { trainerId: 'trainer1', clientId: null, audience: 'open', name: 'Open A' });
   await setDoc(doc(db, 'leaderboardPublic/sporterB'), { orgId: 'studiob', userId: 'sporterB', displayLabel: 'Nora', visibility: 'named', photoURL: '' });
@@ -86,6 +87,12 @@ await t('te lange naam → geweigerd', false, setDoc(doc(as('sporter1'), 'leader
 await t('merge-update van eigen document (zoals de app doet) → mag', true, setDoc(doc(as('sporter1'), 'leaderboardPublic/sporter1'), lb('sporter1', { weightKg7d: 120 }), { merge: true }));
 await t('andere ingelogde gebruiker leest ranglijst → mag', true, getDoc(doc(as('sporter2'), 'leaderboardPublic/sporter1')));
 
+console.log('Check-ins');
+await t('sporter slaat eigen check-in op → mag', true, setDoc(doc(as('sporter2'), 'checkins/c1'), { userId: 'sporter2', loggedBy: 'sporter2', trainerId: 'trainer1', feeling: 4, note: 'Arnold press lastig' }));
+await t('sporter schrijft check-in voor ander → geweigerd', false, setDoc(doc(as('sporter2'), 'checkins/c2'), { userId: 'sporter1', loggedBy: 'sporter2', feeling: 3 }));
+await t('trainer leest check-in van sporter → mag', true, getDoc(doc(as('trainer1'), 'checkins/c1')));
+await t('andere sporter leest check-in → geweigerd', false, getDoc(doc(as('sporter3'), 'checkins/c1')));
+
 console.log('Workouts');
 await t('sporter maakt workout op naam van trainer → geweigerd', false, setDoc(doc(as('sporter1'), 'workouts/w1'), { trainerId: 'trainer1', clientId: 'sporter1', name: 'x' }));
 await t('trainer maakt workout → mag', true, setDoc(doc(as('trainer1'), 'workouts/w2'), { trainerId: 'trainer1', clientId: 'sporter1', name: 'x' }));
@@ -99,6 +106,8 @@ await t('beheerder studio B leest profiel studio A → geweigerd', false, getDoc
 await t('trainer studio A leest profiel studio B → geweigerd', false, getDoc(doc(as('trainer1'), 'profiles/sporterB')));
 await t('trainer studio B leest log studio A → geweigerd', false, getDoc(doc(as('trainerB'), 'logs/l1')));
 await t('beheerder studio B leest meting studio A → geweigerd', false, getDoc(doc(as('adminB'), 'measurements/mA1')));
+await t('trainer studio B leest check-in studio A → geweigerd', false, getDoc(doc(as('trainerB'), 'checkins/c1')));
+await t('trainer studio A leest check-in studio B → geweigerd', false, getDoc(doc(as('trainer1'), 'checkins/cB1')));
 await t('trainer studio B leest workout studio A → geweigerd', false, getDoc(doc(as('trainerB'), 'workouts/w2')));
 await t('sporter studio B leest open workout studio A → geweigerd', false, getDoc(doc(as('sporterB'), 'workouts/wOpenA')));
 await t('sporter studio B leest ranglijst studio A → geweigerd', false, getDoc(doc(as('sporterB'), 'leaderboardPublic/sporter1')));
@@ -109,6 +118,8 @@ await t('beheerder studio B wijzigt profiel studio A → geweigerd', false, upda
 await t('beheerder studio B maakt account in studio A → geweigerd', false, setDoc(doc(as('adminB'), 'profiles/nieuwX'), { userId: 'nieuwX', orgId: 'vanas', role: 'sporter', createdByAdmin: true }));
 await t('trainer studio B maakt workout in studio A → geweigerd', false, setDoc(doc(as('trainerB'), 'workouts/wX'), { orgId: 'vanas', trainerId: 'trainerB', name: 'x' }));
 await t('trainer studio B logt in studio A → geweigerd', false, setDoc(doc(as('trainerB'), 'logs/lX'), { orgId: 'vanas', userId: 'sporterB', loggedBy: 'trainerB', exerciseName: 'Squat' }));
+await t('trainer studio B schrijft check-in in studio A → geweigerd', false, setDoc(doc(as('trainerB'), 'checkins/cX'), { orgId: 'vanas', userId: 'sporterB', loggedBy: 'trainerB', feeling: 3 }));
+await t('check-in verhuizen naar andere studio → geweigerd', false, updateDoc(doc(as('sporterB'), 'checkins/cB1'), { orgId: 'vanas' }));
 await t('sporter zet zichzelf in andere studio → geweigerd', false, updateDoc(doc(as('sporter2'), 'profiles/sporter2'), { orgId: 'studiob' }));
 await t('sporter zet zichzelf platformbeheerder → geweigerd', false, updateDoc(doc(as('sporter2'), 'profiles/sporter2'), { platformAdmin: true }));
 await t('beheerder zet zichzelf platformbeheerder → geweigerd', false, updateDoc(doc(as('admin1'), 'profiles/admin1'), { platformAdmin: true }));
@@ -117,6 +128,7 @@ await t('registratie in studio zonder open aanmelding → geweigerd', false, set
 // Binnen de eigen studio moet alles gewoon blijven werken (controle dat we niet te veel dichtzetten).
 await t('trainer studio B leest eigen sporter → mag', true, getDoc(doc(as('trainerB'), 'profiles/sporterB')));
 await t('trainer studio B leest eigen log → mag', true, getDoc(doc(as('trainerB'), 'logs/lB1')));
+await t('trainer studio B leest eigen check-in → mag', true, getDoc(doc(as('trainerB'), 'checkins/cB1')));
 await t('trainer studio B leest eigen workout → mag', true, getDoc(doc(as('trainerB'), 'workouts/wB1')));
 await t('sporter studio B leest ranglijst eigen studio → mag', true, getDoc(doc(as('sporterB'), 'leaderboardPublic/sporterB')));
 await t('beheerder studio B leest eigen studio → mag', true, getDoc(doc(as('adminB'), 'orgs/studiob')));

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
   Typography,
   TextField,
@@ -19,6 +20,8 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import { PageLayout, ContentCard } from './layout';
 import { ExerciseDbDemo } from './ExerciseDbDemo';
+import { AttendanceOverview } from './groupSession/AttendanceOverview';
+import { checkExerciseAgainstLimitations, describeLimitation } from '../utils/exerciseLimitations';
 import type { ExerciseLog, GroupSession, Profile, Schema } from '../types';
 import { getLogsForSession, getLogsForUser, saveExerciseLog } from '../services/logService';
 
@@ -185,6 +188,10 @@ export function GroupSessionView({ schema, session, participants, currentUserId,
 
   const modalEx = modalExIndex != null ? exercises[modalExIndex] : null;
   const selPrev = modalEx && selPid ? previous[rowKey(selPid, modalEx.exerciseName)] : null;
+  const selLimitationCheck = useMemo(() => {
+    const p = participants.find((x) => x.userId === selPid);
+    return checkExerciseAgainstLimitations(modalEx?.exerciseName ?? '', p?.limitations);
+  }, [participants, selPid, modalEx?.exerciseName]);
   const selCurrent = modalEx && selPid ? current[rowKey(selPid, modalEx.exerciseName)] : null;
 
   return (
@@ -218,6 +225,13 @@ export function GroupSessionView({ schema, session, participants, currentUserId,
           </Typography>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <AttendanceOverview
+              participants={participants}
+              exercises={exercises}
+              previous={previous}
+              rowKey={rowKey}
+              shortName={shortName}
+            />
             {exercises.map((ex, exIndex) => {
               const done = loggedCount(ex);
               return (
@@ -299,6 +313,23 @@ export function GroupSessionView({ schema, session, participants, currentUserId,
                   </MenuItem>
                 ))}
               </TextField>
+
+              {selLimitationCheck.level !== 'ok' && (
+                <Alert
+                  severity={selLimitationCheck.level === 'vermijden' ? 'error' : 'warning'}
+                  sx={{ mb: 2 }}
+                >
+                  <Typography variant="body2" fontWeight={600}>
+                    {selLimitationCheck.level === 'vermijden' ? 'Liever niet doen' : 'Let op'}
+                  </Typography>
+                  {selLimitationCheck.hits.map((h) => (
+                    <Typography variant="body2" key={h.id}>
+                      {describeLimitation(h)}
+                      {h.alternative ? ` → ${h.alternative}` : ''}
+                    </Typography>
+                  ))}
+                </Alert>
+              )}
 
               <Box
                 sx={{

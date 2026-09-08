@@ -40,6 +40,7 @@ const COLLECTIONS = [
   'profiles',
   'workouts',
   'logs',
+  'checkins',
   'nutritionLogs',
   'measurements',
   'sessions',

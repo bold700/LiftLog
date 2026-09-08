@@ -29,7 +29,7 @@ import { useProfile } from '../context/ProfileContext';
 import { useAuth } from '../context/AuthContext';
 import { updateProfile } from '../services/profileService';
 import { uploadAvatar, deleteAvatar } from '../services/avatarService';
-import type { LeaderboardVisibility } from '../types';
+import type { LeaderboardVisibility, Limitation } from '../types';
 import { PageLayout, ContentCard } from './layout';
 import { PushNotificationsCard } from './PushNotificationsCard';
 import { UserAvatar } from './UserAvatar';
@@ -37,6 +37,7 @@ import { AiChatConnectCard } from './AiChatConnectCard';
 import { ageOnDate } from '../utils/bodyFat';
 import { heartRateZones } from '../utils/heartRate';
 import { todayIso } from '../utils/format';
+import { LimitationsEditor } from './LimitationsEditor';
 
 export function ProfielPage() {
   const profile = useProfile();
@@ -47,6 +48,7 @@ export function ProfielPage() {
   const [birthDate, setBirthDate] = useState('');
   const [gender, setGender] = useState<'man' | 'vrouw' | 'anders' | ''>('');
   const [restingHr, setRestingHr] = useState('');
+  const [limitations, setLimitations] = useState<Limitation[]>([]);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -169,7 +171,8 @@ export function ProfielPage() {
     setBirthDate(p?.birthDate ?? '');
     setGender(p?.gender ?? '');
     setRestingHr(p?.restingHrBpm != null ? String(p.restingHrBpm) : '');
-  }, [p?.displayName, p?.leaderboardVisibility, p?.heightCm, p?.birthDate, p?.gender, p?.restingHrBpm, p]);
+    setLimitations(p?.limitations ?? []);
+  }, [p?.displayName, p?.leaderboardVisibility, p?.heightCm, p?.birthDate, p?.gender, p?.restingHrBpm, p?.limitations, p]);
 
   const handleSave = useCallback(async () => {
     if (!uid || !profile) return;
@@ -183,6 +186,7 @@ export function ProfielPage() {
         birthDate: birthDate || null,
         gender: gender || null,
         restingHrBpm: restingHr.trim() ? Number(restingHr) : null,
+        limitations,
       });
       await profile.refreshProfile();
       setMessage({ type: 'success', text: 'Profiel opgeslagen.' });
@@ -402,6 +406,8 @@ export function ProfielPage() {
               />
             </RadioGroup>
           </Box>
+
+          <LimitationsEditor value={limitations} onChange={setLimitations} disabled={saving} />
 
           <Button variant="contained" onClick={handleSave} disabled={saving} sx={{ alignSelf: 'flex-start' }}>
             {saving ? 'Bezig…' : 'Opslaan'}
