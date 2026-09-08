@@ -52,5 +52,14 @@ export const lightTheme = createTheme({
         },
       },
     },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        notchedOutline: {
+          // Safari/iOS tekent de uitsparing voor het label niet altijd opnieuw als de legend
+          // geanimeerd van 0 naar vol breed gaat (rand loopt dan door het label). Zonder animatie wel.
+          '& legend': { transition: 'none' },
+        },
+      },
+    },
   },
 });
