@@ -169,7 +169,7 @@ function AppContent() {
       case TAB_SCHEMAS:
         return <SchemasPage />;
       case TAB_BEHEER:
-        return <BeheerPage />;
+        return <BeheerPage onOpenProfielen={() => setActiveTab(TAB_PROFIELEN)} />;
       case TAB_PROFIELEN:
         return <ProfielenPage />;
       case TAB_ASSISTENT:

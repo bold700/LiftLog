@@ -1,7 +1,13 @@
 /**
- * Profielen: alle accounts inzien en bijwerken (trainers en beheerders).
- * Zoeken, filteren op rol/volledigheid, per profiel alle velden bewerken in één dialoog,
- * en nieuwe accounts aanmaken (zonder e-mailverificatie) om voor sporters bij te houden.
+ * Profielen: de enige plek waar accounts beheerd worden (trainers en beheerders).
+ *
+ * Zoeken, filteren op rol/volledigheid, per profiel alle velden bewerken in één dialoog — rol,
+ * trainer, lichaamsgegevens en bijzonderheden — en nieuwe accounts aanmaken zonder
+ * e-mailverificatie. Beheer had hier lang een tweede, armere kopie van; die is weg, zodat het
+ * niet meer uitmaakt waar je binnenkomt.
+ *
+ * Een rol naar beheerder tillen mag alleen een beheerder; de Firestore-regels dwingen dat af en
+ * het keuzemenu laat het daarom ook niet zien.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {

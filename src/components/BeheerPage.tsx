@@ -1,72 +1,35 @@
 /**
- * Beheeromgeving voor trainers en admins: trainer-aanvragen goedkeuren, alle accounts, sporter toevoegen op e-mail, rol wijzigen.
+ * Beheer: wat over de studio gaat, niet over één persoon.
+ *
+ * Openstaande trainer-aanvragen, de ranglijst opschonen en groepslessen importeren. Accounts
+ * horen hier bewust niet: die stonden ook onder Profielen, met twee verschillende editors die
+ * elk andere velden konden. Wie een naam wilde wijzigen moest maar net weten waar hij binnenkwam.
+ * De regel is nu: gaat het over een persoon, dan Profielen; gaat het over de studio, dan Beheer.
  */
 import { useState, useCallback, useEffect } from 'react';
-import {
-  Box,
-  Card,
-  Typography,
-  TextField,
-  Button,
-  Alert,
-  List,
-  ListItem,
-  ListItemText,
-  FormControl,
-  Select,
-  MenuItem,
-  Chip,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-} from '@mui/material';
-import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
-import EmailRoundedIcon from '@mui/icons-material/EmailRounded';
-import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
-import EditRoundedIcon from '@mui/icons-material/EditRounded';
+import { Box, Typography, Button, Alert } from '@mui/material';
+import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
 import { useAuth } from '../context/AuthContext';
-import { getProfileByEmail, assignTrainerToSporter, updateProfile, getAllProfiles } from '../services/profileService';
-import { deleteAccountAsAdmin, cleanupOrphanedLeaderboard } from '../services/adminAccountService';
-import type { Profile, ProfileRole } from '../types';
+import { cleanupOrphanedLeaderboard } from '../services/adminAccountService';
 import { PageLayout, ContentCard } from './layout';
 import { getPendingWorkoutRequests, resolveWorkoutRequest, type WorkoutRequest } from '../services/workoutRequestService';
 import { GroepslessenImportCard } from './GroepslessenImportCard';
 
-export function BeheerPage() {
+interface BeheerPageProps {
+  /** Brengt de gebruiker naar Profielen; daar worden accounts beheerd. */
+  onOpenProfielen?: () => void;
+}
+
+export function BeheerPage({ onOpenProfielen }: BeheerPageProps) {
   const profile = useProfile();
   const notify = useNotify();
   const auth = useAuth();
-  const [allAccounts, setAllAccounts] = useState<Profile[]>([]);
-  const [accountsLoading, setAccountsLoading] = useState(true);
-  const [email, setEmail] = useState('');
-  const [adding, setAdding] = useState(false);
-  const [updatingRoleFor, setUpdatingRoleFor] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [requests, setRequests] = useState<WorkoutRequest[]>([]);
-
-  // Nieuw account aanmaken (alleen beheerder)
-  const [newEmail, setNewEmail] = useState('');
-  const [newPwd, setNewPwd] = useState('');
-  const [newName, setNewName] = useState('');
-  const [newRole, setNewRole] = useState<ProfileRole>('sporter');
-  const [creating, setCreating] = useState(false);
   const [cleaningLeaderboard, setCleaningLeaderboard] = useState(false);
-
-  // Profiel bewerken (naam, lengte, geboortedatum, geslacht, rusthartslag) + verwijderen
-  const [editTarget, setEditTarget] = useState<Profile | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editHeight, setEditHeight] = useState('');
-  const [editBirth, setEditBirth] = useState('');
-  const [editGender, setEditGender] = useState<'man' | 'vrouw' | 'anders' | ''>('');
-  const [editHr, setEditHr] = useState('');
-  const [savingEdit, setSavingEdit] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     getPendingWorkoutRequests()
@@ -85,92 +48,6 @@ export function BeheerPage() {
     },
     [notify]
   );
-
-  const loadAllAccounts = useCallback(async () => {
-    setAccountsLoading(true);
-    try {
-      const list = await getAllProfiles();
-      setAllAccounts(list.sort((a, b) => (a.displayName || a.email || a.userId).localeCompare(b.displayName || b.email || b.userId, undefined, { sensitivity: 'base' })));
-    } catch (e) {
-      setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Accounts laden mislukt.' });
-    } finally {
-      setAccountsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (profile?.isTrainer) loadAllAccounts();
-  }, [profile?.isTrainer, loadAllAccounts]);
-
-  const handleRoleChange = useCallback(
-    async (userId: string, newRole: ProfileRole) => {
-      // Rollen wijzigen mag alleen een beheerder (de Firestore-regels dwingen dit ook af).
-      if (profile?.profile?.role !== 'admin' || !profile.profile?.userId) return;
-      setUpdatingRoleFor(userId);
-      setMessage(null);
-      try {
-        const updates =
-          newRole === 'trainer'
-            ? { role: 'trainer' as const, trainerId: null }
-            : newRole === 'admin'
-              ? { role: 'admin' as const }
-              : { role: 'sporter' as const, trainerId: null };
-        await updateProfile(userId, updates);
-        await profile.refreshProfile();
-        await loadAllAccounts();
-        setMessage({ type: 'success', text: `Rol gewijzigd naar ${newRole}.` });
-      } catch (e) {
-        setMessage({
-          type: 'error',
-          text: e instanceof Error ? e.message : 'Rol wijzigen mislukt.',
-        });
-      } finally {
-        setUpdatingRoleFor(null);
-      }
-    },
-    [profile, loadAllAccounts]
-  );
-
-  const handleAddSporter = useCallback(async () => {
-    if (!profile?.isTrainer || !profile.profile?.userId) return;
-    const trimmed = email.trim();
-    if (!trimmed) {
-      setMessage({ type: 'error', text: 'Vul een e-mailadres in.' });
-      return;
-    }
-    setAdding(true);
-    setMessage(null);
-    try {
-      const sporterProfile = await getProfileByEmail(trimmed);
-      if (!sporterProfile) {
-        setMessage({ type: 'error', text: 'Geen account gevonden met dit e-mailadres. De sporter moet eerst een account aanmaken.' });
-        setAdding(false);
-        return;
-      }
-      if (sporterProfile.role !== 'sporter') {
-        setMessage({ type: 'error', text: 'Dit account is een trainer. Je kunt alleen sporters toevoegen.' });
-        setAdding(false);
-        return;
-      }
-      if (sporterProfile.trainerId === profile.profile.userId) {
-        setMessage({ type: 'success', text: 'Deze sporter staat al in je lijst.' });
-        setAdding(false);
-        return;
-      }
-      await assignTrainerToSporter(sporterProfile.userId, profile.profile.userId);
-      await profile.refreshProfile();
-      await loadAllAccounts();
-      setEmail('');
-      setMessage({ type: 'success', text: `${sporterProfile.displayName || sporterProfile.email || 'Sporter'} is toegevoegd.` });
-    } catch (e) {
-      setMessage({
-        type: 'error',
-        text: e instanceof Error ? e.message : 'Toevoegen mislukt.',
-      });
-    } finally {
-      setAdding(false);
-    }
-  }, [profile, email, loadAllAccounts]);
 
   const handleCleanupLeaderboard = useCallback(async () => {
     if (!auth?.user || cleaningLeaderboard) return;
@@ -194,76 +71,6 @@ export function BeheerPage() {
     }
   }, [auth?.user, cleaningLeaderboard]);
 
-  const handleCreateAccount = useCallback(async () => {
-    if (!auth) return;
-    const mail = newEmail.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
-      setMessage({ type: 'error', text: 'Vul een geldig e-mailadres in.' });
-      return;
-    }
-    if (newPwd.length < 6) {
-      setMessage({ type: 'error', text: 'Tijdelijk wachtwoord moet minstens 6 tekens zijn.' });
-      return;
-    }
-    setCreating(true);
-    setMessage(null);
-    try {
-      await auth.adminCreateAccount(mail, newPwd, newRole, newName.trim() || null);
-      setMessage({
-        type: 'success',
-        text: `Account aangemaakt voor ${mail} (${newRole === 'trainer' ? 'trainer' : 'sporter'}). Tijdelijk wachtwoord: ${newPwd} — geef dit door; de gebruiker kan het later wijzigen.`,
-      });
-      setNewEmail('');
-      setNewPwd('');
-      setNewName('');
-      setNewRole('sporter');
-      await loadAllAccounts();
-    } catch (e) {
-      setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Account aanmaken mislukt.' });
-    } finally {
-      setCreating(false);
-    }
-  }, [auth, newEmail, newPwd, newName, newRole, loadAllAccounts]);
-
-  const handleSaveEdit = useCallback(async () => {
-    if (!editTarget) return;
-    setSavingEdit(true);
-    setMessage(null);
-    try {
-      await updateProfile(editTarget.userId, {
-        displayName: editName.trim() || null,
-        heightCm: editHeight.trim() ? Number(editHeight) : null,
-        birthDate: editBirth || null,
-        gender: editGender || null,
-        restingHrBpm: editHr.trim() ? Number(editHr) : null,
-      });
-      await loadAllAccounts();
-      await profile?.refreshProfile();
-      setMessage({ type: 'success', text: 'Profiel bijgewerkt.' });
-      setEditTarget(null);
-    } catch (e) {
-      setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Bewerken mislukt.' });
-    } finally {
-      setSavingEdit(false);
-    }
-  }, [editTarget, editName, editHeight, editBirth, editGender, editHr, loadAllAccounts, profile]);
-
-  const handleConfirmDelete = useCallback(async () => {
-    if (!deleteTarget || !auth?.user) return;
-    setDeleting(true);
-    setMessage(null);
-    try {
-      await deleteAccountAsAdmin(auth.user, deleteTarget.userId);
-      await loadAllAccounts();
-      setMessage({ type: 'success', text: 'Account definitief verwijderd.' });
-      setDeleteTarget(null);
-    } catch (e) {
-      setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Verwijderen mislukt.' });
-    } finally {
-      setDeleting(false);
-    }
-  }, [deleteTarget, auth, loadAllAccounts]);
-
   if (!profile?.isTrainer) {
     return (
       <PageLayout>
@@ -279,12 +86,18 @@ export function BeheerPage() {
   return (
     <PageLayout>
       <ContentCard>
-        <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
+        <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
           Beheer
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Overzicht van alle accounts. Je kunt rollen wijzigen (sporter, trainer, beheerder).
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          Instellingen en taken van de studio. Accounts, rollen en profielgegevens beheer je onder Profielen.
         </Typography>
+
+        {message && (
+          <Alert severity={message.type} sx={{ mb: 3 }} onClose={() => setMessage(null)}>
+            {message.text}
+          </Alert>
+        )}
 
         {requests.length > 0 && (
           <Box sx={{ mb: 3, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'rgba(0,0,0,0.02)' }}>
@@ -314,171 +127,23 @@ export function BeheerPage() {
           </Box>
         )}
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-          <Typography variant="subtitle2" color="text.secondary">
-            Alle accounts ({allAccounts.length})
-          </Typography>
-          <Button
-            size="small"
-            startIcon={<RefreshRoundedIcon />}
-            onClick={loadAllAccounts}
-            disabled={accountsLoading}
-          >
-            {accountsLoading ? 'Laden…' : 'Vernieuwen'}
-          </Button>
-        </Box>
-
-        {message && (
-          <Alert severity={message.type} sx={{ mb: 2 }} onClose={() => setMessage(null)}>
-            {message.text}
-          </Alert>
-        )}
-
-        <Card variant="outlined" sx={{ borderRadius: 2, mb: 3 }}>
-          {accountsLoading && allAccounts.length === 0 ? (
-            <Box sx={{ p: 3, textAlign: 'center' }}>
-              <Typography color="text.secondary">Accounts laden…</Typography>
-            </Box>
-          ) : allAccounts.length === 0 ? (
-            <Box sx={{ p: 3 }}>
-              <Typography color="text.secondary">Geen accounts gevonden.</Typography>
-            </Box>
-          ) : (
-            <List dense disablePadding>
-              {allAccounts.map((p) => (
-                <ListItem key={p.userId} divider sx={{ gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <ListItemText
-                    primary={p.displayName || p.email || p.userId}
-                    secondary={p.email ?? undefined}
-                    sx={{ flex: '1 1 200px', minWidth: 0 }}
-                  />
-                  {p.trainerRequested && (
-                    <Chip label="Aanvraag trainer" size="small" color="warning" sx={{ mr: 0.5 }} />
-                  )}
-                  <FormControl size="small" sx={{ minWidth: 130 }}>
-                    <Select
-                      value={p.role}
-                      onChange={(e) => handleRoleChange(p.userId, e.target.value as ProfileRole)}
-                      disabled={!isAdmin || updatingRoleFor === p.userId}
-                      displayEmpty
-                    >
-                      <MenuItem value="sporter">Sporter</MenuItem>
-                      <MenuItem value="trainer">Trainer</MenuItem>
-                      {isAdmin && <MenuItem value="admin">Beheerder</MenuItem>}
-                    </Select>
-                  </FormControl>
-                  <Box sx={{ display: 'flex', gap: 0.5 }}>
-                    <IconButton
-                      size="small"
-                      aria-label="Profiel bewerken"
-                      onClick={() => {
-                        setEditTarget(p);
-                        setEditName(p.displayName ?? '');
-                        setEditHeight(p.heightCm != null ? String(p.heightCm) : '');
-                        setEditBirth(p.birthDate ?? '');
-                        setEditGender(p.gender ?? '');
-                        setEditHr(p.restingHrBpm != null ? String(p.restingHrBpm) : '');
-                      }}
-                    >
-                      <EditRoundedIcon fontSize="small" />
-                    </IconButton>
-                    {isAdmin && (
-                      <IconButton
-                        size="small"
-                        aria-label="Account verwijderen"
-                        color="error"
-                        disabled={p.userId === profile?.profile?.userId}
-                        onClick={() => setDeleteTarget(p)}
-                      >
-                        <DeleteOutlineRoundedIcon fontSize="small" />
-                      </IconButton>
-                    )}
-                  </Box>
-                </ListItem>
-              ))}
-            </List>
-          )}
-        </Card>
-
-        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-          Sporter toevoegen op e-mail
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <TextField
-            label="E-mail sporter"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAddSporter()}
-            placeholder="sporter@voorbeeld.nl"
-            size="small"
-            sx={{ minWidth: 260 }}
-            InputProps={{
-              startAdornment: <EmailRoundedIcon sx={{ mr: 1, color: 'action.active' }} fontSize="small" />,
-            }}
-          />
-          <Button
-            variant="contained"
-            startIcon={<PersonAddRoundedIcon />}
-            onClick={handleAddSporter}
-            disabled={adding}
-          >
-            {adding ? 'Bezig…' : 'Sporter toevoegen'}
-          </Button>
-        </Box>
-
-        {isAdmin && (
-          <Box sx={{ mt: 4, pt: 3, borderTop: '1px solid', borderColor: 'divider' }}>
+        {onOpenProfielen && (
+          <Box sx={{ mb: 4 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-              Nieuw account aanmaken
+              Accounts
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Maak direct een account aan met een tijdelijk wachtwoord. Geen e-mailverificatie nodig; geef het wachtwoord door aan de gebruiker.
+              Aanmaken, rol wijzigen, gegevens aanvullen en verwijderen gaat allemaal onder Profielen.
             </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-start' }}>
-              <TextField
-                label="Naam"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                size="small"
-                sx={{ flex: '1 1 180px' }}
-                placeholder="Bijv. Jan Jansen"
-              />
-              <TextField
-                label="E-mail"
-                type="email"
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-                size="small"
-                sx={{ flex: '1 1 220px' }}
-                placeholder="klant@voorbeeld.nl"
-              />
-              <TextField
-                label="Tijdelijk wachtwoord"
-                value={newPwd}
-                onChange={(e) => setNewPwd(e.target.value)}
-                size="small"
-                sx={{ flex: '1 1 180px' }}
-                placeholder="min. 6 tekens"
-                helperText="Min. 6 tekens"
-              />
-              <FormControl size="small" sx={{ minWidth: 140 }}>
-                <Select value={newRole} onChange={(e) => setNewRole(e.target.value as ProfileRole)}>
-                  <MenuItem value="sporter">Sporter</MenuItem>
-                  <MenuItem value="trainer">Trainer</MenuItem>
-                </Select>
-              </FormControl>
-              <Button
-                variant="contained"
-                startIcon={<PersonAddRoundedIcon />}
-                onClick={handleCreateAccount}
-                disabled={creating}
-              >
-                {creating ? 'Bezig…' : 'Account aanmaken'}
-              </Button>
-            </Box>
+            <Button variant="outlined" startIcon={<GroupRoundedIcon />} onClick={onOpenProfielen}>
+              Naar Profielen
+            </Button>
+          </Box>
+        )}
 
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, mt: 4, mb: 0.5 }}>
+        {isAdmin && (
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
               Ranglijst opschonen
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -498,64 +163,6 @@ export function BeheerPage() {
 
         <GroepslessenImportCard />
       </ContentCard>
-
-      <Dialog open={!!editTarget} onClose={() => setEditTarget(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Profiel bewerken</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {editTarget?.email || editTarget?.userId}
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 0.5 }}>
-            <TextField label="Naam" value={editName} onChange={(e) => setEditName(e.target.value)} fullWidth autoFocus size="small" />
-            <TextField
-              label="Geboortedatum"
-              type="date"
-              value={editBirth}
-              onChange={(e) => setEditBirth(e.target.value)}
-              fullWidth
-              size="small"
-              InputLabelProps={{ shrink: true }}
-              helperText="Nodig voor het berekenen van het vetpercentage uit huidplooien"
-            />
-            <FormControl size="small" fullWidth>
-              <Select
-                value={editGender || 'none'}
-                onChange={(e) => setEditGender(e.target.value === 'none' ? '' : (e.target.value as 'man' | 'vrouw' | 'anders'))}
-                displayEmpty
-                inputProps={{ 'aria-label': 'Geslacht' }}
-              >
-                <MenuItem value="none">Geslacht: niet opgegeven</MenuItem>
-                <MenuItem value="man">Man</MenuItem>
-                <MenuItem value="vrouw">Vrouw</MenuItem>
-                <MenuItem value="anders">Anders</MenuItem>
-              </Select>
-            </FormControl>
-            <TextField label="Lengte (cm)" type="number" inputProps={{ min: 0 }} value={editHeight} onChange={(e) => setEditHeight(e.target.value)} fullWidth size="small" />
-            <TextField label="Rusthartslag (bpm)" type="number" inputProps={{ min: 0 }} value={editHr} onChange={(e) => setEditHr(e.target.value)} fullWidth size="small" />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditTarget(null)}>Annuleren</Button>
-          <Button variant="contained" onClick={handleSaveEdit} disabled={savingEdit}>
-            {savingEdit ? 'Bezig…' : 'Opslaan'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Account verwijderen</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary">
-            Weet je zeker dat je <strong>{deleteTarget?.displayName || deleteTarget?.email || deleteTarget?.userId}</strong> definitief wilt verwijderen? Dit verwijdert zowel het login-account als het profiel en kan niet ongedaan worden gemaakt.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteTarget(null)}>Annuleren</Button>
-          <Button variant="contained" color="error" onClick={handleConfirmDelete} disabled={deleting}>
-            {deleting ? 'Bezig…' : 'Definitief verwijderen'}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </PageLayout>
   );
 }
