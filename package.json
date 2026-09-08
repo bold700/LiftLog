@@ -32,7 +32,8 @@
     "import:groepslessen": "node scripts/import-groepslessen.mjs",
     "test:mcp:rechten": "node scripts/mcp-permission-test.mjs",
     "migrate:orgs": "node scripts/migrate-orgs.mjs",
-    "backup": "node scripts/backup-firestore.mjs"
+    "backup": "node scripts/backup-firestore.mjs",
+    "seed:testruimte": "node scripts/seed-testruimte.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",

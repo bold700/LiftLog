@@ -103,6 +103,47 @@ De annuleertermijn staat als `FREE_CANCEL_HOURS` in `api/booking.mjs`.
 
 ---
 
+## 3b. Veilig uitproberen: de Testruimte
+
+Er is één Firebase-project. De previewomgeving van Vercel schrijft dus in dezelfde database als
+de live app: klikken in de preview is klikken in echte klantgegevens. Een tweede Firebase-project
+zou dat oplossen, maar dat is een dagdeel werk en twee omgevingen om bij te houden.
+
+Goedkoper: gebruik de studioscheiding die er nu toch al is. Een tweede studio staat volledig los,
+en de Firestore-regels houden hem gescheiden — precies dezelfde scheiding die straks tussen twee
+échte studio's geldt. Je test dus meteen of die scheiding werkt.
+
+```bash
+# Kijken wat er zou gebeuren (schrijft niets):
+FIREBASE_SERVICE_ACCOUNT="$(cat service-account.json)" \
+  npm run seed:testruimte -- --owner-email jij@voorbeeld.nl
+
+# Echt aanmaken:
+FIREBASE_SERVICE_ACCOUNT="$(cat service-account.json)" \
+  npm run seed:testruimte -- --owner-email jij@voorbeeld.nl --apply
+```
+
+Dat zet klaar: de studio zelf (zonder open aanmelding), een testtrainer, twee testsporters met
+elk tien credits, jouw eigen account als lid, en vier lessen in de komende dagen. Eén les heeft
+bewust **één plek** — daarmee test je in twee klikken de wachtlijst en het doorschuiven, wat je
+met een lege agenda nooit tegenkomt.
+
+Na afloop log je opnieuw in; bovenin verschijnt de studiowisselaar. Alles wat je in de Testruimte
+doet blijft daar.
+
+Het script draait **niet** op de standaardstudio: het weigert dienst als `--org` gelijk is aan
+`vanas`. Zo kan er nooit een testles in de echte studio belanden.
+
+Opruimen als je klaar bent — de export van klantgegevens is al genoeg om te bewaken, daar hoef je
+geen slapende testaccounts bij te hebben:
+
+```bash
+FIREBASE_SERVICE_ACCOUNT="$(cat service-account.json)" \
+  npm run seed:testruimte -- --owner-email jij@voorbeeld.nl --remove --apply
+```
+
+---
+
 ## 4. Uitrollen (volgorde is belangrijk)
 
 De volgorde ligt vast omdat de app op `orgId` filtert. Draai je de migratie ná het uitrollen, dan
@@ -166,6 +207,7 @@ die op die uid blijven staan.
 | Symptoom | Waarschijnlijke oorzaak | Wat te doen |
 |----------|------------------------|-------------|
 | App is leeg, geen profielen of workouts | Migratie niet gedraaid, of `orgId` staat verkeerd | Stap 3 van het uitrollen draaien |
+| Geen studiowisselaar bovenin | Je account is maar bij één studio lid | `--add-member`, of hoofdstuk 3b |
 | "Geen studio geladen" bij opslaan | Profiel is niet geladen voordat er geschreven werd | Uitloggen en opnieuw inloggen |
 | "Geen toegang tot database" | Firestore-regels niet uitgerold | `npm run deploy:firestore` |
 | Assistent antwoordt niet | `OPENAI_API_KEY` ontbreekt op Vercel | Zie `docs/VERCEL-FIREBASE.md` |
