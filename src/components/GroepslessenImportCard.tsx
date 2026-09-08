@@ -1,5 +1,6 @@
 /**
- * Beheer → Groepslessen importeren: zet het meegeleverde lesrooster (src/data/groepslessenSgt2026.json,
+ * Inhoud van de dialoog "Lesrooster importeren" op de Workouts-pagina: zet het meegeleverde lesrooster
+ * (src/data/groepslessenSgt2026.json,
  * gegenereerd door scripts/import-groepslessen.mjs --emit-app-data) als groepsles-workouts in Firestore,
  * op naam van de ingelogde trainer. Geen service account nodig: de app schrijft via de eigen rechten.
  */
@@ -150,10 +151,7 @@ export function GroepslessenImportCard() {
   const totalExercises = data ? data.lessons.reduce((n, l) => n + l.days.reduce((m, d) => m + d.exercises.length, 0), 0) : 0;
 
   return (
-    <Box sx={{ mt: 3, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'rgba(0,0,0,0.02)' }}>
-      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 0.5 }}>
-        Groepslessen importeren
-      </Typography>
+    <Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Zet elke week van elk lesmoment als losse groepsles-workout op jouw naam, in Workouts onder de tab
         &quot;{CATEGORY}&quot;.
