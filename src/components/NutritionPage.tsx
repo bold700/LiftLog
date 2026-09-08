@@ -136,6 +136,7 @@ export function NutritionPage() {
   const [term, setTerm] = useState('');
   const [results, setResults] = useState<FoodProduct[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchNote, setSearchNote] = useState<string | null>(null);
   const [selected, setSelected] = useState<FoodProduct | null>(null);
   const [editingLog, setEditingLog] = useState<NutritionLog | null>(null);
   const [grams, setGrams] = useState('100');
@@ -236,14 +237,31 @@ export function NutritionPage() {
     const q = term.trim();
     if (!q) {
       setResults([]);
+      setSearchNote(null);
       return;
     }
     let cancelled = false;
     setSearching(true);
     const t = setTimeout(() => {
       searchFoods(q)
-        .then((r) => !cancelled && setResults(r))
-        .catch(() => !cancelled && setResults([]))
+        .then(({ products, remoteFailed }) => {
+          if (cancelled) return;
+          setResults(products);
+          if (remoteFailed) {
+            setSearchNote(
+              products.length
+                ? 'De productendatabase is even niet bereikbaar; je ziet alleen de basisproducten.'
+                : 'De productendatabase is even niet bereikbaar. Probeer het zo nog eens, of voeg het product handmatig toe.'
+            );
+          } else {
+            setSearchNote(products.length ? null : `Geen product gevonden voor "${q}".`);
+          }
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setResults([]);
+          setSearchNote('Zoeken lukte niet. Probeer het zo nog eens.');
+        })
         .finally(() => !cancelled && setSearching(false));
     }, 400);
     return () => {
@@ -489,6 +507,11 @@ export function NutritionPage() {
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
                 <CircularProgress size={20} />
               </Box>
+            )}
+            {!searching && searchNote && (
+              <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+                {searchNote}
+              </Typography>
             )}
             {results.length > 0 && (
               <List dense sx={{ maxHeight: 260, overflow: 'auto', mb: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>

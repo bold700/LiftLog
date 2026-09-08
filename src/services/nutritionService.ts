@@ -1,6 +1,6 @@
 /**
  * Voeding-tracking (prototype).
- * - Zoeken via Open Food Facts (open product-DB, gratis, geen key).
+ * - Zoeken via /api/food-search (Open Food Facts), met eigen basisproducten bovenaan.
  * - Loggen per account in Firestore `nutritionLogs` (zoals training-logs), zodat de
  *   trainer straks per klant de dagtotalen ziet.
  */
@@ -55,7 +55,8 @@ function num(v: unknown): number {
 
 function parseServingGrams(s: unknown): number | null {
   if (typeof s !== 'string') return null;
-  const m = s.match(/([\d.,]+)\s*g/i);
+  // g moet een eenheid zijn, geen begin van een ander woord: "1 glas" is geen 1 gram.
+  const m = s.match(/([\d.,]+)\s*g(?:ram)?(?![a-z])/i);
   if (!m) return null;
   const g = Number(m[1].replace(',', '.'));
   return Number.isFinite(g) && g > 0 ? g : null;
@@ -121,62 +122,47 @@ function nameScore(name: string, q: string): number {
   return 0;
 }
 
-/** Zoek producten: eerst curated basisproducten, daarna Open Food Facts (op relevantie). */
-export async function searchFoods(term: string): Promise<FoodProduct[]> {
-  const q = term.trim();
-  if (!q) return [];
-  const curated = curatedMatches(q);
-  const url =
-    'https://world.openfoodfacts.org/cgi/search.pl?' +
-    new URLSearchParams({
-      search_terms: q,
-      search_simple: '1',
-      action: 'process',
-      json: '1',
-      page_size: '24',
-      fields: 'code,product_name,brands,nutriments,serving_size,image_small_url',
-    }).toString();
+export interface FoodSearchResult {
+  products: FoodProduct[];
+  /**
+   * True als Open Food Facts niet bereikbaar was. De eigen basisproducten staan er dan nog wel,
+   * zodat een storing bij hen niet het hele zoeken onbruikbaar maakt.
+   */
+  remoteFailed: boolean;
+}
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Zoeken mislukt');
-  const data = await res.json();
-  const products = Array.isArray(data?.products) ? data.products : [];
-  const out: FoodProduct[] = [];
-  for (const p of products) {
-    const name = String(p?.product_name ?? '').trim();
-    if (!name) continue;
-    const n = p?.nutriments ?? {};
-    let kcal = num(n['energy-kcal_100g']);
-    if (!kcal && n['energy_100g']) kcal = Math.round(num(n['energy_100g']) / 4.184);
-    out.push({
-      code: String(p?.code ?? ''),
-      name,
-      brand: String(p?.brands ?? '').split(',')[0].trim(),
-      imageUrl: typeof p?.image_small_url === 'string' ? p.image_small_url : null,
-      per100g: {
-        kcal: Math.round(kcal),
-        protein: Math.round(num(n['proteins_100g']) * 10) / 10,
-        carbs: Math.round(num(n['carbohydrates_100g']) * 10) / 10,
-        fat: Math.round(num(n['fat_100g']) * 10) / 10,
-      },
-      servingGrams: parseServingGrams(p?.serving_size),
-    });
+/** Zoek producten: eerst eigen basisproducten, daarna Open Food Facts (op relevantie). */
+export async function searchFoods(term: string): Promise<FoodSearchResult> {
+  const q = term.trim();
+  if (!q) return { products: [], remoteFailed: false };
+  const curated = curatedMatches(q);
+
+  let remote: FoodProduct[] = [];
+  let remoteFailed = false;
+  try {
+    const res = await fetch(apiUrl(`/api/food-search?q=${encodeURIComponent(q)}`));
+    const data = (await res.json().catch(() => null)) as { products?: unknown } | null;
+    if (!res.ok || !Array.isArray(data?.products)) throw new Error('Zoeken mislukt');
+    remote = data.products as FoodProduct[];
+  } catch {
+    remoteFailed = true;
   }
+
   const nq = norm(q);
-  out.sort((a, b) => {
+  remote.sort((a, b) => {
     const sb = (b.per100g.kcal > 0 ? 30 : 0) + nameScore(b.name, nq);
     const sa = (a.per100g.kcal > 0 ? 30 : 0) + nameScore(a.name, nq);
     return sb - sa;
   });
-  // Curated basisproducten bovenaan; dedup op naam (curated wint)
+  // Eigen basisproducten bovenaan; dedup op naam (die van ons wint)
   const seen = new Set(curated.map((c) => norm(c.name)));
-  const merged = [...curated];
-  for (const p of out) {
+  const products = [...curated];
+  for (const p of remote) {
     if (seen.has(norm(p.name))) continue;
     seen.add(norm(p.name));
-    merged.push(p);
+    products.push(p);
   }
-  return merged;
+  return { products, remoteFailed };
 }
 
 /** Zoek een product op barcode (EAN) via Open Food Facts. Null als niet gevonden. */
