@@ -1,6 +1,7 @@
 // Dialoog "Doelgewicht" op de Metingen-pagina. De invoerwaarde en het opslaan blijven in MetingenPage.
-import { Dialog, DialogTitle, DialogContent, DialogActions, Typography, Box, TextField, Button } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Typography, Box, Button } from '@mui/material';
 import { PRIMARY_BUTTON_SX } from './styles';
+import { NumberField } from '../NumberField';
 
 interface WeightGoalDialogProps {
   open: boolean;
@@ -19,15 +20,14 @@ export function WeightGoalDialog({ open, value, onChange, onClose, onSave }: Wei
           Vul je streefgewicht in. Laat leeg om geen doel te gebruiken.
         </Typography>
         <Box sx={{ py: 1 }}>
-          <TextField
+          <NumberField
             label="Doelgewicht (kg)"
-            type="number"
+            decimal
             size="small"
             fullWidth
             autoFocus
-            inputProps={{ step: 0.1, min: 0, inputMode: 'decimal' }}
             value={value}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={onChange}
           />
         </Box>
       </DialogContent>

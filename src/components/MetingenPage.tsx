@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { PageLayout, ContentCard } from './layout';
+import { NumberField } from './NumberField';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
 import { updateProfile } from '../services/profileService';
@@ -386,14 +387,13 @@ export function MetingenPage() {
             onChange={(e) => setDate(e.target.value)}
             InputLabelProps={{ shrink: true }}
           />
-          <TextField
+          <NumberField
             label="Gewicht (kg)"
-            type="number"
+            decimal
             size="small"
             fullWidth
-            inputProps={{ step: 0.1, min: 0, inputMode: 'decimal' }}
             value={weight}
-            onChange={(e) => setWeight(e.target.value)}
+            onChange={setWeight}
             helperText={formBmi != null ? `BMI ${formBmi}` : weightNum != null && !targetProfile?.heightCm ? 'Vul lengte in bij Profiel voor BMI' : ' '}
           />
         </Box>
@@ -417,15 +417,14 @@ export function MetingenPage() {
             <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
               <Box sx={FIELD_GRID_SX}>
                 {CIRCUMFERENCE_FIELDS.map((f) => (
-                  <TextField
+                  <NumberField
                     key={f.key}
                     label={f.label}
-                    type="number"
+                    decimal
                     size="small"
                     fullWidth
-                    inputProps={{ step: 0.5, min: 0, inputMode: 'decimal' }}
                     value={circ[f.key]}
-                    onChange={(e) => setCirc((c) => ({ ...c, [f.key]: e.target.value }))}
+                    onChange={(v) => setCirc((c) => ({ ...c, [f.key]: v }))}
                   />
                 ))}
               </Box>
@@ -449,15 +448,14 @@ export function MetingenPage() {
               </Typography>
               <Box sx={FIELD_GRID_SX}>
                 {SKINFOLD_FIELDS.map((f) => (
-                  <TextField
+                  <NumberField
                     key={f.key}
                     label={f.label}
-                    type="number"
+                    decimal
                     size="small"
                     fullWidth
-                    inputProps={{ step: 0.5, min: 0, inputMode: 'decimal' }}
                     value={skin[f.key]}
-                    onChange={(e) => setSkin((s) => ({ ...s, [f.key]: e.target.value }))}
+                    onChange={(v) => setSkin((s) => ({ ...s, [f.key]: v }))}
                     helperText={f.hint}
                   />
                 ))}

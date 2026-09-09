@@ -5,6 +5,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import type { Formule7Routekaart, Formule7MoverType } from '../../types';
 import { FORMULE7_ORGANISATION_OPTIONS, WARMUP_BY_MOVER_TYPE } from '../../utils/formule7Defaults';
 import { FORM_ROW, HelperText, Formule7SectionAccordion } from './sectionShared';
+import { NumberField } from '../NumberField';
 
 interface WarmingUpSectionProps {
   value: Formule7Routekaart['warmup'];
@@ -51,12 +52,11 @@ export function WarmingUpSection({
             )}
             sx={{ width: '100%' }}
           />
-          <TextField
+          <NumberField
             label="Intensiteit (% HFmax)"
-            type="number"
-            value={effectiveWarmup.intensityPercentOfMaxHr ?? ''}
-            onChange={(e) => {
-              const raw = e.target.value === '' ? null : Number(e.target.value);
+            value={String(effectiveWarmup.intensityPercentOfMaxHr ?? '')}
+            onChange={(v) => {
+              const raw = v === '' ? null : Number(v);
               if (raw === null) {
                 setEffectiveWarmup({ intensityPercentOfMaxHr: null });
                 return;
@@ -157,12 +157,11 @@ export function WarmingUpSection({
                 ),
               }}
             />
-            <TextField
+            <NumberField
               label="Duur (min)"
-              type="number"
-              value={effectiveWarmup.durationMinutes ?? ''}
-              onChange={(e) => {
-                const raw = e.target.value === '' ? null : Number(e.target.value);
+              value={String(effectiveWarmup.durationMinutes ?? '')}
+              onChange={(v) => {
+                const raw = v === '' ? null : Number(v);
                 if (raw === null) {
                   setEffectiveWarmup({ durationMinutes: null });
                   return;

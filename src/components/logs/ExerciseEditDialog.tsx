@@ -8,6 +8,7 @@ import { useExerciseSuggestions } from '../../hooks/useExerciseSuggestions';
 import '@material/web/button/filled-button.js';
 import '@material/web/button/text-button.js';
 import '@material/web/icon/icon.js';
+import { NumberField } from '../NumberField';
 
 interface ExerciseEditDialogProps {
   open: boolean;
@@ -140,31 +141,26 @@ export function ExerciseEditDialog({
           />
 
           <Box sx={{ display: 'flex', gap: 2 }}>
-            <TextField
+            <NumberField
               label="Gewicht (kg)"
-              type="number"
+              decimal
               value={weight}
-              onChange={(e) => onWeightChange(e.target.value)}
+              onChange={onWeightChange}
               sx={{ flex: 1 }}
-              inputProps={{ min: 0, step: 0.5 }}
             />
 
-            <TextField
+            <NumberField
               label="Sets"
-              type="number"
               value={sets}
-              onChange={(e) => onSetsChange(e.target.value)}
+              onChange={onSetsChange}
               sx={{ flex: 1 }}
-              inputProps={{ min: 1 }}
             />
 
-            <TextField
+            <NumberField
               label="Reps"
-              type="number"
               value={reps}
-              onChange={(e) => onRepsChange(e.target.value)}
+              onChange={onRepsChange}
               sx={{ flex: 1 }}
-              inputProps={{ min: 1 }}
             />
           </Box>
 
