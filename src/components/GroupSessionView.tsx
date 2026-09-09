@@ -24,6 +24,7 @@ import { AttendanceOverview } from './groupSession/AttendanceOverview';
 import { checkExerciseAgainstLimitations, describeLimitation } from '../utils/exerciseLimitations';
 import type { ExerciseLog, GroupSession, Profile, Schema } from '../types';
 import { getLogsForSession, getLogsForUser, saveExerciseLog } from '../services/logService';
+import { NumberField } from './NumberField';
 
 interface GroupSessionViewProps {
   schema: Schema;
@@ -352,29 +353,26 @@ export function GroupSessionView({ schema, session, participants, currentUserId,
               </Box>
 
               <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                <TextField
+                <NumberField
                   label="Gewicht (kg)"
-                  type="number"
+                  decimal
                   size="small"
                   value={draft.weight}
-                  onChange={(e) => setDraft((d) => ({ ...d, weight: e.target.value }))}
-                  inputProps={{ inputMode: 'decimal', step: '0.5' }}
+                  onChange={(v) => setDraft((d) => ({ ...d, weight: v }))}
                   sx={{ flex: 1 }}
                 />
-                <TextField
+                <NumberField
                   label="Sets"
-                  type="number"
                   size="small"
                   value={draft.sets}
-                  onChange={(e) => setDraft((d) => ({ ...d, sets: e.target.value }))}
+                  onChange={(v) => setDraft((d) => ({ ...d, sets: v }))}
                   sx={{ width: 80 }}
                 />
-                <TextField
+                <NumberField
                   label="Reps"
-                  type="number"
                   size="small"
                   value={draft.reps}
-                  onChange={(e) => setDraft((d) => ({ ...d, reps: e.target.value }))}
+                  onChange={(v) => setDraft((d) => ({ ...d, reps: v }))}
                   sx={{ width: 80 }}
                 />
               </Box>

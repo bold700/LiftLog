@@ -40,6 +40,7 @@ import { PageLayout, ContentCard, OutlineCard, EmptyState } from './layout';
 import '@material/web/button/filled-button.js';
 import '@material/web/button/text-button.js';
 import '@material/web/icon/icon.js';
+import { NumberField } from './NumberField';
 
 interface ChartData {
   date: string;
@@ -582,31 +583,26 @@ export const OefeningenPage = () => {
             />
 
             <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
+              <NumberField
                 label="Gewicht (kg)"
-                type="number"
+                decimal
                 value={weight}
-                onChange={(e) => setWeight(e.target.value)}
+                onChange={setWeight}
                 sx={{ flex: 1 }}
-                inputProps={{ min: 0, step: 0.5 }}
               />
-              
-              <TextField
+
+              <NumberField
                 label="Sets"
-                type="number"
                 value={sets}
-                onChange={(e) => setSets(e.target.value)}
+                onChange={setSets}
                 sx={{ flex: 1 }}
-                inputProps={{ min: 1 }}
               />
-              
-              <TextField
+
+              <NumberField
                 label="Reps"
-                type="number"
                 value={reps}
-                onChange={(e) => setReps(e.target.value)}
+                onChange={setReps}
                 sx={{ flex: 1 }}
-                inputProps={{ min: 1 }}
               />
             </Box>
 

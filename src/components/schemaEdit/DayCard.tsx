@@ -13,6 +13,7 @@ import { designTokens } from '../../theme/designTokens';
 import { ExercisePicker } from './ExercisePicker';
 import '@material/web/button/text-button.js';
 import '@material/web/icon/icon.js';
+import { NumberField } from '../NumberField';
 
 /** NMT-voorschrift (Tabel 4) voor het gekozen krachtdoel; null buiten Formule 7. */
 export type NmtPreset = (typeof NMT_PRESETS_BY_GOAL)[Formule7StrengthGoal];
@@ -154,13 +155,12 @@ export function DayCard({
                 />
                 <Box sx={{ ...EXERCISE_PARAMS_ROW, mt: 0.5 }}>
                   {nmtPreset && (
-                    <TextField
+                    <NumberField
                       label="% 1RM"
-                      type="number"
-                      value={ex.intensityPercent1RM ?? ''}
+                      value={String(ex.intensityPercent1RM ?? '')}
                       placeholder={String(nmtPreset.percent1RM)}
-                      onChange={(e) => {
-                        const raw = e.target.value === '' ? undefined : parseInt(e.target.value, 10);
+                      onChange={(v) => {
+                        const raw = v === '' ? undefined : parseInt(v, 10);
                         const val =
                           raw == null
                             ? undefined
@@ -196,18 +196,13 @@ export function DayCard({
                           </Tooltip>
                         ),
                       }}
-                      inputProps={{
-                        min: nmtPreset.percent1RMMin,
-                        max: nmtPreset.percent1RMMax,
-                      }}
                     />
                   )}
-                  <TextField
+                  <NumberField
                     label="Sets"
-                    type="number"
-                    value={ex.setsTarget}
-                    onChange={(e) => {
-                      const raw = parseInt(e.target.value, 10) || 0;
+                    value={String(ex.setsTarget ?? '')}
+                    onChange={(v) => {
+                      const raw = parseInt(v, 10) || 0;
                       const val = nmtPreset ? clamp(raw, nmtPreset.setsMin, nmtPreset.setsMax) : raw;
                       updateExerciseInDay(dayIndex, exIndex, { setsTarget: val });
                     }}
@@ -230,16 +225,12 @@ export function DayCard({
                           }
                         : undefined
                     }
-                    inputProps={
-                      nmtPreset ? { min: nmtPreset.setsMin, max: nmtPreset.setsMax } : { min: 1 }
-                    }
                   />
-                  <TextField
+                  <NumberField
                     label="Reps"
-                    type="number"
-                    value={ex.repsTarget}
-                    onChange={(e) => {
-                      const raw = parseInt(e.target.value, 10) || 0;
+                    value={String(ex.repsTarget ?? '')}
+                    onChange={(v) => {
+                      const raw = parseInt(v, 10) || 0;
                       const val = nmtPreset ? clamp(raw, nmtPreset.repsMin, nmtPreset.repsMax) : raw;
                       updateExerciseInDay(dayIndex, exIndex, { repsTarget: val });
                     }}
@@ -262,16 +253,12 @@ export function DayCard({
                           }
                         : undefined
                     }
-                    inputProps={
-                      nmtPreset ? { min: nmtPreset.repsMin, max: nmtPreset.repsMax } : { min: 1 }
-                    }
                   />
-                  <TextField
+                  <NumberField
                     label="Rust (sec)"
-                    type="number"
-                    value={ex.restSeconds ?? ''}
-                    onChange={(e) => {
-                      const raw = e.target.value === '' ? undefined : parseInt(e.target.value, 10) || 0;
+                    value={String(ex.restSeconds ?? '')}
+                    onChange={(v) => {
+                      const raw = v === '' ? undefined : parseInt(v, 10) || 0;
                       const val =
                         raw == null
                           ? undefined
@@ -300,11 +287,6 @@ export function DayCard({
                           }
                         : undefined
                     }
-                    inputProps={
-                      nmtPreset
-                        ? { min: nmtPreset.restSecMin, max: nmtPreset.restSecMax }
-                        : { min: 0 }
-                    }
                   />
                 </Box>
                 {nmtPreset && (
@@ -319,12 +301,12 @@ export function DayCard({
                       '@media (max-width: 400px)': { gridTemplateColumns: '1fr' },
                     }}
                   >
-                    <TextField
+                    <NumberField
+                      decimal
                       label="Mijn max (kg)"
-                      type="number"
-                      value={ex.estimated1RMKg ?? ''}
-                      onChange={(e) => {
-                        const raw = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                      value={String(ex.estimated1RMKg ?? '')}
+                      onChange={(v) => {
+                        const raw = v === '' ? undefined : parseFloat(v);
                         const val = raw != null && raw > 0 ? raw : undefined;
                         const targetWeight =
                           val != null && ex.intensityPercent1RM != null
@@ -339,23 +321,21 @@ export function DayCard({
                       fullWidth
                       placeholder="Vul je max in"
                       InputLabelProps={{ shrink: true }}
-                      inputProps={{ min: 0, step: 0.5 }}
                       sx={{ minWidth: 0 }}
                     />
-                    <TextField
+                    <NumberField
+                      decimal
                       label="Doelgewicht (kg)"
-                      type="number"
-                      value={ex.targetWeight ?? ''}
-                      onChange={(e) =>
+                      value={String(ex.targetWeight ?? '')}
+                      onChange={(v) =>
                         updateExerciseInDay(dayIndex, exIndex, {
-                          targetWeight: e.target.value === '' ? undefined : parseFloat(e.target.value) || undefined,
+                          targetWeight: v === '' ? undefined : parseFloat(v) || undefined,
                         })
                       }
                       size="small"
                       fullWidth
                       placeholder={ex.estimated1RMKg != null ? 'Berekend' : 'Vul eerst je max in'}
                       InputLabelProps={{ shrink: true }}
-                      inputProps={{ min: 0, step: 0.5 }}
                       sx={{ minWidth: 0 }}
                     />
                   </Box>

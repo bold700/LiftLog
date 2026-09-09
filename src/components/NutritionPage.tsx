@@ -54,6 +54,7 @@ import {
   type RecognizedFood,
 } from '../services/nutritionService';
 import { todayIso } from '../utils/format';
+import { NumberField } from './NumberField';
 
 type Period = 'day' | 'week' | 'month';
 
@@ -656,14 +657,12 @@ function AddDialog({
                 {selected.brand}
               </Typography>
             )}
-            <TextField
+            <NumberField
               label="Hoeveelheid (gram)"
-              type="number"
               size="small"
               fullWidth
               value={grams}
-              onChange={(e) => setGrams(e.target.value)}
-              inputProps={{ inputMode: 'numeric', min: 1 }}
+              onChange={setGrams}
               sx={{ mb: 2 }}
               autoFocus
             />
@@ -734,10 +733,10 @@ function GoalDialog({
           Laat leeg (0) om zonder doel te loggen.
         </Typography>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <TextField label="Calorieën (kcal)" type="number" size="small" value={kcal} onChange={(e) => setKcal(e.target.value)} />
-          <TextField label="Eiwit (g)" type="number" size="small" value={protein} onChange={(e) => setProtein(e.target.value)} />
-          <TextField label="Koolhydraten (g)" type="number" size="small" value={carbs} onChange={(e) => setCarbs(e.target.value)} />
-          <TextField label="Vet (g)" type="number" size="small" value={fat} onChange={(e) => setFat(e.target.value)} />
+          <NumberField label="Calorieën (kcal)" size="small" value={kcal} onChange={setKcal} />
+          <NumberField label="Eiwit (g)" decimal size="small" value={protein} onChange={setProtein} />
+          <NumberField label="Koolhydraten (g)" decimal size="small" value={carbs} onChange={setCarbs} />
+          <NumberField label="Vet (g)" decimal size="small" value={fat} onChange={setFat} />
         </Box>
       </DialogContent>
       <DialogActions>

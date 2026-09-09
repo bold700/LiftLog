@@ -37,6 +37,7 @@ import { ageOnDate } from '../utils/bodyFat';
 import { heartRateZones } from '../utils/heartRate';
 import { todayIso } from '../utils/format';
 import { LimitationsEditor } from './LimitationsEditor';
+import { NumberField } from './NumberField';
 
 export function ProfielPage() {
   const profile = useProfile();
@@ -282,7 +283,7 @@ export function ProfielPage() {
             </Typography>
           </Box>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-            <TextField label="Lengte (cm)" type="number" size="small" fullWidth inputProps={{ min: 0, inputMode: 'numeric' }} value={heightCm} onChange={(e) => setHeightCm(e.target.value)} />
+            <NumberField label="Lengte (cm)" size="small" fullWidth value={heightCm} onChange={setHeightCm} />
             <TextField label="Geboortedatum" type="date" size="small" fullWidth value={birthDate} onChange={(e) => setBirthDate(e.target.value)} InputLabelProps={{ shrink: true }} />
             <TextField select label="Geslacht" size="small" fullWidth value={gender || 'none'} onChange={(e) => setGender(e.target.value === 'none' ? '' : (e.target.value as typeof gender))}>
               <MenuItem value="none">Niet opgegeven</MenuItem>
@@ -290,7 +291,7 @@ export function ProfielPage() {
               <MenuItem value="vrouw">Vrouw</MenuItem>
               <MenuItem value="anders">Anders</MenuItem>
             </TextField>
-            <TextField label="Rusthartslag (bpm)" type="number" size="small" fullWidth inputProps={{ min: 0, inputMode: 'numeric' }} value={restingHr} onChange={(e) => setRestingHr(e.target.value)} />
+            <NumberField label="Rusthartslag (bpm)" size="small" fullWidth value={restingHr} onChange={setRestingHr} />
           </Box>
 
           {/* Hartslagzones: uit leeftijd + rusthartslag, zelfde formule als de routekaart */}
