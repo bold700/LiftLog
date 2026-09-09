@@ -5,6 +5,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import type { Formule7Routekaart, Formule7Stretch } from '../../types';
 import { getMuscleGroupsFromExerciseNames } from '../../utils/stretchingSuggestions';
 import { HelperText, Formule7SectionAccordion } from './sectionShared';
+import { NumberField } from '../NumberField';
 
 /** Rij voor stretching: volle breedte, Spiergroep groot, Duur/Herhalingen kleiner, delete-knop vast. */
 const STRETCH_ROW = {
@@ -105,34 +106,30 @@ export function StretchingSection({
                 sx={{ minWidth: 0 }}
                 placeholder="Spiergroep"
               />
-              <TextField
+              <NumberField
                 label="Duur stretch (sec)"
-                type="number"
-                value={row.stretchDurationSeconds ?? ''}
-                onChange={(e) =>
+                value={String(row.stretchDurationSeconds ?? '')}
+                onChange={(v) =>
                   setStretch(idx, {
                     stretchDurationSeconds:
-                      e.target.value === '' ? null : Number(e.target.value) || null,
+                      v === '' ? null : Number(v) || null,
                   })
                 }
                 size="small"
                 fullWidth
                 sx={{ minWidth: 0 }}
-                inputProps={{ min: 0 }}
               />
-              <TextField
+              <NumberField
                 label="Herhalingen"
-                type="number"
-                value={row.repetitions ?? ''}
-                onChange={(e) =>
+                value={String(row.repetitions ?? '')}
+                onChange={(v) =>
                   setStretch(idx, {
-                    repetitions: e.target.value === '' ? null : Number(e.target.value) || null,
+                    repetitions: v === '' ? null : Number(v) || null,
                   })
                 }
                 size="small"
                 fullWidth
                 sx={{ minWidth: 0 }}
-                inputProps={{ min: 0 }}
               />
               <Box sx={{ flex: '0 0 40px', width: 40, height: 40, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <IconButton

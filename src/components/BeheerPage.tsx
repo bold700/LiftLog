@@ -45,6 +45,7 @@ import { LimitationsEditor } from './LimitationsEditor';
 import { todayIso } from '../utils/format';
 import { WorkoutRequestsCard } from './beheer/WorkoutRequestsCard';
 import { AddSporterByEmailCard } from './beheer/AddSporterByEmailCard';
+import { NumberField } from './NumberField';
 
 type Filter = 'all' | 'sporter' | 'trainer' | 'incomplete';
 
@@ -538,9 +539,9 @@ export function BeheerPage() {
                 <MenuItem value="vrouw">Vrouw</MenuItem>
                 <MenuItem value="anders">Anders</MenuItem>
               </TextField>
-              <TextField label="Lengte (cm)" type="number" size="small" fullWidth inputProps={{ min: 0, inputMode: 'numeric' }} value={edit.heightCm} onChange={(e) => setEdit({ ...edit, heightCm: e.target.value })} />
-              <TextField label="Rusthartslag (bpm)" type="number" size="small" fullWidth inputProps={{ min: 0, inputMode: 'numeric' }} value={edit.restingHr} onChange={(e) => setEdit({ ...edit, restingHr: e.target.value })} />
-              <TextField label="Doelgewicht (kg)" type="number" size="small" fullWidth inputProps={{ min: 0, step: 0.1, inputMode: 'decimal' }} value={edit.weightGoalKg} onChange={(e) => setEdit({ ...edit, weightGoalKg: e.target.value })} />
+              <NumberField label="Lengte (cm)" size="small" fullWidth value={edit.heightCm} onChange={(v) => setEdit({ ...edit, heightCm: v })} />
+              <NumberField label="Rusthartslag (bpm)" size="small" fullWidth value={edit.restingHr} onChange={(v) => setEdit({ ...edit, restingHr: v })} />
+              <NumberField label="Doelgewicht (kg)" decimal size="small" fullWidth value={edit.weightGoalKg} onChange={(v) => setEdit({ ...edit, weightGoalKg: v })} />
               <TextField select label="Ranglijst" size="small" fullWidth value={edit.leaderboardVisibility} onChange={(e) => setEdit({ ...edit, leaderboardVisibility: e.target.value as LeaderboardVisibility })}>
                 <MenuItem value="named">Met naam</MenuItem>
                 <MenuItem value="anonymous">Anoniem</MenuItem>

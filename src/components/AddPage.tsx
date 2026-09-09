@@ -66,6 +66,7 @@ import BodyBackQuadsLevel1 from '../assets/body/levels/back levels/Body Back Qua
 import BodyBackObliquesLevel1 from '../assets/body/levels/back levels/Body Back Obliques Level 1.svg';
 import BodyBackTricpesLevel1 from '../assets/body/levels/back levels/Body Back Tricpes Level 1.svg';
 import BodyBackUnderarmLevel1 from '../assets/body/levels/back levels/Body Back Underarm Level 1.svg';
+import { NumberField } from './NumberField';
 
 // Mapping van spiergroep display namen naar Level 1 SVG's (voorkant)
 // Alleen spiergroepen die daadwerkelijk op de voorkant zitten
@@ -533,35 +534,30 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
             </FormControl>
 
             <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
+              <NumberField
                 label="Gewicht (kg)"
-                type="number"
+                decimal
                 value={weight}
-                onChange={(e) => setWeight(e.target.value)}
+                onChange={setWeight}
                 onKeyPress={handleKeyPress}
                 autoFocus={prefilledFromSchema}
                 sx={{ flex: 1 }}
-                inputProps={{ min: 0, step: 0.5 }}
               />
-              
-              <TextField
+
+              <NumberField
                 label="Sets"
-                type="number"
                 value={sets}
-                onChange={(e) => setSets(e.target.value)}
+                onChange={setSets}
                 onKeyPress={handleKeyPress}
                 sx={{ flex: 1 }}
-                inputProps={{ min: 1 }}
               />
-              
-              <TextField
+
+              <NumberField
                 label="Reps"
-                type="number"
                 value={reps}
-                onChange={(e) => setReps(e.target.value)}
+                onChange={setReps}
                 onKeyPress={handleKeyPress}
                 sx={{ flex: 1 }}
-                inputProps={{ min: 1 }}
               />
             </Box>
 

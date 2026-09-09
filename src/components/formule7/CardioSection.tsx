@@ -10,6 +10,7 @@ import {
   CARDIO_ZONE_HR_PERCENT,
 } from '../../utils/formule7Defaults';
 import { FORM_ROW, HelperText, Formule7SectionAccordion } from './sectionShared';
+import { NumberField } from '../NumberField';
 
 interface CardioSectionProps {
   value: Formule7Routekaart['cardio'];
@@ -143,12 +144,11 @@ export function CardioSection({
                   )}
                   sx={{ minWidth: 0 }}
                 />
-                <TextField
+                <NumberField
                   label="Trainingshartslag (sl/min)"
-                  type="number"
-                  value={effectiveCardio.zones[i]?.trainingHr ?? ''}
-                  onChange={(e) => {
-                    const raw = e.target.value === '' ? null : Number(e.target.value) || null;
+                  value={String(effectiveCardio.zones[i]?.trainingHr ?? '')}
+                  onChange={(v) => {
+                    const raw = v === '' ? null : Number(v) || null;
                     if (raw == null) {
                       setCardioZone(i, { trainingHr: null });
                       return;
@@ -159,10 +159,6 @@ export function CardioSection({
                   }}
                   size="small"
                   fullWidth
-                  inputProps={{
-                    min: maxHr != null ? Math.round((maxHr * zoneHrPreset.min) / 100) : 0,
-                    max: maxHr != null ? Math.round((maxHr * zoneHrPreset.max) / 100) : 300,
-                  }}
                   placeholder={suggestedHr != null ? `Standaard ${suggestedHr} (${zoneHrPreset.defaultPercent}% max HF)` : undefined}
                   InputProps={{
                     endAdornment: (
@@ -191,18 +187,16 @@ export function CardioSection({
                     ),
                   }}
                 />
-                <TextField
+                <NumberField
                   label="Duur (min)"
-                  type="number"
-                  value={effectiveCardio.zones[i]?.durationMinutes ?? ''}
-                  onChange={(e) =>
+                  value={String(effectiveCardio.zones[i]?.durationMinutes ?? '')}
+                  onChange={(v) =>
                     setCardioZone(i, {
-                      durationMinutes: e.target.value === '' ? null : Number(e.target.value) || null,
+                      durationMinutes: v === '' ? null : Number(v) || null,
                     })
                   }
                   size="small"
                   fullWidth
-                  inputProps={{ min: 0 }}
                 />
               </Box>
             </Box>

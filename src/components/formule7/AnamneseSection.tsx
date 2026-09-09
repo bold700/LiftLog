@@ -9,6 +9,7 @@ import {
   FORMULE7_MOVER_LEVELS_HELP,
 } from '../../utils/formule7Defaults';
 import { FORM_ROW, HelperText, Formule7SectionAccordion } from './sectionShared';
+import { NumberField } from '../NumberField';
 
 const SESSION_DURATION_OPTIONS = [
   { value: '<30' as const, label: 'Korter dan 30 min' },
@@ -113,14 +114,12 @@ export function AnamneseSection({
           placeholder="Korte omschrijving van de cliënt"
         />
         <Box sx={FORM_ROW}>
-          <TextField
+          <NumberField
             label="Leeftijd (jaar)"
-            type="number"
-            value={formule7.ageYears ?? ''}
-            onChange={(e) => set({ ageYears: e.target.value === '' ? null : Number(e.target.value) || null })}
+            value={String(formule7.ageYears ?? '')}
+            onChange={(v) => set({ ageYears: v === '' ? null : Number(v) || null })}
             size="small"
             fullWidth
-            inputProps={{ min: 0 }}
           />
           <Autocomplete
             options={['M', 'V']}
@@ -230,24 +229,22 @@ export function AnamneseSection({
             )}
             sx={{ width: '100%' }}
           />
-          <TextField
+          <NumberField
             label="Rusthartfrequentie (sl/min)"
-            type="number"
-            value={formule7.restingHr ?? ''}
-            onChange={(e) => set({ restingHr: e.target.value === '' ? null : Number(e.target.value) || null })}
+            value={String(formule7.restingHr ?? '')}
+            onChange={(v) => set({ restingHr: v === '' ? null : Number(v) || null })}
             size="small"
             fullWidth
-            inputProps={{ min: 0 }}
           />
+          {/* Wordt berekend uit de leeftijd; alleen-lezen (was het al, maar impliciet). */}
           <TextField
             label="Theoretische max. hartfrequentie (sl/min)"
-            type="number"
-            value={formule7.theoreticalMaxHr ?? computedMaxHr ?? ''}
+            value={String(formule7.theoreticalMaxHr ?? computedMaxHr ?? '')}
             size="small"
             fullWidth
-            inputProps={{ min: 0, readOnly: true }}
             placeholder="Vul leeftijd in (220 − leeftijd)"
             InputProps={{
+              readOnly: true,
               endAdornment: (
                 <Tooltip title="Automatisch: 220 − leeftijd (slagen per minuut)" placement="top">
                   <span style={{ display: 'inline-flex', cursor: 'help', marginLeft: 4 }} aria-label="Uitleg berekening">

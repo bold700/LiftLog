@@ -4,6 +4,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import type { Formule7Routekaart } from '../../types';
 import { FORMULE7_COOLDOWN_ORGANISATION_OPTIONS } from '../../utils/formule7Defaults';
 import { FORM_ROW, HelperText, Formule7SectionAccordion } from './sectionShared';
+import { NumberField } from '../NumberField';
 
 interface CoolingDownSectionProps {
   value: Formule7Routekaart['cooldown'];
@@ -37,19 +38,17 @@ export function CoolingDownSection({
             )}
             sx={{ minWidth: 0 }}
           />
-          <TextField
+          <NumberField
             label="Intensiteit (% HFmax)"
-            type="number"
-            value={effectiveCooldown.intensityPercentOfMaxHr ?? ''}
-            onChange={(e) =>
+            value={String(effectiveCooldown.intensityPercentOfMaxHr ?? '')}
+            onChange={(v) =>
               setEffectiveCooldown({
-                intensityPercentOfMaxHr: e.target.value === '' ? null : Number(e.target.value) || null,
+                intensityPercentOfMaxHr: v === '' ? null : Number(v) || null,
               })
             }
             size="small"
             fullWidth
             sx={{ minWidth: 0 }}
-            inputProps={{ min: 0, max: 100 }}
           />
           <TextField
             label="Trainingshartfrequentie (sl/min)"
@@ -84,17 +83,15 @@ export function CoolingDownSection({
               ),
             }}
           />
-          <TextField
+          <NumberField
             label="Duur (min)"
-            type="number"
-            value={effectiveCooldown.durationMinutes ?? ''}
-            onChange={(e) =>
-              setEffectiveCooldown({ durationMinutes: e.target.value === '' ? null : Number(e.target.value) || null })
+            value={String(effectiveCooldown.durationMinutes ?? '')}
+            onChange={(v) =>
+              setEffectiveCooldown({ durationMinutes: v === '' ? null : Number(v) || null })
             }
             size="small"
             fullWidth
             sx={{ minWidth: 0 }}
-            inputProps={{ min: 0 }}
           />
         </Box>
     </Formule7SectionAccordion>
