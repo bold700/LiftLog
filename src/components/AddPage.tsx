@@ -182,8 +182,12 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
   const isTrainer = profileCtx?.isTrainer ?? false;
   const sporters = profileCtx?.allSporters ?? [];
   const selfUid = profileCtx?.profile?.userId ?? null;
-  /** '' = voor mijzelf; anders userId van de sporter. */
-  const [logTargetId, setLogTargetId] = useState('');
+  /**
+   * '' = voor mijzelf; anders userId van de sporter. Staat in de context, zodat de keuze uit de
+   * training hier doorwerkt en blijft staan als je meerdere oefeningen achter elkaar logt.
+   */
+  const logTargetId = addFromSchema?.logTargetId ?? '';
+  const setLogTargetId = addFromSchema?.setLogTargetId ?? (() => {});
   /** True wanneer de oefening al is voorgevuld vanuit een training (dan geen auto-open dropdown). */
   const [prefilledFromSchema, setPrefilledFromSchema] = useState(false);
   const [exerciseName, setExerciseName] = useState('');
@@ -302,7 +306,12 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
         schemaId: exercise.schemaId ?? null,
         schemaDayIndex: exercise.schemaDayIndex ?? null,
         sessionId: null,
-      }).catch((err) => notify.error('Log opslaan voor de sporter mislukt. Probeer het opnieuw.', err));
+      })
+        .then(() => {
+          // Zelfde signaal als bij een eigen log, zodat de trainingsessie het vinkje bijwerkt.
+          window.dispatchEvent(new Event('workoutUpdated'));
+        })
+        .catch((err) => notify.error('Log opslaan voor de sporter mislukt. Probeer het opnieuw.', err));
     } else {
       addExercise(exercise);
     }
@@ -400,6 +409,15 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
   const formContent = (
     <>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {isTrainer && prefilledFromSchema && logTargetId && (
+              <Typography variant="body2" color="text.secondary">
+                Log gaat naar{' '}
+                <Box component="span" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                  {sporters.find((s) => s.userId === logTargetId)?.displayName?.trim() || 'de gekozen sporter'}
+                </Box>
+                . Wijzig dat in de training zelf.
+              </Typography>
+            )}
             {isTrainer && !prefilledFromSchema && sporters.length > 0 && (
               <TextField
                 select
