@@ -7,6 +7,8 @@ import {
   IconButton,
   Snackbar,
   Button,
+  TextField,
+  MenuItem,
 } from '@mui/material';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
@@ -14,7 +16,11 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { Schema, SchemaExercise } from '../types';
 import { Exercise } from '../types';
 import { deleteExercise } from '../utils/storage';
-import { getLoggedExercisesForSchemaDayInLast12Hours } from '../utils/schemaSessionUtils';
+import {
+  getLoggedExercisesForSchemaDayInLast12Hours,
+  loggedExercisesFromSporterLogs,
+} from '../utils/schemaSessionUtils';
+import { getLogsForUser, deleteExerciseLog } from '../services/logService';
 import {
   isDayMarkedCompleteInLast12Hours,
   markDayComplete,
@@ -75,6 +81,23 @@ export const TrainingSessionView = ({
   const addFromSchema = useAddFromSchema();
   const profileCtx = useProfile();
   const notify = useNotify();
+  const isTrainer = profileCtx?.isTrainer ?? false;
+  const sporters = useMemo(() => profileCtx?.allSporters ?? [], [profileCtx?.allSporters]);
+  /** '' = de trainer logt voor zichzelf; anders het userId van de sporter. */
+  const logTargetId = addFromSchema?.logTargetId ?? '';
+  const setLogTargetId = addFromSchema?.setLogTargetId;
+  const applyDefaultLogTarget = addFromSchema?.applyDefaultLogTarget;
+  const logTarget = logTargetId ? sporters.find((sp) => sp.userId === logTargetId) ?? null : null;
+
+  // Een workout die aan één sporter hangt, staat meteen op die sporter: dat is bijna altijd
+  // voor wie de trainer de training start.
+  const schemaClientId = schema.clientId;
+  const schemaId = schema.id;
+  useEffect(() => {
+    if (!isTrainer || !applyDefaultLogTarget || !schemaClientId) return;
+    if (!sporters.some((sp) => sp.userId === schemaClientId)) return;
+    applyDefaultLogTarget(schemaId, schemaClientId);
+  }, [isTrainer, applyDefaultLogTarget, schemaClientId, schemaId, sporters]);
   const [checkinOpen, setCheckinOpen] = useState(false);
   const [checkinSaving, setCheckinSaving] = useState(false);
   const day = schema.days[dayIndex];
@@ -96,9 +119,10 @@ export const TrainingSessionView = ({
       setCheckinSaving(true);
       try {
         await saveCheckin({
-          userId: me.userId,
+          // Logt de trainer voor een sporter, dan is de check-in van die sporter.
+          userId: logTarget?.userId ?? me.userId,
           loggedBy: me.userId,
-          trainerId: me.trainerId ?? schema.trainerId ?? null,
+          trainerId: logTarget ? logTarget.trainerId ?? me.userId : me.trainerId ?? schema.trainerId ?? null,
           schemaId: schema.id,
           schemaDayIndex: dayIndex,
           dayLabel: day?.dayLabel ?? null,
@@ -113,7 +137,7 @@ export const TrainingSessionView = ({
       }
       completeDay();
     },
-    [profileCtx?.profile, schema.id, schema.trainerId, dayIndex, day?.dayLabel, notify, completeDay]
+    [profileCtx?.profile, logTarget, schema.id, schema.trainerId, dayIndex, day?.dayLabel, notify, completeDay]
   );
   const [loggedExercises, setLoggedExercises] = useState<Exercise[]>(() =>
     getLoggedExercisesForSchemaDayInLast12Hours(schema.id, dayIndex)
@@ -135,9 +159,24 @@ export const TrainingSessionView = ({
     setHealthSummary(getStoredHealthSummary(healthStorageKey));
   }, [healthStorageKey]);
 
+  /**
+   * Wat er al gelogd is voor deze trainingsdag. Voor jezelf staat dat lokaal op dit toestel; logt
+   * de trainer voor een sporter, dan staat het in de cloud onder dat account — anders zou de
+   * trainer geen enkel vinkje zien en oefeningen dubbel loggen.
+   */
   const refreshLogged = useCallback(() => {
-    setLoggedExercises(getLoggedExercisesForSchemaDayInLast12Hours(schema.id, dayIndex));
-  }, [schema.id, dayIndex]);
+    if (!logTargetId) {
+      setLoggedExercises(getLoggedExercisesForSchemaDayInLast12Hours(schema.id, dayIndex));
+      return;
+    }
+    getLogsForUser(logTargetId)
+      .then((logs) => setLoggedExercises(loggedExercisesFromSporterLogs(logs, schema.id, dayIndex)))
+      .catch(() => setLoggedExercises([]));
+  }, [schema.id, dayIndex, logTargetId]);
+
+  useEffect(() => {
+    refreshLogged();
+  }, [refreshLogged]);
 
   useEffect(() => {
     const handler = () => refreshLogged();
@@ -160,14 +199,22 @@ export const TrainingSessionView = ({
     }
   }, [justLoggedExerciseId]);
 
-  const handleUndo = useCallback(() => {
-    if (justLoggedExerciseId) {
+  const handleUndo = useCallback(async () => {
+    if (!justLoggedExerciseId) return;
+    // Voor een sporter staat de log in de cloud; lokaal verwijderen zou hem laten staan.
+    if (logTargetId) {
+      try {
+        await deleteExerciseLog(justLoggedExerciseId);
+      } catch (err) {
+        notify.error('Log terugdraaien mislukt. Probeer het via Beheer of de log zelf.', err);
+      }
+    } else {
       deleteExercise(justLoggedExerciseId);
-      onClearJustLogged();
-      setSnackbarOpen(false);
-      refreshLogged();
     }
-  }, [justLoggedExerciseId, onClearJustLogged, refreshLogged]);
+    onClearJustLogged();
+    setSnackbarOpen(false);
+    refreshLogged();
+  }, [justLoggedExerciseId, logTargetId, notify, onClearJustLogged, refreshLogged]);
 
   const handleSnackbarClose = useCallback(() => {
     setSnackbarOpen(false);
@@ -262,6 +309,32 @@ export const TrainingSessionView = ({
               </Button>
             )}
           </Box>
+
+          {isTrainer && sporters.length > 0 && setLogTargetId && (
+            <TextField
+              select
+              size="small"
+              fullWidth
+              label="Training voor"
+              value={logTargetId}
+              onChange={(e) => setLogTargetId(e.target.value)}
+              SelectProps={{ displayEmpty: true }}
+              InputLabelProps={{ shrink: true }}
+              helperText={
+                logTarget
+                  ? 'Alles wat je hier logt komt onder het account van deze sporter.'
+                  : 'Je logt voor jezelf.'
+              }
+              sx={{ mb: 2 }}
+            >
+              <MenuItem value="">Mijzelf</MenuItem>
+              {sporters.map((sp) => (
+                <MenuItem key={sp.userId} value={sp.userId}>
+                  {sp.displayName?.trim() || sp.email || sp.userId}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
 
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             <strong>Training afronden:</strong> log per oefening via &quot;Log toevoegen&quot;, of rond de hele training af met &quot;Training afronden&quot; hieronder.
@@ -396,20 +469,25 @@ export const TrainingSessionView = ({
                           {isLogged && (
                             <Box
                               component="button"
-                              onClick={() => logId && handleGelogdClick(logId)}
+                              disabled={Boolean(logTargetId)}
+                              onClick={() => !logTargetId && logId && handleGelogdClick(logId)}
                               sx={{
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: 0.5,
                                 color: 'success.main',
-                                cursor: 'pointer',
+                                cursor: logTargetId ? 'default' : 'pointer',
                                 border: 'none',
                                 background: 'none',
                                 padding: 0,
                                 font: 'inherit',
-                                '&:hover': { textDecoration: 'underline' },
+                                '&:hover': { textDecoration: logTargetId ? 'none' : 'underline' },
                               }}
-                              aria-label="Gelogd – klik om naar log te gaan"
+                              aria-label={
+                                logTargetId
+                                  ? 'Gelogd voor deze sporter'
+                                  : 'Gelogd – klik om naar log te gaan'
+                              }
                             >
                               <CheckCircleOutlineIcon fontSize="small" />
                               <Typography variant="caption" color="success.main" component="span">

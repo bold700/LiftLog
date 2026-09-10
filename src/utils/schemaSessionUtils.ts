@@ -1,4 +1,5 @@
 import { Exercise } from '../types';
+import type { ExerciseLog } from '../types';
 import { Schema } from '../types';
 import { getAllExercises } from './storage';
 import {
@@ -34,6 +35,37 @@ export function getLastSessionDateForDay(schemaId: string, schemaDayIndex: numbe
     }
   }
   return last;
+}
+
+/**
+ * Hetzelfde als hierboven, maar dan voor logs uit de cloud: die gebruikt de trainer als hij een
+ * training voor een sporter draait. De logs staan dan onder het account van de sporter en niet
+ * op dit toestel, dus ze komen uit Firestore in plaats van uit de lokale opslag.
+ */
+export function loggedExercisesFromSporterLogs(
+  logs: ExerciseLog[],
+  schemaId: string,
+  schemaDayIndex: number
+): Exercise[] {
+  return logs
+    .filter(
+      (l) =>
+        l.schemaId === schemaId &&
+        l.schemaDayIndex === schemaDayIndex &&
+        Boolean(l.exerciseName) &&
+        isWithinLast12Hours(l.date)
+    )
+    .map((l) => ({
+      id: l.id,
+      name: l.exerciseName,
+      weight: l.weight ?? undefined,
+      sets: l.sets ?? undefined,
+      reps: l.reps ?? undefined,
+      notes: l.notes ?? undefined,
+      date: l.date,
+      schemaId: l.schemaId ?? undefined,
+      schemaDayIndex: l.schemaDayIndex ?? undefined,
+    })) as Exercise[];
 }
 
 export function getLoggedExercisesForSchemaDayInLast12Hours(
