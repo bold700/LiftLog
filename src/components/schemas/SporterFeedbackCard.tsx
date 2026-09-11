@@ -36,18 +36,39 @@ export function SporterFeedbackCard({ userId, sporterName, schemaId }: SporterFe
     let cancelled = false;
     setFeedback(null);
     setError(null);
-    Promise.all([getLogsForUser(userId), getCheckinsForUser(userId)])
-      .then(([logs, checkins]) => {
-        if (cancelled) return;
-        // Eerst alleen deze workout; als de sporter daar niets voor heeft gelogd, alles van de laatste 60 dagen.
-        const forSchema = buildSporterFeedback(logs, checkins, { schemaId });
-        setFeedback(forSchema.lastActivity ? forSchema : buildSporterFeedback(logs, checkins));
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        console.error('Terugkoppeling van de sporter laden mislukt', err);
-        setError('Terugkoppeling laden mislukt.');
+
+    // Logs en check-ins los van elkaar ophalen. Met Promise.all verdween álles zodra één van de
+    // twee faalde — dan zag de trainer geen enkel gewicht meer, ook al stonden de logs er gewoon.
+    Promise.allSettled([getLogsForUser(userId), getCheckinsForUser(userId)]).then(([logResult, checkinResult]) => {
+      if (cancelled) return;
+
+      const logs = logResult.status === 'fulfilled' ? logResult.value : [];
+      const checkins = checkinResult.status === 'fulfilled' ? checkinResult.value : [];
+
+      // Eerst alleen deze workout; als de sporter daar niets voor heeft gelogd, alles van de laatste 60 dagen.
+      const forSchema = buildSporterFeedback(logs, checkins, { schemaId });
+      setFeedback(forSchema.lastActivity ? forSchema : buildSporterFeedback(logs, checkins));
+
+      const failed = [logResult, checkinResult].filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+      if (failed.length === 0) return;
+      for (const f of failed) console.error('Terugkoppeling van de sporter laden mislukt', f.reason);
+
+      // "Geen rechten" betekent hier vrijwel altijd dat de Firestore-regels voor een nieuwe
+      // collectie nog niet zijn uitgerold; die gaan niet mee met een app-deploy. Dat is iets
+      // anders dan een storing, dus zeg het ook anders.
+      const denied = failed.some((f) => {
+        const code = f.reason && typeof f.reason === 'object' && 'code' in f.reason ? String((f.reason as { code: unknown }).code) : '';
+        return code.includes('permission-denied');
       });
+      if (logResult.status === 'rejected' && checkinResult.status === 'rejected') {
+        setError(denied ? 'Geen toegang tot de gegevens van deze sporter.' : 'Terugkoppeling laden mislukt.');
+      } else if (checkinResult.status === 'rejected') {
+        setError(denied ? 'Check-ins zijn niet beschikbaar (regels nog niet uitgerold).' : 'Check-ins laden mislukt.');
+      } else {
+        setError(denied ? 'Oefeningen zijn niet beschikbaar (geen toegang).' : 'Oefeningen laden mislukt.');
+      }
+    });
+
     return () => {
       cancelled = true;
     };
