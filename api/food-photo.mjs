@@ -1,4 +1,4 @@
-import { applyCors } from './cors.mjs';
+import { applyCors } from './_lib/cors.mjs';
 import { requireUser, enforceRateLimit } from './_lib/requireUser.mjs';
 /**
  * Herkent voeding op een foto met een vision-model (OpenAI) en geeft per item een

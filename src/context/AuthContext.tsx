@@ -13,7 +13,8 @@ import {
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
   signInWithPopup,
-  deleteUser,
+  signInWithRedirect,
+  getRedirectResult,
   getAuth,
   GoogleAuthProvider,
   sendPasswordResetEmail,
@@ -26,7 +27,10 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured, firebaseConfig } from '../firebase/config';
-import { createProfile, deleteProfile } from '../services/profileService';
+import { createProfile } from '../services/profileService';
+import { deleteOwnAccount } from '../services/adminAccountService';
+import { getCurrentOrgId, requireOrgId } from '../services/orgContext';
+import { isStandaloneApp } from '../utils/appMode';
 import type { ProfileRole } from '../types';
 
 type AuthState = {
@@ -89,6 +93,18 @@ function friendlyAuthError(e: unknown, fallback: string): string {
   }
 }
 
+/**
+ * Foutcodes die betekenen dat de popup zelf niet bruikbaar was — niet dat het inloggen mislukte.
+ * `cancelled-popup-request` en `popup-closed-by-user` staan er bewust niet bij: die betekenen dat
+ * de gebruiker zelf afbrak, en dan is opnieuw beginnen met een doorstuur juist vervelend.
+ */
+const POPUP_UNUSABLE = new Set([
+  'auth/popup-blocked',
+  'auth/operation-not-supported-in-this-environment',
+  'auth/web-storage-unsupported',
+  'auth/internal-error',
+]);
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,6 +115,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
+    // Kwam de gebruiker terug van een doorstuur-login, dan wordt die hier afgerond. Bij succes
+    // meldt `onAuthStateChanged` zich vanzelf; we lezen het resultaat vooral om een mislukking
+    // niet stil te laten verdwijnen — anders staat iemand na de omweg weer op het inlogscherm
+    // zonder te weten waarom.
+    getRedirectResult(auth).catch((e: unknown) => {
+      setError(friendlyAuthError(e, 'Google inloggen mislukt.'));
+    });
+
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
@@ -132,10 +156,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (isFirebaseConfigured()) {
         try {
           const name = (displayName?.trim() || cred.user.displayName) ?? null;
+          // Zelfregistratie komt in de studio voor open aanmelding terecht (zie orgContext).
+          const signupOrgId = getCurrentOrgId() ?? undefined;
           if (role === 'trainer') {
-            await createProfile(cred.user.uid, 'sporter', cred.user.email ?? email, name, true);
+            await createProfile(cred.user.uid, 'sporter', cred.user.email ?? email, name, true, signupOrgId);
           } else {
-            await createProfile(cred.user.uid, role, cred.user.email ?? email, name);
+            await createProfile(cred.user.uid, role, cred.user.email ?? email, name, false, signupOrgId);
           }
         } catch (profileErr) {
           // Account bestaat al in Auth; profiel wordt bij eerste laden alsnog aangemaakt door ProfileContext
@@ -170,8 +196,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Profiel schrijven met de beheerderssessie: alleen een beheerder mag een profiel met een rol
         // en de verificatie-bypass aanmaken (Firestore-regels).
         if (!db) throw new Error('Firebase niet geconfigureerd');
+        const orgId = requireOrgId();
         await setDoc(doc(db, 'profiles', uid), {
           userId: uid,
+          // Nieuw account hoort bij de studio van de beheerder die het aanmaakt. Lid worden van
+          // een tweede studio doet de beheerder daar, later, via Profielen.
+          orgId,
+          orgIds: [orgId],
           role,
           email: (cred.user.email ?? email).trim().toLowerCase(),
           displayName: name,
@@ -191,12 +222,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  /**
+   * Inloggen met Google. Welke weg we nemen hangt af van waar de app draait.
+   *
+   * Vanaf het beginscherm of in de native app is er geen bruikbare popup: iOS opent die als een
+   * los venster dat niets terug kan geven aan de app, waarna Firebase alleen nog "The requested
+   * action is invalid" toont. Daar sturen we de gebruiker dus door en vangen we hem bij
+   * terugkomst op met `getRedirectResult`. In een gewoon tabblad blijft de popup beter: je raakt
+   * de pagina niet kwijt. Blijkt die daar toch geblokkeerd, dan wijken we alsnog uit.
+   */
   const signInWithGoogle = useCallback(async () => {
     setError(null);
     if (!auth) throw new Error('Firebase Auth niet geconfigureerd');
+    const provider = new GoogleAuthProvider();
+
+    if (isStandaloneApp()) {
+      await signInWithRedirect(auth, provider);
+      return;
+    }
+
     try {
-      await signInWithPopup(auth, new GoogleAuthProvider());
+      await signInWithPopup(auth, provider);
     } catch (e: unknown) {
+      const code = e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : '';
+      if (POPUP_UNUSABLE.has(code)) {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
       const msg = friendlyAuthError(e, 'Google inloggen mislukt.');
       setError(msg);
       throw e;
@@ -212,10 +264,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const deleteAccount = useCallback(async () => {
     setError(null);
     if (!auth?.currentUser) return;
-    const uid = auth.currentUser.uid;
     try {
-      await deleteProfile(uid);
-      await deleteUser(auth.currentUser);
+      // Via de server: de app mag geen profielen verwijderen, en de server ruimt in één keer
+      // ook de logs, metingen en het ranglijstdocument op.
+      await deleteOwnAccount(auth.currentUser);
+      await firebaseSignOut(auth);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Account verwijderen mislukt';
       setError(msg);

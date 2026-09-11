@@ -1,6 +1,8 @@
-# Van As Personal Training Logs (LiftLog)
+# VORM
 
-Web- en mobiele app voor Van As Personal Training: trainers maken workouts en groepslessen, sporters loggen hun trainingen, voeding en metingen en zien hun voortgang.
+Trainingsplatform voor personal trainers en boutique studio's: trainers maken workouts en groepslessen, sporters loggen hun trainingen, voeding en metingen en zien hun voortgang. Meerdere studio's draaien naast elkaar op hetzelfde systeem, strikt van elkaar gescheiden.
+
+Van As Personal Training is de eerste studio en tegelijk de proeftuin.
 
 - **Live**: https://lift-log-phi.vercel.app (Vercel bouwt automatisch vanaf `main`)
 - **Native**: iOS/Android via Capacitor (`ios/App`, `android/`)
@@ -15,6 +17,11 @@ Web- en mobiele app voor Van As Personal Training: trainers maken workouts en gr
 - **Inzichten**: progressie, spiergroepen, ranglijst (opt-in), hartslagzones, vetpercentage (Durnin & Womersley).
 - **Voeding en metingen**: Open Food Facts, barcode-scanner, fotoherkenning, gewicht/huidplooien/voortgangsfoto's.
 - **AI-chat koppeling**: MCP-server op `/api/mcp` met een persoonlijke koppelsleutel (Profiel → Koppel met AI-chat).
+- **Assistent in de app**: dezelfde gereedschapskist als de AI-koppeling, maar zonder connector of ChatGPT-abonnement (`/api/assistant`).
+- **Berichten en check-ins**: contact tussen trainer en sporter bij het dossier, met een wekelijkse check-in die het gewicht meteen als meting vastlegt.
+- **Meldingen**: pushnotificaties per toestel bij een bericht, een check-in of een nieuw schema.
+- **Meerdere studio's**: elke studio is strikt gescheiden; een trainer kan bij meerdere studio's werken en wisselt bovenin (zie [docs/STUDIOS-EN-OVERDRACHT.md](docs/STUDIOS-EN-OVERDRACHT.md)).
+- **Lessen en credits**: rooster met capaciteit en wachtlijst; sporters reserveren met credits, de trainer kent ze toe. Reserveren loopt via een transactie op de server, zodat plek en saldo altijd kloppen.
 
 ## Ontwikkelen
 

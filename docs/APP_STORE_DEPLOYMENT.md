@@ -1,6 +1,6 @@
-# LiftLog - App Store & Play Store Deployment Guide
+# VORM - App Store & Play Store Deployment Guide
 
-Deze guide helpt je om de LiftLog app te publiceren in de Apple App Store en Google Play Store.
+Deze guide helpt je om de VORM app te publiceren in de Apple App Store en Google Play Store.
 
 ## 📋 Vereisten
 
@@ -103,7 +103,7 @@ De splash screen is al geconfigureerd in `capacitor.config.ts`. Je kunt de splas
 
 1. In Xcode, selecteer `Info.plist`
 2. Pas de volgende velden aan:
-   - **Bundle display name**: "LiftLog"
+   - **Bundle display name**: "VORM"
    - **Bundle version**: "1.0.0"
    - **Bundle versions string, short**: "1.0.0"
 
@@ -143,7 +143,7 @@ De splash screen is al geconfigureerd in `capacitor.config.ts`. Je kunt de splas
 3. Klik op **"My Apps"** > **"+ New App"**
 4. Vul in:
    - **Platform**: iOS
-   - **Name**: LiftLog
+   - **Name**: VORM
    - **Primary Language**: Nederlands
    - **Bundle ID**: com.vanas.liftlog
    - **SKU**: liftlog-001 (unieke identifier)
@@ -163,7 +163,7 @@ De splash screen is al geconfigureerd in `capacitor.config.ts`. Je kunt de splas
 
 3. **App Privacy**:
    - Beantwoord vragen over data verzameling
-   - Voor LiftLog: Geen data verzameling (alleen lokale opslag)
+   - Voor VORM: Geen data verzameling (alleen lokale opslag)
 
 4. **Version Information**:
    - Screenshots: Upload screenshots van verschillende iPhone sizes
@@ -232,7 +232,7 @@ Of handmatig:
 3. **Open `android/app/src/main/AndroidManifest.xml`**
 4. Controleer:
    - Package name: "com.vanas.liftlog"
-   - App name: "LiftLog"
+   - App name: "VORM"
    - Permissions (indien nodig)
 
 ### 3.5 App Icon & Splash Screen
@@ -344,7 +344,7 @@ De splash screen is al geconfigureerd. Pas aan in:
 2. Betaal de $25 eenmalige registratiekosten
 3. Klik **"Create app"**
 4. Vul in:
-   - **App name**: LiftLog
+   - **App name**: VORM
    - **Default language**: Nederlands
    - **App or game**: App
    - **Free or paid**: Free (of Paid)
@@ -362,7 +362,7 @@ De splash screen is al geconfigureerd. Pas aan in:
 
 3. **Content rating**:
    - Vul de vragenlijst in
-   - Voor LiftLog: Geen specifieke leeftijdsbeperkingen
+   - Voor VORM: Geen specifieke leeftijdsbeperkingen
 
 4. **Target audience**:
    - Leeftijdsgroep: Alle leeftijden
@@ -370,7 +370,7 @@ De splash screen is al geconfigureerd. Pas aan in:
 
 5. **Data safety**:
    - Beantwoord vragen over data verzameling
-   - Voor LiftLog: Geen data verzameling (alleen lokale opslag)
+   - Voor VORM: Geen data verzameling (alleen lokale opslag)
 
 ### 3.11 Store Listing
 

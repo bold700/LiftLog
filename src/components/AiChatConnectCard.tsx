@@ -1,5 +1,5 @@
 /**
- * Profiel-kaart: koppel LiftLog aan ChatGPT, Claude of Gemini via een koppel-URL (MCP).
+ * Profiel-kaart: koppel VORM aan ChatGPT, Claude of Gemini via een koppel-URL (MCP).
  * De URL bevat een geheime sleutel; hij wordt één keer getoond (en op dit apparaat onthouden).
  */
 import { useCallback, useEffect, useState } from 'react';
@@ -172,7 +172,7 @@ export function AiChatConnectCard({ userId }: Props) {
             </Typography>
             <Typography variant="body2">
               Op de website: Instellingen → Connectors → Geavanceerd → Developer mode aan. Klik op "Create", geef een naam
-              (bijv. LiftLog), plak de koppel-URL bij "MCP Server URL", kies "No authentication" en sla op. Daarna werkt het ook in de
+              (bijv. VORM), plak de koppel-URL bij "MCP Server URL", kies "No authentication" en sla op. Daarna werkt het ook in de
               ChatGPT-app op je telefoon.
             </Typography>
           </Box>
@@ -181,8 +181,8 @@ export function AiChatConnectCard({ userId }: Props) {
               Claude (Pro of Max)
             </Typography>
             <Typography variant="body2">
-              Instellingen → Connectors → "Add custom connector". Naam LiftLog, plak de koppel-URL, en voeg toe. Daarna in een chat
-              LiftLog aanzetten onder de connector-knop.
+              Instellingen → Connectors → "Add custom connector". Naam VORM, plak de koppel-URL, en voeg toe. Daarna in een chat
+              VORM aanzetten onder de connector-knop.
             </Typography>
           </Box>
           <Box>

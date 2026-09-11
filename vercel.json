@@ -19,6 +19,16 @@
     },
     "api/food-photo.mjs": {
       "maxDuration": 30
+    },
+    "api/assistant.mjs": {
+      "includeFiles": "src/data/*.json",
+      "maxDuration": 60
+    },
+    "api/notify.mjs": {
+      "maxDuration": 15
+    },
+    "api/booking.mjs": {
+      "maxDuration": 20
     }
   },
   "rewrites": [

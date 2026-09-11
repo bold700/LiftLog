@@ -6,12 +6,16 @@ import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
 import EventNoteRoundedIcon from '@mui/icons-material/EventNoteRounded';
 import MenuRoundedIcon from '@mui/icons-material/MenuRounded';
 import DonutLargeRoundedIcon from '@mui/icons-material/DonutLargeRounded';
+import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
+import ChatBubbleOutlineRoundedIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
+import EventAvailableRoundedIcon from '@mui/icons-material/EventAvailableRounded';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
 import MonitorWeightRoundedIcon from '@mui/icons-material/MonitorWeightRounded';
 import { lightTheme } from './theme';
 import { NavigationBar } from './components/NavigationBar';
+import { StudioSwitcher } from './components/StudioSwitcher';
 import { FullscreenMenu } from './components/FullscreenMenu';
 import { InzichtenPage } from './components/InzichtenPage';
 import { AddPage } from './components/AddPage';
@@ -21,6 +25,9 @@ import { NotifyProvider } from './context/NotifyContext';
 
 // Minder vaak gebruikte tabbladen pas laden als ze opengaan (kleinere eerste download).
 const BeheerPage = lazy(() => import('./components/BeheerPage').then((m) => ({ default: m.BeheerPage })));
+const AssistentPage = lazy(() => import('./components/AssistentPage').then((m) => ({ default: m.AssistentPage })));
+const BerichtenPage = lazy(() => import('./components/BerichtenPage').then((m) => ({ default: m.BerichtenPage })));
+const LessenPage = lazy(() => import('./components/LessenPage').then((m) => ({ default: m.LessenPage })));
 const ProfielPage = lazy(() => import('./components/ProfielPage').then((m) => ({ default: m.ProfielPage })));
 const NutritionPage = lazy(() => import('./components/NutritionPage').then((m) => ({ default: m.NutritionPage })));
 const MetingenPage = lazy(() => import('./components/MetingenPage').then((m) => ({ default: m.MetingenPage })));
@@ -42,6 +49,9 @@ const TAB_PROFIEL = 3;
 const TAB_BEHEER = 4;
 const TAB_VOEDING = 5;
 const TAB_METINGEN = 6;
+const TAB_ASSISTENT = 7;
+const TAB_BERICHTEN = 8;
+const TAB_LESSEN = 9;
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState(TAB_INZICHTEN);
@@ -93,7 +103,7 @@ function AppContent() {
   }, [handleFabMenuClose]);
 
   useEffect(() => {
-    document.title = 'Van As Personal Training Logs';
+    document.title = 'VORM';
   }, []);
 
   const handleExerciseAdded = useCallback((opts?: { returnToSchema?: boolean }) => {
@@ -109,6 +119,8 @@ function AppContent() {
 
   const tabs = [
     { label: 'Menu', icon: <MenuRoundedIcon fontSize="small" />, tabIndex: TAB_MENU },
+    // De assistent staat vooraan: hij is de snelste weg naar alles wat de app kan.
+    { label: 'Assistent', icon: <AutoAwesomeRoundedIcon fontSize="small" />, tabIndex: TAB_ASSISTENT },
     { label: 'Inzichten', icon: <DonutLargeRoundedIcon fontSize="small" />, tabIndex: TAB_INZICHTEN },
     { label: 'Workouts', icon: <CalendarMonthRoundedIcon fontSize="small" />, tabIndex: TAB_SCHEMAS },
     ...(isTrainer ? [{ label: 'Beheer', icon: <GroupRoundedIcon fontSize="small" />, tabIndex: TAB_BEHEER }] : []),
@@ -130,6 +142,9 @@ function AppContent() {
           <FullscreenMenu
             onClose={() => setActiveTab(TAB_INZICHTEN)}
             navItems={[
+              { label: 'Assistent', tabIndex: TAB_ASSISTENT, icon: <AutoAwesomeRoundedIcon fontSize="small" /> },
+              { label: 'Lessen', tabIndex: TAB_LESSEN, icon: <EventAvailableRoundedIcon fontSize="small" /> },
+              { label: 'Berichten', tabIndex: TAB_BERICHTEN, icon: <ChatBubbleOutlineRoundedIcon fontSize="small" /> },
               { label: 'Inzichten', tabIndex: TAB_INZICHTEN, icon: <DonutLargeRoundedIcon fontSize="small" /> },
               { label: 'Workouts', tabIndex: TAB_SCHEMAS, icon: <CalendarMonthRoundedIcon fontSize="small" /> },
               { label: 'Voeding', tabIndex: TAB_VOEDING, icon: <RestaurantRoundedIcon fontSize="small" /> },
@@ -153,6 +168,12 @@ function AppContent() {
         return <SchemasPage />;
       case TAB_BEHEER:
         return <BeheerPage />;
+      case TAB_ASSISTENT:
+        return <AssistentPage />;
+      case TAB_BERICHTEN:
+        return <BerichtenPage />;
+      case TAB_LESSEN:
+        return <LessenPage />;
       case TAB_PROFIEL:
         return <ProfielPage />;
       case TAB_VOEDING:
@@ -244,6 +265,7 @@ function AppContent() {
                 <strong>Je trainer-aanvraag wacht op goedkeuring.</strong> Een beheerder keurt de aanvraag goed onder Beheer.
               </Alert>
             )}
+            <StudioSwitcher />
             <Suspense fallback={<LoadingBlock />}>{renderPage()}</Suspense>
           </Box>
 

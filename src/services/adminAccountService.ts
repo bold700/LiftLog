@@ -20,3 +20,18 @@ export async function deleteAccountAsAdmin(caller: User, targetUid: string): Pro
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string })?.error || 'Verwijderen mislukt.');
 }
+
+/**
+ * Zegt het eigen account op: login, profiel, logs, metingen, voeding en het ranglijstdocument.
+ * Loopt via de server omdat de app zelf geen profielen mag verwijderen (zie firestore.rules).
+ */
+export async function deleteOwnAccount(caller: User): Promise<void> {
+  const token = await caller.getIdToken();
+  const res = await fetch(apiUrl('/api/admin-account'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ action: 'delete-self' }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string })?.error || 'Account verwijderen mislukt.');
+}

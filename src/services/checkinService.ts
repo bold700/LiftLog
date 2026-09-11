@@ -4,6 +4,7 @@
  */
 import { collection, query, where, getDocs, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
+import { requireOrgId } from './orgContext';
 import type { SessionCheckin } from '../types';
 
 const COLLECTION = 'checkins';
@@ -18,6 +19,7 @@ function toCheckin(data: Record<string, unknown>, id: string): SessionCheckin {
   const feeling = (feelingRaw >= 1 && feelingRaw <= 5 ? Math.round(feelingRaw) : 3) as SessionCheckin['feeling'];
   return {
     id,
+    orgId: data.orgId == null ? undefined : String(data.orgId),
     userId: String(data.userId ?? ''),
     loggedBy: String(data.loggedBy ?? ''),
     trainerId: str(data.trainerId),
@@ -36,7 +38,12 @@ export async function saveCheckin(
 ): Promise<SessionCheckin> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
   const id = checkin.id ?? newId();
-  const full: SessionCheckin = { ...checkin, id, createdAt: new Date().toISOString() };
+  const full: SessionCheckin = {
+    ...checkin,
+    id,
+    orgId: checkin.orgId || requireOrgId(),
+    createdAt: new Date().toISOString(),
+  };
   const clean: Record<string, unknown> = { updatedAt: serverTimestamp() };
   for (const [k, v] of Object.entries(full)) if (v !== undefined) clean[k] = v;
   await setDoc(doc(db, COLLECTION, id), clean, { merge: true });

@@ -13,6 +13,19 @@ export function todayNl() {
 /** Aantal weken in één schemablok (een half jaar). Gelijk aan SCHEDULE_WEEKS in workoutFilter.ts. */
 export const SCHEDULE_WEEKS = 26;
 
+/**
+ * Studio waar documenten zonder `orgId` bij horen (data van vóór de multi-tenant migratie).
+ * Zelfde waarde als DEFAULT_ORG_ID in src/services/orgContext.ts en defaultOrg() in firestore.rules.
+ * Bewust vast en niet via een omgevingsvariabele: de Firestore-regels kunnen daar niet in meebewegen.
+ */
+export const DEFAULT_ORG_ID = 'vanas';
+
+/** Studio van een document; ontbreekt het veld, dan de standaardstudio. */
+export function orgIdOf(raw) {
+  const v = typeof raw === 'string' ? raw.trim() : '';
+  return v || DEFAULT_ORG_ID;
+}
+
 /** ISO 8601-weeknummer (1-53): de week waarin de donderdag valt. */
 export function getIsoWeek(date) {
   const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -56,8 +69,12 @@ function str(v) {
 
 export function toProfile(data, userId) {
   const rawRole = String(data.role ?? '').toLowerCase().trim();
+  const orgId = orgIdOf(data.orgId);
   return {
     userId,
+    orgId,
+    // Studio's waar deze persoon lid van is; een trainer kan er bij meerdere werken.
+    orgIds: Array.isArray(data.orgIds) && data.orgIds.length ? data.orgIds.map(String) : [orgId],
     role: rawRole === 'admin' || rawRole === 'trainer' ? rawRole : 'sporter',
     email: str(data.email),
     displayName: str(data.displayName),
@@ -159,7 +176,22 @@ export function generatePassword() {
 }
 
 /** Maakt de datalaag voor Firestore en (optioneel) Firebase Auth. */
-export function createStore(db, auth) {
+/**
+ * Gegevenslaag voor de AI-koppeling.
+ *
+ * LET OP: dit draait op de Admin SDK en omzeilt dus alle Firestore-regels. De scheiding tussen
+ * studio's moet hier in code staan. Geef `orgId` mee zodra het profiel bekend is; alles wat daarna
+ * gelezen of geschreven wordt blijft binnen die studio.
+ *
+ * `findUserByKey` en `getProfile` draaien vóórdat de studio bekend is (het profiel bepáált hem) en
+ * zijn daarom bewust niet begrensd — ze werken op één document dat via de sleutel is aangewezen.
+ */
+export function createStore(db, auth, orgId = null) {
+  /** De studio van de aanroeper; ontbreekt hij, dan is er iets misgegaan in de opzet. */
+  function requireOrg() {
+    if (!orgId) throw new Error('Geen studio bekend voor deze sleutel.');
+    return orgId;
+  }
   return {
     async findUserByKey(key) {
       const snap = await db.collection('mcpKeys').doc(hashKey(key)).get();
@@ -170,18 +202,41 @@ export function createStore(db, auth) {
       return String(userId);
     },
 
+    /**
+     * Profiel op uid. Bewust NIET begrensd: dit draait ook vóór de studio bekend is, want het
+     * profiel bepáált hem. Gebruik `getProfileInOrg` zodra het om iemand anders gaat.
+     */
     async getProfile(userId) {
       const snap = await db.collection('profiles').doc(userId).get();
       return snap.exists ? toProfile(snap.data(), snap.id) : null;
     },
 
-    /** Werkt losse profielvelden bij; alleen wat is meegegeven verandert. */
-    async updateProfileFields(userId, fields) {
-      await db.collection('profiles').doc(userId).set({ ...fields, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    /** Profiel van een derde; geeft null als die persoon niet bij de eigen studio hoort. */
+    async getProfileInOrg(userId) {
+      const snap = await db.collection('profiles').doc(userId).get();
+      if (!snap.exists) return null;
+      const profile = toProfile(snap.data(), snap.id);
+      return profile.orgIds.includes(requireOrg()) ? profile : null;
     },
 
+    /**
+     * Werkt losse profielvelden bij; alleen wat is meegegeven verandert.
+     * `orgId`, `role`, `platformAdmin`, `userId` en `createdByAdmin` worden er bewust uit gefilterd:
+     * van studio wisselen of jezelf rechten geven kan nooit via de AI-koppeling.
+     */
+    async updateProfileFields(userId, fields) {
+      const safe = { ...(fields ?? {}) };
+      for (const blocked of ['orgId', 'role', 'platformAdmin', 'userId', 'createdByAdmin']) delete safe[blocked];
+      await db.collection('profiles').doc(userId).set({ ...safe, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    },
+
+    /**
+     * Alle profielen binnen de eigen studio. Nooit daarbuiten.
+     * Filtert op `orgIds` (lidmaatschap), niet op `orgId` (thuisstudio): een trainer die bij twee
+     * studio's werkt hoort in beide lijsten thuis.
+     */
     async getAllProfiles() {
-      const snap = await db.collection('profiles').get();
+      const snap = await db.collection('profiles').where('orgIds', 'array-contains', requireOrg()).get();
       return snap.docs.map((d) => toProfile(d.data(), d.id));
     },
 
@@ -194,7 +249,7 @@ export function createStore(db, auth) {
      * De eerste treffer wint, zodat een eigen schema nooit als 'authored' wordt gemarkeerd.
      */
     async getSchemasForUser(userId, role) {
-      const col = db.collection('workouts');
+      const col = db.collection('workouts').where('orgId', '==', requireOrg());
       const isStaff = role === 'trainer' || role === 'admin';
       const [byClient, byParticipant, byOpen, byAuthor] = await Promise.all([
         col.where('clientId', '==', userId).get(),
@@ -219,7 +274,7 @@ export function createStore(db, auth) {
     /** Slaat een nieuw schema op. Overschrijft nooit: de id wordt hier gemaakt. */
     async saveSchema(schema) {
       const id = `schema_${Date.now()}_${randomBytes(4).toString('hex')}`;
-      const doc = { ...schema, id, createdAt: new Date().toISOString(), updatedAt: FieldValue.serverTimestamp() };
+      const doc = { ...schema, id, orgId: requireOrg(), createdAt: new Date().toISOString(), updatedAt: FieldValue.serverTimestamp() };
       await db.collection('workouts').doc(id).set(doc);
       return { ...schema, id, createdAt: doc.createdAt };
     },
@@ -242,6 +297,7 @@ export function createStore(db, auth) {
       }
       await db.collection('profiles').doc(user.uid).set({
         userId: user.uid,
+        orgId: requireOrg(),
         role,
         email: normalized,
         displayName: displayName || null,
@@ -257,38 +313,74 @@ export function createStore(db, auth) {
 
     /** Wijst een bestaand schema toe aan een sporter (of maakt het los). Raakt de oefeningen niet aan. */
     async assignSchema(schemaId, clientId) {
-      await db.collection('workouts').doc(schemaId).set(
+      // De Admin SDK kent geen regels: eerst zelf controleren dat het schema in de eigen studio staat.
+      const ref = db.collection('workouts').doc(schemaId);
+      const snap = await ref.get();
+      if (!snap.exists) throw new Error('Schema niet gevonden.');
+      if (orgIdOf(snap.data()?.orgId) !== requireOrg()) throw new Error('Schema niet gevonden.');
+      await ref.set(
         { clientId, audience: 'single', updatedAt: FieldValue.serverTimestamp() },
         { merge: true }
       );
     },
 
     async getLogsForUser(userId) {
-      const snap = await db.collection('logs').where('userId', '==', userId).get();
+      const snap = await db.collection('logs').where('orgId', '==', requireOrg()).where('userId', '==', userId).get();
       return snap.docs.map((d) => toLog(d.data(), d.id)).sort((a, b) => (b.date > a.date ? 1 : -1));
     },
 
     async saveLog(log) {
       const id = newId('log');
       const createdAt = new Date().toISOString();
-      await db.collection('logs').doc(id).set({ ...log, id, createdAt, updatedAt: FieldValue.serverTimestamp() });
+      await db.collection('logs').doc(id).set({ ...log, id, orgId: requireOrg(), createdAt, updatedAt: FieldValue.serverTimestamp() });
       return { ...log, id, createdAt };
     },
 
     async getNutritionForDay(userId, date) {
-      const snap = await db.collection('nutritionLogs').where('userId', '==', userId).where('date', '==', date).get();
+      const snap = await db
+        .collection('nutritionLogs')
+        .where('orgId', '==', requireOrg())
+        .where('userId', '==', userId)
+        .where('date', '==', date)
+        .get();
       return snap.docs.map((d) => toNutritionLog(d.data(), d.id)).sort((a, b) => (a.createdAt > b.createdAt ? 1 : -1));
     },
 
     async saveNutritionLog(log) {
       const id = newId('food');
       const createdAt = new Date().toISOString();
-      await db.collection('nutritionLogs').doc(id).set({ ...log, id, createdAt, updatedAt: FieldValue.serverTimestamp() });
+      await db.collection('nutritionLogs').doc(id).set({ ...log, id, orgId: requireOrg(), createdAt, updatedAt: FieldValue.serverTimestamp() });
       return { ...log, id, createdAt };
     },
 
+    /**
+     * Stuurt een bericht namens iemand. De aanroeper heeft de rechten al gecontroleerd;
+     * hier stampen we alleen de studio en de vaste velden.
+     */
+    async sendMessage({ senderId, recipientId, text, kind = 'text', checkin = null }) {
+      const id = newId('msg');
+      const createdAt = new Date().toISOString();
+      const doc = {
+        id,
+        orgId: requireOrg(),
+        threadId: [senderId, recipientId].sort().join('__'),
+        // Zie messageService.ts: de app filtert hierop bij het ophalen van een gesprek.
+        participants: [senderId, recipientId].sort(),
+        senderId,
+        recipientId,
+        text: String(text).slice(0, 4000),
+        kind,
+        checkin,
+        createdAt,
+        readAt: null,
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      await db.collection('messages').doc(id).set(doc);
+      return { id, createdAt };
+    },
+
     async getMeasurements(userId) {
-      const snap = await db.collection('measurements').where('userId', '==', userId).get();
+      const snap = await db.collection('measurements').where('orgId', '==', requireOrg()).where('userId', '==', userId).get();
       return snap.docs.map((d) => toMeasurement(d.data(), d.id)).sort((a, b) => (a.date > b.date ? 1 : -1));
     },
 
@@ -301,7 +393,7 @@ export function createStore(db, auth) {
         skinfoldSubscapularMm: null, skinfoldSuprailiacMm: null, skinfoldAbdomenMm: null, bodyFatMethod: null,
         photoFrontUrl: null, photoSideUrl: null, photoBackUrl: null, note: '',
       };
-      await db.collection('measurements').doc(id).set({ ...empty, ...m, id, createdAt, updatedAt: FieldValue.serverTimestamp() });
+      await db.collection('measurements').doc(id).set({ ...empty, ...m, id, orgId: requireOrg(), createdAt, updatedAt: FieldValue.serverTimestamp() });
       return { ...m, id, createdAt };
     },
   };

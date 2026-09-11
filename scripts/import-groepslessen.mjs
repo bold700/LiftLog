@@ -37,7 +37,7 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 
 import { dirname, join, basename, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
-import { buildExerciseCatalog, loadMegaExerciseNamesFromDisk, normalizeExerciseKey } from '../api/exerciseCatalog.mjs';
+import { buildExerciseCatalog, loadMegaExerciseNamesFromDisk, normalizeExerciseKey } from '../api/_lib/exerciseCatalog.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'groepslessen');

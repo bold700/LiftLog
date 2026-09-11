@@ -13,8 +13,11 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
+import { requireOrgId } from './orgContext';
 
 export interface Measurement {
+  /** Studio waar dit document bij hoort (multi-tenant). */
+  orgId?: string;
   id: string;
   userId: string;
   loggedBy: string;
@@ -95,6 +98,35 @@ function newId(): string {
 }
 
 /** Nieuw meting-id vooraf (nodig om foto's te uploaden vóór het document bestaat). */
+/**
+ * Alle optionele meetvelden op null. Handig als je maar één waarde vastlegt (bijvoorbeeld het
+ * gewicht bij een check-in) en de rest niet wilt uitschrijven.
+ */
+export function emptyMeasurementFields(): Omit<Measurement, 'id' | 'createdAt' | 'userId' | 'loggedBy' | 'trainerId' | 'date'> {
+  return {
+    weightKg: null,
+    bodyFatPct: null,
+    chestCm: null,
+    waistCm: null,
+    bellyCm: null,
+    hipCm: null,
+    glutesCm: null,
+    thighLeftCm: null,
+    thighRightCm: null,
+    armCm: null,
+    skinfoldBicepsMm: null,
+    skinfoldTricepsMm: null,
+    skinfoldSubscapularMm: null,
+    skinfoldSuprailiacMm: null,
+    skinfoldAbdomenMm: null,
+    bodyFatMethod: null,
+    photoFrontUrl: null,
+    photoSideUrl: null,
+    photoBackUrl: null,
+    note: '',
+  };
+}
+
 export function newMeasurementId(): string {
   return newId();
 }
@@ -145,7 +177,12 @@ export async function saveMeasurement(
 ): Promise<Measurement> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
   const id = input.id ?? newId();
-  const full: Measurement = { ...input, id, createdAt: input.createdAt ?? new Date().toISOString() };
+  const full: Measurement = {
+    ...input,
+    id,
+    orgId: input.orgId || requireOrgId(),
+    createdAt: input.createdAt ?? new Date().toISOString(),
+  };
   await setDoc(doc(db, COLLECTION, id), { ...full, updatedAt: serverTimestamp() }, { merge: true });
   return full;
 }
