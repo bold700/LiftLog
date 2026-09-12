@@ -1,0 +1,8 @@
+{
+  "name": "bold700-core",
+  "displayName": "bold700 Core",
+  "description": "Gedeelde agents, skills en huisregels voor alle bold700-projecten. Eén bron, overal dezelfde agents.",
+  "author": { "name": "bold700", "url": "https://github.com/bold700" },
+  "repository": "https://github.com/bold700/hq",
+  "keywords": ["bold700", "agents", "penpot", "design-system", "ux", "fitness"]
+}

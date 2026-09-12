@@ -14,6 +14,7 @@ export default tseslint.config(
       'ios/**',
       'Van As Personal Training Logs/**',
       'public/**',
+      'hq/**', // tijdelijke kit voor bold700/hq; eigen tooling, valt buiten dit project
     ],
   },
   js.configs.recommended,

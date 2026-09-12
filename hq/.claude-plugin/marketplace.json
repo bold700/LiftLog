@@ -1,0 +1,14 @@
+{
+  "name": "bold700",
+  "owner": { "name": "bold700", "url": "https://github.com/bold700" },
+  "description": "Gedeelde Claude Code agents, skills en huisregels voor alle bold700-projecten.",
+  "plugins": [
+    {
+      "name": "bold700-core",
+      "source": "./plugins/bold700-core",
+      "description": "Kern-agents (ux-reviewer, penpot-expert, design-system-guardian, code-reviewer, fitness-domain), huisregels en het /hq overzicht.",
+      "category": "productivity",
+      "keywords": ["bold700", "agents", "penpot", "design-system", "ux"]
+    }
+  ]
+}

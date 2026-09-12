@@ -1,0 +1,55 @@
+<meta charset="utf-8">
+<title>bold700 HQ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+
+<canvas id="space" aria-label="3D-overzicht van alle bold700-projecten en agents"></canvas>
+<div id="labels" aria-hidden="true"></div>
+<div id="tip" class="tip" hidden></div>
+
+<header class="brand">
+  <h1>bold700 <span>HQ</span></h1>
+  <p id="brand-sub">projecten en agents</p>
+</header>
+
+<aside class="rail" id="rail">
+  <label class="search">
+    <span class="sr-only">Zoek project of agent</span>
+    <input id="q" type="search" placeholder="Zoek project of agent…" autocomplete="off" spellcheck="false">
+  </label>
+  <nav class="clusters" id="clusters" aria-label="Clusters"></nav>
+  <section class="agents" aria-label="Agents">
+    <h2>Agents</h2>
+    <ul id="agent-list"></ul>
+  </section>
+  <ol class="projects" id="project-list" aria-label="Projecten op recentheid"></ol>
+</aside>
+
+<aside class="panel" id="panel" hidden>
+  <button class="close" id="panel-close" aria-label="Sluiten">×</button>
+  <p class="eyebrow" id="p-cluster"></p>
+  <h2 id="p-name"></h2>
+  <p class="desc" id="p-desc"></p>
+  <dl class="facts">
+    <div><dt>Status</dt><dd id="p-status"></dd></div>
+    <div><dt>Laatste push</dt><dd id="p-push"></dd></div>
+    <div><dt>Zichtbaar</dt><dd id="p-vis"></dd></div>
+  </dl>
+  <h3>Agents hier</h3>
+  <ul class="chips" id="p-agents"></ul>
+  <div class="links" id="p-links"></div>
+</aside>
+
+<footer class="legend">
+  <span><i class="dot hot"></i>gepusht &lt; 30 dagen</span>
+  <span><i class="dot warm"></i>&lt; 6 maanden</span>
+  <span><i class="dot cold"></i>ouder</span>
+  <span><i class="dot agent"></i>agent</span>
+  <span class="hint">sleep om te draaien · scroll om te zoomen · klik op een ster</span>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="world.js"></script>
