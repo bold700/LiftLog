@@ -19,6 +19,9 @@
     },
     "api/food-photo.mjs": {
       "maxDuration": 30
+    },
+    "api/bodyscan-photo.mjs": {
+      "maxDuration": 60
     }
   },
   "rewrites": [

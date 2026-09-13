@@ -2,9 +2,11 @@
 import { Box, Typography, IconButton, CircularProgress, List, ListItem, ListItemText } from '@mui/material';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import AssessmentRoundedIcon from '@mui/icons-material/AssessmentRounded';
 import { CIRCUMFERENCE_FIELDS, skinfoldSum, type Measurement } from '../../services/measurementService';
 import { PHOTO_VIEWS } from '../../services/progressPhotoService';
 import { fatFreeMassKg } from '../../utils/bodyFat';
+import { summarizeBodyScan } from '../../utils/bodyScan';
 
 interface MeasurementHistoryProps {
   loading: boolean;
@@ -12,9 +14,11 @@ interface MeasurementHistoryProps {
   items: Measurement[];
   onEdit: (m: Measurement) => void;
   onDelete: (id: string) => Promise<void>;
+  /** Opent het bodyscan-rapport van deze meting. */
+  onViewScan: (m: Measurement) => void;
 }
 
-export function MeasurementHistory({ loading, items, onEdit, onDelete }: MeasurementHistoryProps) {
+export function MeasurementHistory({ loading, items, onEdit, onDelete, onViewScan }: MeasurementHistoryProps) {
   return (
     <>
       <Typography variant="subtitle1" fontWeight={600} sx={{ mt: 3, mb: 1 }}>
@@ -38,11 +42,12 @@ export function MeasurementHistory({ loading, items, onEdit, onDelete }: Measure
             const skinSummary = sum != null ? `Plooien ${sum} mm` : null;
             const photoCount = PHOTO_VIEWS.filter((v) => m[v.key] != null).length;
             const photoSummary = photoCount > 0 ? `${photoCount} foto${photoCount === 1 ? '' : "'s"}` : null;
-            const secondary = [circSummary || null, skinSummary, photoSummary, m.note || null].filter(Boolean).join(' — ');
+            const scanSummary = m.bodyScan ? summarizeBodyScan(m.bodyScan) : null;
+            const secondary = [scanSummary, circSummary || null, skinSummary, photoSummary, m.note || null].filter(Boolean).join(' — ');
             const ffm = m.weightKg != null && m.bodyFatPct != null ? fatFreeMassKg(m.weightKg, m.bodyFatPct) : null;
             const fatLabel =
               m.bodyFatPct != null
-                ? `${m.bodyFatPct}%${m.bodyFatMethod === 'durnin-womersley' ? ' (berekend)' : ''}${ffm != null ? ` · VVM ${ffm} kg` : ''}`
+                ? `${m.bodyFatPct}%${m.bodyFatMethod === 'durnin-womersley' ? ' (berekend)' : m.bodyFatMethod === 'bodyscan' ? ' (scan)' : ''}${ffm != null ? ` · VVM ${ffm} kg` : ''}`
                 : '';
             return (
               <ListItem
@@ -50,9 +55,14 @@ export function MeasurementHistory({ loading, items, onEdit, onDelete }: Measure
                 disableGutters
                 divider
                 alignItems="flex-start"
-                sx={{ py: 1.25, pr: 10, '&:last-child': { borderBottom: 0 } }}
+                sx={{ py: 1.25, pr: m.bodyScan ? 14 : 10, '&:last-child': { borderBottom: 0 } }}
                 secondaryAction={
                   <Box sx={{ display: 'flex', gap: 0.25 }}>
+                    {m.bodyScan && (
+                      <IconButton size="small" sx={{ width: 32, height: 32 }} onClick={() => onViewScan(m)} aria-label="Bodyscan-rapport">
+                        <AssessmentRoundedIcon fontSize="small" />
+                      </IconButton>
+                    )}
                     <IconButton size="small" sx={{ width: 32, height: 32 }} onClick={() => onEdit(m)} aria-label="Bewerken">
                       <EditRoundedIcon fontSize="small" />
                     </IconButton>

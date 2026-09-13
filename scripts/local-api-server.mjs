@@ -6,6 +6,7 @@ import generateHandler from '../api/generate-workout.mjs';
 import exerciseDemoHandler from '../api/exercise-demo.mjs';
 import exerciseSearchHandler from '../api/exercise-search.mjs';
 import foodPhotoHandler from '../api/food-photo.mjs';
+import bodyScanPhotoHandler from '../api/bodyscan-photo.mjs';
 import foodSearchHandler from '../api/food-search.mjs';
 
 function loadDotEnvIfMissing() {
@@ -130,6 +131,14 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pathname === '/api/bodyscan-photo') {
+    const body = await readJsonBody(req);
+    const reqAdapter = { method: req.method, body, headers: req.headers };
+    const resAdapter = new ServerResponseAdapter(res);
+    await bodyScanPhotoHandler(reqAdapter, resAdapter);
+    return;
+  }
+
   res.writeHead(404, {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
@@ -140,7 +149,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(
-    `[local-api-server] Luistert op http://localhost:${PORT} — /api/generate-workout, /api/exercise-demo, /api/exercise-search, /api/food-search, /api/food-photo`
+    `[local-api-server] Luistert op http://localhost:${PORT} — /api/generate-workout, /api/exercise-demo, /api/exercise-search, /api/food-search, /api/food-photo, /api/bodyscan-photo`
   );
 });
 

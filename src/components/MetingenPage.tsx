@@ -45,6 +45,18 @@ import { SporterProfileFix } from './metingen/SporterProfileFix';
 import { ProgressPhotoSlots, type PhotoSlot } from './metingen/ProgressPhotoSlots';
 import { MeasurementHistory } from './metingen/MeasurementHistory';
 import { WeightGoalDialog } from './metingen/WeightGoalDialog';
+import { BodyScanPanel } from './metingen/BodyScanPanel';
+import { BodyScanSection } from './metingen/BodyScanSection';
+import { BodyScanDialog } from './metingen/BodyScanDialog';
+import {
+  bodyScanFromDraft,
+  draftFromBodyScan,
+  draftHasValues,
+  emptyBodyScanDraft,
+  measuredDate,
+  type BodyScan,
+  type BodyScanDraft,
+} from '../utils/bodyScan';
 
 const EMPTY_CIRC = Object.fromEntries(CIRCUMFERENCE_FIELDS.map((f) => [f.key, ''])) as Record<CircumferenceKey, string>;
 const EMPTY_SKIN = Object.fromEntries(SKINFOLD_FIELDS.map((f) => [f.key, ''])) as Record<SkinfoldKey, string>;
@@ -72,7 +84,7 @@ const FIELD_GRID_SX = {
   gap: 1.5,
 } as const;
 
-type SectionKey = 'circ' | 'skin' | 'photos';
+type SectionKey = 'scan' | 'circ' | 'skin' | 'photos';
 
 export function MetingenPage() {
   const profileCtx = useProfile();
@@ -99,6 +111,8 @@ export function MetingenPage() {
   const [note, setNote] = useState('');
   const [circ, setCirc] = useState<Record<CircumferenceKey, string>>(EMPTY_CIRC);
   const [skin, setSkin] = useState<Record<SkinfoldKey, string>>(EMPTY_SKIN);
+  const [scanDraft, setScanDraft] = useState<BodyScanDraft>(emptyBodyScanDraft);
+  const [viewScan, setViewScan] = useState<Measurement | null>(null);
   const [saving, setSaving] = useState(false);
   const [goalOpen, setGoalOpen] = useState(false);
   const [goalInput, setGoalInput] = useState('');
@@ -133,6 +147,7 @@ export function MetingenPage() {
     setNote('');
     setCirc(EMPTY_CIRC);
     setSkin(EMPTY_SKIN);
+    setScanDraft(emptyBodyScanDraft());
     setOpenSections([]);
     setPhotos((p) => {
       for (const v of PHOTO_VIEWS) if (p[v.view].previewUrl) URL.revokeObjectURL(p[v.view].previewUrl as string);
@@ -156,6 +171,26 @@ export function MetingenPage() {
     });
     const el = photoInputs.current[view];
     if (el) el.value = '';
+  };
+
+  /** Herkende bodyscan overnemen: het concept vullen en gewicht, vetpercentage en datum meenemen. */
+  const handleScanRecognized = (scan: BodyScan) => {
+    setScanDraft(draftFromBodyScan(scan));
+    if (scan.values.weightKg != null) setWeight(String(scan.values.weightKg));
+    if (scan.values.bodyFatPct != null) {
+      setBodyFat(String(scan.values.bodyFatPct));
+      setBodyFatMethodStored('bodyscan');
+    }
+    const d = measuredDate(scan);
+    if (d && !editingId) setDate(d);
+  };
+
+  const handleScanClear = () => {
+    setScanDraft(emptyBodyScanDraft());
+    if (bodyFatMethodStored === 'bodyscan') {
+      setBodyFat('');
+      setBodyFatMethodStored(null);
+    }
   };
 
   const circNumbers = (): Record<CircumferenceKey, number | null> => {
@@ -213,14 +248,19 @@ export function MetingenPage() {
 
   const handleSave = async () => {
     if (!effectiveUserId) return;
-    const w = weight.trim() !== '' ? Number(weight) : null;
-    const bf = bodyFatValue.trim() !== '' ? Number(bodyFatValue) : null;
+    let w = weight.trim() !== '' ? Number(weight) : null;
+    let bf = bodyFatValue.trim() !== '' ? Number(bodyFatValue) : null;
     const cn = circNumbers();
     const hasCirc = CIRCUMFERENCE_FIELDS.some((f) => cn[f.key] != null);
     const hasSkin = SKINFOLD_FIELDS.some((f) => skinNumbers[f.key] != null);
     const hasPhoto = PHOTO_VIEWS.some((v) => photos[v.view].file != null || (photos[v.view].existingUrl != null && !photos[v.view].remove));
-    if (w == null && bf == null && !hasCirc && !hasSkin && !hasPhoto) return;
-    const bodyFatMethod: BodyFatMethod | null = bf == null ? null : fatIsComputed ? 'durnin-womersley' : bodyFatMethodStored ?? 'manual';
+    const bodyScan = draftHasValues(scanDraft) ? bodyScanFromDraft(scanDraft) : null;
+    // De bodyscan is leidend voor gewicht en vetpercentage (de velden zijn er al mee gevuld, maar de scan kan nog bijgewerkt zijn).
+    if (bodyScan?.values.weightKg != null) w = bodyScan.values.weightKg;
+    if (bodyScan?.values.bodyFatPct != null && !fatIsComputed) bf = bodyScan.values.bodyFatPct;
+    if (w == null && bf == null && !hasCirc && !hasSkin && !hasPhoto && !bodyScan) return;
+    const bodyFatMethod: BodyFatMethod | null =
+      bf == null ? null : fatIsComputed ? 'durnin-womersley' : bodyScan?.values.bodyFatPct != null ? 'bodyscan' : bodyFatMethodStored ?? 'manual';
     setSaving(true);
     try {
       const editing = items.find((m) => m.id === editingId);
@@ -250,6 +290,7 @@ export function MetingenPage() {
         weightKg: w,
         bodyFatPct: bf,
         bodyFatMethod,
+        bodyScan,
         ...cn,
         ...skinNumbers,
         ...photoUrls,
@@ -284,6 +325,7 @@ export function MetingenPage() {
       s[f.key] = v != null ? String(v) : '';
     }
     setSkin(s);
+    setScanDraft(m.bodyScan ? draftFromBodyScan(m.bodyScan) : emptyBodyScanDraft());
     setPhotos((p) => {
       for (const v of PHOTO_VIEWS) if (p[v.view].previewUrl) URL.revokeObjectURL(p[v.view].previewUrl as string);
       return Object.fromEntries(
@@ -291,6 +333,7 @@ export function MetingenPage() {
       ) as Record<PhotoView, PhotoSlot>;
     });
     const open: SectionKey[] = [];
+    if (m.bodyScan) open.push('scan');
     if (CIRCUMFERENCE_FIELDS.some((f) => m[f.key] != null)) open.push('circ');
     if (SKINFOLD_FIELDS.some((f) => m[f.key] != null)) open.push('skin');
     if (PHOTO_VIEWS.some((v) => m[v.key] != null)) open.push('photos');
@@ -309,6 +352,8 @@ export function MetingenPage() {
     if (editingId === id) resetForm();
     await load();
   };
+
+  const scanFilled = draftHasValues(scanDraft);
 
   const goalWeight = targetId ? targetProfile?.weightGoalKg ?? null : profileCtx?.profile?.weightGoalKg ?? null;
 
@@ -345,7 +390,7 @@ export function MetingenPage() {
           </Button>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Houd je gewicht, vetpercentage, omtrekmaten en huidplooien bij en volg je voortgang.
+          Houd je gewicht, vetpercentage, bodyscan, omtrekmaten en huidplooien bij en volg je voortgang.
         </Typography>
 
         {isTrainer && sporters.length > 0 && (
@@ -369,6 +414,9 @@ export function MetingenPage() {
 
         {/* Huidige waarden, voortgang naar doel + tempo, gewicht- en huidplooi-trend */}
         <MeasurementOverview items={items} goalWeight={goalWeight} heightCm={targetProfile?.heightCm} />
+
+        {/* Laatste bodyscan als leesbaar rapport (InBody-stijl) */}
+        <BodyScanPanel items={items} />
 
         {/* Foto-voortgang: eerste foto naast de laatste, per aanzicht */}
         <PhotoProgressPanel items={items} />
@@ -401,8 +449,31 @@ export function MetingenPage() {
         {/* Profiel van de sporter aanvullen (alleen trainer, alleen als het ontbreekt) */}
         {canFixProfile && <SporterProfileFix targetId={targetId} targetProfile={targetProfile} />}
 
-        {/* Omtrekken, huidplooien en foto's ingeklapt: optioneel, samen 16 velden. Zelfde secties als de routekaart. */}
+        {/* Bodyscan, omtrekken, huidplooien en foto's ingeklapt: optioneel. Zelfde secties als de routekaart. */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 1.5 }}>
+          <Accordion disableGutters expanded={openSections.includes('scan')} onChange={() => toggleSection('scan')} sx={ACCORDION_SX}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', minWidth: 0, flex: 1, alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
+                <Typography variant="subtitle1" fontWeight={600}>
+                  Bodyscan (weegschaal)
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {scanFilled ? 'ingevuld' : 'foto → waarden'}
+                </Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
+              <BodyScanSection
+                draft={scanDraft}
+                onDraftChange={setScanDraft}
+                onRecognized={handleScanRecognized}
+                onClear={handleScanClear}
+                profileAge={age}
+                profileHeightCm={targetProfile?.heightCm}
+              />
+            </AccordionDetails>
+          </Accordion>
+
           <Accordion disableGutters expanded={openSections.includes('circ')} onChange={() => toggleSection('circ')} sx={ACCORDION_SX}>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
               <Box sx={{ display: 'flex', minWidth: 0, flex: 1, alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
@@ -540,10 +611,11 @@ export function MetingenPage() {
         </Box>
 
         {/* Historie */}
-        <MeasurementHistory loading={loading} items={items} onEdit={handleEdit} onDelete={handleDelete} />
+        <MeasurementHistory loading={loading} items={items} onEdit={handleEdit} onDelete={handleDelete} onViewScan={setViewScan} />
       </ContentCard>
 
       <WeightGoalDialog open={goalOpen} value={goalInput} onChange={setGoalInput} onClose={() => setGoalOpen(false)} onSave={handleSaveGoal} />
+      <BodyScanDialog measurement={viewScan} onClose={() => setViewScan(null)} />
     </PageLayout>
   );
 }
