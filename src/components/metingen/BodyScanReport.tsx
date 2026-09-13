@@ -2,9 +2,9 @@
 // een InBody-uitdraai: score bovenaan, balken laag/normaal/hoog per waarde, samenstelling, segmentale
 // spier/vet-verdeling en gewichtsregulatie. Alleen weergave; rekent niets zelf uit.
 import { Box, Typography } from '@mui/material';
+import { BodyScanFigure } from './BodyScanFigure';
 import {
   BODY_SCAN_FIELDS,
-  BODY_SCAN_SEGMENTS,
   BODY_SCAN_SOURCES,
   RANGE_BAR_NORMAL,
   RANGE_STATUS_LABEL,
@@ -16,7 +16,6 @@ import {
   segmentsHaveValues,
   type BodyScan,
   type BodyScanRange,
-  type BodyScanSegmentKey,
   type BodyScanValueKey,
   type RangeStatus,
 } from '../../utils/bodyScan';
@@ -192,59 +191,6 @@ function HeadlineTiles({ scan }: { scan: BodyScan }) {
   );
 }
 
-/** Segmentale verdeling: spier en vet per lichaamsdeel rond een silhouet. */
-function SegmentFigure({ scan }: { scan: BodyScan }) {
-  const seg = (key: BodyScanSegmentKey) => scan.segments[key];
-  const label = (key: BodyScanSegmentKey) => BODY_SCAN_SEGMENTS.find((s) => s.key === key)?.label ?? key;
-  const fmt = (v: number | null) => (v == null ? '—' : `${v.toFixed(1).replace('.', ',')} kg`);
-  const Cell = ({ k, align }: { k: BodyScanSegmentKey; align: 'left' | 'right' | 'center' }) => {
-    const s = seg(k);
-    return (
-      <Box sx={{ textAlign: align, minWidth: 0, position: 'relative', zIndex: 1 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-          {label(k)}
-        </Typography>
-        <Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
-          {fmt(s.muscleKg)}
-        </Typography>
-        <Typography variant="caption" sx={{ display: 'block', whiteSpace: 'nowrap' }}>
-          {fmt(s.fatKg)} vet
-        </Typography>
-      </Box>
-    );
-  };
-  return (
-    <Box sx={{ position: 'relative', py: 1 }}>
-      {/* Silhouet op de achtergrond; de cijfers staan er in een raster overheen */}
-      <Box
-        component="svg"
-        viewBox="0 0 120 200"
-        aria-hidden
-        sx={{ position: 'absolute', inset: 0, height: '100%', width: '100%', opacity: 0.1, pointerEvents: 'none' }}
-        preserveAspectRatio="xMidYMid meet"
-      >
-        <circle cx="60" cy="18" r="13" fill="#000" />
-        <rect x="40" y="34" width="40" height="70" rx="14" fill="#000" />
-        <rect x="18" y="38" width="16" height="62" rx="8" fill="#000" transform="rotate(-8 26 38)" />
-        <rect x="86" y="38" width="16" height="62" rx="8" fill="#000" transform="rotate(8 94 38)" />
-        <rect x="41" y="104" width="17" height="86" rx="8" fill="#000" />
-        <rect x="62" y="104" width="17" height="86" rx="8" fill="#000" />
-      </Box>
-      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', rowGap: 3, columnGap: 1 }}>
-        <Cell k="armLeft" align="left" />
-        <Cell k="trunk" align="center" />
-        <Cell k="armRight" align="right" />
-        <Cell k="legLeft" align="left" />
-        <Box />
-        <Cell k="legRight" align="right" />
-      </Box>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5, textAlign: 'center' }}>
-        Per lichaamsdeel: spiermassa (dik) en vetmassa. Links en rechts horen ongeveer gelijk te zijn.
-      </Typography>
-    </Box>
-  );
-}
-
 function ControlRow({ scan, fieldKey }: { scan: BodyScan; fieldKey: BodyScanValueKey }) {
   const def = fieldDef(fieldKey);
   const v = scan.values[fieldKey];
@@ -326,7 +272,7 @@ export function BodyScanReport({ scan, date }: BodyScanReportProps) {
           <Typography variant="overline" sx={SECTION_TITLE_SX}>
             Segmentale analyse
           </Typography>
-          <SegmentFigure scan={scan} />
+          <BodyScanFigure scan={scan} />
         </>
       )}
 
