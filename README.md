@@ -16,6 +16,7 @@ Van As Personal Training is de eerste studio en tegelijk de proeftuin.
 - **Loggen**: sets/reps/gewicht per oefening, groepslessessies, Apple Health-workouts (native).
 - **Inzichten**: progressie, spiergroepen, ranglijst (opt-in), hartslagzones, vetpercentage (Durnin & Womersley).
 - **Voeding en metingen**: Open Food Facts, barcode-scanner, fotoherkenning, gewicht/huidplooien/voortgangsfoto's.
+- **Bodyscan**: foto's van het scherm of de uitdraai van de lichaamsanalyse-weegschaal (BodyAnalyse, InBody) worden uitgelezen (`/api/bodyscan-photo`), gecontroleerd en als leesbaar rapport bij de sporter bewaard. Er gaat niets naar de fabrikant van de weegschaal.
 - **AI-chat koppeling**: MCP-server op `/api/mcp` met een persoonlijke koppelsleutel (Profiel → Koppel met AI-chat).
 - **Assistent in de app**: dezelfde gereedschapskist als de AI-koppeling, maar zonder connector of ChatGPT-abonnement (`/api/assistant`).
 - **Berichten en check-ins**: contact tussen trainer en sporter bij het dossier, met een wekelijkse check-in die het gewicht meteen als meting vastlegt.

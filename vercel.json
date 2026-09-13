@@ -29,6 +29,9 @@
     },
     "api/booking.mjs": {
       "maxDuration": 20
+    },
+    "api/bodyscan-photo.mjs": {
+      "maxDuration": 60
     }
   },
   "rewrites": [

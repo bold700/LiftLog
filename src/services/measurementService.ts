@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
+import { parseBodyScan, type BodyScan } from '../utils/bodyScan';
 
 export interface Measurement {
   /** Studio waar dit document bij hoort (multi-tenant). */
@@ -40,8 +41,10 @@ export interface Measurement {
   skinfoldSubscapularMm: number | null;
   skinfoldSuprailiacMm: number | null;
   skinfoldAbdomenMm: number | null;
-  /** Hoe `bodyFatPct` tot stand kwam: handmatig ingevuld (bijv. bodyscan) of berekend uit de plooien. */
+  /** Hoe `bodyFatPct` tot stand kwam: handmatig ingevuld, uit een bodyscan (weegschaal) of berekend uit de plooien. */
   bodyFatMethod: BodyFatMethod | null;
+  /** Volledige uitslag van de lichaamsanalyse-weegschaal, of null. `weightKg` en `bodyFatPct` staan er ook los in. */
+  bodyScan: BodyScan | null;
   /** Voortgangsfoto's (download-URL's uit Storage), optioneel. */
   photoFrontUrl: string | null;
   photoSideUrl: string | null;
@@ -50,7 +53,9 @@ export interface Measurement {
   createdAt: string;
 }
 
-export type BodyFatMethod = 'manual' | 'durnin-womersley';
+export type BodyFatMethod = 'manual' | 'bodyscan' | 'durnin-womersley';
+
+const BODY_FAT_METHODS: readonly BodyFatMethod[] = ['manual', 'bodyscan', 'durnin-womersley'];
 
 /** Huidplooivelden (key + label + meetplek) voor de UI. `inFormula` = telt mee in Durnin & Womersley. */
 export const SKINFOLD_FIELDS = [
@@ -120,6 +125,7 @@ export function emptyMeasurementFields(): Omit<Measurement, 'id' | 'createdAt' |
     skinfoldSuprailiacMm: null,
     skinfoldAbdomenMm: null,
     bodyFatMethod: null,
+    bodyScan: null,
     photoFrontUrl: null,
     photoSideUrl: null,
     photoBackUrl: null,
@@ -163,7 +169,8 @@ function toMeasurement(data: Record<string, unknown>, id: string): Measurement {
     skinfoldSubscapularMm: num(data.skinfoldSubscapularMm),
     skinfoldSuprailiacMm: num(data.skinfoldSuprailiacMm),
     skinfoldAbdomenMm: num(data.skinfoldAbdomenMm),
-    bodyFatMethod: data.bodyFatMethod === 'manual' || data.bodyFatMethod === 'durnin-womersley' ? data.bodyFatMethod : null,
+    bodyFatMethod: BODY_FAT_METHODS.includes(data.bodyFatMethod as BodyFatMethod) ? (data.bodyFatMethod as BodyFatMethod) : null,
+    bodyScan: parseBodyScan(data.bodyScan),
     photoFrontUrl: str(data.photoFrontUrl),
     photoSideUrl: str(data.photoSideUrl),
     photoBackUrl: str(data.photoBackUrl),
@@ -190,6 +197,14 @@ export async function saveMeasurement(
 export async function deleteMeasurement(id: string): Promise<void> {
   if (!isFirebaseConfigured() || !db) return;
   await deleteDoc(doc(db, COLLECTION, id));
+}
+
+/** Laatste meting met een bodyscan, of null. */
+export function latestBodyScan(measurements: Measurement[]): Measurement | null {
+  for (let i = measurements.length - 1; i >= 0; i--) {
+    if (measurements[i].bodyScan) return measurements[i];
+  }
+  return null;
 }
 
 /** Alle metingen van een persoon, oud → nieuw (handig voor grafieken). */
