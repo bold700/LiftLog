@@ -12,6 +12,7 @@ import {
   parseMeasuredAt,
   rangeBarPosition,
   rangeStatus,
+  segmentLevel,
   summarizeBodyScan,
 } from '../../src/utils/bodyScan';
 // De server schoont het AI-antwoord op met dezelfde sleutels; deze test bewaakt dat de lijsten gelijk blijven.
@@ -135,6 +136,19 @@ describe('rangeStatus en rangeBarPosition', () => {
     expect(rangeBarPosition(77.5, range)).toBeCloseTo(0.5, 5);
     expect(rangeBarPosition(300, range)).toBe(0.98);
     expect(rangeBarPosition(-100, range)).toBe(0.02);
+  });
+});
+
+describe('segmentLevel', () => {
+  it('geeft een donkerdere tint naarmate een lichaamsdeel meer spier per kilo vet heeft', () => {
+    expect(segmentLevel({ muscleKg: 3.4, fatKg: 2.1 })).toBe(2); // 62% net eronder
+    expect(segmentLevel({ muscleKg: 10.7, fatKg: 4.7 })).toBe(3);
+    expect(segmentLevel({ muscleKg: 4.12, fatKg: 0.1 })).toBe(5);
+    expect(segmentLevel({ muscleKg: 2, fatKg: 3 })).toBe(1);
+  });
+  it('zonder vet een middentint, zonder spier niets', () => {
+    expect(segmentLevel({ muscleKg: 5, fatKg: null })).toBe(3);
+    expect(segmentLevel({ muscleKg: null, fatKg: 2 })).toBeNull();
   });
 });
 

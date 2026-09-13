@@ -288,6 +288,21 @@ export function groupHasValues(scan: BodyScan, group: BodyScanGroup): boolean {
   return BODY_SCAN_FIELDS.some((f) => f.group === group && scan.values[f.key] != null);
 }
 
+/**
+ * Aandeel spier in (spier + vet) van een lichaamsdeel → tint 1..5 voor de illustratie (5 = meest gespierd).
+ * Grenzen zo gekozen dat een gemiddelde sporter rond 3 zit. Alleen spier bekend: 3.
+ */
+export function segmentLevel(seg: BodyScanSegment): number | null {
+  if (seg.muscleKg == null) return null;
+  if (seg.fatKg == null || seg.muscleKg + seg.fatKg <= 0) return 3;
+  const share = seg.muscleKg / (seg.muscleKg + seg.fatKg);
+  if (share < 0.55) return 1;
+  if (share < 0.62) return 2;
+  if (share < 0.7) return 3;
+  if (share < 0.78) return 4;
+  return 5;
+}
+
 export function segmentsHaveValues(scan: BodyScan): boolean {
   return BODY_SCAN_SEGMENT_KEYS.some((k) => scan.segments[k].muscleKg != null || scan.segments[k].fatKg != null);
 }

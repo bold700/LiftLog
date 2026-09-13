@@ -10,7 +10,9 @@ import { sanitizeBodyScan, BODY_SCAN_KEYS, BODY_SCAN_SEGMENT_KEYS } from './_lib
  * Zelfde opzet als food-photo: alleen ingelogd, daglimiet, foto's als data-URL.
  */
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
-const MODEL = (process.env.OPENAI_VISION_MODEL || process.env.OPENAI_MODEL || 'gpt-4.1-mini').trim().split(/\s+/)[0];
+// Kleine cijfers op een schuin gefotografeerd scherm: het mini-model verwisselt segmentwaarden; het volle model niet.
+// Volume is laag (enkele scans per dag), dus de hogere prijs per foto weegt niet op tegen een verkeerde uitslag.
+const MODEL = (process.env.OPENAI_BODYSCAN_MODEL || 'gpt-4.1').trim().split(/\s+/)[0];
 
 function json(res, status, body) {
   const payload = JSON.stringify(body);
@@ -58,7 +60,9 @@ const SYSTEM =
   'Skeletal Muscle=skeletalMuscleKg, Body Fat=fatMassKg, met Normal Range); 3 Overweight Analysis (Body Mass Parameters=bmi, ' +
   'Body fat percentage=bodyFatPct, Waist to hip ratio=waistHipRatio, Subcutaneous fat=subcutaneousFat, met Normal Range); ' +
   '4 Segmental Muscles: per lichaamsdeel twee getallen boven elkaar, boven=Segmental Muscles (muscleKg), onder=Segmental ' +
-  'Fat (fatKg), voor Left upper limb=armLeft, Right upper limb=armRight, romp/midden=trunk, Left leg=legLeft, Right leg=legRight; ' +
+  'Fat (fatKg). Indeling: linkerkolom van boven naar beneden Left upper limb=armLeft en Left leg=legLeft; rechterkolom Right ' +
+  'upper limb=armRight en Right leg=legRight; het paar in het midden (bij de romp van het figuurtje) is trunk. Lees elk paar als ' +
+  'eigen eenheid en verwissel links en rechts niet; de rompwaarden zijn veel groter dan die van de ledematen; ' +
   'daarnaast Visceral Fat Index=visceralFatLevel met bereik "1.0~9.0"; 7 Weight Control (Target weight=targetWeightKg, ' +
   'Weight control=weightControlKg, Fat control=fatControlKg, Muscle control=muscleControlKg, Basic metabolism=basalMetabolismKcal, ' +
   'Healthy assessment=healthScore, Body age=bodyAge). Bovenin staan Gender, Age (ageYears), Height (heightCm) en datum/tijd. ' +
