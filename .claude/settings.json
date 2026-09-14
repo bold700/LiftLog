@@ -1,0 +1,10 @@
+{
+  "extraKnownMarketplaces": {
+    "bold700": {
+      "source": { "source": "github", "repo": "bold700/hq" }
+    }
+  },
+  "enabledPlugins": {
+    "bold700-core@bold700": true
+  }
+}
