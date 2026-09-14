@@ -5,7 +5,7 @@
  */
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'node:fs';
-import { doc, setDoc, updateDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, getDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
 
 const env = await initializeTestEnvironment({
   projectId: 'liftlog-rules-test',
@@ -21,6 +21,7 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(db, 'profiles/sporter3'), { userId: 'sporter3', role: 'sporter', trainerId: null, displayName: 'Eva' });
 });
 const as = (uid) => env.authenticatedContext(uid).firestore();
+const anon = () => env.unauthenticatedContext().firestore();
 let passed = 0, failed = 0;
 async function t(name, ok, p) {
   try { await (ok ? assertSucceeds(p) : assertFails(p)); passed++; console.log('  ok  ', name); }
@@ -78,6 +79,56 @@ await t('sporter maakt workout op naam van trainer → geweigerd', false, setDoc
 await t('trainer maakt workout → mag', true, setDoc(doc(as('trainer1'), 'workouts/w2'), { trainerId: 'trainer1', clientId: 'sporter1', name: 'x' }));
 await t('toegewezen sporter leest workout → mag', true, getDoc(doc(as('sporter1'), 'workouts/w2')));
 await t('andere sporter leest workout → geweigerd', false, getDoc(doc(as('sporter2'), 'workouts/w2')));
+
+console.log('Niet ingelogd (elke regel moet request.auth eisen)');
+await t('niet ingelogd leest profiel → geweigerd', false, getDoc(doc(anon(), 'profiles/sporter1')));
+await t('niet ingelogd leest ranglijst → geweigerd', false, getDoc(doc(anon(), 'leaderboardPublic/sporter1')));
+await t('niet ingelogd leest workout → geweigerd', false, getDoc(doc(anon(), 'workouts/w2')));
+await t('niet ingelogd leest log → geweigerd', false, getDoc(doc(anon(), 'logs/l1')));
+await t('niet ingelogd schrijft profiel → geweigerd', false, setDoc(doc(anon(), 'profiles/hacker'), { userId: 'hacker', role: 'admin' }));
+await t('niet ingelogd schrijft log → geweigerd', false, setDoc(doc(anon(), 'logs/hack1'), { userId: 'sporter1', loggedBy: 'sporter1' }));
+
+console.log('Onbekende collectie (default-deny)');
+await t('ingelogde gebruiker leest onbekende collectie → geweigerd', false, getDocs(collection(as('sporter1'), 'somethingElse')));
+await t('ingelogde gebruiker schrijft onbekende collectie → geweigerd', false, setDoc(doc(as('sporter1'), 'somethingElse/x'), { a: 1 }));
+
+console.log('AI-chat koppelsleutels (mcpKeys)');
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'mcpKeys/key1'), { userId: 'sporter1', label: 'AI-chat' });
+});
+await t('eigenaar maakt eigen sleutel aan → mag', true, setDoc(doc(as('sporter1'), 'mcpKeys/key2'), { userId: 'sporter1', label: 'AI-chat' }));
+await t('sleutel aanmaken voor een ander → geweigerd', false, setDoc(doc(as('sporter1'), 'mcpKeys/key3'), { userId: 'sporter2', label: 'AI-chat' }));
+await t('eigenaar leest eigen sleutel → mag', true, getDoc(doc(as('sporter1'), 'mcpKeys/key1')));
+await t('ander leest sleutel → geweigerd', false, getDoc(doc(as('sporter2'), 'mcpKeys/key1')));
+await t('trainer leest sleutel van sporter → geweigerd (geen ledenlijst-uitzondering voor sleutels)', false, getDoc(doc(as('trainer1'), 'mcpKeys/key1')));
+await t('eigenaar verwijdert eigen sleutel → mag', true, deleteDoc(doc(as('sporter1'), 'mcpKeys/key1')));
+await t('sleutel bijwerken → altijd geweigerd (onveranderlijk)', false, updateDoc(doc(as('sporter1'), 'mcpKeys/key2'), { label: 'x' }));
+
+console.log('Workout-aanvragen');
+await t('sporter maakt eigen aanvraag → mag', true, setDoc(doc(as('sporter2'), 'workoutRequests/r1'), { userId: 'sporter2', trainerId: null, status: 'pending' }));
+await t('sporter maakt aanvraag namens ander → geweigerd', false, setDoc(doc(as('sporter2'), 'workoutRequests/r2'), { userId: 'sporter1', trainerId: null, status: 'pending' }));
+await t('trainer leest aanvraag van sporter → mag', true, getDoc(doc(as('trainer1'), 'workoutRequests/r1')));
+await t('andere sporter leest aanvraag → geweigerd', false, getDoc(doc(as('sporter3'), 'workoutRequests/r1')));
+await t('trainer handelt aanvraag af (status done) → mag', true, updateDoc(doc(as('trainer1'), 'workoutRequests/r1'), { status: 'done' }));
+
+console.log('Groepsles-sessies');
+await t('trainer maakt eigen sessie → mag', true, setDoc(doc(as('trainer1'), 'sessions/s1'), { trainerId: 'trainer1', schemaId: 'x', participantIds: ['sporter1'] }));
+await t('trainer maakt sessie op naam van andere trainer → geweigerd', false, setDoc(doc(as('trainer1'), 'sessions/s2'), { trainerId: 'admin1', schemaId: 'x', participantIds: [] }));
+await t('deelnemer leest sessie → mag', true, getDoc(doc(as('sporter1'), 'sessions/s1')));
+await t('niet-deelnemer leest sessie → geweigerd', false, getDoc(doc(as('sporter3'), 'sessions/s1')));
+await t('andere trainer verwijdert sessie (ledenlijst-model) → mag', true, deleteDoc(doc(as('admin1'), 'sessions/s1')));
+
+console.log('Voeding- en metingen-logs (extra negatieve gevallen)');
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore();
+  await setDoc(doc(db, 'nutritionLogs/n1'), { userId: 'sporter1', loggedBy: 'sporter1', item: 'appel' });
+  await setDoc(doc(db, 'measurements/m1'), { userId: 'sporter1', loggedBy: 'sporter1', weightKg: 80 });
+});
+await t('niet ingelogd leest voedingslog → geweigerd', false, getDoc(doc(anon(), 'nutritionLogs/n1')));
+await t('sporter maakt voedingslog voor ander → geweigerd', false, setDoc(doc(as('sporter2'), 'nutritionLogs/n2'), { userId: 'sporter1', loggedBy: 'sporter2', item: 'appel' }));
+await t('sporter leest meting van ander → geweigerd', false, getDoc(doc(as('sporter3'), 'measurements/m1')));
+await t('sporter verwijdert meting van ander → geweigerd', false, deleteDoc(doc(as('sporter3'), 'measurements/m1')));
+await t('trainer leest meting van sporter (ledenlijst-model) → mag', true, getDoc(doc(as('trainer1'), 'measurements/m1')));
 
 await env.cleanup();
 console.log(`\n${passed} geslaagd, ${failed} mislukt`);
