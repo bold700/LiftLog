@@ -64,6 +64,14 @@ vi.mock('../../api/_lib/liftlogData.mjs', async (importOriginal) => {
   };
 });
 
+/**
+ * Vóór het laden gezet: de assistent mag dit NIET oppakken. `OPENAI_MODEL` is de instelling van
+ * de workout-generator, en toen de assistent daarop terugviel raakte hij op de eerste aanroep al
+ * door zijn uitvoertokens heen met een lege `output` — het gedrag van een redenerend model.
+ * `MODEL` wordt bij het laden van de module vastgesteld, dus dit moet vóór de import staan.
+ */
+process.env.OPENAI_MODEL = 'een-ander-model-van-de-workoutgenerator';
+
 const { default: handler } = await import('../../api/assistant.mjs');
 
 /** Minimale res die het antwoord opvangt in plaats van het over het netwerk te sturen. */
@@ -269,6 +277,14 @@ describe('assistent-endpoint', () => {
 
       expect(res.body.reply).toMatch(/anders te vragen/i);
     });
+  });
+
+  it('erft het model niet van de workout-generator', async () => {
+    const res = makeRes();
+    await handler(makeReq({ messages: [{ role: 'user', content: 'hoi' }] }), res);
+
+    expect(openAiCalls[0].body.model).toBe('gpt-4.1-mini');
+    expect(openAiCalls[0].body.model).not.toBe(process.env.OPENAI_MODEL);
   });
 
   it('geeft een nette fout als OpenAI eruit ligt', async () => {

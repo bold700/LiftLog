@@ -25,7 +25,17 @@ import { createStore, todayNl } from './_lib/liftlogData.mjs';
 import { openToolbox } from './_lib/assistantTools.mjs';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
-const MODEL = (process.env.OPENAI_ASSISTANT_MODEL || process.env.OPENAI_MODEL || 'gpt-4.1-mini').trim().split(/\s+/)[0];
+/**
+ * Het model van de assistent staat los van dat van de workout-generator.
+ *
+ * Tot nu toe viel dit terug op `OPENAI_MODEL`, een instelling die voor het genereren van
+ * workouts is gezet. Eén variabele die twee heel verschillende dingen aanstuurt gaat een keer
+ * mis, en dat gebeurde: op de eerste aanroep al waren alle uitvoertokens op, met een lege
+ * `output` en zonder dat er één functie was aangeroepen. Dat is het gedrag van een redenerend
+ * model dat zijn budget aan nadenken besteedt — niet van het model dat hier hoort te draaien.
+ * Wie de assistent een ander model wil geven, zet `OPENAI_ASSISTANT_MODEL`.
+ */
+const MODEL = (process.env.OPENAI_ASSISTANT_MODEL || 'gpt-4.1-mini').trim().split(/\s+/)[0];
 const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
 
 /**
@@ -238,6 +248,7 @@ export default async function handler(req, res) {
         if (reply) return json(res, 200, { reply, steps, build: BUILD });
 
         console.error('[assistant] leeg antwoord', {
+          model: MODEL,
           round,
           status: result?.status ?? null,
           incomplete: result?.incomplete_details ?? null,
