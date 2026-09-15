@@ -214,14 +214,34 @@ describe('assistent-endpoint', () => {
    * iemand zijn vraag herformuleren terwijl er een limiet in de weg staat.
    */
   describe('als het model geen tekst teruggeeft', () => {
-    it('zegt dat het antwoord is afgekapt bij een tokenlimiet', async () => {
-      openAiQueue = [{ status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, output: [] }];
+    it('vraagt één keer om een korter antwoord als het niet paste', async () => {
+      // De gegevens zijn dan al opgehaald; alleen het opschrijven paste niet. Opnieuw vragen
+      // levert een antwoord op, waar de gebruiker anders met lege handen stond.
+      openAiQueue = [
+        { status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, output: [] },
+        { status: 'completed', output_text: 'Vandaag: squat 3x8 op 60 kg.' },
+      ];
       const res = makeRes();
       await handler(makeReq({ messages: [{ role: 'user', content: 'wat is mijn training vandaag?' }] }), res);
 
       expect(res.statusCode).toBe(200);
+      expect(res.body.reply).toBe('Vandaag: squat 3x8 op 60 kg.');
+      // De tweede aanroep moet de opdracht "korter" meekrijgen.
+      expect(JSON.stringify(openAiCalls.at(-1).body.input)).toMatch(/afgekapt/i);
+    });
+
+    it('geeft het op na één poging en zegt dan dat het is afgekapt', async () => {
+      openAiQueue = [
+        { status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, output: [] },
+        { status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, output: [] },
+      ];
+      const res = makeRes();
+      await handler(makeReq({ messages: [{ role: 'user', content: 'wat is mijn training vandaag?' }] }), res);
+
       expect(res.body.reply).toMatch(/afgekapt/i);
       expect(res.body.reply).not.toMatch(/anders te vragen/i);
+      // Precies twee keer geprobeerd, niet eindeloos.
+      expect(openAiCalls).toHaveLength(2);
     });
 
     it('meldt een onvolledig antwoord met een andere reden apart', async () => {
