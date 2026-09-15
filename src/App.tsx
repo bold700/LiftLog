@@ -35,6 +35,7 @@ import { LeaderboardAutoSync } from './components/LeaderboardAutoSync';
 import { AddFromSchemaProvider } from './context/AddFromSchemaContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProfileProvider, useProfile } from './context/ProfileContext';
+import { ViewAsProvider } from './context/ViewAsContext';
 import { INZICHTEN_SUB } from './components/InzichtenPage';
 import { LoginPage } from './components/LoginPage';
 import { VerifyEmailScreen } from './components/VerifyEmailScreen';
@@ -211,6 +212,7 @@ function AppContent() {
       <CssBaseline />
       <NotifyProvider>
       <ProfileProvider>
+      <ViewAsProvider>
       <VerificationGate>
       <LeaderboardAutoSync />
       <AddFromSchemaProvider
@@ -339,6 +341,7 @@ function AppContent() {
         )}
       </AddFromSchemaProvider>
       </VerificationGate>
+      </ViewAsProvider>
       </ProfileProvider>
       </NotifyProvider>
     </ThemeProvider>

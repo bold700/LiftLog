@@ -1,5 +1,6 @@
-import { Exercise, Workout, ExerciseEffort } from '../types';
+import { Exercise, Workout } from '../types';
 import { saveExerciseLog, deleteExerciseLog, getLogsForUser } from '../services/logService';
+import { logToExercise } from './exerciseLogMapping';
 
 const STORAGE_KEY = 'liftlog_workouts';
 
@@ -14,32 +15,6 @@ let cloudSync: CloudSync | null = null;
 
 export function setCloudSync(cfg: CloudSync | null): void {
   cloudSync = cfg;
-}
-
-function logToExercise(log: {
-  id: string;
-  exerciseName: string;
-  weight: number | null;
-  sets: number | null;
-  reps: number | null;
-  notes?: string | null;
-  effort?: ExerciseEffort | null;
-  date: string;
-  schemaId?: string | null;
-  schemaDayIndex?: number | null;
-}): Exercise {
-  return {
-    id: log.id,
-    name: log.exerciseName || undefined,
-    weight: log.weight ?? undefined,
-    date: log.date,
-    sets: log.sets ?? undefined,
-    reps: log.reps ?? undefined,
-    notes: log.notes ?? undefined,
-    effort: log.effort ?? undefined,
-    schemaId: log.schemaId ?? null,
-    schemaDayIndex: log.schemaDayIndex ?? null,
-  };
 }
 
 function mirrorToCloud(ex: Exercise): void {
