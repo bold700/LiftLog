@@ -17,9 +17,9 @@ export default defineConfig({
       injectRegister: null,
       includeAssets: ['app-icon.svg', 'va-logo.svg'],
       manifest: {
-        name: 'Van As Personal Training Logs',
-        short_name: 'Van As PT Logs',
-        description: 'Track je fitness progressie en workouts',
+        name: 'VORM',
+        short_name: 'VORM',
+        description: 'Trainingsschema\'s, voeding en voortgang voor personal trainers en boutique studio\'s',
         theme_color: '#F2E4D3',
         background_color: '#F2E4D3',
         display: 'standalone',

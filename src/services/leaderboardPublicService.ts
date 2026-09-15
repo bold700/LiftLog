@@ -8,10 +8,13 @@ import {
   deleteDoc,
   getDocs,
   getDocsFromServer,
+  query,
+  where,
   serverTimestamp,
   type Timestamp,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
+import { requireOrgId } from './orgContext';
 import type { LeaderboardVisibility } from '../types';
 import {
   computeLocalLeaderboardMetrics,
@@ -33,6 +36,8 @@ export const LEADERBOARD_PUBLIC_SYNCED_EVENT = 'leaderboardPublicSynced';
 const COLLECTION = 'leaderboardPublic';
 
 export interface PublicLeaderboardEntry {
+  /** Studio waar dit document bij hoort (multi-tenant). */
+  orgId?: string;
   userId: string;
   displayLabel: string;
   visibility: 'anonymous' | 'named';
@@ -90,6 +95,8 @@ export async function syncMyLeaderboardPublic(opts: {
     ref,
     {
       userId: opts.uid,
+      // Ranglijst is per studio: zonder dit veld zou iemand op de lijst van een andere studio staan.
+      orgId: requireOrgId(),
       displayLabel: labelInfo.label,
       visibility: labelInfo.visibility,
       // Foto alleen bij 'named' delen (bij anoniem geen herkenbare foto)
@@ -139,7 +146,7 @@ function tsToIso(v: unknown): string {
 /** Oude documenten (volume/sessions) nog leesbaar: fallback naar lege oefening. */
 export async function fetchPublicLeaderboard(): Promise<PublicLeaderboardEntry[]> {
   if (!isFirebaseConfigured() || !db) return [];
-  const col = collection(db, COLLECTION);
+  const col = query(collection(db, COLLECTION), where('orgId', '==', requireOrgId()));
   let snap;
   try {
     snap = await getDocsFromServer(col);

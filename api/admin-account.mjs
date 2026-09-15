@@ -1,4 +1,4 @@
-import { applyCors } from './cors.mjs';
+import { applyCors } from './_lib/cors.mjs';
 /**
  * Admin-endpoint: een beheerder verwijdert een account definitief (Auth + profiel + persoonlijke data
  * + ranglijstdocument). De ranglijst wordt daarbij automatisch opgeschoond.
@@ -67,13 +67,7 @@ export default async function handler(req, res) {
     return json(res, 401, { error: 'Ongeldige sessie. Log opnieuw in.' });
   }
 
-  // 2) Beller moet admin zijn
-  const callerSnap = await db.collection('profiles').doc(callerUid).get();
-  if (!callerSnap.exists || callerSnap.data()?.role !== 'admin') {
-    return json(res, 403, { error: 'Alleen beheerders mogen accounts verwijderen.' });
-  }
-
-  // 3) Verzoek verwerken
+  // 2) Verzoek uitlezen. Het eigen account opzeggen mag iedereen; de rest alleen een beheerder.
   let body;
   try {
     body = await readBody(req);
@@ -82,6 +76,33 @@ export default async function handler(req, res) {
   }
 
   const action = body?.action;
+
+  // Eigen account opzeggen. Dit loopt bewust langs de server: in de app mag niemand een profiel
+  // verwijderen. Anders kon iemand zijn profiel weggooien en zich met hetzelfde account opnieuw
+  // aanmaken in een andere studio — inclusief de logs en metingen die op zijn uid blijven staan.
+  if (action === 'delete-self') {
+    try {
+      await auth.deleteUser(callerUid);
+    } catch (e) {
+      if (e?.code !== 'auth/user-not-found') {
+        return json(res, 500, { error: 'Verwijderen van het login-account mislukt.' });
+      }
+    }
+    try {
+      await db.collection('profiles').doc(callerUid).delete();
+      const cleaned = await deleteUserData(db, callerUid);
+      return json(res, 200, { ok: true, deletedUid: callerUid, cleaned });
+    } catch {
+      return json(res, 500, { error: 'Login verwijderd, maar het opruimen van je gegevens mislukte.' });
+    }
+  }
+
+  // 3) Alle overige acties: alleen een beheerder.
+  const callerSnap = await db.collection('profiles').doc(callerUid).get();
+  if (!callerSnap.exists || callerSnap.data()?.role !== 'admin') {
+    return json(res, 403, { error: 'Alleen beheerders mogen accounts verwijderen.' });
+  }
+
   const targetUid = String(body?.targetUid || '').trim();
   if (action !== 'delete' || !targetUid) {
     return json(res, 400, { error: 'Ongeldige actie of ontbrekende targetUid.' });

@@ -14,6 +14,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
+import { requireOrgId } from './orgContext';
 import type { Schema } from '../types';
 import type { ProfileRole } from '../types';
 
@@ -87,7 +88,11 @@ function toSchema(data: Record<string, unknown>, id: string): Schema {
 export async function getWorkoutsForUser(uid: string, role: ProfileRole): Promise<Schema[]> {
   if (!isFirebaseConfigured() || !db) return [];
   if (role === 'trainer' || role === 'admin') {
-    const q = query(collection(db, COLLECTION), where('trainerId', '==', uid));
+    const q = query(
+      collection(db, COLLECTION),
+      where('orgId', '==', requireOrgId()),
+      where('trainerId', '==', uid)
+    );
     const snap = await getDocs(q);
     return snap.docs.map((d) => toSchema(d.data(), d.id)).sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
   }
@@ -95,7 +100,11 @@ export async function getWorkoutsForUser(uid: string, role: ProfileRole): Promis
   const queries = [
     query(collection(db, COLLECTION), where('clientId', '==', uid)),
     query(collection(db, COLLECTION), where('participantIds', 'array-contains', uid)),
-    query(collection(db, COLLECTION), where('audience', '==', 'open')),
+    query(
+      collection(db, COLLECTION),
+      where('orgId', '==', requireOrgId()),
+      where('audience', '==', 'open')
+    ),
   ];
   const snaps = await Promise.all(queries.map((q) => getDocs(q).catch(() => null)));
   const byId = new Map<string, Schema>();
@@ -111,6 +120,8 @@ export async function saveWorkoutToFirestore(schema: Schema): Promise<void> {
   const ref = doc(db, COLLECTION, schema.id);
   const toStore = {
     ...schema,
+    // Studio meeschrijven: zonder dit veld is het schema voor niemand meer vindbaar.
+    orgId: schema.orgId || requireOrgId(),
     updatedAt: serverTimestamp(),
   };
   const cleaned = omitUndefinedDeep(toStore);

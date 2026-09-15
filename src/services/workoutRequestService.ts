@@ -13,8 +13,11 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
+import { requireOrgId } from './orgContext';
 
 export interface WorkoutRequest {
+  /** Studio waar dit document bij hoort (multi-tenant). */
+  orgId?: string;
   id: string;
   userId: string;
   displayName: string | null;
@@ -54,7 +57,13 @@ export async function createWorkoutRequest(input: {
 }): Promise<WorkoutRequest> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
   const id = newId();
-  const full: WorkoutRequest = { ...input, id, status: 'pending', createdAt: new Date().toISOString() };
+  const full: WorkoutRequest = {
+    ...input,
+    id,
+    orgId: requireOrgId(),
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+  };
   await setDoc(doc(db, COLLECTION, id), { ...full, updatedAt: serverTimestamp() });
   return full;
 }
@@ -71,7 +80,11 @@ export async function getMyPendingRequest(userId: string): Promise<WorkoutReques
 /** Alle openstaande aanvragen (voor trainer/admin). */
 export async function getPendingWorkoutRequests(): Promise<WorkoutRequest[]> {
   if (!isFirebaseConfigured() || !db) return [];
-  const q = query(collection(db, COLLECTION), where('status', '==', 'pending'));
+  const q = query(
+    collection(db, COLLECTION),
+    where('orgId', '==', requireOrgId()),
+    where('status', '==', 'pending')
+  );
   const snap = await getDocs(q);
   return snap.docs.map((d) => toRequest(d.data(), d.id)).sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
 }

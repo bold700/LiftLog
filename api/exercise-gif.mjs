@@ -1,4 +1,4 @@
-import { applyCors } from './cors.mjs';
+import { applyCors } from './_lib/cors.mjs';
 /**
  * Stilstaand beeld (eerste frame) van een oefening-GIF, als PNG.
  * Voor de PDF-export: Firebase Storage stuurt geen CORS-headers, dus de browser kan de GIF niet
@@ -7,7 +7,7 @@ import { applyCors } from './cors.mjs';
  *
  *   GET /api/exercise-gif?id=0585[&size=320]
  */
-import { gifUrlForId } from './exerciseGifIndex.mjs';
+import { gifUrlForId } from './_lib/exerciseGifIndex.mjs';
 import { gifFirstFrameToPng } from './_lib/gifFrame.mjs';
 
 const ID_RE = /^[A-Za-z0-9_-]{1,32}$/;

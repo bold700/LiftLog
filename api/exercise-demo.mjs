@@ -1,9 +1,9 @@
-import { applyCors } from './cors.mjs';
+import { applyCors } from './_lib/cors.mjs';
 /**
  * Zoekt een oefening op naam in de eigen dataset en geeft id + GIF-URL terug.
  * De GIF komt uit Firebase Storage (exercises/720/{id}.gif). Geen externe API.
  */
-import { resolveExercise, gifUrlForId } from './exerciseGifIndex.mjs';
+import { resolveExercise, gifUrlForId } from './_lib/exerciseGifIndex.mjs';
 
 function json(res, status, body) {
   const payload = JSON.stringify(body);

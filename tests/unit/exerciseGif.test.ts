@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { gifIdForExerciseName, gifUrlForExerciseName, gifUrlForId } from '../../src/utils/exerciseGif';
-import { resolveExercise, gifUrlForId as serverGifUrlForId } from '../../api/exerciseGifIndex.mjs';
+import { resolveExercise, gifUrlForId as serverGifUrlForId } from '../../api/_lib/exerciseGifIndex.mjs';
 
 describe('oefening → GIF', () => {
   it('vindt dataset-id op (genormaliseerde) naam en via de uitzonderingenlijst', () => {

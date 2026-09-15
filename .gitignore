@@ -63,3 +63,4 @@ src/dev/
 
 # Gegenereerde import-output (node scripts/import-groepslessen.mjs)
 scripts/groepslessen/out/
+backups/

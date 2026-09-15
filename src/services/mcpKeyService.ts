@@ -1,5 +1,5 @@
 /**
- * Koppelsleutels voor AI-chats (ChatGPT, Claude, Gemini) via de LiftLog MCP-server.
+ * Koppelsleutels voor AI-chats (ChatGPT, Claude, Gemini) via de VORM MCP-server.
  * De sleutel zelf wordt nooit opgeslagen in Firestore: alleen de SHA-256-hash als document-id
  * in `mcpKeys`, met de userId. De server herkent de gebruiker aan de hash.
  */

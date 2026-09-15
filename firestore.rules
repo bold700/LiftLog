@@ -7,60 +7,168 @@ service cloud.firestore {
     function myProfile() {
       return get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data;
     }
+
+    // --- Studio's (multi-tenant) -------------------------------------------------
+    // Elke studio is een eigen organisatie. Alles is per studio gescheiden: een trainer of
+    // beheerder van studio A mag niets van studio B zien, ook niet lezen.
+    //
+    // Documenten van vóór de migratie missen `orgId`; die horen bij de standaardstudio.
+    // Dezelfde waarde staat als DEFAULT_ORG_ID in src/services/orgContext.ts — samen aanpassen.
+    function defaultOrg() {
+      return 'vanas';
+    }
+    /** Studio van een document; ontbreekt het veld, dan de standaardstudio. */
+    function orgOf(data) {
+      return data.get('orgId', defaultOrg());
+    }
+    /** Thuisstudio van de ingelogde gebruiker. */
+    function myOrg() {
+      return orgOf(myProfile());
+    }
+    /**
+     * Alle studio's waar de ingelogde gebruiker lid van is.
+     *
+     * Een sporter zit meestal bij één studio, maar een trainer kan bij meerdere werken. Daarom is
+     * lidmaatschap een lijst en geen enkele waarde. Ontbreekt `orgIds` (profiel van vóór deze
+     * wijziging), dan telt alleen de thuisstudio.
+     */
+    function myOrgs() {
+      return myProfile().get('orgIds', [myOrg()]);
+    }
+    /** Waar voor een bestaand document in een studio waar ik lid van ben. */
+    function sameOrg() {
+      return orgOf(resource.data) in myOrgs();
+    }
+    /** Waar wanneer het binnenkomende document een studio draagt waar ik lid van ben. */
+    function writesMyOrg() {
+      return request.resource.data.get('orgId', defaultOrg()) in myOrgs();
+    }
+    /**
+     * Mag hier zelf een account worden aangemaakt? Alleen als de studio dat aan heeft staan.
+     * De standaardstudio blijft werken ook als het `orgs`-document nog niet bestaat, zodat de
+     * volgorde van migreren en regels uitrollen geen registraties blokkeert.
+     */
+    function orgAllowsSelfSignup(orgId) {
+      return (orgId == defaultOrg() && !exists(/databases/$(database)/documents/orgs/$(orgId)))
+        || (exists(/databases/$(database)/documents/orgs/$(orgId))
+            && get(/databases/$(database)/documents/orgs/$(orgId)).data.get('allowSelfSignup', false) == true);
+    }
+
     function isAdmin() {
       return isSignedIn() && myProfile().role == 'admin';
     }
     function isTrainerOrAdmin() {
       return isSignedIn() && (myProfile().role == 'trainer' || myProfile().role == 'admin');
     }
-    /** Velden die alleen een beheerder mag zetten: rol en de verificatie-bypass. */
+    /** Trainer of beheerder binnen dezelfde studio als het bestaande document. */
+    function isStaffInSameOrg() {
+      return isTrainerOrAdmin() && sameOrg();
+    }
+    /** Idem, maar voor een document dat nog niet bestaat: dan telt de studio in de aanvraag. */
+    function isStaffInSameOrgForNew() {
+      return isTrainerOrAdmin() && writesMyOrg();
+    }
+    /**
+     * Velden die alleen een beheerder mag zetten: rol en de verificatie-bypass.
+     * `orgId` en `platformAdmin` staan er ook in: een studio verlaten of jezelf platformbeheerder
+     * maken kan nooit vanuit de client — dat gaat alleen via de Admin SDK op de server.
+     */
     function touchesProtectedProfileFields() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'createdByAdmin']);
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['role', 'createdByAdmin', 'orgId', 'orgIds', 'platformAdmin', 'userId']);
+    }
+    /**
+     * Wat je op je eigen profiel nooit zelf mag zetten. Naast het bovenstaande ook `trainerId`:
+     * jezelf aan een willekeurige trainer hangen geeft die trainer je dossier te zien, en het is
+     * de basis voor misbruik van de meldingenroute. Koppelen doet een trainer of beheerder.
+     */
+    function touchesProtectedSelfFields() {
+      return touchesProtectedProfileFields()
+        || request.resource.data.diff(resource.data).affectedKeys().hasAny(['trainerId']);
+    }
+    /** Zelfs een beheerder mag `platformAdmin` niet vanuit de app zetten of wijzigen. */
+    function touchesPlatformAdmin() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(['platformAdmin']);
+    }
+
+    // Studio's zelf. Lezen mag binnen je eigen studio (naam tonen); beheren alleen de beheerder
+    // van díe studio. Nieuwe studio's worden met het beheerscript (Admin SDK) aangemaakt.
+    match /orgs/{orgId} {
+      allow read: if isSignedIn() && orgId == myOrg();
+      allow update: if isAdmin() && orgId == myOrg();
+      allow create, delete: if false;
     }
 
     // Profielen.
-    // - Lezen: eigen profiel, je eigen sporters, en trainers/beheerders (ledenlijst, ranglijst).
-    // - Aanmaken: je eigen profiel, altijd als sporter (trainer worden gaat via een aanvraag die een
-    //   beheerder goedkeurt), of door een beheerder (Beheer → account aanmaken). Zo kan niemand
-    //   zichzelf trainer of beheerder maken.
-    // - Bijwerken: jezelf (behalve rol), een trainer mag sporterprofielen bijwerken (behalve rol),
-    //   een beheerder mag alles.
+    // - Lezen: eigen profiel, en verder alleen binnen je eigen studio (je eigen sporters, of
+    //   als trainer/beheerder de ledenlijst en ranglijst van je studio).
+    // - Aanmaken: je eigen profiel, altijd als sporter, in een studio die open aanmelding toestaat,
+    //   of door een beheerder binnen de eigen studio. Zo kan niemand zichzelf trainer, beheerder
+    //   of lid van een andere studio maken.
+    // - Bijwerken: jezelf (behalve de beschermde velden), een trainer mag sporterprofielen in de
+    //   eigen studio bijwerken, een beheerder mag alles binnen de eigen studio.
     match /profiles/{userId} {
       allow read: if isSignedIn()
         && (request.auth.uid == userId
-            || resource.data.trainerId == request.auth.uid
-            || isTrainerOrAdmin());
-      allow create: if isAdmin()
+            || (sameOrg()
+                && (resource.data.trainerId == request.auth.uid
+                    || isTrainerOrAdmin()
+                    // Je eigen trainer mag je zien: zonder dit blijft de berichtenlijst leeg.
+                    || myProfile().get('trainerId', '') == userId)));
+      allow create: if (isAdmin() && writesMyOrg())
         || (isSignedIn()
             && request.auth.uid == userId
             && request.resource.data.get('role', 'sporter') == 'sporter'
-            && request.resource.data.get('createdByAdmin', false) == false);
+            && request.resource.data.get('createdByAdmin', false) == false
+            && request.resource.data.get('platformAdmin', false) == false
+            // Je meldt je aan bij één studio; lid worden van een tweede doet een beheerder daar.
+            && request.resource.data.get('orgIds', [request.resource.data.get('orgId', defaultOrg())])
+                 .hasOnly([request.resource.data.get('orgId', defaultOrg())])
+            && orgAllowsSelfSignup(request.resource.data.get('orgId', defaultOrg())));
+      // Een beheerder beheert profielen binnen zijn eigen studio, inclusief lidmaatschap
+      // (een trainer erbij halen of eruit halen). Hij kan niemand bij een andere studio zetten:
+      // `writesMyOrg()` controleert de thuisstudio en `orgIds` moet zijn eigen studio bevatten.
       allow update: if isSignedIn()
-        && (isAdmin()
-            || (request.auth.uid == userId && !touchesProtectedProfileFields())
-            || (isTrainerOrAdmin() && resource.data.role == 'sporter' && !touchesProtectedProfileFields()));
-      allow delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        && !touchesPlatformAdmin()
+        && ((isAdmin() && sameOrg() && writesMyOrg()
+             && request.resource.data.get('orgIds', [myOrg()]).hasAny(myOrgs()))
+            || (request.auth.uid == userId && !touchesProtectedSelfFields())
+            || (isStaffInSameOrg()
+                && resource.data.role == 'sporter'
+                && !touchesProtectedProfileFields()));
+      // Bewust niemand: verwijderen loopt via api/admin-account.mjs met de Admin SDK, dat het
+      // login-account en de bijbehorende gegevens in één keer opruimt. Kon je hier je eigen profiel
+      // weggooien, dan kon je jezelf daarna in een andere studio opnieuw aanmaken met dezelfde uid.
+      allow delete: if false;
     }
+
     // Koppelsleutels voor AI-chats (MCP). Doc-id = SHA-256 van de sleutel; alleen de eigenaar beheert ze.
-    // De server (Admin SDK) leest ze om de gebruiker te herkennen.
+    // De server (Admin SDK) leest ze om de gebruiker te herkennen; de studio komt uit het profiel.
     match /mcpKeys/{keyId} {
-      allow read, delete: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
-    // Workouts: alleen eigen (trainer of toegewezen sporter)
+
+    // Workouts: alleen binnen de eigen studio, en daarbinnen alleen eigen of toegewezen schema's.
+    // Let op `audience == 'open'`: dat is open binnen de studio, nooit daarbuiten.
     match /workouts/{workoutId} {
-      allow read: if request.auth != null
+      allow read: if isSignedIn()
+        && sameOrg()
         && (resource.data.trainerId == request.auth.uid
             || resource.data.clientId == request.auth.uid
             || request.auth.uid in resource.data.get('participantIds', [])
             || resource.data.get('audience', 'single') == 'open');
-      allow create: if request.auth != null
+      allow create: if isSignedIn()
+        && writesMyOrg()
         && request.resource.data.trainerId == request.auth.uid;
-      allow update, delete: if request.auth != null
+      allow update, delete: if isSignedIn()
+        && sameOrg()
+        && writesMyOrg()
         && resource.data.trainerId == request.auth.uid;
     }
-    // Openbare ranglijst: alleen geaggregeerde totalen; iedere ingelogde gebruiker mag lezen.
-    // Schrijven alleen eigen document (client zet visibility + label; geen ruwe logs).
+
+    // Openbare ranglijst: alleen geaggregeerde totalen, en alleen binnen je eigen studio.
+    // Schrijven alleen het eigen document (client zet visibility + label; geen ruwe logs).
     function isAllowedPhotoUrl(url) {
       return url is string
         && url.size() <= 600
@@ -69,93 +177,228 @@ service cloud.firestore {
             || url.matches('https://lh[0-9][.]googleusercontent[.]com/.*'));
     }
     match /leaderboardPublic/{userId} {
-      allow read: if request.auth != null;
+      allow read: if isSignedIn() && sameOrg();
       // Alleen het eigen document, met een naam van beperkte lengte en een foto van onze eigen opslag
       // (geen willekeurige externe plaatjes of namen van anderen op de ranglijst).
-      allow create, update: if request.auth != null
+      allow create, update: if isSignedIn()
         && request.auth.uid == userId
+        && writesMyOrg()
         && request.resource.data.userId == userId
         && request.resource.data.displayLabel is string
         && request.resource.data.displayLabel.size() <= 60
         && request.resource.data.visibility in ['anonymous', 'named']
         && isAllowedPhotoUrl(request.resource.data.get('photoURL', ''));
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow delete: if isSignedIn() && request.auth.uid == userId;
     }
 
-    // Per-persoon oefening-logs (groepsles + individueel). Eigen logs of via je trainer/admin.
-    // Aanmaken voor een ander kan alleen als trainer/beheerder (bv. tijdens een groepsles).
+    // Per-persoon oefening-logs (groepsles + individueel). Eigen logs, of via je trainer/beheerder
+    // binnen dezelfde studio. Aanmaken voor een ander kan alleen als trainer/beheerder.
     match /logs/{logId} {
-      allow read: if request.auth != null
+      allow read: if isSignedIn()
         && (resource.data.userId == request.auth.uid
-            || resource.data.trainerId == request.auth.uid
-            || isTrainerOrAdmin());
-      allow create: if request.auth != null
+            || (sameOrg()
+                && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin())));
+      allow create: if isSignedIn()
+        && writesMyOrg()
         && (request.resource.data.userId == request.auth.uid
             || (isTrainerOrAdmin() && request.resource.data.loggedBy == request.auth.uid));
-      allow update, delete: if request.auth != null
-        && (resource.data.userId == request.auth.uid || isTrainerOrAdmin());
+      // `writesMyOrg()` staat er ook bij update: zonder dat kan iemand het `orgId` van een
+      // bestaand document naar een andere studio schrijven en het daarmee overhevelen.
+      allow update: if isSignedIn()
+        && writesMyOrg()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow delete: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
     }
 
-    // Check-ins na een training (hoe voelde het, waar moet de trainer op letten). Zelfde regels als logs.
+    // Check-ins na een training (hoe voelde het, waar moet de trainer op letten). Dezelfde regels
+    // als `logs`, inclusief de studiogrens: een check-in vertelt iets over iemands gezondheid en
+    // hoort dus nooit buiten de eigen studio zichtbaar te zijn.
     match /checkins/{checkinId} {
-      allow read: if request.auth != null
+      allow read: if isSignedIn()
         && (resource.data.userId == request.auth.uid
-            || resource.data.trainerId == request.auth.uid
-            || isTrainerOrAdmin());
-      allow create: if request.auth != null
+            || (sameOrg()
+                && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin())));
+      allow create: if isSignedIn()
+        && writesMyOrg()
         && (request.resource.data.userId == request.auth.uid
             || (isTrainerOrAdmin() && request.resource.data.loggedBy == request.auth.uid));
-      allow update, delete: if request.auth != null
-        && (resource.data.userId == request.auth.uid || isTrainerOrAdmin());
+      // `writesMyOrg()` staat er ook bij update: zonder dat kan iemand het `orgId` van een
+      // bestaand document naar een andere studio schrijven en het daarmee overhevelen.
+      allow update: if isSignedIn()
+        && writesMyOrg()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow delete: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
     }
 
-    // Voeding-logs per persoon (Open Food Facts). Eigen logs of via je trainer/admin.
+    // Voeding-logs per persoon (Open Food Facts). Eigen logs of via je trainer/beheerder in dezelfde studio.
     match /nutritionLogs/{logId} {
-      allow read: if request.auth != null
+      allow read: if isSignedIn()
         && (resource.data.userId == request.auth.uid
-            || resource.data.trainerId == request.auth.uid
-            || isTrainerOrAdmin());
-      allow create: if request.auth != null
+            || (sameOrg()
+                && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin())));
+      allow create: if isSignedIn()
+        && writesMyOrg()
         && (request.resource.data.userId == request.auth.uid
             || (isTrainerOrAdmin() && request.resource.data.loggedBy == request.auth.uid));
-      allow update, delete: if request.auth != null
-        && (resource.data.userId == request.auth.uid || isTrainerOrAdmin());
+      // `writesMyOrg()` staat er ook bij update: zonder dat kan iemand het `orgId` van een
+      // bestaand document naar een andere studio schrijven en het daarmee overhevelen.
+      allow update: if isSignedIn()
+        && writesMyOrg()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow delete: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
     }
 
-    // Lichaamsmetingen (gewicht, vet%) per persoon. Eigen data of via je trainer/admin.
+    // Lichaamsmetingen (gewicht, vet%) per persoon. Eigen data of via je trainer/beheerder in dezelfde studio.
     match /measurements/{mId} {
-      allow read: if request.auth != null
+      allow read: if isSignedIn()
         && (resource.data.userId == request.auth.uid
-            || resource.data.trainerId == request.auth.uid
-            || isTrainerOrAdmin());
-      allow create: if request.auth != null
+            || (sameOrg()
+                && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin())));
+      allow create: if isSignedIn()
+        && writesMyOrg()
         && (request.resource.data.userId == request.auth.uid
             || (isTrainerOrAdmin() && request.resource.data.loggedBy == request.auth.uid));
-      allow update, delete: if request.auth != null
-        && (resource.data.userId == request.auth.uid || isTrainerOrAdmin());
+      // `writesMyOrg()` staat er ook bij update: zonder dat kan iemand het `orgId` van een
+      // bestaand document naar een andere studio schrijven en het daarmee overhevelen.
+      allow update: if isSignedIn()
+        && writesMyOrg()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow delete: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
     }
 
-    // Workout-aanvragen: sporter maakt eigen aanvraag; trainer/admin ziet en handelt af.
+    // Workout-aanvragen: sporter maakt eigen aanvraag; trainer/beheerder van dezelfde studio handelt af.
     match /workoutRequests/{reqId} {
-      allow read: if request.auth != null
-        && (resource.data.userId == request.auth.uid || isTrainerOrAdmin());
-      allow create: if request.auth != null
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow create: if isSignedIn()
+        && writesMyOrg()
         && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if request.auth != null
-        && (resource.data.userId == request.auth.uid || isTrainerOrAdmin());
+      allow update: if isSignedIn()
+        && writesMyOrg()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow delete: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
     }
 
-    // Groepsles-sessies. Trainer beheert; deelnemers mogen hun sessie lezen.
+    // Toesteltokens voor pushnotificaties. Het document-id is het token zelf, zodat hetzelfde
+    // toestel niet twee keer in de lijst komt. Alleen je eigen tokens; niemand mag de lijst van
+    // een ander lezen (dat zou verraden op welke toestellen iemand de app heeft staan).
+    // De server (Admin SDK) leest ze om een melding te kunnen versturen.
+    match /pushTokens/{token} {
+      allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && writesMyOrg();
+      // Bij update ook het bestaande document controleren: het doc-id is het FCM-token, en wie
+      // dat token kent zou anders de melding van iemand anders naar zijn eigen toestel omleiden.
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid
+        && writesMyOrg();
+    }
+
+    // Berichten tussen trainer en sporter. Een gesprek gaat altijd tussen precies twee mensen:
+    // alleen de afzender en de ontvanger mogen het lezen, en alleen binnen dezelfde studio.
+    // Niemand kan een bericht op naam van een ander versturen of de tekst achteraf veranderen.
+    match /messages/{messageId} {
+      // Op `participants` wordt ook gequeryd. Firestore kan een lijst alleen toestaan als de regel
+      // op hetzelfde veld controleert als waarop de query filtert; met senderId/recipientId in twee
+      // losse takken lukt dat niet en wordt zelfs een deelnemer geweigerd.
+      function amParticipant() {
+        return request.auth.uid in resource.data.participants;
+      }
+      allow read: if isSignedIn() && sameOrg() && amParticipant();
+      allow create: if isSignedIn()
+        && writesMyOrg()
+        && request.resource.data.senderId == request.auth.uid
+        && request.resource.data.recipientId != request.auth.uid
+        // `participants` is waar de app op filtert bij het ophalen van een gesprek; het moet dus
+        // precies de twee betrokkenen bevatten, anders klopt de lijst niet met de leesregel.
+        && request.resource.data.participants.hasOnly([request.resource.data.senderId, request.resource.data.recipientId])
+        && request.resource.data.participants.hasAll([request.resource.data.senderId, request.resource.data.recipientId])
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 4000
+        && request.resource.data.readAt == null;
+      // Bijwerken kan alleen om een bericht als gelezen te markeren, en alleen door de ontvanger.
+      allow update: if isSignedIn()
+        && sameOrg()
+        && request.auth.uid == resource.data.recipientId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
+      // Je eigen bericht terugtrekken mag; dat van een ander niet.
+      allow delete: if isSignedIn() && sameOrg() && request.auth.uid == resource.data.senderId;
+    }
+
+    // Lessen op het rooster. Een trainer of beheerder van de studio maakt en beheert ze; iedereen
+    // in de studio mag ze zien om te kunnen reserveren.
+    //
+    // `bookedCount` en `waitlistCount` worden alleen door de server bijgewerkt (api/booking.mjs).
+    // Kon een trainer die tellers zelf zetten, dan klopt de capaciteit niet meer en kunnen er meer
+    // mensen in de zaal staan dan er plek is.
+    match /classes/{classId} {
+      function touchesCounters() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['bookedCount', 'waitlistCount']);
+      }
+      allow read: if isSignedIn() && sameOrg();
+      allow create: if isStaffInSameOrgForNew()
+        && request.resource.data.get('bookedCount', 0) == 0
+        && request.resource.data.get('waitlistCount', 0) == 0
+        && request.resource.data.capacity is int
+        && request.resource.data.capacity > 0;
+      allow update: if isSignedIn()
+        && sameOrg()
+        && writesMyOrg()
+        && isTrainerOrAdmin()
+        && !touchesCounters();
+      allow delete: if isSignedIn() && sameOrg() && isTrainerOrAdmin();
+    }
+
+    // Reserveringen. Alleen te lezen door de sporter zelf en door de staf van die studio.
+    // Schrijven kan uitsluitend de server: reserveren moet plek, saldo en reservering in één
+    // transactie regelen, en dat kan een regel niet.
+    match /bookings/{bookingId} {
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow write: if false;
+    }
+
+    // Creditsaldo per persoon per studio. Lezen: jezelf, of de staf van je studio.
+    // Schrijven: alleen de server, zodat saldo en grootboek nooit uit elkaar lopen.
+    match /creditAccounts/{accountId} {
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow write: if false;
+    }
+
+    // Grootboek van creditmutaties: waar komt elk saldo vandaan. Zelfde leesrechten, nooit schrijven.
+    match /creditLedger/{entryId} {
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow write: if false;
+    }
+
+    // Groepsles-sessies. Trainer beheert; deelnemers mogen hun sessie lezen. Altijd binnen één studio.
     match /sessions/{sessionId} {
-      allow read: if request.auth != null
+      allow read: if isSignedIn()
+        && sameOrg()
         && (resource.data.trainerId == request.auth.uid
             || request.auth.uid in resource.data.participantIds
             || isTrainerOrAdmin());
-      allow create: if request.auth != null
+      allow create: if isSignedIn()
+        && writesMyOrg()
         && request.resource.data.trainerId == request.auth.uid;
-      allow update, delete: if request.auth != null
-        && (resource.data.trainerId == request.auth.uid
-            || isTrainerOrAdmin());
+      allow update: if isSignedIn()
+        && sameOrg()
+        && writesMyOrg()
+        && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin());
+      allow delete: if isSignedIn()
+        && sameOrg()
+        && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin());
     }
   }
 }

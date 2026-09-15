@@ -1,9 +1,9 @@
-import { applyCors } from './cors.mjs';
+import { applyCors } from './_lib/cors.mjs';
 /**
  * Autocomplete over de eigen ExerciseDB-dataset (geen externe API).
  * Query: ?q=&equipment=&muscleGroup=&limit=  →  { ok, options: string[] }
  */
-import { searchExercises } from './exerciseGifIndex.mjs';
+import { searchExercises } from './_lib/exerciseGifIndex.mjs';
 
 function json(res, status, body) {
   const payload = JSON.stringify(body);

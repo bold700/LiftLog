@@ -14,8 +14,11 @@ import { dirname, join } from 'node:path';
 import { candidatesForExerciseDbLookup } from './exerciseCatalog.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const INDEX_PATH = join(__dirname, '..', 'src', 'data', 'exerciseGifIndex.json');
-const OVERRIDES_PATH = join(__dirname, '..', 'src', 'data', 'exerciseGifOverrides.json');
+// Twee mappen omhoog: dit bestand staat in api/_lib/, de data in src/data/.
+// (Het `_lib`-voorvoegsel is nodig omdat Vercel elk ander bestand in api/ als functie telt.)
+const DATA_DIR = join(__dirname, '..', '..', 'src', 'data');
+const INDEX_PATH = join(DATA_DIR, 'exerciseGifIndex.json');
+const OVERRIDES_PATH = join(DATA_DIR, 'exerciseGifOverrides.json');
 
 /** [{ id, name, bodyPart, target, equipment, secondaryMuscles }] */
 export const EXERCISES = JSON.parse(readFileSync(INDEX_PATH, 'utf8'));

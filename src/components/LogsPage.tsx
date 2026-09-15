@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
+  Alert,
   Card,
   CardContent,
   Typography,
@@ -17,6 +18,11 @@ import { getAllExercises, updateExercise, deleteExercise } from '../utils/storag
 import { getSessionLogs, saveSessionLog, deleteSessionLog } from '../utils/sessionLogStorage';
 import { getSchemas, getSchemaById } from '../utils/schemaStorage';
 import { Exercise, TrainingSessionLog } from '../types';
+import { useViewAs } from '../context/ViewAsContext';
+import { useProfile } from '../context/ProfileContext';
+import { getLogsForUser, saveExerciseLog, deleteExerciseLog } from '../services/logService';
+import { logToExercise } from '../utils/exerciseLogMapping';
+import { groupExercisesIntoTrainings } from '../utils/trainingGroups';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { formatExerciseDateShort, formatExerciseDetails } from '../utils/format';
 import { designTokens } from '../theme/designTokens';
@@ -41,7 +47,17 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
   const addFromSchema = useAddFromSchema();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { viewed } = useViewAs();
+  const profile = useProfile();
+  /** Kijk je bij een sporter mee, dan komen de oefeningen uit Firestore in plaats van dit toestel. */
+  const viewingOther = viewed.isOther;
+  /** Profiel van de sporter waar je meekijkt; nodig om `trainerId` op de log te laten staan. */
+  const viewedProfile = useMemo(
+    () => (viewingOther ? profile?.allSporters?.find((p) => p.userId === viewed.userId) ?? null : null),
+    [viewingOther, profile?.allSporters, viewed.userId]
+  );
   const [allExercises, setAllExercises] = useState<Exercise[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [menuExerciseId, setMenuExerciseId] = useState<string | null>(null);
   const [openEditDialog, setOpenEditDialog] = useState(false);
@@ -83,31 +99,48 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
     addFromSchema.clearOpenLogId();
   }, [addFromSchema?.openLogId, addFromSchema, allExercises]);
 
+  /**
+   * Je eigen oefeningen komen uit de lokale opslag; die wordt op de achtergrond met de cloud
+   * gelijkgehouden, dus daar verandert niets aan. Kijk je bij een sporter mee, dan halen we de
+   * logs rechtstreeks uit Firestore: van een ander toestel is hier niets bekend.
+   */
+  const loadAllExercises = useCallback(async () => {
+    if (!viewingOther) {
+      setLoadError(null);
+      setAllExercises(getAllExercises()); // Sorteert al op datum (nieuwste eerst)
+      return;
+    }
+    try {
+      const logs = await getLogsForUser(viewed.userId);
+      setLoadError(null);
+      setAllExercises(logs.map(logToExercise));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setAllExercises([]);
+      setLoadError(
+        msg.toLowerCase().includes('permission')
+          ? 'Geen toegang tot de logs van deze sporter. Zit hij of zij wel in jouw studio?'
+          : 'De logs konden niet geladen worden.'
+      );
+    }
+  }, [viewingOther, viewed.userId]);
+
   useEffect(() => {
-    const loadAllExercises = () => {
-      const exercises = getAllExercises(); // Sorteert al op datum (nieuwste eerst)
-      setAllExercises(exercises);
-    };
+    void loadAllExercises();
+  }, [loadAllExercises]);
 
-    loadAllExercises();
-
-    // Luister naar storage events voor updates
-    const handleStorageChange = () => {
-      loadAllExercises();
-    };
-    window.addEventListener('storage', handleStorageChange);
-
-    // Ook luisteren naar custom storage events (voor updates binnen dezelfde tab)
-    const handleCustomStorageChange = () => {
-      loadAllExercises();
-    };
-    window.addEventListener('workoutUpdated', handleCustomStorageChange);
-
+  useEffect(() => {
+    // Alleen zinvol voor je eigen logs: de lokale opslag verandert niet als je meekijkt.
+    if (viewingOther) return;
+    const handle = () => void loadAllExercises();
+    window.addEventListener('storage', handle);
+    // Ook binnen dezelfde tab, want dan komt er geen storage-event.
+    window.addEventListener('workoutUpdated', handle);
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('workoutUpdated', handleCustomStorageChange);
+      window.removeEventListener('storage', handle);
+      window.removeEventListener('workoutUpdated', handle);
     };
-  }, []);
+  }, [viewingOther, loadAllExercises]);
 
   const refreshSessionLogs = useCallback(() => setSessionLogs(getSessionLogs()), []);
   useEffect(() => {
@@ -155,13 +188,35 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
       return;
     }
 
-    updateExercise(editingExercise.id, {
-      name: exerciseName.trim(),
-      weight: parseFloat(weight),
-      sets: sets ? parseInt(sets) : undefined,
-      reps: reps ? parseInt(reps) : undefined,
-      notes: notes.trim() || undefined,
-    });
+    if (viewingOther) {
+      // Schrijven namens de sporter: het document blijft van hem (`userId`), maar `loggedBy`
+      // houdt vast dat jij het hebt ingevoerd. Dat spoor is precies wat verloren gaat als je
+      // in plaats hiervan als de sporter zou inloggen.
+      await saveExerciseLog({
+        id: editingExercise.id,
+        userId: viewed.userId,
+        loggedBy: profile?.profile?.userId ?? '',
+        trainerId: viewedProfile?.trainerId ?? null,
+        exerciseName: exerciseName.trim(),
+        exerciseId: exerciseName.trim(),
+        weight: parseFloat(weight),
+        sets: sets ? parseInt(sets) : null,
+        reps: reps ? parseInt(reps) : null,
+        notes: notes.trim() || null,
+        effort: editingExercise.effort ?? null,
+        date: editingExercise.date,
+        schemaId: editingExercise.schemaId ?? null,
+        schemaDayIndex: editingExercise.schemaDayIndex ?? null,
+      });
+    } else {
+      updateExercise(editingExercise.id, {
+        name: exerciseName.trim(),
+        weight: parseFloat(weight),
+        sets: sets ? parseInt(sets) : undefined,
+        reps: reps ? parseInt(reps) : undefined,
+        notes: notes.trim() || undefined,
+      });
+    }
 
     setOpenEditDialog(false);
     setEditingExercise(null);
@@ -172,11 +227,8 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
     setNotes('');
 
     await new Promise(resolve => setTimeout(resolve, 50));
-
-    // Herlaad exercises
-    const exercises = getAllExercises();
-    setAllExercises(exercises);
-  }, [editingExercise, exerciseName, weight, sets, reps, notes]);
+    await loadAllExercises();
+  }, [editingExercise, exerciseName, weight, sets, reps, notes, viewingOther, viewed.userId, viewedProfile?.trainerId, profile?.profile?.userId, loadAllExercises]);
 
   const handleCloseEditDialog = useCallback(() => {
     setOpenEditDialog(false);
@@ -191,17 +243,18 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
   const handleConfirmDelete = useCallback(async () => {
     if (!deletingExerciseId) return;
 
-    deleteExercise(deletingExerciseId);
+    if (viewingOther) {
+      await deleteExerciseLog(deletingExerciseId);
+    } else {
+      deleteExercise(deletingExerciseId);
+    }
 
     setOpenDeleteDialog(false);
     setDeletingExerciseId(null);
 
     await new Promise(resolve => setTimeout(resolve, 50));
-
-    // Herlaad exercises
-    const exercises = getAllExercises();
-    setAllExercises(exercises);
-  }, [deletingExerciseId]);
+    await loadAllExercises();
+  }, [deletingExerciseId, viewingOther, loadAllExercises]);
 
   const handleCloseDeleteDialog = useCallback(() => {
     setOpenDeleteDialog(false);
@@ -265,21 +318,40 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
 
   const closeDeleteSessionLogDialog = () => { setOpenDeleteSessionLogDialog(false); setDeletingSessionLogId(null); };
 
+  /**
+   * Trainingen komen uit de oefeningen zelf: één dag (en één schema-dag) is één training.
+   * Een handmatig toegevoegd trainingslog levert alleen nog de notitie; bij een sporter waar je
+   * meekijkt is die notitie er niet, want die staat op diens eigen toestel.
+   */
+  const trainings = useMemo(
+    // Bij een sporter waar je meekijkt gaan de handmatige logs niet mee: die staan op diens toestel.
+    () => groupExercisesIntoTrainings(allExercises, viewingOther ? [] : sessionLogs),
+    [allExercises, sessionLogs, viewingOther]
+  );
+
   return (
     <PageLayout>
       <ContentCard>
         <PageTitle>Log</PageTitle>
 
+        {loadError && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            {loadError}
+          </Alert>
+        )}
+
         <Typography variant="subtitle2" color="text.secondary" fontWeight={600} sx={{ mb: 1 }}>
           Trainingen
         </Typography>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 3 }}>
-          {sessionLogs.map((log) => {
-            const schema = getSchemaById(log.schemaId);
-            const dayLabel = schema?.days[log.schemaDayIndex]?.dayLabel ?? `Dag ${log.schemaDayIndex + 1}`;
+          {trainings.map((t) => {
+            const schema = t.schemaId ? getSchemaById(t.schemaId) : null;
+            const dayLabel =
+              t.schemaDayIndex != null ? schema?.days[t.schemaDayIndex]?.dayLabel ?? `Dag ${t.schemaDayIndex + 1}` : null;
+            const title = schema ? [schema.name, dayLabel].filter(Boolean).join(' – ') : 'Losse oefeningen';
             return (
               <Card
-                key={log.id}
+                key={t.id}
                 sx={{
                   backgroundColor: 'transparent',
                   borderRadius: `${designTokens.cardRadius}px`,
@@ -291,33 +363,50 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography variant="subtitle1" fontWeight={600}>
-                        {schema?.name ?? log.schemaId} – {dayLabel}
+                        {title}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        {formatExerciseDateShort(log.date)}
+                        {formatExerciseDateShort(t.date)} · {t.exerciseCount}{' '}
+                        {t.exerciseCount === 1 ? 'oefening' : 'oefeningen'}
                       </Typography>
-                      {log.notes?.trim() && (
+                      {t.exerciseNames.length > 0 && (
+                        <Typography variant="body2" color="text.primary" sx={{ mt: 1 }}>
+                          {t.exerciseNames.join(' · ')}
+                        </Typography>
+                      )}
+                      {t.notes && (
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontStyle: 'italic' }}>
-                          &quot;{log.notes.trim()}&quot;
+                          &quot;{t.notes}&quot;
                         </Typography>
                       )}
                     </Box>
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        setMenuAnchorEl(e.currentTarget);
-                        setMenuExerciseId(`session-${log.id}`);
-                      }}
-                      sx={{ color: 'text.secondary', ml: 1 }}
-                      aria-label="Menu sessie-log"
-                    >
-                      <MoreVertIcon fontSize="small" />
-                    </IconButton>
+                    {/* Alleen een handmatig toegevoegd trainingslog is te bewerken; een afgeleide
+                        groep bestaat niet als document. */}
+                    {t.sessionLogId && (
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          setMenuAnchorEl(e.currentTarget);
+                          setMenuExerciseId(`session-${t.sessionLogId}`);
+                        }}
+                        sx={{ color: 'text.secondary', ml: 1 }}
+                        aria-label="Menu training"
+                      >
+                        <MoreVertIcon fontSize="small" />
+                      </IconButton>
+                    )}
                   </Box>
                 </CardContent>
               </Card>
             );
           })}
+          {trainings.length === 0 && (
+            <EmptyState>
+              {viewingOther
+                ? `${viewed.name} heeft nog geen oefeningen gelogd.`
+                : 'Nog geen trainingen. Zodra je oefeningen logt, staan ze hier per dag bij elkaar.'}
+            </EmptyState>
+          )}
         </Box>
 
         <Typography variant="subtitle2" color="text.secondary" fontWeight={600} sx={{ mb: 1 }}>

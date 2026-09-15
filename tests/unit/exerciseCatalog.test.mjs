@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeExerciseKey, buildExerciseCatalog, candidatesForExerciseDbLookup } from '../../api/exerciseCatalog.mjs';
+import { normalizeExerciseKey, buildExerciseCatalog, candidatesForExerciseDbLookup } from '../../api/_lib/exerciseCatalog.mjs';
 
 describe('normalizeExerciseKey', () => {
   it('kleine letters, geen accenten of leestekens, enkele spaties', () => {

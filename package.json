@@ -26,10 +26,14 @@
     "delete-all-accounts": "node scripts/delete-all-accounts.cjs",
     "test:mcp": "node scripts/mcp-smoke-test.mjs",
     "test:rules": "npx --yes firebase-tools@13 emulators:exec --only firestore --project liftlog-rules-test \"node tests/rules/firestore.rules.test.mjs\"",
+    "test:isolatie": "npm run test:rules && npm run test:mcp:rechten",
     "deploy:firestore": "npx --yes firebase-tools@13 deploy --only firestore:rules",
     "deploy:storage": "npx --yes firebase-tools@13 deploy --only storage",
     "import:groepslessen": "node scripts/import-groepslessen.mjs",
-    "test:mcp:rechten": "node scripts/mcp-permission-test.mjs"
+    "test:mcp:rechten": "node scripts/mcp-permission-test.mjs",
+    "migrate:orgs": "node scripts/migrate-orgs.mjs",
+    "backup": "node scripts/backup-firestore.mjs",
+    "seed:testruimte": "node scripts/seed-testruimte.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",
@@ -39,6 +43,7 @@
     "@capacitor/haptics": "^7.0.2",
     "@capacitor/ios": "^7.4.4",
     "@capacitor/keyboard": "^7.0.3",
+    "@capacitor/push-notifications": "^7.0.7",
     "@capacitor/splash-screen": "^7.0.3",
     "@capacitor/status-bar": "^7.0.3",
     "@emotion/react": "^11.13.0",
