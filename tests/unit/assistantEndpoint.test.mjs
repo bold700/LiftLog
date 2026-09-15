@@ -208,6 +208,49 @@ describe('assistent-endpoint', () => {
     expect(openAiCalls).toHaveLength(0);
   });
 
+  /**
+   * Waarom deze groep bestaat: een leeg antwoord kreeg altijd dezelfde zin mee — "probeer het
+   * anders te vragen". Daarmee lijkt een afgekapt antwoord op een onbegrepen vraag, en dan gaat
+   * iemand zijn vraag herformuleren terwijl er een limiet in de weg staat.
+   */
+  describe('als het model geen tekst teruggeeft', () => {
+    it('zegt dat het antwoord is afgekapt bij een tokenlimiet', async () => {
+      openAiQueue = [{ status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, output: [] }];
+      const res = makeRes();
+      await handler(makeReq({ messages: [{ role: 'user', content: 'wat is mijn training vandaag?' }] }), res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.reply).toMatch(/afgekapt/i);
+      expect(res.body.reply).not.toMatch(/anders te vragen/i);
+    });
+
+    it('meldt een onvolledig antwoord met een andere reden apart', async () => {
+      openAiQueue = [{ status: 'incomplete', incomplete_details: { reason: 'content_filter' }, output: [] }];
+      const res = makeRes();
+      await handler(makeReq({ messages: [{ role: 'user', content: 'hoi' }] }), res);
+
+      expect(res.body.reply).toMatch(/niet compleet/i);
+    });
+
+    it('geeft een weigering van het model door in plaats van hem te verbergen', async () => {
+      openAiQueue = [
+        { status: 'completed', output: [{ type: 'message', content: [{ type: 'refusal', refusal: 'Dat kan ik niet doen.' }] }] },
+      ];
+      const res = makeRes();
+      await handler(makeReq({ messages: [{ role: 'user', content: 'doe iets raars' }] }), res);
+
+      expect(res.body.reply).toBe('Dat kan ik niet doen.');
+    });
+
+    it('valt terug op de algemene zin als er echt niets te melden is', async () => {
+      openAiQueue = [{ status: 'completed', output: [] }];
+      const res = makeRes();
+      await handler(makeReq({ messages: [{ role: 'user', content: 'hoi' }] }), res);
+
+      expect(res.body.reply).toMatch(/anders te vragen/i);
+    });
+  });
+
   it('geeft een nette fout als OpenAI eruit ligt', async () => {
     vi.stubGlobal('fetch', async () => ({ ok: false, status: 500, text: async () => 'boom', json: async () => ({}) }));
     const res = makeRes();
