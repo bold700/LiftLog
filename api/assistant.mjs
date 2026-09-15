@@ -118,6 +118,38 @@ function outputText(result) {
   return parts.join('\n').trim();
 }
 
+/** Een weigering van het model is geen tekstantwoord, maar wel een antwoord aan de gebruiker. */
+function refusalText(result) {
+  for (const item of result.output ?? []) {
+    if (item.type !== 'message') continue;
+    for (const c of item.content ?? []) {
+      if (c.type === 'refusal' && typeof c.refusal === 'string' && c.refusal.trim()) return c.refusal.trim();
+    }
+  }
+  return '';
+}
+
+/**
+ * Wat zeggen we als het model geen tekst teruggaf?
+ *
+ * "Probeer het anders te vragen" was het enige antwoord, ongeacht de oorzaak. Daarmee lijkt een
+ * afgekapt antwoord op een onbegrepen vraag, en dan gaat iemand zijn vraag zitten herformuleren
+ * terwijl er een limiet in de weg staat. Het antwoord van de Responses-API zegt zelf of het is
+ * afgekapt; dat geven we door. En we schrijven het weg, want zonder logregel is er achteraf
+ * niets terug te vinden over waarom het misging.
+ */
+function noReplyMessage(result) {
+  const refusal = refusalText(result);
+  if (refusal) return refusal;
+  const reason = result?.incomplete_details?.reason;
+  if (result?.status === 'incomplete') {
+    return reason === 'max_output_tokens'
+      ? 'Het antwoord werd te lang en is afgekapt. Stel de vraag wat specifieker, bijvoorbeeld over één sporter of één dag.'
+      : 'Het antwoord kwam niet compleet terug. Probeer het zo nog eens.';
+  }
+  return 'Ik kon daar geen antwoord op formuleren. Probeer het anders te vragen.';
+}
+
 export default async function handler(req, res) {
   if (applyCors(req, res)) return;
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed', build: BUILD });
@@ -179,7 +211,7 @@ export default async function handler(req, res) {
       model: MODEL,
       instructions: systemPrompt(profile, orgName),
       tools: toolbox.definitions,
-      max_output_tokens: 1200,
+      max_output_tokens: 2000,
     };
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
@@ -190,11 +222,16 @@ export default async function handler(req, res) {
       const calls = (result.output ?? []).filter((o) => o.type === 'function_call');
       if (calls.length === 0) {
         const reply = outputText(result);
-        return json(res, 200, {
-          reply: reply || 'Ik kon daar geen antwoord op formuleren. Probeer het anders te vragen.',
-          steps,
-          build: BUILD,
-        });
+        if (!reply) {
+          console.error('[assistant] leeg antwoord', {
+            round,
+            status: result?.status ?? null,
+            incomplete: result?.incomplete_details ?? null,
+            outputTypes: (result.output ?? []).map((o) => o.type),
+            toolsUsed: steps.map((s2) => s2.tool),
+          });
+        }
+        return json(res, 200, { reply: reply || noReplyMessage(result), steps, build: BUILD });
       }
 
       // Functieaanroepen uitvoeren en het resultaat teruggeven aan het model.
