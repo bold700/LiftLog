@@ -37,6 +37,17 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Maximaal aantal rondes waarin het model functies mag aanroepen voordat we het antwoord afdwingen. */
 const MAX_ROUNDS = 6;
+/**
+ * Ruimte voor het antwoord. Een workout van vandaag met sets, reps en de vorige gewichten erbij
+ * is met 1200 (de oude waarde) niet te schrijven; dan kwam er helemaal niets terug.
+ */
+const MAX_REPLY_TOKENS = 4000;
+/** Zo vraagt de assistent zichzelf om het korter te doen als het antwoord niet paste. */
+const SHORTEN = [
+  'Je vorige antwoord werd afgekapt omdat het te lang was.',
+  'Geef hetzelfde antwoord opnieuw, maar korter: hooguit tien regels, alleen wat nu nodig is.',
+  'Laat toelichting en herhaling weg; noem per oefening alleen naam, sets, reps en gewicht.',
+].join(' ');
 /** Hoeveel eerdere berichten we meesturen. Houdt de kosten en de latentie in de hand. */
 const MAX_HISTORY = 20;
 
@@ -207,11 +218,13 @@ export default async function handler(req, res) {
   const steps = [];
   try {
     let input = toInput(messages);
+    /** Of we het model al één keer om een korter antwoord hebben gevraagd. */
+    let shortened = false;
     const base = {
       model: MODEL,
       instructions: systemPrompt(profile, orgName),
       tools: toolbox.definitions,
-      max_output_tokens: 2000,
+      max_output_tokens: MAX_REPLY_TOKENS,
     };
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
@@ -222,16 +235,26 @@ export default async function handler(req, res) {
       const calls = (result.output ?? []).filter((o) => o.type === 'function_call');
       if (calls.length === 0) {
         const reply = outputText(result);
-        if (!reply) {
-          console.error('[assistant] leeg antwoord', {
-            round,
-            status: result?.status ?? null,
-            incomplete: result?.incomplete_details ?? null,
-            outputTypes: (result.output ?? []).map((o) => o.type),
-            toolsUsed: steps.map((s2) => s2.tool),
-          });
+        if (reply) return json(res, 200, { reply, steps, build: BUILD });
+
+        console.error('[assistant] leeg antwoord', {
+          round,
+          status: result?.status ?? null,
+          incomplete: result?.incomplete_details ?? null,
+          outputTypes: (result.output ?? []).map((o) => o.type),
+          toolsUsed: steps.map((s2) => s2.tool),
+        });
+
+        // Te lang is geen doodlopende weg: de gegevens zijn al opgehaald, alleen het opschrijven
+        // paste niet. Eén keer opnieuw, met de opdracht het korter te doen. Zonder dit blijft de
+        // gebruiker achter met "stel de vraag specifieker" terwijl het antwoord er gewoon is.
+        if (result?.incomplete_details?.reason === 'max_output_tokens' && !shortened) {
+          shortened = true;
+          input = [...input, { role: 'user', content: [{ type: 'input_text', text: SHORTEN }] }];
+          continue;
         }
-        return json(res, 200, { reply: reply || noReplyMessage(result), steps, build: BUILD });
+
+        return json(res, 200, { reply: noReplyMessage(result), steps, build: BUILD });
       }
 
       // Functieaanroepen uitvoeren en het resultaat teruggeven aan het model.
