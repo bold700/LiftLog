@@ -299,13 +299,18 @@ export const TrainingSessionView = ({
                   py: 1.25,
                   textTransform: 'none',
                   fontWeight: 500,
-                  flexShrink: 0,
+                  // Mag krimpen: een lange dagnaam liep anders het scherm uit.
+                  minWidth: 0,
+                  maxWidth: '100%',
                   '&:hover': { bgcolor: '#1a1a1a' },
                 }}
               >
-                {hasMultipleDays
-                  ? `Volgende dag: ${schema.days[(dayIndex + 1) % schema.days.length].dayLabel}`
-                  : 'Terug naar workout'}
+                <Box
+                  component="span"
+                  sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                >
+                  {`Volgende dag: ${schema.days[(dayIndex + 1) % schema.days.length].dayLabel}`}
+                </Box>
               </Button>
             )}
           </Box>
@@ -340,23 +345,6 @@ export const TrainingSessionView = ({
             <strong>Training afronden:</strong> log per oefening via &quot;Log toevoegen&quot;, of rond de hele training af met &quot;Training afronden&quot; hieronder.
           </Typography>
 
-          {!isDayComplete && (
-            <Button
-              variant="outlined"
-              color="inherit"
-              onClick={() => setCheckinOpen(true)}
-              aria-label="Training afronden en check-in invullen"
-              sx={{
-                mb: 2,
-                borderRadius: '20px',
-                textTransform: 'none',
-                fontWeight: 500,
-              }}
-            >
-              Training afronden
-            </Button>
-          )}
-
           {isDayComplete && (
             <Box
               sx={{
@@ -370,12 +358,15 @@ export const TrainingSessionView = ({
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 gap: 2,
+                flexWrap: 'wrap',
               }}
             >
-              <Typography variant="body2" fontWeight={500}>
-                {dayMarkedComplete && !allExercisesLogged
-                  ? 'Training voltooid (in één keer gemarkeerd).'
-                  : 'Dag voltooid – alle oefeningen zijn gelogd. "Gelogd" verdwijnt na 12 uur; klik erop om de log te bekijken of bewerken.'}
+              <Typography variant="body2" fontWeight={500} sx={{ minWidth: 0, flex: 1 }}>
+                {dayMarkedComplete
+                  ? allExercisesLogged
+                    ? 'Training afgerond – alle oefeningen zijn gelogd.'
+                    : 'Training voltooid (in één keer gemarkeerd).'
+                  : 'Alle oefeningen zijn gelogd. Rond de training hieronder af met je check-in.'}
               </Typography>
               {dayMarkedComplete && !allExercisesLogged && (
                 <Button
@@ -396,6 +387,25 @@ export const TrainingSessionView = ({
                 </Button>
               )}
             </Box>
+          )}
+
+          {/* Blijft staan tot je écht hebt afgerond: ook met alles gelogd wil je de check-in nog
+              kunnen invullen. Eerder verdween deze knop juist zodra je klaar was. */}
+          {!dayMarkedComplete && (
+            <Button
+              variant="outlined"
+              color="inherit"
+              onClick={() => setCheckinOpen(true)}
+              aria-label="Training afronden en check-in invullen"
+              sx={{
+                mb: 2,
+                borderRadius: '20px',
+                textTransform: 'none',
+                fontWeight: 500,
+              }}
+            >
+              Training afronden
+            </Button>
           )}
 
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
