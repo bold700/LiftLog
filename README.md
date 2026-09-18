@@ -12,7 +12,7 @@ Van As Personal Training is de eerste studio en tegelijk de proeftuin.
 
 - **Rollen**: sporter, trainer, beheerder (zie [docs/ROLLEN-EN-RECHTEN.md](docs/ROLLEN-EN-RECHTEN.md)). Rollen zet alleen een beheerder.
 - **Workouts**: per sporter, voor meerdere sporters, open, of groepsles; Formule 7-routekaart (AALO); AI-generatie; PDF-export als invulbaar schema met plaatjes.
-- **Groepslessen**: halfjaarschema per lesmoment (week 1–26 volgt het ISO-weeknummer), import vanuit het lesrooster (`scripts/import-groepslessen.mjs`, Beheer → Groepslessen importeren).
+- **Groepslessen**: halfjaarschema per lesmoment (week 1–26 volgt het ISO-weeknummer), import vanuit het lesrooster (`scripts/import-groepslessen.mjs`, Workouts → Lesrooster importeren).
 - **Loggen**: sets/reps/gewicht per oefening, groepslessessies, Apple Health-workouts (native).
 - **Inzichten**: progressie, spiergroepen, ranglijst (opt-in), hartslagzones, vetpercentage (Durnin & Womersley).
 - **Voeding en metingen**: Open Food Facts, barcode-scanner, fotoherkenning, gewicht/huidplooien/voortgangsfoto's.

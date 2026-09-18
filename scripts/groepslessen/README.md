@@ -37,7 +37,7 @@ de chip "Deze week (week n)" filtert erop.
 
 ## Snelste route: knop in de app
 
-Log in als trainer, ga naar **Beheer → Groepslessen importeren**, controleer de namen van de lesmomenten
+Log in als trainer, ga naar **Workouts → Lesrooster importeren**, controleer de namen van de lesmomenten
 en klik op **Importeren als workouts**. De app schrijft de workouts op jouw naam naar Firestore; er is
 geen service account nodig. De data daarvoor staat in `src/data/groepslessenSgt2026.json` en wordt
 opnieuw gemaakt met:

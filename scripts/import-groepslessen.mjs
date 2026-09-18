@@ -18,7 +18,7 @@
  *
  *   # Echt importeren (vereist service account, zie scripts/delete-all-accounts.cjs):
  *   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json \
- *     node scripts/import-groepslessen.mjs --trainer-email trainer@voorbeeld.nl --start 2026-09-07
+ *     node scripts/import-groepslessen.mjs --trainer-email trainer@voorbeeld.nl
  *
  * Opties:
  *   --dry-run               Niets naar Firestore schrijven, alleen output + rapport.
@@ -28,7 +28,7 @@
  *   --csv <map>             Map met CSV-exports uit Google Sheets (één per tabblad) i.p.v. de JSON.
  *   --only <naam>           Alleen het tabblad met deze naam importeren.
  *   --emit-app-data         Schrijf src/data/groepslessenSgt2026.json, de bron voor de importknop in
- *                           de app (Beheer → Groepslessen importeren). Geen Firestore nodig.
+ *                           de app (Workouts → Lesrooster importeren). Geen Firestore nodig.
  *
  * Bij opnieuw draaien worden dezelfde workout-id's gebruikt (schema_sgt2026_<tab>), dus bestaande
  * imports worden bijgewerkt in plaats van gedupliceerd.
@@ -68,6 +68,7 @@ function parseArgs(argv) {
       process.exit(0);
     } else {
       console.error(`Onbekende optie: ${a}`);
+      console.error('Bekende opties: --dry-run, --trainer-email, --trainer-uid, --json, --csv, --only, --emit-app-data, --help');
       process.exit(1);
     }
   }
