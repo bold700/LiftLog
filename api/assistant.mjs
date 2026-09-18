@@ -23,6 +23,7 @@ import { getAdmin } from './_lib/firebaseAdmin.mjs';
 import { enforceRateLimit } from './_lib/requireUser.mjs';
 import { createStore, todayNl } from './_lib/liftlogData.mjs';
 import { openToolbox } from './_lib/assistantTools.mjs';
+import { requestRecap, RECAP_RATE_LIMIT_PER_DAY, RECAP_DAY_MS } from './_lib/trainingRecap.mjs';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
 /**
@@ -198,6 +199,27 @@ export default async function handler(req, res) {
     return json(res, 401, { error: 'Sessie verlopen. Log opnieuw in.', build: BUILD });
   }
 
+  let body;
+  try {
+    body = await readBody(req);
+  } catch {
+    return json(res, 400, { error: 'Ongeldige aanvraag.', build: BUILD });
+  }
+
+  // De overdracht na een training deelt dit endpoint (Vercel telt elk bestand in api/ als een
+  // aparte functie). Hij praat wel met hetzelfde model, maar zonder gereedschapskist: de app
+  // stuurt de feiten mee en krijgt alleen tekst terug, dus er wordt niets gelezen of geschreven.
+  if (body?.action === 'recap') {
+    if (!(await enforceRateLimit(admin.db, res, uid, 'training-recap', RECAP_RATE_LIMIT_PER_DAY, RECAP_DAY_MS))) return;
+    try {
+      return json(res, 200, await requestRecap(body));
+    } catch (e) {
+      const status = typeof e?.status === 'number' ? e.status : 502;
+      if (status >= 500) console.error('[assistant/recap]', e instanceof Error ? e.message : String(e));
+      return json(res, status, { error: e instanceof Error ? e.message : 'Samenvatten mislukt.', build: BUILD });
+    }
+  }
+
   if (!(await enforceRateLimit(admin.db, res, uid, 'assistant', RATE_LIMIT_PER_DAY, DAY_MS))) return;
 
   // 2) Profiel bepaalt de rol én de studio; daarna is alles tot die studio begrensd.
@@ -205,12 +227,6 @@ export default async function handler(req, res) {
   const profile = await lookup.getProfile(uid);
   if (!profile) return json(res, 401, { error: 'Profiel niet gevonden.', build: BUILD });
 
-  let body;
-  try {
-    body = await readBody(req);
-  } catch {
-    return json(res, 400, { error: 'Ongeldige aanvraag.', build: BUILD });
-  }
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   if (messages.length === 0) return json(res, 400, { error: 'Geen bericht meegegeven.', build: BUILD });
 

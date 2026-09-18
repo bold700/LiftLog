@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildFacts, parseRecapReply } from '../../api/training-recap.mjs';
+import { buildFacts, parseRecapReply, requestRecap } from '../../api/_lib/trainingRecap.mjs';
 
 describe('buildFacts', () => {
   const base = {
@@ -79,5 +79,42 @@ describe('parseRecapReply', () => {
     const out = parseRecapReply(lang);
     expect(out.handover).toHaveLength(2000);
     expect(out.toSporter).toHaveLength(1000);
+  });
+});
+
+describe('requestRecap', () => {
+  const training = {
+    sporterName: 'Tanja',
+    dayLabel: 'Kickboxing – Dinsdag',
+    exercises: [{ name: 'Kettlebell Deadlift', weight: 16, sets: 3, reps: 12 }],
+  };
+  const antwoord = (obj) => ({ ok: true, json: async () => ({ output_text: JSON.stringify(obj) }) });
+
+  it('stuurt de feiten naar het model en geeft de twee teksten terug', async () => {
+    let verstuurd = null;
+    const nep = async (_url, init) => {
+      verstuurd = JSON.parse(init.body);
+      return antwoord({ handover: 'Ging goed met Tanja.', toSporter: 'Sterke training!' });
+    };
+    const uit = await requestRecap(training, nep);
+    expect(uit).toEqual({ handover: 'Ging goed met Tanja.', toSporter: 'Sterke training!' });
+    expect(verstuurd.input[1].content[0].text).toContain('- Kettlebell Deadlift — 16 kg, 3 × 12');
+  });
+
+  it('roept het model niet aan als er niets gelogd is', async () => {
+    let aangeroepen = false;
+    const nep = async () => { aangeroepen = true; return antwoord({}); };
+    await expect(requestRecap({ sporterName: 'Tanja', exercises: [] }, nep)).rejects.toThrow(/niets gelogd/);
+    expect(aangeroepen).toBe(false);
+  });
+
+  it('geeft een leesbare fout als de AI-dienst faalt', async () => {
+    const nep = async () => ({ ok: false, status: 500, text: async () => 'boem' });
+    await expect(requestRecap(training, nep)).rejects.toThrow(/AI-dienst gaf een fout/);
+  });
+
+  it('geeft een leesbare fout bij een onbruikbaar antwoord', async () => {
+    const nep = async () => ({ ok: true, json: async () => ({ output_text: 'sorry' }) });
+    await expect(requestRecap(training, nep)).rejects.toThrow(/geen bruikbare tekst/);
   });
 });

@@ -1,30 +1,21 @@
-import { applyCors } from './_lib/cors.mjs';
-import { requireUser, enforceRateLimit } from './_lib/requireUser.mjs';
 /**
- * Schrijft na een training twee stukjes tekst: een overdracht voor de trainers en een kort
- * bericht voor de sporter.
+ * Overdracht na een training: twee stukjes tekst op basis van wat er is gelogd — een verhaal voor
+ * de vaste trainer en een kort bericht voor de sporter.
  *
- * Waarom: neemt een trainer een training over, dan zit het verhaal ("eerste keer kickboksen,
- * techniek zit er goed in, volgende keer op de heupen letten") in zijn hoofd en in losse
- * notities per oefening. De vaste trainer krijgt dat nu niet te zien. Dit maakt er één verhaal
- * van, dat de trainer nog kan bijschrijven voordat het weggaat.
+ * Waarom dit naast de assistent in hetzelfde endpoint hangt en geen eigen route is: Vercel telt
+ * elk bestand in `api/` als een aparte serverless functie, en daar zit een plafond aan. Alles in
+ * `api/_lib/` is gedeelde code en telt niet mee. De assistent is bovendien de plek waar de app al
+ * met het model praat; dit is diezelfde stem, alleen zonder gereedschapskist.
  *
- * De app stuurt de feiten mee die hij al heeft; dit endpoint doet alleen de verwoording en raakt
- * geen data aan. De tekst gaat terug naar dezelfde gebruiker, dus er komt niets bij iemand
- * terecht die het niet al mocht zien.
- *
- * POST, JSON:
- *   { sporterName, dayLabel, feeling?, sporterNote?, exercises: [{ name, weight?, sets?, reps?,
- *     effort?, note?, previousWeight? }] }
- * Antwoord:
- *   { handover: string, toSporter: string }
+ * Aanroep: POST /api/assistant met { action: 'recap', sporterName, dayLabel, feeling?,
+ * sporterNote?, exercises: [...] } → { handover, toSporter }
  */
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
-const MODEL = (process.env.OPENAI_RECAP_MODEL || 'gpt-4.1-mini').trim().split(/\s+/)[0];
+export const RECAP_MODEL = (process.env.OPENAI_RECAP_MODEL || 'gpt-4.1-mini').trim().split(/\s+/)[0];
 
 /** Per gebruiker per dag. Een training afronden gebeurt hooguit een paar keer per dag. */
-const RATE_LIMIT_PER_DAY = 60;
-const DAY_MS = 24 * 60 * 60 * 1000;
+export const RECAP_RATE_LIMIT_PER_DAY = 60;
+export const RECAP_DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_EXERCISES = 30;
 
 const EFFORT_TEXT = { light: 'te licht', good: 'ging goed', heavy: 'te zwaar' };
@@ -45,17 +36,6 @@ const SYSTEM = [
   'Antwoord ALLEEN met JSON: {"handover": string, "toSporter": string}.',
 ].join('\n');
 
-function json(res, status, body) {
-  const payload = JSON.stringify(body);
-  const ct = 'application/json; charset=utf-8';
-  if (typeof res.status === 'function') {
-    res.status(status).setHeader('Content-Type', ct);
-    res.end(payload);
-    return;
-  }
-  res.writeHead(status, { 'Content-Type': ct });
-  res.end(payload);
-}
 
 function extractText(payload) {
   if (!payload || typeof payload !== 'object') return '';
@@ -144,49 +124,43 @@ export function parseRecapReply(raw) {
   return { handover, toSporter };
 }
 
-export default async function handler(req, res) {
-  if (applyCors(req, res)) return;
-  if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
-  if (!process.env.OPENAI_API_KEY) {
-    console.error('[training-recap] OPENAI_API_KEY ontbreekt');
-    return json(res, 500, { error: 'De samenvatting is niet geconfigureerd op de server.' });
-  }
 
-  const user = await requireUser(req, res);
-  if (!user) return;
-  if (!(await enforceRateLimit(user.db, res, user.uid, 'training-recap', RATE_LIMIT_PER_DAY, DAY_MS))) return;
-
-  const facts = buildFacts(req.body ?? {});
+/**
+ * Doet de modelaanroep. `fetchImpl` is er zodat een test hem kan vervangen zonder netwerk.
+ * Gooit een Error met een nette Nederlandse tekst als er niets bruikbaars uitkomt.
+ */
+export async function requestRecap(body, fetchImpl = fetch) {
+  const facts = buildFacts(body ?? {});
   if (!/^- /m.test(facts)) {
-    return json(res, 400, { error: 'Er is nog niets gelogd om over te schrijven.' });
+    const err = new Error('Er is nog niets gelogd om over te schrijven.');
+    err.status = 400;
+    throw err;
   }
-
-  try {
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-      body: JSON.stringify({
-        model: MODEL,
-        temperature: 0.4,
-        max_output_tokens: 700,
-        input: [
-          { role: 'system', content: [{ type: 'input_text', text: SYSTEM }] },
-          { role: 'user', content: [{ type: 'input_text', text: facts }] },
-        ],
-      }),
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      console.error('[training-recap] OpenAI HTTP', response.status, text.slice(0, 300));
-      return json(res, 502, { error: 'De AI-dienst gaf een fout terug. Schrijf het zelf of probeer het later.' });
-    }
-    const raw = extractText(await response.json());
-    if (!raw) return json(res, 502, { error: 'Lege AI-respons.' });
-    const recap = parseRecapReply(raw);
-    if (!recap) return json(res, 502, { error: 'De AI gaf geen bruikbare tekst terug.' });
-    return json(res, 200, recap);
-  } catch (e) {
-    console.error('[training-recap]', e instanceof Error ? e.message : String(e));
-    return json(res, 502, { error: 'Samenvatten mislukt. Schrijf het zelf of probeer het opnieuw.' });
+  const response = await fetchImpl(OPENAI_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+    body: JSON.stringify({
+      model: RECAP_MODEL,
+      temperature: 0.4,
+      max_output_tokens: 700,
+      input: [
+        { role: 'system', content: [{ type: 'input_text', text: SYSTEM }] },
+        { role: 'user', content: [{ type: 'input_text', text: facts }] },
+      ],
+    }),
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    console.error('[recap] OpenAI HTTP', response.status, String(text).slice(0, 300));
+    const err = new Error('De AI-dienst gaf een fout terug. Schrijf het zelf of probeer het later.');
+    err.status = 502;
+    throw err;
   }
+  const recap = parseRecapReply(extractText(await response.json()));
+  if (!recap) {
+    const err = new Error('De AI gaf geen bruikbare tekst terug.');
+    err.status = 502;
+    throw err;
+  }
+  return recap;
 }

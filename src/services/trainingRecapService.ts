@@ -31,10 +31,11 @@ export async function generateTrainingRecap(input: {
   sporterNote?: string | null;
   exercises: RecapExercise[];
 }): Promise<TrainingRecap> {
-  const res = await fetch(apiUrl('/api/training-recap'), {
+  // Deelt het assistent-endpoint: Vercel telt elk bestand in api/ als een aparte functie.
+  const res = await fetch(apiUrl('/api/assistant'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ action: 'recap', ...input }),
   });
   const data = (await res.json().catch(() => null)) as { handover?: string; toSporter?: string; error?: string } | null;
   if (!res.ok) throw new Error(data?.error || 'Samenvatten mislukt.');
