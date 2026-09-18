@@ -113,6 +113,17 @@ export function SporterFeedbackCard({ userId, sporterName, schemaId }: SporterFe
               “{feedback.checkin.note}”
             </Typography>
           )}
+          {/* Gaf een collega deze training, dan staat hier zijn overdracht. */}
+          {feedback.checkin.handover && (
+            <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">
+                Overdracht van de trainer
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 0.25, whiteSpace: 'pre-line' }}>
+                {feedback.checkin.handover}
+              </Typography>
+            </Box>
+          )}
         </Box>
       )}
 

@@ -28,6 +28,7 @@ function toCheckin(data: Record<string, unknown>, id: string): SessionCheckin {
     dayLabel: str(data.dayLabel),
     feeling,
     note: str(data.note),
+    handover: str(data.handover),
     date: typeof data.date === 'string' ? data.date : new Date().toISOString(),
     createdAt: typeof data.createdAt === 'string' ? data.createdAt : new Date().toISOString(),
   };

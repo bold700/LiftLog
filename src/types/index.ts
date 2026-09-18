@@ -71,6 +71,11 @@ export interface SessionCheckin {
   /** 1 (slecht) t/m 5 (top). */
   feeling: 1 | 2 | 3 | 4 | 5;
   note: string | null;
+  /**
+   * Overdracht aan de vaste trainer, geschreven door wie de training gaf. Staat los van `note`:
+   * dat is wat de sporter kwijt wil, dit is wat een collega moet weten.
+   */
+  handover?: string | null;
   date: string; // ISO date-time string
   createdAt: string;
 }
