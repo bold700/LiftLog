@@ -13,6 +13,7 @@ import {
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import { Schema, SchemaExercise } from '../types';
 import { Exercise } from '../types';
 import { deleteExercise } from '../utils/storage';
@@ -21,6 +22,14 @@ import {
   loggedExercisesFromSporterLogs,
 } from '../utils/schemaSessionUtils';
 import { getLogsForUser, deleteExerciseLog } from '../services/logService';
+import {
+  fromLocalExercises,
+  fromSporterLogs,
+  describePrevious,
+  shortDate,
+  type PreviousPerformance,
+} from '../utils/previousPerformance';
+import { getAllExercises } from '../utils/storage';
 import {
   isDayMarkedCompleteInLast12Hours,
   markDayComplete,
@@ -143,6 +152,8 @@ export const TrainingSessionView = ({
     getLoggedExercisesForSchemaDayInLast12Hours(schema.id, dayIndex)
   );
   const [snackbarOpen, setSnackbarOpen] = useState(false);
+  /** Wat deze persoon de vorige keer deed, per oefeningnaam (kleine letters). */
+  const [previous, setPrevious] = useState<Map<string, PreviousPerformance>>(new Map());
 
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
   const healthStorageKey = useMemo(
@@ -166,12 +177,21 @@ export const TrainingSessionView = ({
    */
   const refreshLogged = useCallback(() => {
     if (!logTargetId) {
-      setLoggedExercises(getLoggedExercisesForSchemaDayInLast12Hours(schema.id, dayIndex));
+      const logged = getLoggedExercisesForSchemaDayInLast12Hours(schema.id, dayIndex);
+      setLoggedExercises(logged);
+      setPrevious(fromLocalExercises(getAllExercises(), new Set(logged.map((ex) => ex.id))));
       return;
     }
     getLogsForUser(logTargetId)
-      .then((logs) => setLoggedExercises(loggedExercisesFromSporterLogs(logs, schema.id, dayIndex)))
-      .catch(() => setLoggedExercises([]));
+      .then((logs) => {
+        const logged = loggedExercisesFromSporterLogs(logs, schema.id, dayIndex);
+        setLoggedExercises(logged);
+        setPrevious(fromSporterLogs(logs, new Set(logged.map((ex) => ex.id))));
+      })
+      .catch(() => {
+        setLoggedExercises([]);
+        setPrevious(new Map());
+      });
   }, [schema.id, dayIndex, logTargetId]);
 
   useEffect(() => {
@@ -450,6 +470,7 @@ export const TrainingSessionView = ({
             {day.exercises.map((ex, exIndex) => {
               const logId = findLogIdForExercise(loggedExercises, ex.exerciseName);
               const isLogged = logId !== null;
+              const prev = previous.get(ex.exerciseName.trim().toLowerCase()) ?? null;
               return (
                 <Card
                   key={exIndex}
@@ -510,6 +531,24 @@ export const TrainingSessionView = ({
                           Voorgeschreven: {ex.setsTarget} × {ex.repsTarget} reps
                           {ex.restSeconds != null && ex.restSeconds > 0 && ` · ${ex.restSeconds}s rust`}
                         </Typography>
+                        {/* Zodat je tijdens het begeleiden meteen weet of er gewicht bij kan,
+                            zonder eerst naar Inzichten te hoeven. */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+                          <TrendingUpIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+                          {prev ? (
+                            <Typography variant="caption" color="text.secondary">
+                              Vorige keer:{' '}
+                              <Box component="span" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                                {describePrevious(prev)}
+                              </Box>
+                              {shortDate(prev.date) && ` · ${shortDate(prev.date)}`}
+                            </Typography>
+                          ) : (
+                            <Typography variant="caption" color="text.disabled">
+                              Nog niet eerder gelogd
+                            </Typography>
+                          )}
+                        </Box>
                         {ex.notes && (
                           <Typography variant="caption" color="text.secondary" display="block" fontStyle="italic" sx={{ mt: 0.5 }}>
                             {ex.notes}
