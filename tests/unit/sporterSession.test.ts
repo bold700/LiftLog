@@ -45,6 +45,11 @@ describe('loggedExercisesFromSporterLogs', () => {
     expect(loggedExercisesFromSporterLogs([recent], 'schema1', 0)).toHaveLength(1);
   });
 
+  it('neemt mee hoe het ging, want daar leunt de overdracht op', () => {
+    const zwaar = { ...base, effort: 'heavy' as const };
+    expect(loggedExercisesFromSporterLogs([zwaar], 'schema1', 0)[0].effort).toBe('heavy');
+  });
+
   it('slaat een log zonder oefeningnaam over', () => {
     expect(loggedExercisesFromSporterLogs([{ ...base, exerciseName: '' }], 'schema1', 0)).toEqual([]);
   });

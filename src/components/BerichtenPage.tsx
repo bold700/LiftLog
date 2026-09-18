@@ -24,7 +24,7 @@ import AssignmentTurnedInRoundedIcon from '@mui/icons-material/AssignmentTurnedI
 import { PageLayout, ContentCard, PageTitle, EmptyState } from './layout';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
-import { getProfile } from '../services/profileService';
+import { getColleagues, getProfile } from '../services/profileService';
 import {
   getThread,
   getUnreadCountsByPartner,
@@ -69,7 +69,8 @@ export function BerichtenPage() {
   const [checkinOpen, setCheckinOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Gesprekspartners: een trainer praat met zijn sporters, een sporter met zijn trainer.
+  // Gesprekspartners: een trainer praat met zijn sporters én met collega's (voor de overdracht na
+  // een overgenomen training), een sporter met zijn trainer.
   const loadPartners = useCallback(async () => {
     if (!me) return;
     setLoading(true);
@@ -77,7 +78,8 @@ export function BerichtenPage() {
       if (isStaff) {
         const own = profileCtx?.sporters ?? [];
         const list = me.role === 'admin' ? (profileCtx?.allSporters ?? own) : own;
-        setPartners(list);
+        const colleagues = await getColleagues(me.userId).catch(() => []);
+        setPartners([...list, ...colleagues]);
       } else if (me.trainerId) {
         const trainer = await getProfile(me.trainerId);
         setPartners(trainer ? [trainer] : []);

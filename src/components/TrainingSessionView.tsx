@@ -22,6 +22,8 @@ import {
   loggedExercisesFromSporterLogs,
 } from '../utils/schemaSessionUtils';
 import { getLogsForUser, deleteExerciseLog } from '../services/logService';
+import { generateTrainingRecap } from '../services/trainingRecapService';
+import { sendMessage } from '../services/messageService';
 import {
   fromLocalExercises,
   fromSporterLogs,
@@ -109,6 +111,8 @@ export const TrainingSessionView = ({
   }, [isTrainer, applyDefaultLogTarget, schemaClientId, schemaId, sporters]);
   const [checkinOpen, setCheckinOpen] = useState(false);
   const [checkinSaving, setCheckinSaving] = useState(false);
+  /** Overdracht uit stap 2 van de dialoog; gaat mee in de check-in die daarna wordt opgeslagen. */
+  const [handover, setHandover] = useState<string | null>(null);
   const day = schema.days[dayIndex];
 
   const completeDay = useCallback(() => {
@@ -137,6 +141,7 @@ export const TrainingSessionView = ({
           dayLabel: day?.dayLabel ?? null,
           feeling,
           note: note || null,
+          handover: handover || null,
           date: new Date().toISOString(),
         });
       } catch (err) {
@@ -146,7 +151,7 @@ export const TrainingSessionView = ({
       }
       completeDay();
     },
-    [profileCtx?.profile, logTarget, schema.id, schema.trainerId, dayIndex, day?.dayLabel, notify, completeDay]
+    [profileCtx?.profile, logTarget, handover, schema.id, schema.trainerId, dayIndex, day?.dayLabel, notify, completeDay]
   );
   const [loggedExercises, setLoggedExercises] = useState<Exercise[]>(() =>
     getLoggedExercisesForSchemaDayInLast12Hours(schema.id, dayIndex)
@@ -276,6 +281,63 @@ export const TrainingSessionView = ({
       addFromSchema?.goToLog(logId);
     },
     [addFromSchema]
+  );
+
+  /**
+   * Voorzet voor de overdracht: alles wat in deze training is gelogd, met de notitie per oefening
+   * en het gewicht van de vorige keer erbij, zodat de tekst kan benoemen of er iets veranderd is.
+   */
+  const handleRequestDraft = useCallback(
+    async (feeling: number, note: string) => {
+      const exercises = (day?.exercises ?? []).map((ex) => {
+        const logged = loggedExercises.find(
+          (l) => l.name?.toLowerCase() === ex.exerciseName.toLowerCase()
+        );
+        const prev = previous.get(ex.exerciseName.trim().toLowerCase()) ?? null;
+        return {
+          name: ex.exerciseName,
+          weight: logged?.weight ?? null,
+          sets: logged?.sets ?? null,
+          reps: logged?.reps ?? null,
+          effort: logged?.effort ?? null,
+          note: logged?.notes ?? null,
+          previousWeight: prev?.weight ?? null,
+        };
+      });
+      return generateTrainingRecap({
+        sporterName: logTarget?.displayName?.trim() || 'de sporter',
+        dayLabel: `${schema.name} – ${day?.dayLabel ?? ''}`.trim(),
+        feeling,
+        sporterNote: note || null,
+        exercises: exercises.filter((ex) => ex.weight != null || ex.reps != null || ex.note),
+      });
+    },
+    [day?.exercises, day?.dayLabel, schema.name, loggedExercises, previous, logTarget]
+  );
+
+  /**
+   * De overdracht gaat naar de vaste trainer van de sporter; het korte bericht naar de sporter
+   * zelf. Heeft de sporter geen andere vaste trainer, dan is er niemand om aan over te dragen en
+   * blijft de tekst bij de check-in staan.
+   */
+  const handleSendHandover = useCallback(
+    async (draft: { handover: string; toSporter: string }) => {
+      const me = profileCtx?.profile;
+      setHandover(draft.handover || null);
+      if (!me || !logTarget) return;
+      const headCoach = logTarget.trainerId;
+      if (draft.handover && headCoach && headCoach !== me.userId) {
+        await sendMessage({
+          senderId: me.userId,
+          recipientId: headCoach,
+          text: `Overdracht na ${day?.dayLabel ?? 'de training'} met ${logTarget.displayName?.trim() || 'je sporter'}:\n\n${draft.handover}`,
+        });
+      }
+      if (draft.toSporter) {
+        await sendMessage({ senderId: me.userId, recipientId: logTarget.userId, text: draft.toSporter });
+      }
+    },
+    [profileCtx?.profile, logTarget, day?.dayLabel]
   );
 
   if (!day) {
@@ -634,6 +696,9 @@ export const TrainingSessionView = ({
         saving={checkinSaving}
         onSkip={completeDay}
         onSave={handleCheckinSave}
+        sporterName={logTarget ? logTarget.displayName?.trim() || logTarget.email || 'de sporter' : null}
+        onRequestDraft={logTarget ? handleRequestDraft : undefined}
+        onSendHandover={logTarget ? handleSendHandover : undefined}
       />
       </PageLayout>
   );

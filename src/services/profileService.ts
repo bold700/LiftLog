@@ -193,6 +193,23 @@ export async function getAllSporters(): Promise<Profile[]> {
 }
 
 /**
+ * Collega's: trainers en beheerders in dezelfde studio, jezelf niet meegerekend.
+ *
+ * Nodig sinds een trainer een training van een collega kan overnemen: de overdracht daarna gaat
+ * naar de vaste trainer, en die moet in Berichten terug te vinden zijn.
+ */
+export async function getColleagues(myUserId: string): Promise<Profile[]> {
+  const all = await getAllProfiles();
+  return all
+    .filter((p) => (p.role === 'trainer' || p.role === 'admin') && p.userId !== myUserId)
+    .sort((a, b) =>
+      (a.displayName || a.email || a.userId).localeCompare(b.displayName || b.email || b.userId, undefined, {
+        sensitivity: 'base',
+      })
+    );
+}
+
+/**
  * Zoek profiel op e-mail binnen de actieve studio.
  * E-mail is uniek, dus we zoeken daarop en controleren daarna het lidmaatschap — dat scheelt
  * een samengestelde index en houdt het antwoord scherp.

@@ -62,6 +62,8 @@ export function loggedExercisesFromSporterLogs(
       sets: l.sets ?? undefined,
       reps: l.reps ?? undefined,
       notes: l.notes ?? undefined,
+      // Hoort erbij: de overdracht na de training leunt juist op "was te zwaar".
+      effort: l.effort ?? undefined,
       date: l.date,
       schemaId: l.schemaId ?? undefined,
       schemaDayIndex: l.schemaDayIndex ?? undefined,
