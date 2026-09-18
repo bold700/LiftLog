@@ -78,6 +78,19 @@ Zonder het blok `match /leaderboardPublic/{userId}` in de gepubliceerde regels k
 
 **Regels in Firebase zetten:**
 
+> **Gaat vanzelf.** Sinds de CI-workflow `deploy-rules` bestaat worden `firestore.rules` en
+> `storage.rules` bij een merge naar `main` automatisch uitgerold, maar alleen als die bestanden in
+> die push zijn veranderd. Daarvoor moet in GitHub → Settings → Secrets and variables → Actions de
+> secret **`FIREBASE_SERVICE_ACCOUNT`** staan: dezelfde JSON van het service-account die ook op
+> Vercel staat. Ontbreekt die, dan slaat de stap over met een waarschuwing (CI wordt niet rood) en
+> blijft het handwerk hieronder nodig.
+>
+> Loopt de database achter op de repo, dan is er niets veranderd om op te reageren. Start dan
+> GitHub → Actions → **CI** → *Run workflow* met **deploy_rules** aangevinkt; die rolt de huidige
+> regels alsnog uit.
+
+Met de hand:
+
 1. Open **Firebase Console** → je project → **Firestore** → tab **Rules**.
 2. Vervang de inhoud van de editor door de inhoud van **`firestore.rules`** uit dit project (of kopieer de regels hieronder).
 3. Klik op **Publish** / **Publiceren**.

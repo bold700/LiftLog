@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Handmatig te starten om de regels alsnog uit te rollen, ook als ze in geen enkele push zijn
+  # veranderd — bijvoorbeeld als de database achterloopt op wat er al in de repo staat.
+  workflow_dispatch:
+    inputs:
+      deploy_rules:
+        description: 'Firestore- en storage-regels uitrollen, ook zonder wijziging'
+        type: boolean
+        default: false
 
 jobs:
   check:
@@ -48,3 +56,67 @@ jobs:
           key: firebase-emulators-${{ runner.os }}
       - run: npm ci
       - run: npm run test:rules
+
+  # De Firestore-regels staan in de repo, maar Vercel rolt ze niet uit: dat is een aparte stap bij
+  # Firebase. Zolang die met de hand moest, liep de database achter op de code — regels voor nieuwe
+  # collecties (check-ins, berichten) stonden er wel in maar golden niet. Daarom gebeurt het hier,
+  # bij een merge naar main, en alleen als de regelbestanden zijn veranderd.
+  deploy-rules:
+    name: Firestore- en storage-regels uitrollen
+    needs: [check, firestore-rules]
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      || (github.event_name == 'workflow_dispatch' && inputs.deploy_rules)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Twee commits, zodat we kunnen zien of de regels in deze push zijn veranderd.
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Zijn de regels veranderd?
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Handmatig gestart: uitrollen ongeacht wijzigingen."
+            echo "yes=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only HEAD^ HEAD | grep -qE '^(firestore|storage)\.rules$'; then
+            echo "Regelbestanden gewijzigd in deze push."
+            echo "yes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Geen wijziging in firestore.rules of storage.rules; niets uit te rollen."
+            echo "yes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Het service-account is hetzelfde JSON-blok dat de serverless functies al gebruiken.
+      # Ontbreekt de secret, dan stopt deze stap zonder de build rood te maken: dan is er simpelweg
+      # nog niets ingesteld en blijft uitrollen handwerk.
+      - name: Service-account klaarzetten
+        id: auth
+        if: steps.changed.outputs.yes == 'true'
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::warning::Secret FIREBASE_SERVICE_ACCOUNT ontbreekt; regels zijn NIET uitgerold."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/service-account.json"
+          project="$(node -e "const p=require(process.env.RUNNER_TEMP+'/service-account.json'); if(!p.project_id){console.error('Geen project_id in het service-account.');process.exit(1)} process.stdout.write(p.project_id)")"
+          echo "project=$project" >> "$GITHUB_OUTPUT"
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Uitrollen
+        if: steps.auth.outputs.ok == 'true'
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/service-account.json
+        run: |
+          npx --yes firebase-tools@13 deploy \
+            --only firestore:rules,storage:rules \
+            --project "${{ steps.auth.outputs.project }}" \
+            --non-interactive
