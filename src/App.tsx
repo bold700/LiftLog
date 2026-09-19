@@ -172,30 +172,7 @@ function AppContent() {
     }
   };
 
-  const firebaseConfigured = isFirebaseConfigured();
-  const showLogin = firebaseConfigured && !auth?.loading && !auth?.user;
-
-  if (showLogin) {
-    return (
-      <ThemeProvider theme={lightTheme}>
-        <CssBaseline />
-        <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
-          <LoginPage />
-        </Box>
-      </ThemeProvider>
-    );
-  }
-
   return (
-    <ThemeProvider theme={lightTheme}>
-      <CssBaseline />
-      <NotifyProvider>
-      <ProfileProvider>
-      <BrandingProvider>
-      <BrandedTheme>
-      <ViewAsProvider>
-      <VerificationGate>
-      <LeaderboardAutoSync />
       <AddFromSchemaProvider
         onSwitchToAddTab={openAdd}
         onSwitchToSchemasTab={switchToSchemasTab}
@@ -325,6 +302,43 @@ function AppContent() {
           />
         )}
       </AddFromSchemaProvider>
+  );
+}
+
+/**
+ * Inloggen, en daarna de providers óm de schil heen.
+ *
+ * De schil (AppContent) leest profiel en huisstijl uit de context. Stonden de providers in zijn
+ * eigen return, dan las hij die contexten buiten de provider: rol "sporter", naam "VORM", geen
+ * Beheer in het menu — terwijl de pagina's erbinnen wél de echte rol zagen.
+ */
+function AuthedApp() {
+  const auth = useAuth();
+  const firebaseConfigured = isFirebaseConfigured();
+  const showLogin = firebaseConfigured && !auth?.loading && !auth?.user;
+
+  if (showLogin) {
+    return (
+      <ThemeProvider theme={lightTheme}>
+        <CssBaseline />
+        <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
+          <LoginPage />
+        </Box>
+      </ThemeProvider>
+    );
+  }
+
+  return (
+    <ThemeProvider theme={lightTheme}>
+      <CssBaseline />
+      <NotifyProvider>
+      <ProfileProvider>
+      <BrandingProvider>
+      <BrandedTheme>
+      <ViewAsProvider>
+      <VerificationGate>
+      <LeaderboardAutoSync />
+      <AppContent />
       </VerificationGate>
       </ViewAsProvider>
       </BrandedTheme>
@@ -365,7 +379,7 @@ function VerificationGate({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <AuthedApp />
     </AuthProvider>
   );
 }
