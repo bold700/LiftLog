@@ -56,6 +56,21 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
     const barIndex = Math.max(0, destinations.findIndex((d) => d.tabIndex === activeTab));
     return (
       <>
+        {/* Op een telefoon scrolt de inhoud onder de statusbalk door; deze strook houdt dat vlak dicht,
+            zodat een paginatitel niet half achter de klok of de notch verdwijnt. */}
+        <Box
+          aria-hidden
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 'env(safe-area-inset-top, 0px)',
+            bgcolor: 'background.default',
+            zIndex: (th) => th.zIndex.appBar,
+            pointerEvents: 'none',
+          }}
+        />
         {children}
         <NavigationBar
           value={barIndex}

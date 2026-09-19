@@ -16,7 +16,9 @@ export { LANGS };
 const DICTS: Record<Lang, Messages> = { nl, en };
 
 export const DEFAULT_LANG: Lang = 'nl';
-export const LANG_STORAGE_KEY = 'vorm.lang';
+// Versie 2: de eerste versie schreef ook de browsertaal weg, waardoor een Engelse telefoon "Engels
+// gekozen" leek. Onder deze sleutel staat alleen nog een keuze die iemand zelf maakte.
+export const LANG_STORAGE_KEY = 'vorm.lang.v2';
 
 export function isLang(v: unknown): v is Lang {
   return typeof v === 'string' && (LANGS as readonly string[]).includes(v);
