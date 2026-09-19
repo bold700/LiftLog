@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapOffHits, parseServingGrams } from '../../api/food-search.mjs';
+import { mapOffHits, mergeProducts, parseServingGrams } from '../../api/food-search.mjs';
 
 describe('parseServingGrams', () => {
   it('leest gram uit een portie-omschrijving', () => {
@@ -37,6 +37,7 @@ describe('mapOffHits', () => {
         imageUrl: 'https://images.openfoodfacts.org/kwark.jpg',
         per100g: { kcal: 57, protein: 10, carbs: 3.4, fat: 0.2 },
         servingGrams: 250,
+        nl: false,
       },
     ]);
   });
@@ -49,6 +50,11 @@ describe('mapOffHits', () => {
   it('rekent kilojoule om naar kcal als kcal ontbreekt', () => {
     const kj = { ...hit, nutriments: { energy_100g: 1000, proteins_100g: 5 } };
     expect(mapOffHits([kj])[0].per100g.kcal).toBe(239);
+  });
+
+  it('laat een product met alleen een barcode als naam weg', () => {
+    expect(mapOffHits([{ ...hit, product_name: '4056489132032' }])).toEqual([]);
+    expect(mapOffHits([{ ...hit, product_name: '4056 489 132' }])).toEqual([]);
   });
 
   it('laat producten zonder naam of zonder voedingswaarde weg', () => {
@@ -65,5 +71,26 @@ describe('mapOffHits', () => {
   it('gaat om met onzin-invoer', () => {
     expect(mapOffHits(null)).toEqual([]);
     expect(mapOffHits([null, undefined, 42])).toEqual([]);
+  });
+});
+
+describe('nl-markering en samenvoegen', () => {
+  const base = { product_name: 'Kwark', nutriments: { 'energy-kcal_100g': 60 } };
+
+  it('markeert een product dat in Nederland verkocht wordt', () => {
+    expect(mapOffHits([{ ...base, code: '1', countries_tags: ['en:netherlands', 'en:belgium'] }])[0].nl).toBe(true);
+    expect(mapOffHits([{ ...base, code: '2', countries_tags: ['en:germany'] }])[0].nl).toBe(false);
+    expect(mapOffHits([{ ...base, code: '3' }])[0].nl).toBe(false);
+  });
+
+  it('houdt Nederlandse treffers voorop en telt een dubbel product één keer', () => {
+    const nl = mapOffHits([{ ...base, code: '1', countries_tags: ['en:netherlands'] }]);
+    const world = mapOffHits([
+      { ...base, code: '1', product_name: 'Kwark (wereld)' },
+      { ...base, code: '9', product_name: 'Quark' },
+    ]);
+    const merged = mergeProducts(nl, world);
+    expect(merged.map((p) => p.code)).toEqual(['1', '9']);
+    expect(merged[0].name).toBe('Kwark');
   });
 });

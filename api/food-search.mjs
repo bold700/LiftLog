@@ -10,11 +10,18 @@ import { applyCors } from './_lib/cors.mjs';
  *    aanroepen naar Open Food Facts beperkt.
  *
  * Query: ?q=kwark  →  { ok, products: FoodProduct[] }
+ *
+ * Er wordt in het Nederlands gezocht (`langs=nl`). Zonder die parameter zoekt Open Food Facts in de
+ * Engelse productnaam, en daar staat "kwark" zelden in: 64 treffers tegenover 1580 mét. Dat scheelde
+ * de hele Nederlandse supermarkt. Levert het Nederlands weinig op — bij een Engelse term als
+ * "protein bar" — dan zoeken we er alsnog zonder taal bij.
  */
 const SEARCH_URL = 'https://search.openfoodfacts.org/search';
 const USER_AGENT = 'LiftLog/1.0 (https://lift-log-phi.vercel.app)';
-const FIELDS = 'code,product_name,brands,nutriments,serving_size,image_small_url';
-const PAGE_SIZE = 24;
+const FIELDS = 'code,product_name,brands,nutriments,serving_size,image_small_url,countries_tags';
+const PAGE_SIZE = 50;
+/** Onder dit aantal Nederlandse treffers zoeken we er ook nog zonder taal bij. */
+const MIN_RESULTS_BEFORE_FALLBACK = 8;
 const TIMEOUT_MS = 8000;
 
 function json(res, status, body) {
@@ -52,6 +59,11 @@ function firstBrand(brands) {
 
 const NUTRIMENT_KEYS = ['energy-kcal_100g', 'energy_100g', 'proteins_100g', 'carbohydrates_100g', 'fat_100g'];
 
+/** Verkocht in Nederland? Zo'n product hoort in de lijst boven een Duits of Frans equivalent. */
+function soldInNl(countriesTags) {
+  return Array.isArray(countriesTags) && countriesTags.includes('en:netherlands');
+}
+
 /**
  * Zet zoekresultaten van Open Food Facts om naar de vorm die de app gebruikt.
  * Producten zonder naam of zonder enige voedingswaarde vallen af: die zijn niet te loggen.
@@ -60,7 +72,8 @@ export function mapOffHits(hits) {
   const out = [];
   for (const p of Array.isArray(hits) ? hits : []) {
     const name = String(p?.product_name ?? '').trim();
-    if (!name) continue;
+    // Geen naam, of alleen een barcode als naam: daar kan niemand iets mee in een lijst.
+    if (!name || /^[\d\s-]+$/.test(name)) continue;
     const n = p?.nutriments ?? {};
     if (!NUTRIMENT_KEYS.some((k) => n[k] != null)) continue;
     let kcal = num(n['energy-kcal_100g']);
@@ -77,9 +90,37 @@ export function mapOffHits(hits) {
         fat: Math.round(num(n['fat_100g']) * 10) / 10,
       },
       servingGrams: parseServingGrams(p?.serving_size),
+      nl: soldInNl(p?.countries_tags),
     });
   }
   return out;
+}
+
+/**
+ * Nederlandse treffers eerst, daarna de rest; een product dat in beide lijsten zit telt één keer.
+ */
+export function mergeProducts(primary, secondary) {
+  const seen = new Set();
+  const out = [];
+  for (const p of [...primary, ...secondary]) {
+    const key = p.code || `${p.name}|${p.brand}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(p);
+  }
+  return out;
+}
+
+async function searchOff(term, { langs, signal }) {
+  const params = { q: term, page_size: String(PAGE_SIZE), fields: FIELDS };
+  if (langs) params.langs = langs;
+  const upstream = await fetch(`${SEARCH_URL}?${new URLSearchParams(params)}`, {
+    headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+    signal,
+  });
+  if (!upstream.ok) throw new Error(`Open Food Facts antwoordde ${upstream.status}`);
+  const data = await upstream.json();
+  return mapOffHits(data?.hits);
 }
 
 export default async function handler(req, res) {
@@ -90,19 +131,16 @@ export default async function handler(req, res) {
   const term = (typeof query.q === 'string' ? query.q : '').trim().slice(0, 64);
   if (!term) return json(res, 400, { ok: false, products: [], error: 'Geef een zoekterm op.' });
 
-  const url = `${SEARCH_URL}?${new URLSearchParams({ q: term, page_size: String(PAGE_SIZE), fields: FIELDS })}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const upstream = await fetch(url, {
-      headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
-      signal: controller.signal,
-    });
-    if (!upstream.ok) {
-      return json(res, 502, { ok: false, products: [], error: 'De productendatabase is even niet bereikbaar.' });
+    const signal = controller.signal;
+    let products = await searchOff(term, { langs: 'nl', signal });
+    if (products.length < MIN_RESULTS_BEFORE_FALLBACK) {
+      // Een Engelse of merkterm: de wereldwijde zoekopdracht erbij, Nederlandse treffers blijven voorop.
+      const world = await searchOff(term, { signal }).catch(() => []);
+      products = mergeProducts(products, world);
     }
-    const data = await upstream.json();
-    const products = mapOffHits(data?.hits);
     res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400');
     return json(res, 200, { ok: true, products });
   } catch (e) {
