@@ -135,7 +135,7 @@ jobs:
 
       # De storage-regels veranderen zelden en hangen aan twee extra rechten die het service-account
       # niet standaard heeft: serviceusage.services.get (rol "Service Usage Consumer") en
-      # firebasestorage.defaultBucket.get (rol "Firebase Storage Admin"). Struikelt dit, dan blijft
+      # firebasestorage.defaultBucket.get (rol "Cloud Storage for Firebase Admin"). Struikelt dit, dan blijft
       # het bij een waarschuwing: de Firestore-regels staan dan al goed. Let wel: een storage-regel
       # die alleen in de repo staat (zoals orgLogos) werkt in de app dan nog niet.
       - name: Storage-regels uitrollen
@@ -152,4 +152,4 @@ jobs:
       - name: Wat te doen bij 403 (storage)
         if: steps.storage.outcome == 'failure'
         run: |
-          echo "::warning::Storage-regels niet uitgerold. Ging dit mis op HTTP Error 403 (firebasestorage.defaultBucket.get of serviceusage.services.get)? Geef het service-account (firebase-adminsdk-...@${{ steps.auth.outputs.project }}.iam.gserviceaccount.com) in Google Cloud - IAM de rollen 'Firebase Storage Admin' en 'Service Usage Consumer', en start CI opnieuw met deploy_rules. Tot die tijd: storage.rules plakken in Firebase Console - Storage - Rules. Zie docs/ROLLEN-EN-RECHTEN.md."
+          echo "::warning::Storage-regels niet uitgerold. Ging dit mis op HTTP Error 403 (firebasestorage.defaultBucket.get of serviceusage.services.get)? Geef het service-account (firebase-adminsdk-...@${{ steps.auth.outputs.project }}.iam.gserviceaccount.com) in Google Cloud - IAM de rollen 'Cloud Storage for Firebase Admin' en 'Service Usage Consumer', en start CI opnieuw met deploy_rules. Tot die tijd: storage.rules plakken in Firebase Console - Storage - Rules. Zie docs/ROLLEN-EN-RECHTEN.md."
