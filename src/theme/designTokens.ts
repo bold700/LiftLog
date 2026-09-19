@@ -1,10 +1,13 @@
 /**
- * Centrale design tokens, afgeleid van het Material 3-schema in theme.json (het Figma-ontwerp).
- * Gebruik deze — of het MUI-palet ('primary.main') — in plaats van hexcodes in componenten.
+ * Centrale design tokens, afgeleid van het actieve Material 3-schema — dat van VORM zelf, of dat
+ * van de studio als die een eigen huisstijl heeft. Gebruik deze — of het MUI-palet
+ * ('primary.main') — in plaats van hexcodes in componenten.
+ *
+ * Het zijn getters: een component dat `designTokens.cardBackground` leest, krijgt de kleur van
+ * het schema dat op dát moment actief is. Bij een wisseling van studio rendert alles opnieuw
+ * (het MUI-thema is dan een nieuw object), dus de getters worden vanzelf opnieuw gelezen.
  */
-import themeData from '../theme.json';
-
-const scheme = themeData.schemes.light;
+import { getActiveScheme } from './brandingTheme';
 
 export const designTokens = {
   /** Max breedte pagina-inhoud (px) */
@@ -13,29 +16,56 @@ export const designTokens = {
   pagePaddingBottom: 10,
   /** Breedte van de zijbalk op grote schermen (px) */
   railWidth: 240,
-  /** Achtergrond van de pagina */
-  surface: scheme.surface,
-  /** Achtergrondkleur hoofdcards: een tint donkerder dan de pagina */
-  cardBackground: scheme.surfaceContainerLow,
-  /** Nog een tint donkerder: tegels ín een card, de keuzebalk, de navigatie */
-  cardBackgroundHigh: scheme.surfaceContainer,
-  /** Randkleur secundaire/outline cards */
-  cardBorder: scheme.outlineVariant,
   /** Border radius cards (px) — "Corner/Large" in het ontwerp */
   cardRadius: 16,
   /** Border radius knoppen (px) */
   buttonRadius: 20,
+
+  /** Achtergrond van de pagina */
+  get surface() {
+    return getActiveScheme().surface;
+  },
+  /** Achtergrondkleur hoofdcards: een tint donkerder dan de pagina */
+  get cardBackground() {
+    return getActiveScheme().surfaceContainerLow;
+  },
+  /** Nog een tint donkerder: tegels ín een card, de keuzebalk, de navigatie */
+  get cardBackgroundHigh() {
+    return getActiveScheme().surfaceContainer;
+  },
+  /** Randkleur secundaire/outline cards */
+  get cardBorder() {
+    return getActiveScheme().outlineVariant;
+  },
   /** Donkergroen: gevulde knoppen, actieve balken */
-  primary: scheme.primary,
-  onPrimary: scheme.onPrimary,
+  get primary() {
+    return getActiveScheme().primary;
+  },
+  get onPrimary() {
+    return getActiveScheme().onPrimary;
+  },
   /** Zachtgroen: FAB, "Assigned to you"-chips, avatars */
-  primaryContainer: scheme.primaryContainer,
-  onPrimaryContainer: scheme.onPrimaryContainer,
+  get primaryContainer() {
+    return getActiveScheme().primaryContainer;
+  },
+  get onPrimaryContainer() {
+    return getActiveScheme().onPrimaryContainer;
+  },
   /** Gedempt groen: gekozen segment in een keuzebalk, actieve navigatie */
-  secondaryContainer: scheme.secondaryContainer,
-  onSecondaryContainer: scheme.onSecondaryContainer,
+  get secondaryContainer() {
+    return getActiveScheme().secondaryContainer;
+  },
+  get onSecondaryContainer() {
+    return getActiveScheme().onSecondaryContainer;
+  },
   /** Blauwgroen: "Last time"-balk, Duo PT, informatie */
-  tertiaryContainer: scheme.tertiaryContainer,
-  onTertiaryContainer: scheme.onTertiaryContainer,
-  outline: scheme.outline,
-} as const;
+  get tertiaryContainer() {
+    return getActiveScheme().tertiaryContainer;
+  },
+  get onTertiaryContainer() {
+    return getActiveScheme().onTertiaryContainer;
+  },
+  get outline() {
+    return getActiveScheme().outline;
+  },
+};

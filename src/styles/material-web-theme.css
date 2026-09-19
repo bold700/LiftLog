@@ -1,7 +1,8 @@
 /* Material Web Components theming via CSS variables - Light mode only */
 
 :root {
-  /* Kleuren uit theme.json — het Material 3-schema van het Figma-ontwerp */
+  /* Standaardkleuren uit theme.json (VORM). Een studio met eigen huisstijl zet dezelfde variabelen
+     op <html> vanuit BrandingContext; inline wint van :root, dus die gaan dan voor. */
   --md-sys-color-primary: #426833;
   --md-sys-color-on-primary: #FFFFFF;
   --md-sys-color-primary-container: #C3EFAD;
@@ -20,13 +21,18 @@
   
   --md-sys-color-outline: #73796E;
   --md-sys-color-outline-variant: #C3C8BB;
+  --md-sys-color-surface-container-low: #F2F5EA;
+  --md-sys-color-surface-container: #ECEFE5;
+  --md-sys-color-surface-container-high: #E7E9DF;
+  --md-sys-color-secondary-container: #D8E7CC;
+  --md-sys-color-on-secondary-container: #3D4B36;
 }
 
 /* Navigatiebalk: een tint donkerder dan de pagina, zoals in het ontwerp */
 md-navigation-bar {
-  --md-navigation-bar-container-color: #ECEFE5;
+  --md-navigation-bar-container-color: var(--md-sys-color-surface-container, #ECEFE5);
   --md-navigation-bar-label-text-font: 'Roboto', sans-serif;
-  background-color: #ECEFE5;
+  background-color: var(--md-sys-color-surface-container, #ECEFE5);
   font-family: 'Roboto', sans-serif;
 }
 
@@ -56,8 +62,8 @@ md-navigation-tab .material-symbols-outlined {
 md-navigation-tab[active] .nav-icon,
 md-navigation-tab[active] .nav-svg-icon,
 md-navigation-tab[active] .material-symbols-outlined {
-  color: #3D4B36 !important;
-  fill: #3D4B36 !important;
+  color: var(--md-sys-color-on-secondary-container, #3D4B36) !important;
+  fill: var(--md-sys-color-on-secondary-container, #3D4B36) !important;
 }
 
 /* Navigatietab: actief = zachtgroene pil met donkergroen icoon (Material 3) */
@@ -67,30 +73,30 @@ md-navigation-tab {
   margin: 12px 0 16px;
   
   /* Actief */
-  --md-navigation-bar-active-icon-color: #3D4B36;
-  --md-navigation-bar-active-label-text-color: #191D17;
-  --md-navigation-bar-active-indicator-color: #D8E7CC;
-  --md-navigation-bar-active-pressed-icon-color: #3D4B36;
-  --md-navigation-bar-active-pressed-label-text-color: #191D17;
+  --md-navigation-bar-active-icon-color: var(--md-sys-color-on-secondary-container, #3D4B36);
+  --md-navigation-bar-active-label-text-color: var(--md-sys-color-on-surface, #191D17);
+  --md-navigation-bar-active-indicator-color: var(--md-sys-color-secondary-container, #D8E7CC);
+  --md-navigation-bar-active-pressed-icon-color: var(--md-sys-color-on-secondary-container, #3D4B36);
+  --md-navigation-bar-active-pressed-label-text-color: var(--md-sys-color-on-surface, #191D17);
   --md-navigation-bar-active-pressed-state-layer-color: rgba(61, 75, 54, 0.12);
-  --md-navigation-bar-active-hover-icon-color: #3D4B36;
-  --md-navigation-bar-active-hover-label-text-color: #191D17;
+  --md-navigation-bar-active-hover-icon-color: var(--md-sys-color-on-secondary-container, #3D4B36);
+  --md-navigation-bar-active-hover-label-text-color: var(--md-sys-color-on-surface, #191D17);
   --md-navigation-bar-active-hover-state-layer-color: rgba(61, 75, 54, 0.08);
-  --md-navigation-bar-active-focus-icon-color: #3D4B36;
-  --md-navigation-bar-active-focus-label-text-color: #191D17;
+  --md-navigation-bar-active-focus-icon-color: var(--md-sys-color-on-secondary-container, #3D4B36);
+  --md-navigation-bar-active-focus-label-text-color: var(--md-sys-color-on-surface, #191D17);
   --md-navigation-bar-active-focus-state-layer-color: rgba(61, 75, 54, 0.12);
   
   /* Inactive state */
-  --md-navigation-bar-inactive-icon-color: #43483F;
-  --md-navigation-bar-inactive-label-text-color: #43483F;
-  --md-navigation-bar-inactive-pressed-icon-color: #43483F;
-  --md-navigation-bar-inactive-pressed-label-text-color: #43483F;
+  --md-navigation-bar-inactive-icon-color: var(--md-sys-color-on-surface-variant, #43483F);
+  --md-navigation-bar-inactive-label-text-color: var(--md-sys-color-on-surface-variant, #43483F);
+  --md-navigation-bar-inactive-pressed-icon-color: var(--md-sys-color-on-surface-variant, #43483F);
+  --md-navigation-bar-inactive-pressed-label-text-color: var(--md-sys-color-on-surface-variant, #43483F);
   --md-navigation-bar-inactive-pressed-state-layer-color: rgba(67, 72, 63, 0.12);
-  --md-navigation-bar-inactive-hover-icon-color: #43483F;
-  --md-navigation-bar-inactive-hover-label-text-color: #43483F;
+  --md-navigation-bar-inactive-hover-icon-color: var(--md-sys-color-on-surface-variant, #43483F);
+  --md-navigation-bar-inactive-hover-label-text-color: var(--md-sys-color-on-surface-variant, #43483F);
   --md-navigation-bar-inactive-hover-state-layer-color: rgba(67, 72, 63, 0.08);
-  --md-navigation-bar-inactive-focus-icon-color: #43483F;
-  --md-navigation-bar-inactive-focus-label-text-color: #43483F;
+  --md-navigation-bar-inactive-focus-icon-color: var(--md-sys-color-on-surface-variant, #43483F);
+  --md-navigation-bar-inactive-focus-label-text-color: var(--md-sys-color-on-surface-variant, #43483F);
   --md-navigation-bar-inactive-focus-state-layer-color: rgba(67, 72, 63, 0.12);
 }
 
@@ -103,7 +109,7 @@ md-filled-button {
   padding-bottom: 0;
 
   /* Container styling */
-  --md-filled-button-container-color: #426833;
+  --md-filled-button-container-color: var(--md-sys-color-primary, #426833);
   --md-filled-button-container-shape: 20px; /* M3: 20dp corner radius */
   --md-filled-button-container-height: 40px; /* M3: 40dp height */
 
@@ -116,17 +122,17 @@ md-filled-button {
   --md-filled-button-with-trailing-icon-trailing-space: 16px;
   
   /* Label text styling - M3: Roboto Medium, 14sp, no text transform */
-  --md-filled-button-label-text-color: #FFFFFF;
+  --md-filled-button-label-text-color: var(--md-sys-color-on-primary, #FFFFFF);
   --md-filled-button-label-text-font: 'Roboto', sans-serif;
   --md-filled-button-label-text-size: 0.875rem; /* 14px */
   --md-filled-button-label-text-weight: 500; /* Medium */
   
   /* State colors */
-  --md-filled-button-hover-label-text-color: #FFFFFF;
+  --md-filled-button-hover-label-text-color: var(--md-sys-color-on-primary, #FFFFFF);
   --md-filled-button-hover-container-elevation: 1; /* M3: subtle elevation on hover */
-  --md-filled-button-focus-label-text-color: #FFFFFF;
+  --md-filled-button-focus-label-text-color: var(--md-sys-color-on-primary, #FFFFFF);
   --md-filled-button-focus-container-elevation: 0;
-  --md-filled-button-pressed-label-text-color: #FFFFFF;
+  --md-filled-button-pressed-label-text-color: var(--md-sys-color-on-primary, #FFFFFF);
   --md-filled-button-pressed-container-elevation: 0;
   
   /* Uitgeschakeld */
@@ -136,7 +142,7 @@ md-filled-button {
   --md-filled-button-disabled-icon-color: rgba(25, 29, 23, 0.55);
   
   /* Icon styling */
-  --md-filled-button-icon-color: #FFFFFF;
+  --md-filled-button-icon-color: var(--md-sys-color-on-primary, #FFFFFF);
   --md-filled-button-icon-size: 18px;
 }
 
@@ -151,15 +157,15 @@ md-text-button {
   --md-text-button-trailing-space: 16px;
   
   /* Label text styling - M3: Roboto Medium, 14sp */
-  --md-text-button-label-text-color: #426833;
+  --md-text-button-label-text-color: var(--md-sys-color-primary, #426833);
   --md-text-button-label-text-font: 'Roboto', sans-serif;
   --md-text-button-label-text-size: 0.875rem; /* 14px */
   --md-text-button-label-text-weight: 500; /* Medium */
   
   /* State colors */
-  --md-text-button-hover-label-text-color: #426833;
-  --md-text-button-focus-label-text-color: #426833;
-  --md-text-button-pressed-label-text-color: #426833;
+  --md-text-button-hover-label-text-color: var(--md-sys-color-primary, #426833);
+  --md-text-button-focus-label-text-color: var(--md-sys-color-primary, #426833);
+  --md-text-button-pressed-label-text-color: var(--md-sys-color-primary, #426833);
   
   /* Disabled state */
   --md-text-button-disabled-label-text-color: rgba(25, 29, 23, 0.38);

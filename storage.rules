@@ -28,6 +28,18 @@ service firebase.storage {
       allow write: if false;
     }
 
+    function myOrgId() {
+      return firestore.get(/databases/(default)/documents/profiles/$(request.auth.uid)).data.orgId;
+    }
+
+    // Studiologo: publiek leesbaar (staat straks ook op de inlogpagina), alleen een beheerder van
+    // díe studio schrijft. Een logo is klein; 2 MB is ruim.
+    match /orgLogos/{orgId} {
+      allow read: if true;
+      allow write: if signedIn() && myRole() == 'admin' && myOrgId() == orgId
+        && (request.resource == null || isImageUnder(2 * 1024 * 1024));
+    }
+
     // Profielfoto's: iedereen die is ingelogd mag ze zien (ranglijst), alleen de eigenaar schrijft.
     match /avatars/{uid} {
       allow read: if signedIn();
