@@ -367,6 +367,8 @@ export interface Profile {
    * Ranglijst: standaard `named` (profielnaam). `anonymous` = alleen “Anoniem”. `hidden` = uit.
    */
   leaderboardVisibility?: LeaderboardVisibility;
+  /** Taal van de app voor dit account; ontbreekt hij, dan beslist de browser. */
+  language?: 'nl' | 'en' | null;
   createdAt: string;
   updatedAt: string;
 }
