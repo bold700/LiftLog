@@ -116,6 +116,7 @@ jobs:
       # mag opvragen — waarna de Firestore-regels niet eens aan de beurt komen. Juist die zijn
       # nodig voor check-ins, berichten en logs.
       - name: Firestore-regels uitrollen
+        id: firestore
         if: steps.auth.outputs.ok == 'true'
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/service-account.json
@@ -124,6 +125,13 @@ jobs:
             --only firestore:rules \
             --project "${{ steps.auth.outputs.project }}" \
             --non-interactive
+
+      # Struikelt het uitrollen over een 403, dan ligt het bijna altijd aan een ontbrekende rol en
+      # niet aan de regels zelf. Die uitleg hoort in de job te staan, niet in iemands hoofd.
+      - name: Wat te doen bij 403
+        if: failure() && steps.firestore.outcome == 'failure'
+        run: |
+          echo "::warning::Ging dit mis op HTTP Error 403 bij firebaserules.googleapis.com? Geef het service-account (firebase-adminsdk-...@${{ steps.auth.outputs.project }}.iam.gserviceaccount.com) in Google Cloud - IAM de rol 'Firebase Rules Admin'. Zie docs/ROLLEN-EN-RECHTEN.md."
 
       # De storage-regels veranderen zelden en hangen aan een extra recht dat het service-account
       # niet standaard heeft (serviceusage.services.get). Struikelt dit, dan blijft het bij een

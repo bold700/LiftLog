@@ -89,10 +89,19 @@ Zonder het blok `match /leaderboardPublic/{userId}` in de gepubliceerde regels k
 > GitHub → Actions → **CI** → *Run workflow* met **deploy_rules** aangevinkt; die rolt de huidige
 > regels alsnog uit.
 >
-> De **storage**-regels gaan in een aparte stap en mogen falen zonder de rest tegen te houden. Een
-> standaard service-account mag namelijk niet opvragen of de storage-API aanstaat
-> (`serviceusage.services.get`), en de CLI controleert dat vóór het uitrollen. Wil je ook die stap
-> groen: geef het service-account in Google Cloud → IAM de rol **Service Usage Consumer**.
+> **Twee rollen die het service-account nodig heeft.** Ga naar
+> [Google Cloud → IAM](https://console.cloud.google.com/iam-admin/iam?project=vanas-d1a25), zoek het
+> account `firebase-adminsdk-…@vanas-d1a25.iam.gserviceaccount.com`, klik op het potlood en voeg toe:
+>
+> - **Firebase Rules Admin** (`roles/firebaserules.admin`) — zonder deze rol valt de
+>   Firestore-stap om op `firebaserules.googleapis.com … HTTP Error: 403`. De CLI compileert de
+>   regels eerst via die API, en een standaard service-account mag dat niet.
+> - **Service Usage Consumer** (`roles/serviceusage.serviceUsageConsumer`) — voor de storage-stap,
+>   die vóór het uitrollen opvraagt of de storage-API aanstaat (`serviceusage.services.get`).
+>
+> De **storage**-regels gaan daarom in een aparte stap en mogen falen zonder de rest tegen te
+> houden: die regels veranderen zelden, en de fout blijft zichtbaar in de job zonder de
+> Firestore-regels tegen te houden.
 
 Met de hand:
 
