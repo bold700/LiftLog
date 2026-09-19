@@ -133,6 +133,8 @@ jobs:
         run: |
           echo "::warning::Ging dit mis op HTTP Error 403 bij firebaserules.googleapis.com? Geef het service-account (firebase-adminsdk-...@${{ steps.auth.outputs.project }}.iam.gserviceaccount.com) in Google Cloud - IAM de rol 'Firebase Rules Admin'. Zie docs/ROLLEN-EN-RECHTEN.md."
 
+      # Let op `--only storage` en niet `storage:rules`: na de dubbele punt verwacht firebase-tools
+      # een deploy-target, en dan zoekt hij een target "rules" dat niet bestaat.
       # De storage-regels veranderen zelden en hangen aan twee extra rechten die het service-account
       # niet standaard heeft: serviceusage.services.get (rol "Service Usage Consumer") en
       # firebasestorage.defaultBucket.get (rol "Cloud Storage for Firebase Admin"). Struikelt dit, dan blijft
@@ -146,7 +148,7 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/service-account.json
         run: |
           npx --yes firebase-tools@13 deploy \
-            --only storage:rules \
+            --only storage \
             --project "${{ steps.auth.outputs.project }}" \
             --non-interactive
       - name: Wat te doen bij 403 (storage)
