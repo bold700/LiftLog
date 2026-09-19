@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
+  Chip,
   Typography,
   TextField,
   MenuItem,
@@ -56,6 +57,7 @@ import {
 import { todayIso } from '../utils/format';
 import { fileToDataUrl } from '../utils/imageDataUrl';
 import { NumberField } from './NumberField';
+import { portionsFor } from '../utils/portions';
 
 type Period = 'day' | 'week' | 'month';
 
@@ -643,6 +645,22 @@ function AddDialog({
                 {selected.brand}
               </Typography>
             )}
+            {/* Porties zoals je ze eet: bakje, snee, glas. "100 gram" tikt niemand uit zijn hoofd. */}
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 1.5 }}>
+              {portionsFor(selected.name, selected.servingGrams).map((p) => {
+                const active = Number(grams) === p.grams;
+                return (
+                  <Chip
+                    key={p.label}
+                    label={`${p.label} · ${p.grams} g`}
+                    size="small"
+                    onClick={() => setGrams(String(p.grams))}
+                    variant={active ? 'filled' : 'outlined'}
+                    sx={active ? { bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } } : undefined}
+                  />
+                );
+              })}
+            </Box>
             <NumberField
               label="Hoeveelheid (gram)"
               size="small"

@@ -28,6 +28,8 @@ export interface FoodProduct {
   per100g: { kcal: number; protein: number; carbs: number; fat: number };
   /** Portiegrootte in gram indien bekend (bv. "30 g"). */
   servingGrams: number | null;
+  /** Verkocht in Nederland volgens Open Food Facts. Zulke producten staan hoger in de lijst. */
+  nl?: boolean;
 }
 
 export interface NutritionLog {
@@ -149,17 +151,18 @@ export async function searchFoods(term: string): Promise<FoodSearchResult> {
   }
 
   const nq = norm(q);
-  remote.sort((a, b) => {
-    const sb = (b.per100g.kcal > 0 ? 30 : 0) + nameScore(b.name, nq);
-    const sa = (a.per100g.kcal > 0 ? 30 : 0) + nameScore(a.name, nq);
-    return sb - sa;
-  });
-  // Eigen basisproducten bovenaan; dedup op naam (die van ons wint)
-  const seen = new Set(curated.map((c) => norm(c.name)));
+  const score = (p: FoodProduct) =>
+    (p.per100g.kcal > 0 ? 30 : 0) + nameScore(p.name, nq) + (p.nl ? 15 : 0) + (p.imageUrl ? 5 : 0);
+  remote.sort((a, b) => score(b) - score(a));
+  // Eigen basisproducten bovenaan. Dubbel is dezelfde naam bij hetzelfde merk: "Magere kwark" van
+  // Melkan, Optimel en Jumbo zijn drie producten, niet één — dat waren ze eerst wel.
+  const keyOf = (p: FoodProduct) => `${norm(p.name)}|${norm(p.brand)}`;
+  const seen = new Set(curated.map(keyOf));
   const products = [...curated];
   for (const p of remote) {
-    if (seen.has(norm(p.name))) continue;
-    seen.add(norm(p.name));
+    const key = keyOf(p);
+    if (seen.has(key)) continue;
+    seen.add(key);
     products.push(p);
   }
   return { products, remoteFailed };
