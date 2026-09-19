@@ -98,7 +98,8 @@ Zonder het blok `match /leaderboardPublic/{userId}` in de gepubliceerde regels k
 >   regels eerst via die API, en een standaard service-account mag dat niet.
 > - **Service Usage Consumer** (`roles/serviceusage.serviceUsageConsumer`) — voor de storage-stap,
 >   die vóór het uitrollen opvraagt of de storage-API aanstaat (`serviceusage.services.get`).
-> - **Firebase Storage Admin** (`roles/firebasestorage.admin`) — ook voor de storage-stap: de CLI
+> - **Cloud Storage for Firebase Admin** (`roles/firebasestorage.admin`; in de console zo genoemd,
+>   met "(Beta)" erachter — niet te verwarren met *Storage Admin* van Cloud Storage) — ook voor de storage-stap: de CLI
 >   zoekt eerst de standaardbucket op (`firebasestorage.defaultBucket.get`). Zonder deze rol:
 >   `Unexpected error when fetching default storage bucket … HTTP Error: 403`. Dat gebeurde op
 >   19 september 2026; het gevolg was dat de regel voor studiologo's (`orgLogos/{orgId}`) alleen in
