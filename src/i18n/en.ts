@@ -39,6 +39,7 @@ export const en: Messages = {
       one: '1 open request',
       other: '{count} open requests',
     },
+    comingSoon: 'Coming in a later step.',
     review: 'Review',
     searchMembers: 'Search members',
     columns: {
