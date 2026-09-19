@@ -307,8 +307,25 @@ export interface Org {
    * Staat dit uit, dan kunnen accounts alleen door een beheerder worden aangemaakt.
    */
   allowSelfSignup: boolean;
+  /** Eigen uiterlijk van de studio. Ontbreekt dit, dan ziet de studio er uit als VORM zelf. */
+  branding?: OrgBranding | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Huisstijl van een studio. VORM is het platform, maar een studio wil dat de app van hén lijkt:
+ * eigen naam en logo in de balk, en eigen kleuren. De kleuren komen uit één merkkleur (het
+ * Material 3-schema wordt daaruit afgeleid, zoals de Material Theme Builder doet) of uit een
+ * geplakte Theme Builder-export voor wie precies wil sturen.
+ */
+export interface OrgBranding {
+  /** Download-URL van het logo in Storage (orgLogos/{orgId}). */
+  logoUrl?: string | null;
+  /** Merkkleur als hex, bijv. "#4E6543". Daaruit wordt het hele schema afgeleid. */
+  seedColor?: string | null;
+  /** Volledig licht schema uit de Material Theme Builder (schemes.light). Gaat vóór seedColor. */
+  lightScheme?: Record<string, string> | null;
 }
 
 export interface Profile {

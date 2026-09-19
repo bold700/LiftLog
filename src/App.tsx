@@ -31,6 +31,7 @@ import { AddFromSchemaProvider } from './context/AddFromSchemaContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProfileProvider, useProfile } from './context/ProfileContext';
 import { ViewAsProvider } from './context/ViewAsContext';
+import { BrandingProvider, useBranding } from './context/BrandingContext';
 import { INZICHTEN_SUB } from './components/InzichtenPage';
 import { LoginPage } from './components/LoginPage';
 import { VerifyEmailScreen } from './components/VerifyEmailScreen';
@@ -55,6 +56,7 @@ function AppContent() {
   const [fabAnchorEl, setFabAnchorEl] = useState<null | HTMLElement>(null);
   const fabMenuOpen = Boolean(fabAnchorEl);
   const profile = useProfile();
+  const branding = useBranding();
   const auth = useAuth();
   // Rol direct uit profiel (zelfde bron als in menu); fallback tot profile?.role uit context
   const role = (profile?.profile?.role ?? profile?.role ?? 'sporter') as 'sporter' | 'trainer' | 'admin';
@@ -97,7 +99,6 @@ function AppContent() {
   }, [handleFabMenuClose]);
 
   useEffect(() => {
-    document.title = 'VORM';
   }, []);
 
   const handleExerciseAdded = useCallback((opts?: { returnToSchema?: boolean }) => {
@@ -190,6 +191,8 @@ function AppContent() {
       <CssBaseline />
       <NotifyProvider>
       <ProfileProvider>
+      <BrandingProvider>
+      <BrandedTheme>
       <ViewAsProvider>
       <VerificationGate>
       <LeaderboardAutoSync />
@@ -205,6 +208,7 @@ function AppContent() {
           secondary={secondary}
           onLog={openAdd}
           onLogout={handleLogout}
+          brand={{ name: branding?.name ?? 'VORM', logoUrl: branding?.logoUrl ?? null }}
         >
           <Box
             sx={{
@@ -323,8 +327,21 @@ function AppContent() {
       </AddFromSchemaProvider>
       </VerificationGate>
       </ViewAsProvider>
+      </BrandedTheme>
+      </BrandingProvider>
       </ProfileProvider>
       </NotifyProvider>
+    </ThemeProvider>
+  );
+}
+
+/** Het thema van de studio over dat van VORM heen, zodra de huisstijl bekend is. */
+function BrandedTheme({ children }: { children: React.ReactNode }) {
+  const branding = useBranding();
+  return (
+    <ThemeProvider theme={branding?.theme ?? lightTheme}>
+      <CssBaseline />
+      {children}
     </ThemeProvider>
   );
 }

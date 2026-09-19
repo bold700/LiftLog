@@ -37,6 +37,7 @@ import { getAllProfiles, updateProfile } from '../services/profileService';
 import { deleteAccountAsAdmin } from '../services/adminAccountService';
 import type { LeaderboardVisibility, Profile, ProfileRole, Limitation } from '../types';
 import { PageLayout, ContentCard } from './layout';
+import { BrandingSettings } from './beheer/BrandingSettings';
 import { UserAvatar } from './UserAvatar';
 import { ageOnDate } from '../utils/bodyFat';
 import { heartRateZones } from '../utils/heartRate';
@@ -139,6 +140,8 @@ export function BeheerPage() {
   const selfId = profileCtx?.profile?.userId ?? '';
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
+  // Beheer heeft twee delen: de leden, en (alleen voor de eigenaar) de huisstijl van de studio.
+  const [section, setSection] = useState<'leden' | 'huisstijl'>('leden');
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -336,8 +339,20 @@ export function BeheerPage() {
     );
   }
 
+  if (isAdmin && section === 'huisstijl') {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+        <SectionTabs value={section} onChange={setSection} />
+        <PageLayout>
+          <BrandingSettings />
+        </PageLayout>
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+      {isAdmin && <SectionTabs value={section} onChange={setSection} />}
       <Tabs
         value={filter}
         onChange={(_, v: Filter) => setFilter(v)}
@@ -702,5 +717,20 @@ export function BeheerPage() {
     </PageLayout>
     </Box>
     </Box>
+  );
+}
+
+/** Leden of Huisstijl — alleen zichtbaar voor de eigenaar; een trainer ziet direct de leden. */
+function SectionTabs({ value, onChange }: { value: 'leden' | 'huisstijl'; onChange: (v: 'leden' | 'huisstijl') => void }) {
+  return (
+    <Tabs
+      value={value}
+      onChange={(_, v: 'leden' | 'huisstijl') => onChange(v)}
+      aria-label="Beheer"
+      sx={{ minHeight: 44, mb: 1, '& .MuiTab-root': { minHeight: 44, textTransform: 'none', fontWeight: 600, px: 2 } }}
+    >
+      <Tab value="leden" label="Leden" />
+      <Tab value="huisstijl" label="Huisstijl" />
+    </Tabs>
   );
 }

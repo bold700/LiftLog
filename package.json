@@ -48,6 +48,7 @@
     "@capacitor/status-bar": "^7.0.3",
     "@emotion/react": "^11.13.0",
     "@emotion/styled": "^11.13.0",
+    "@material/material-color-utilities": "^0.2.7",
     "@material/web": "^2.4.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@mui/icons-material": "^6.1.1",

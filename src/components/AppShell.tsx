@@ -29,6 +29,8 @@ interface AppShellProps {
   secondary: ShellDestination[];
   onLog: () => void;
   onLogout: () => void;
+  /** Naam en logo van de studio; zonder huisstijl is dat VORM. */
+  brand: { name: string; logoUrl: string | null };
   children: ReactNode;
 }
 
@@ -44,7 +46,7 @@ const railItemSx = (active: boolean) => ({
   '&:hover': { bgcolor: active ? designTokens.secondaryContainer : 'rgba(0,0,0,0.04)' },
 });
 
-export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog, onLogout, children }: AppShellProps) {
+export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog, onLogout, brand, children }: AppShellProps) {
   const theme = useTheme();
   const wide = useMediaQuery(theme.breakpoints.up('md'));
 
@@ -81,7 +83,12 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
           bgcolor: 'background.default',
         }}
       >
-        <Typography sx={{ px: 2, pb: 2, fontWeight: 700, fontSize: 20, letterSpacing: '-0.3px' }}>Vorm</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, px: 2, pb: 2, minHeight: 36 }}>
+          {brand.logoUrl && <Box component="img" src={brand.logoUrl} alt="" sx={{ height: 32, width: 'auto', maxWidth: 120, objectFit: 'contain' }} />}
+          <Typography sx={{ fontWeight: 700, fontSize: 20, letterSpacing: '-0.3px', lineHeight: 1.1 }} noWrap>
+            {brand.name}
+          </Typography>
+        </Box>
         <Button
           onClick={onLog}
           startIcon={<AddRoundedIcon />}
