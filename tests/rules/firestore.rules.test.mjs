@@ -252,6 +252,20 @@ await t('beheerder haalt een trainer bij zijn studio → mag', true,
 await t('beheerder zet iemand in een studio die niet de zijne is → geweigerd', false,
   updateDoc(doc(as('admin1'), 'profiles/trainer1'), { orgIds: ['studiob'] }));
 
+console.log('Lessoorten');
+const soort = (extra = {}) => ({ orgId: 'vanas', name: 'Small group strength', durationMin: 60, capacity: 8, creditCost: 1, defaultTrainerId: null, schemaId: null, ...extra });
+await t('trainer maakt een lessoort → mag', true, setDoc(doc(as('trainer1'), 'classTypes/ct1'), soort()));
+await t('beheerder maakt een lessoort → mag', true, setDoc(doc(as('admin1'), 'classTypes/ct2'), soort({ name: 'Open gym', capacity: null, creditCost: 0 })));
+await t('sporter maakt een lessoort → geweigerd', false, setDoc(doc(as('sporter2'), 'classTypes/ct3'), soort()));
+await t('lessoort zonder naam → geweigerd', false, setDoc(doc(as('trainer1'), 'classTypes/ct4'), soort({ name: '' })));
+await t('lessoort met negatieve credits → geweigerd', false, setDoc(doc(as('trainer1'), 'classTypes/ct5'), soort({ creditCost: -1 })));
+await t('sporter leest de lessoorten van zijn studio → mag', true, getDocs(query(collection(as('sporter2'), 'classTypes'), where('orgId', '==', 'vanas'))));
+await t('studio B leest de lessoorten van studio A → geweigerd', false, getDoc(doc(as('trainerB'), 'classTypes/ct1')));
+await t('trainer studio B maakt een lessoort in studio A → geweigerd', false, setDoc(doc(as('trainerB'), 'classTypes/ct6'), soort()));
+await t('trainer werkt een lessoort bij → mag', true, updateDoc(doc(as('trainer1'), 'classTypes/ct1'), { capacity: 10 }));
+await t('sporter werkt een lessoort bij → geweigerd', false, updateDoc(doc(as('sporter2'), 'classTypes/ct1'), { capacity: 1 }));
+await t('trainer verwijdert een lessoort → mag', true, deleteDoc(doc(as('trainer1'), 'classTypes/ct2')));
+
 console.log('Lessen, reserveringen en credits');
 const les = (extra = {}) => ({
   orgId: 'vanas', title: 'Small Group', date: '2026-09-10', startTime: '09:00',

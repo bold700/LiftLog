@@ -4,8 +4,8 @@ import { designTokens } from '../../theme/designTokens';
 
 interface PageLayoutProps {
   children: ReactNode;
-  /** Optioneel: andere max-width (default 800) */
-  maxWidth?: number;
+  /** Optioneel: andere max-width (default 800); 'none' = de hele breedte, zoals Beheer in het ontwerp. */
+  maxWidth?: number | 'none';
 }
 
 /**
