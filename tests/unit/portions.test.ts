@@ -15,7 +15,7 @@ describe('portionsFor', () => {
 
   it('zet de portie van de verpakking vooraan als die er is', () => {
     const p = portionsFor('Eiwitreep', 60);
-    expect(p[0]).toEqual({ label: 'Portie op de verpakking', grams: 60 });
+    expect(p[0]).toEqual({ label: 'Portie', grams: 60 });
     expect(p.map((x) => x.label)).toContain('Reep');
   });
 
@@ -30,5 +30,15 @@ describe('portionsFor', () => {
 
   it('laat "ei" niet afgaan op "eiwitreep"', () => {
     expect(portionsFor('Eiwitreep').map((p) => p.label)).not.toContain('Stuk');
+  });
+
+  it('zet de hele verpakking achteraan als de inhoud bekend is', () => {
+    const p = portionsFor('Protein kwark', 150, 450);
+    expect(p[p.length - 1]).toEqual({ label: 'Hele verpakking', grams: 450 });
+    expect(p.filter((x) => x.grams === 450)).toHaveLength(1);
+  });
+
+  it('herhaalt de verpakking niet als een portie al even zwaar is', () => {
+    expect(portionsFor('Magere kwark', null, 200).filter((x) => x.grams === 200)).toHaveLength(1);
   });
 });

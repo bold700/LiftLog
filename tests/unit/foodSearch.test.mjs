@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapOffHits, mergeProducts, parseServingGrams } from '../../api/food-search.mjs';
+import { mapOffHits, mergeProducts, nutritionDetails, parseServingGrams } from '../../api/food-search.mjs';
 
 describe('parseServingGrams', () => {
   it('leest gram uit een portie-omschrijving', () => {
@@ -37,6 +37,10 @@ describe('mapOffHits', () => {
         imageUrl: 'https://images.openfoodfacts.org/kwark.jpg',
         per100g: { kcal: 57, protein: 10, carbs: 3.4, fat: 0.2 },
         servingGrams: 250,
+        packageGrams: null,
+        imageLargeUrl: null,
+        nutriscore: null,
+        details: null,
         nl: false,
       },
     ]);
@@ -92,5 +96,25 @@ describe('nl-markering en samenvoegen', () => {
     const merged = mergeProducts(nl, world);
     expect(merged.map((p) => p.code)).toEqual(['1', '9']);
     expect(merged[0].name).toBe('Kwark');
+  });
+});
+
+describe('extra productinformatie', () => {
+  it('leest verpakkingsinhoud, grote foto en Nutri-Score', () => {
+    const [p] = mapOffHits([{
+      code: '1', product_name: 'Protein kwark', quantity: '450 g', image_url: 'https://x/groot.jpg', nutriscore_grade: 'A',
+      nutriments: { 'energy-kcal_100g': 66, sugars_100g: '3.0', fiber_100g: 0.2, salt_100g: 0.1 },
+    }]);
+    expect(p.packageGrams).toBe(450);
+    expect(p.imageLargeUrl).toBe('https://x/groot.jpg');
+    expect(p.nutriscore).toBe('a');
+    expect(p.details).toEqual({ sugars: 3, fiber: 0.2, saturatedFat: null, salt: 0.1 });
+  });
+
+  it('geeft geen details als het etiket er geen noemt, en geen Nutri-Score bij "unknown"', () => {
+    const [p] = mapOffHits([{ code: '1', product_name: 'X', nutriscore_grade: 'unknown', nutriments: { 'energy-kcal_100g': 1 } }]);
+    expect(p.details).toBeNull();
+    expect(p.nutriscore).toBeNull();
+    expect(nutritionDetails({})).toBeNull();
   });
 });
