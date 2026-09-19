@@ -30,6 +30,8 @@ import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
 import { useProfile } from '../context/ProfileContext';
+import { useI18n } from '../context/I18nContext';
+import { LANGS, type Lang } from '../i18n';
 import type { ReactNode } from 'react';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import { useAuth } from '../context/AuthContext';
@@ -55,6 +57,7 @@ export interface ProfileMoreItem {
 
 export function ProfielPage({ more = [], onLogout }: { more?: ProfileMoreItem[]; onLogout?: () => void }) {
   const profile = useProfile();
+  const { t, lang, setLang } = useI18n();
   const auth = useAuth();
   const [displayName, setDisplayName] = useState('');
   const [leaderboardVisibility, setLeaderboardVisibility] = useState<LeaderboardVisibility>('named');
@@ -398,6 +401,23 @@ export function ProfielPage({ more = [], onLogout }: { more?: ProfileMoreItem[];
             </Box>
           )}
 
+          {/* Taal: op het profiel, zodat elk apparaat dezelfde keuze laat zien (ontwerp: Account-kaart, rij "Language"). */}
+          <TextField
+            select
+            label={t('lang.label')}
+            size="small"
+            value={lang}
+            onChange={(e) => void setLang(e.target.value as Lang)}
+            helperText={t('profile.languageHelp')}
+            sx={{ maxWidth: 260 }}
+          >
+            {LANGS.map((l) => (
+              <MenuItem key={l} value={l}>
+                {t(`lang.${l}`)}
+              </MenuItem>
+            ))}
+          </TextField>
+
           <Box component="fieldset" sx={{ mt: 0.5, width: '100%', minWidth: 0, m: 0, p: 0, border: 0 }}>
             <Typography component="legend" variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, p: 0 }}>
               Ranglijst (privacy)
@@ -436,7 +456,7 @@ export function ProfielPage({ more = [], onLogout }: { more?: ProfileMoreItem[];
       {(more.length > 0 || onLogout) && (
         <ContentCard>
           <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 0.5 }}>
-            Meer
+            {t('profile.more')}
           </Typography>
           <List disablePadding>
             {more.map((item) => (
@@ -450,7 +470,7 @@ export function ProfielPage({ more = [], onLogout }: { more?: ProfileMoreItem[];
                 <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
                   <LogoutRoundedIcon fontSize="small" />
                 </ListItemIcon>
-                <ListItemText primary="Uitloggen" />
+                <ListItemText primary={t('nav.signOut')} />
               </ListItemButton>
             )}
           </List>

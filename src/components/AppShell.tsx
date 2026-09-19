@@ -12,6 +12,7 @@ import { Box, Button, Divider, List, ListItemButton, ListItemIcon, ListItemText,
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import { NavigationBar } from './NavigationBar';
+import { useI18n } from '../context/I18nContext';
 import { designTokens } from '../theme/designTokens';
 
 export interface ShellDestination {
@@ -48,6 +49,7 @@ const railItemSx = (active: boolean) => ({
 
 export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog, onLogout, brand, children }: AppShellProps) {
   const theme = useTheme();
+  const { t } = useI18n();
   const wide = useMediaQuery(theme.breakpoints.up('md'));
 
   if (!wide) {
@@ -68,7 +70,7 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       <Box
         component="nav"
-        aria-label="Hoofdnavigatie"
+        aria-label={t('nav.mainNavigation')}
         sx={{
           width: designTokens.railWidth,
           flexShrink: 0,
@@ -106,7 +108,7 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
             '&:hover': { bgcolor: designTokens.primaryContainer, boxShadow: '0 2px 6px rgba(0,0,0,0.25)' },
           }}
         >
-          Log
+          {t('nav.log')}
         </Button>
         <List disablePadding>
           {destinations.map((d) => (
@@ -131,7 +133,7 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
         )}
         <Box sx={{ flex: 1 }} />
         <Button onClick={onLogout} startIcon={<LogoutRoundedIcon />} color="inherit" sx={{ alignSelf: 'flex-start', mx: 1, color: 'text.secondary' }}>
-          Uitloggen
+          {t('nav.signOut')}
         </Button>
       </Box>
       <Box component="main" sx={{ flex: 1, minWidth: 0, px: 5, pt: 2 }}>

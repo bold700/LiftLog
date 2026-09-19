@@ -32,6 +32,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProfileProvider, useProfile } from './context/ProfileContext';
 import { ViewAsProvider } from './context/ViewAsContext';
 import { BrandingProvider, useBranding } from './context/BrandingContext';
+import { I18nProvider, useI18n } from './context/I18nContext';
 import { INZICHTEN_SUB } from './components/InzichtenPage';
 import { LoginPage } from './components/LoginPage';
 import { VerifyEmailScreen } from './components/VerifyEmailScreen';
@@ -57,6 +58,7 @@ function AppContent() {
   const fabMenuOpen = Boolean(fabAnchorEl);
   const profile = useProfile();
   const branding = useBranding();
+  const { t } = useI18n();
   const auth = useAuth();
   // Rol direct uit profiel (zelfde bron als in menu); fallback tot profile?.role uit context
   const role = (profile?.profile?.role ?? profile?.role ?? 'sporter') as 'sporter' | 'trainer' | 'admin';
@@ -115,16 +117,16 @@ function AppContent() {
   // Vijf bestemmingen, zoals in het ontwerp. Wat daar niet in past staat op een groot scherm in
   // de zijbalk onder een lijn en op de telefoon onder Profiel.
   const destinations: ShellDestination[] = [
-    { label: 'Inzichten', icon: <DonutLargeRoundedIcon fontSize="small" />, tabIndex: TAB_INZICHTEN },
-    { label: 'Workouts', icon: <FitnessCenterRoundedIcon fontSize="small" />, tabIndex: TAB_SCHEMAS },
-    { label: 'Lessen', icon: <CalendarMonthRoundedIcon fontSize="small" />, tabIndex: TAB_LESSEN },
-    { label: 'Voeding', icon: <RestaurantRoundedIcon fontSize="small" />, tabIndex: TAB_VOEDING },
-    { label: 'Profiel', icon: <PersonRoundedIcon fontSize="small" />, tabIndex: TAB_PROFIEL },
+    { label: t('nav.insights'), icon: <DonutLargeRoundedIcon fontSize="small" />, tabIndex: TAB_INZICHTEN },
+    { label: t('nav.workouts'), icon: <FitnessCenterRoundedIcon fontSize="small" />, tabIndex: TAB_SCHEMAS },
+    { label: t('nav.classes'), icon: <CalendarMonthRoundedIcon fontSize="small" />, tabIndex: TAB_LESSEN },
+    { label: t('nav.nutrition'), icon: <RestaurantRoundedIcon fontSize="small" />, tabIndex: TAB_VOEDING },
+    { label: t('nav.profile'), icon: <PersonRoundedIcon fontSize="small" />, tabIndex: TAB_PROFIEL },
   ];
   const secondary: ShellDestination[] = [
-    { label: 'Assistent', icon: <AutoAwesomeRoundedIcon fontSize="small" />, tabIndex: TAB_ASSISTENT },
-    { label: 'Metingen', icon: <MonitorWeightRoundedIcon fontSize="small" />, tabIndex: TAB_METINGEN },
-    ...(isTrainer ? [{ label: 'Beheer', icon: <GroupRoundedIcon fontSize="small" />, tabIndex: TAB_BEHEER }] : []),
+    { label: t('nav.assistant'), icon: <AutoAwesomeRoundedIcon fontSize="small" />, tabIndex: TAB_ASSISTENT },
+    { label: t('nav.measurements'), icon: <MonitorWeightRoundedIcon fontSize="small" />, tabIndex: TAB_METINGEN },
+    ...(isTrainer ? [{ label: t('nav.admin'), icon: <GroupRoundedIcon fontSize="small" />, tabIndex: TAB_BEHEER }] : []),
   ];
   const handleLogout = useCallback(() => {
     void auth?.logout();
@@ -333,6 +335,7 @@ function AuthedApp() {
       <CssBaseline />
       <NotifyProvider>
       <ProfileProvider>
+      <I18nProvider>
       <BrandingProvider>
       <BrandedTheme>
       <ViewAsProvider>
@@ -343,6 +346,7 @@ function AuthedApp() {
       </ViewAsProvider>
       </BrandedTheme>
       </BrandingProvider>
+      </I18nProvider>
       </ProfileProvider>
       </NotifyProvider>
     </ThemeProvider>

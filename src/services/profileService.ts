@@ -90,6 +90,7 @@ function toProfile(data: Record<string, unknown>, userId: string): Profile {
     trainerRequested: data.trainerRequested === true,
     createdByAdmin: data.createdByAdmin === true,
     leaderboardVisibility,
+    language: data.language === 'nl' || data.language === 'en' ? data.language : null,
     createdAt: ts(data.createdAt),
     updatedAt: ts(data.updatedAt),
   };
@@ -162,6 +163,7 @@ export async function updateProfile(
       | 'trainerId'
       | 'trainerRequested'
       | 'leaderboardVisibility'
+      | 'language'
     >
   >
 ): Promise<void> {
