@@ -152,17 +152,25 @@ export async function getThread(a: string, b: string): Promise<Message[]> {
     .sort((x, y) => (x.createdAt > y.createdAt ? 1 : -1));
 }
 
-/** Ongelezen berichten voor deze gebruiker; alleen gelijkheidsfilters, dus geen extra index nodig. */
+/**
+ * Ongelezen berichten voor deze gebruiker.
+ *
+ * Het filter op `participants` is geen detail maar de kern: de leesregel controleert dat veld, en
+ * Firestore staat een query alleen toe als hij uit de filters kan afleiden dat élk resultaat die
+ * regel haalt. Een zoekopdracht op `recipientId` + `readAt` werd daarom geweigerd — ook voor een
+ * deelnemer — en dat is wat "Missing or insufficient permissions" op de berichtenlijst was, terwijl
+ * één gesprek openen wél werkte (die query filtert al op `participants`).
+ *
+ * De rest filteren we hier: één filter houdt de query op de standaardindex, en de regel garandeert
+ * al dat er niets van een andere studio terugkomt.
+ */
 export async function getUnreadForUser(userId: string): Promise<Message[]> {
   if (!isFirebaseConfigured() || !db) return [];
-  const q = query(
-    collection(db, COLLECTION),
-    where('orgId', '==', requireOrgId()),
-    where('recipientId', '==', userId),
-    where('readAt', '==', null)
-  );
+  const q = query(collection(db, COLLECTION), where('participants', 'array-contains', userId));
   const snap = await getDocs(q);
-  return snap.docs.map((d) => toMessage(d.data(), d.id));
+  return snap.docs
+    .map((d) => toMessage(d.data(), d.id))
+    .filter((m) => m.recipientId === userId && !m.readAt);
 }
 
 /** Aantal ongelezen berichten per gesprekspartner, voor de tellers in de lijst. */

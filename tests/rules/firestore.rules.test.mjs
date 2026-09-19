@@ -150,6 +150,20 @@ await t('derde leest andermans gesprek → geweigerd', false, getDoc(doc(as('spo
 await t('ontvanger leest het bericht → mag', true, getDoc(doc(as('sporter2'), 'messages/m1')));
 await t('afzender leest het eigen bericht → mag', true, getDoc(doc(as('trainer1'), 'messages/m1')));
 await t('ontvanger markeert als gelezen → mag', true, updateDoc(doc(as('sporter2'), 'messages/m1'), { readAt: '2026-09-07T10:00:00.000Z' }));
+// De leesregel controleert `participants`. Firestore laat een query alleen toe als hij uit de
+// filters kan afleiden dat élk resultaat die regel haalt; een zoekopdracht zonder dat veld wordt
+// dus geweigerd, ook voor een deelnemer. Zo zag de trainer "Missing or insufficient permissions"
+// op de berichtenlijst terwijl één gesprek openen gewoon werkte.
+await t(
+  'ongelezen berichten zoeken zonder participants-filter → geweigerd',
+  false,
+  getDocs(query(collection(as('trainer1'), 'messages'), where('recipientId', '==', 'trainer1'), where('readAt', '==', null)))
+);
+await t(
+  'ongelezen berichten zoeken mét participants-filter → mag',
+  true,
+  getDocs(query(collection(as('trainer1'), 'messages'), where('participants', 'array-contains', 'trainer1')))
+);
 await t('afzender markeert eigen bericht als gelezen → geweigerd', false, updateDoc(doc(as('trainer1'), 'messages/m1'), { readAt: '2026-09-07T10:00:00.000Z' }));
 await t('ontvanger wijzigt de tekst → geweigerd', false, updateDoc(doc(as('sporter2'), 'messages/m1'), { text: 'iets anders' }));
 await t('afzender trekt eigen bericht terug → mag', true, deleteDoc(doc(as('sporter2'), 'messages/m2')));
