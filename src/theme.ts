@@ -60,7 +60,9 @@ export const lightTheme = createTheme({
     subtitle1: { fontWeight: 500 },
     button: { textTransform: 'none', fontWeight: 500 },
   },
-  shape: { borderRadius: 16 },
+  // Bewust op de MUI-standaard (4): `borderRadius: 2` in sx betekent overal in de app 2 × 4 = 8 px.
+  // De 16 px van het ontwerp ("Corner/Large") staat per component hieronder, niet als vermenigvuldiger.
+  shape: { borderRadius: 4 },
   components: {
     MuiButton: {
       styleOverrides: {
@@ -72,6 +74,19 @@ export const lightTheme = createTheme({
     },
     MuiChip: {
       styleOverrides: { root: { borderRadius: 8 } },
+    },
+    // MUI rondt bij een accordion alleen de buitenste hoeken van de eerste en laatste af, met
+    // shape.borderRadius (4 px). In het ontwerp is elke sectie een losse kaart van 16 px, dus
+    // krijgen alle hoeken van elke accordion dezelfde afronding — ook de eerste en de laatste.
+    MuiAccordion: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16,
+          '&:first-of-type': { borderTopLeftRadius: 16, borderTopRightRadius: 16 },
+          '&:last-of-type': { borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+          '&::before': { display: 'none' },
+        },
+      },
     },
     MuiPaper: {
       styleOverrides: { rounded: { borderRadius: 16 } },
