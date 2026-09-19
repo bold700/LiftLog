@@ -39,6 +39,15 @@ service cloud.firestore {
     function sameOrg() {
       return orgOf(resource.data) in myOrgs();
     }
+    /**
+     * Waar voor een profiel dat lid is van een studio waar ik lid van ben. Op `orgIds` en niet op
+     * `orgId`: de ledenlijst in de app filtert op lidmaatschap (`array-contains`), en Firestore
+     * keurt een lijst alleen goed als de regel uit dat filter te bewijzen is. Een profiel zonder
+     * `orgIds` (van vóór de migratie) telt met zijn thuisstudio mee.
+     */
+    function memberOfMyOrg() {
+      return resource.data.get('orgIds', [orgOf(resource.data)]).hasAny(myOrgs());
+    }
     /** Waar wanneer het binnenkomende document een studio draagt waar ik lid van ben. */
     function writesMyOrg() {
       return request.resource.data.get('orgId', defaultOrg()) in myOrgs();
@@ -110,7 +119,7 @@ service cloud.firestore {
     match /profiles/{userId} {
       allow read: if isSignedIn()
         && (request.auth.uid == userId
-            || (sameOrg()
+            || (memberOfMyOrg()
                 && (resource.data.trainerId == request.auth.uid
                     || isTrainerOrAdmin()
                     // Je eigen trainer mag je zien: zonder dit blijft de berichtenlijst leeg.
