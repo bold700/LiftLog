@@ -53,7 +53,6 @@ import { LesroosterImportDialog } from './schemas/LesroosterImportDialog';
 import { SchemaPrintView } from './schemas/SchemaPrintView';
 import { SchemaPeriodSummary } from './schemas/SchemaPeriodSummary';
 import { SchemaDayCard } from './schemas/SchemaDayCard';
-import { SporterFeedbackCard } from './schemas/SporterFeedbackCard';
 import { SchemaListFilters } from './schemas/SchemaListFilters';
 import type { AssigneeOption } from './schemas/SchemaListFilters';
 import { SchemaListCard } from './schemas/SchemaListCard';
@@ -529,14 +528,6 @@ export const SchemasPage = () => {
                 schema={selectedSchema}
                 startDate={selectedSchema.startDate}
                 endDate={selectedSchema.endDate}
-              />
-            )}
-
-            {isTrainer && selectedSchema.clientId && selectedSchema.audience !== 'group' && (
-              <SporterFeedbackCard
-                userId={selectedSchema.clientId}
-                sporterName={nameOf(selectedSchema.clientId)}
-                schemaId={selectedSchema.id}
               />
             )}
 

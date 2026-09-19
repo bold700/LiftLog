@@ -46,6 +46,7 @@ import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
 import { saveCheckin } from '../services/checkinService';
+import { LastHandoverNote } from './LastHandoverNote';
 import { CheckinDialog, type Feeling } from './CheckinDialog';
 import { designTokens } from '../theme/designTokens';
 import { PageLayout, ContentCard } from './layout';
@@ -405,6 +406,8 @@ export const TrainingSessionView = ({
               ))}
             </TextField>
           )}
+
+          {logTarget && <LastHandoverNote userId={logTarget.userId} />}
 
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
             <strong>Training afronden:</strong> log per oefening via &quot;Log toevoegen&quot;, of rond de hele training af met &quot;Training afronden&quot; hieronder.
