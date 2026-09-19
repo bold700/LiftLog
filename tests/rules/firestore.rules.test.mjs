@@ -135,6 +135,17 @@ await t('beheerder studio B leest eigen studio → mag', true, getDoc(doc(as('ad
 await t('beheerder studio B leest andere studio → geweigerd', false, getDoc(doc(as('adminB'), 'orgs/vanas')));
 await t('trainer studio B maakt workout in eigen studio → mag', true, setDoc(doc(as('trainerB'), 'workouts/wB2'), { orgId: 'studiob', trainerId: 'trainerB', name: 'ok' }));
 
+// De ledenlijst zoals de app hem opvraagt (profileService.getAllProfiles): een filter op lidmaatschap
+// (`orgIds`). Firestore keurt een lijst alleen goed als uit de filters volgt dat élk resultaat de
+// leesregel haalt. Wordt dit geweigerd, dan valt het hele profiel weg en ziet een beheerder de app
+// als sporter: geen Beheer, geen sporters.
+const leden = (uid, org) => getDocs(query(collection(as(uid), 'profiles'), where('orgIds', 'array-contains', org)));
+await t('beheerder vraagt ledenlijst eigen studio op → mag', true, leden('adminB', 'studiob'));
+await t('trainer vraagt ledenlijst eigen studio op → mag', true, leden('trainerB', 'studiob'));
+await t('beheerder vraagt ledenlijst andere studio op → geweigerd', false, leden('adminB', 'vanas'));
+await t('sporter vraagt ledenlijst op → geweigerd', false, leden('sporterB', 'studiob'));
+await t('trainer van twee studio\'s vraagt ledenlijst tweede studio op → mag', true, leden('duo', 'studiob'));
+
 console.log('Berichten');
 const msg = (from, to, extra = {}) => ({
   orgId: 'vanas', threadId: [from, to].sort().join('__'), participants: [from, to].sort(),

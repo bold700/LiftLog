@@ -87,12 +87,21 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setActiveOrgId(active);
       setProfile(p);
       if (p?.role === 'trainer' || p?.role === 'admin') {
-        const [mySporters, all] = await Promise.all([
-          getSportersByTrainerId(auth.user.uid),
-          getAllSporters(),
-        ]);
-        setSporters(mySporters);
-        setAllSporters(all);
+        // De ledenlijst apart afvangen: mislukt die, dan blijft het profiel (en dus de rol) staan.
+        // Anders zag een beheerder de app als sporter zodra alleen de lijst werd geweigerd.
+        try {
+          const [mySporters, all] = await Promise.all([
+            getSportersByTrainerId(auth.user.uid),
+            getAllSporters(),
+          ]);
+          setSporters(mySporters);
+          setAllSporters(all);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          setError('Ledenlijst niet kunnen laden. ' + msg);
+          setSporters([]);
+          setAllSporters([]);
+        }
       } else {
         setSporters([]);
         setAllSporters([]);
