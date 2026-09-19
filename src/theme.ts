@@ -3,20 +3,26 @@ import themeData from './theme.json';
 
 const lightScheme = themeData.schemes.light;
 
-// Light theme - alleen Material 3 tokens gebruiken
+/**
+ * Licht thema, één-op-één uit het Material 3-schema in theme.json — dat is het schema uit het
+ * Figma-ontwerp (Vorm): donkergroen op gebroken wit, zachtgroene containers. Componenten halen
+ * kleuren uit het palet ('primary.main', 'background.default'); hexcodes horen hier of in
+ * theme/designTokens.ts en nergens anders.
+ */
 export const lightTheme = createTheme({
   palette: {
     mode: 'light',
     primary: {
       main: lightScheme.primary,
-      light: lightScheme.primaryFixed,
-      dark: lightScheme.primaryContainer,
+      // light = de zachte container (chips, FAB); dark = de hover-tint van een gevulde knop.
+      light: lightScheme.primaryContainer,
+      dark: lightScheme.onPrimaryContainer,
       contrastText: lightScheme.onPrimary,
     },
     secondary: {
       main: lightScheme.secondary,
-      light: lightScheme.secondaryFixed,
-      dark: lightScheme.secondaryContainer,
+      light: lightScheme.secondaryContainer,
+      dark: lightScheme.onSecondaryContainer,
       contrastText: lightScheme.onSecondary,
     },
     error: {
@@ -26,10 +32,16 @@ export const lightTheme = createTheme({
       contrastText: lightScheme.onError,
     },
     success: {
-      main: '#00CF93', // Using tertiary color for success
-      light: '#5AFDBD',
-      dark: '#006C4B',
-      contrastText: '#FFFFFF',
+      main: lightScheme.primary,
+      light: lightScheme.primaryContainer,
+      dark: lightScheme.onPrimaryContainer,
+      contrastText: lightScheme.onPrimary,
+    },
+    info: {
+      main: lightScheme.tertiary,
+      light: lightScheme.tertiaryContainer,
+      dark: lightScheme.onTertiaryContainer,
+      contrastText: lightScheme.onTertiary,
     },
     background: {
       default: lightScheme.background,
@@ -43,12 +55,32 @@ export const lightTheme = createTheme({
   },
   typography: {
     fontFamily: 'Roboto, sans-serif',
+    h5: { fontWeight: 500, letterSpacing: '-0.2px' },
+    h6: { fontWeight: 500 },
+    subtitle1: { fontWeight: 500 },
+    button: { textTransform: 'none', fontWeight: 500 },
   },
+  shape: { borderRadius: 16 },
   components: {
     MuiButton: {
       styleOverrides: {
         root: {
           borderRadius: '9999999999px',
+          textTransform: 'none',
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: { root: { borderRadius: 8 } },
+    },
+    MuiPaper: {
+      styleOverrides: { rounded: { borderRadius: 16 } },
+    },
+    MuiFab: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16,
+          boxShadow: '0 1px 3px rgba(0,0,0,0.3), 0 4px 8px 3px rgba(0,0,0,0.15)',
         },
       },
     },

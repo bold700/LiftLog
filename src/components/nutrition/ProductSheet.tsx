@@ -128,7 +128,7 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
       fullScreen={fullScreen}
       maxWidth="xs"
       fullWidth
-      PaperProps={{ sx: { bgcolor: '#F2E4D3', borderRadius: fullScreen ? 0 : `${designTokens.cardRadius}px` } }}
+      PaperProps={{ sx: { bgcolor: 'background.default', borderRadius: fullScreen ? 0 : `${designTokens.cardRadius}px` } }}
     >
       {product && (
         <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: fullScreen ? '100%' : undefined }}>
@@ -182,7 +182,7 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
             {/* Macro's voor wat je gaat eten */}
             {macros && (
               <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, mb: 2 }}>
-                <MacroTile label="kcal" value={macros.kcal.toLocaleString('nl-NL')} dot="#000" />
+                <MacroTile label="kcal" value={macros.kcal.toLocaleString('nl-NL')} dot={designTokens.primary} />
                 <MacroTile label="koolh." value={`${fmt1(macros.carbs)} g`} dot="#D96C6C" />
                 <MacroTile label="eiwit" value={`${fmt1(macros.protein)} g`} dot="#4E8AC7" />
                 <MacroTile label="vet" value={`${fmt1(macros.fat)} g`} dot="#E39A3B" />
@@ -265,7 +265,7 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
               variant="contained"
               onClick={onSave}
               disabled={saving || totalGrams <= 0}
-              sx={{ py: 1.5, borderRadius: '28px', textTransform: 'none', fontSize: 16, fontWeight: 700, bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}
+              sx={{ py: 1.5, borderRadius: '28px', textTransform: 'none', fontSize: 16, fontWeight: 700, bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } }}
             >
               {saving ? 'Bezig…' : isEditing ? 'Opslaan' : 'Toevoegen aan dagboek'}
             </Button>

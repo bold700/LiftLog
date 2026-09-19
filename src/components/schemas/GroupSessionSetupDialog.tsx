@@ -111,7 +111,7 @@ export const GroupSessionSetupDialog = ({
         variant="contained"
         onClick={onConfirm}
         disabled={participantIds.length === 0 || starting}
-        sx={{ bgcolor: '#000000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}
+        sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } }}
       >
         {starting ? 'Bezig…' : 'Training starten'}
       </Button>

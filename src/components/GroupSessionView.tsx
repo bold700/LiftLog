@@ -265,7 +265,7 @@ export function GroupSessionView({ schema, session, participants, currentUserId,
                         ) : null}
                         <Box sx={{ mt: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Box
-                            sx={{ cursor: 'pointer', display: 'inline-flex', bgcolor: '#000', color: '#F2E4D3', borderRadius: '20px', px: 2, py: 1 }}
+                            sx={{ cursor: 'pointer', display: 'inline-flex', bgcolor: 'primary.main', color: 'primary.contrastText', borderRadius: '20px', px: 2, py: 1 }}
                             onClick={() => openModal(exIndex)}
                             role="button"
                             tabIndex={0}
@@ -395,7 +395,7 @@ export function GroupSessionView({ schema, session, participants, currentUserId,
             onClick={handleSave}
             disabled={saving || !selPid}
             startIcon={selCurrent ? <CheckCircleIcon /> : undefined}
-            sx={{ bgcolor: '#000000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}
+            sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } }}
           >
             {saving ? 'Bezig…' : selCurrent ? 'Bijwerken' : 'Opslaan'}
           </Button>

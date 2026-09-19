@@ -98,7 +98,7 @@ body {
 /* Kleuren uit theme: outline #7D766D, outlineVariant #CEC5BB */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #7D766D #CEC5BB;
+  scrollbar-color: #73796E #E7E9DF;
 }
 
 *::-webkit-scrollbar {
@@ -107,26 +107,26 @@ body {
 }
 
 *::-webkit-scrollbar-track {
-  background: #CEC5BB;
+  background: #E7E9DF;
   border-radius: 4px;
 }
 
 *::-webkit-scrollbar-thumb {
-  background: #7D766D;
+  background: #73796E;
   border-radius: 4px;
-  border: 1px solid #CEC5BB;
+  border: 1px solid #E7E9DF;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: #4C463E;
+  background: #43483F;
 }
 
 *::-webkit-scrollbar-thumb:active {
-  background: #1D1B1A;
+  background: #191D17;
 }
 
 *::-webkit-scrollbar-corner {
-  background: #CEC5BB;
+  background: #E7E9DF;
   border-radius: 4px;
 }
 

@@ -9,12 +9,12 @@ export const PANEL_SX = {
 
 /** Zwarte primaire knop, zelfde look als de andere pagina's. */
 export const PRIMARY_BUTTON_SX = {
-  bgcolor: '#000',
-  color: '#F2E4D3',
+  bgcolor: 'primary.main',
+  color: 'primary.contrastText',
   borderRadius: '24px',
   textTransform: 'none',
   fontWeight: 600,
-  '&:hover': { bgcolor: '#1a1a1a' },
+  '&:hover': { bgcolor: 'primary.dark' },
   '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.12)', color: 'rgba(29,27,26,0.38)' },
 } as const;
 

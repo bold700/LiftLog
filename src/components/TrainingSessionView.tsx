@@ -358,8 +358,8 @@ export const TrainingSessionView = ({
                 onClick={onNextDay}
                 aria-label="Volgende dag"
                 sx={{
-                  bgcolor: '#000000',
-                  color: '#F2E4D3',
+                  bgcolor: 'primary.main',
+                  color: 'primary.contrastText',
                   borderRadius: '20px',
                   px: 2,
                   py: 1.25,
@@ -368,7 +368,7 @@ export const TrainingSessionView = ({
                   // Mag krimpen: een lange dagnaam liep anders het scherm uit.
                   minWidth: 0,
                   maxWidth: '100%',
-                  '&:hover': { bgcolor: '#1a1a1a' },
+                  '&:hover': { bgcolor: 'primary.dark' },
                 }}
               >
                 <Box

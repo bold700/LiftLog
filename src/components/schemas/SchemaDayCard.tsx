@@ -44,8 +44,8 @@ export const SchemaDayCard = ({ schema, dayIndex, isCurrentWeek, onStart }: Sche
                 px: 1,
                 py: 0.25,
                 borderRadius: '12px',
-                bgcolor: '#000000',
-                color: '#F2E4D3',
+                bgcolor: 'primary.main',
+                color: 'primary.contrastText',
                 fontSize: 12,
                 fontWeight: 600,
                 lineHeight: 1.4,
@@ -228,13 +228,13 @@ export const SchemaDayCard = ({ schema, dayIndex, isCurrentWeek, onStart }: Sche
           aria-label={`Training starten voor ${day.dayLabel}`}
           sx={{
             mt: 2,
-            bgcolor: '#000000',
-            color: '#F2E4D3',
+            bgcolor: 'primary.main',
+            color: 'primary.contrastText',
             borderRadius: '24px',
             py: 1.25,
             textTransform: 'none',
             fontWeight: 600,
-            '&:hover': { bgcolor: '#1a1a1a' },
+            '&:hover': { bgcolor: 'primary.dark' },
             '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.12)', color: 'rgba(29,27,26,0.38)' },
           }}
         >

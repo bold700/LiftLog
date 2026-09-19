@@ -65,7 +65,7 @@ export const WorkoutRequestDialog = ({ open, profile, onClose, onSent }: Workout
           variant="contained"
           onClick={handleSendRequest}
           disabled={requestSending}
-          sx={{ bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}
+          sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } }}
         >
           {requestSending ? 'Versturen…' : 'Aanvraag versturen'}
         </Button>
