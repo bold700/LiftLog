@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { PageLayout, ContentCard } from './layout';
+import { WeeklyCheckinDialog } from './WeeklyCheckinDialog';
 import { NumberField } from './NumberField';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
@@ -94,6 +95,7 @@ export function MetingenPage() {
   const selfUid = profileCtx?.profile?.userId ?? '';
   const selfTrainerId = profileCtx?.profile?.trainerId ?? null;
 
+  const [weeklyOpen, setWeeklyOpen] = useState(false);
   const [targetId, setTargetId] = useState('');
   const [items, setItems] = useState<Measurement[]>([]);
   const [loading, setLoading] = useState(false);
@@ -377,17 +379,24 @@ export function MetingenPage() {
           <Typography variant="h5" fontWeight={600}>
             Metingen
           </Typography>
-          <Button
-            size="small"
-            variant="text"
-            sx={{ textTransform: 'none' }}
-            onClick={() => {
-              setGoalInput(goalWeight != null ? String(goalWeight) : '');
-              setGoalOpen(true);
-            }}
-          >
-            {goalWeight != null ? `Doel: ${goalWeight} kg` : 'Doelgewicht instellen'}
-          </Button>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            {!isTrainer && profileCtx?.profile && (
+              <Button size="small" variant="text" sx={{ textTransform: 'none' }} onClick={() => setWeeklyOpen(true)}>
+                Wekelijkse check-in
+              </Button>
+            )}
+            <Button
+              size="small"
+              variant="text"
+              sx={{ textTransform: 'none' }}
+              onClick={() => {
+                setGoalInput(goalWeight != null ? String(goalWeight) : '');
+                setGoalOpen(true);
+              }}
+            >
+              {goalWeight != null ? `Doel: ${goalWeight} kg` : 'Doelgewicht instellen'}
+            </Button>
+          </Box>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Houd je gewicht, vetpercentage, bodyscan, omtrekmaten en huidplooien bij en volg je voortgang.
@@ -616,6 +625,14 @@ export function MetingenPage() {
 
       <WeightGoalDialog open={goalOpen} value={goalInput} onChange={setGoalInput} onClose={() => setGoalOpen(false)} onSave={handleSaveGoal} />
       <BodyScanDialog measurement={viewScan} onClose={() => setViewScan(null)} />
+      {!isTrainer && profileCtx?.profile && (
+        <WeeklyCheckinDialog
+          open={weeklyOpen}
+          onClose={() => setWeeklyOpen(false)}
+          me={profileCtx.profile}
+          onSaved={() => void load()}
+        />
+      )}
     </PageLayout>
   );
 }

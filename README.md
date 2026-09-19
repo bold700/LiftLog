@@ -19,7 +19,7 @@ Van As Personal Training is de eerste studio en tegelijk de proeftuin.
 - **Bodyscan**: foto's van het scherm of de uitdraai van de lichaamsanalyse-weegschaal (BodyAnalyse, InBody) worden uitgelezen (`/api/bodyscan-photo`), gecontroleerd en als leesbaar rapport bij de sporter bewaard. Er gaat niets naar de fabrikant van de weegschaal.
 - **AI-chat koppeling**: MCP-server op `/api/mcp` met een persoonlijke koppelsleutel (Profiel → Koppel met AI-chat).
 - **Assistent in de app**: dezelfde gereedschapskist als de AI-koppeling, maar zonder connector of ChatGPT-abonnement (`/api/assistant`).
-- **Berichten en check-ins**: contact tussen trainer en sporter bij het dossier, met een wekelijkse check-in die het gewicht meteen als meting vastlegt.
+- **Check-ins en overdracht**: een wekelijkse check-in die het gewicht meteen als meting vastlegt, en na een training een overdracht die bij het dossier blijft staan. Versturen doet de app niet — teksten gaan met één knop naar WhatsApp, waar het gesprek toch al loopt.
 - **Meldingen**: pushnotificaties per toestel bij een bericht, een check-in of een nieuw schema.
 - **Meerdere studio's**: elke studio is strikt gescheiden; een trainer kan bij meerdere studio's werken en wisselt bovenin (zie [docs/STUDIOS-EN-OVERDRACHT.md](docs/STUDIOS-EN-OVERDRACHT.md)).
 - **Lessen en credits**: rooster met capaciteit en wachtlijst; sporters reserveren met credits, de trainer kent ze toe. Reserveren loopt via een transactie op de server, zodat plek en saldo altijd kloppen.

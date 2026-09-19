@@ -23,7 +23,6 @@ import {
 } from '../utils/schemaSessionUtils';
 import { getLogsForUser, deleteExerciseLog } from '../services/logService';
 import { generateTrainingRecap } from '../services/trainingRecapService';
-import { sendMessage } from '../services/messageService';
 import {
   fromLocalExercises,
   fromSporterLogs,
@@ -316,29 +315,13 @@ export const TrainingSessionView = ({
   );
 
   /**
-   * De overdracht gaat naar de vaste trainer van de sporter; het korte bericht naar de sporter
-   * zelf. Heeft de sporter geen andere vaste trainer, dan is er niemand om aan over te dragen en
-   * blijft de tekst bij de check-in staan.
+   * De overdracht komt bij deze training te staan; de volgende trainer leest hem bij het dossier
+   * van de sporter. Versturen doet de app niet — daar zitten de knoppen naar WhatsApp voor, waar
+   * het gesprek toch al loopt.
    */
-  const handleSendHandover = useCallback(
-    async (draft: { handover: string; toSporter: string }) => {
-      const me = profileCtx?.profile;
-      setHandover(draft.handover || null);
-      if (!me || !logTarget) return;
-      const headCoach = logTarget.trainerId;
-      if (draft.handover && headCoach && headCoach !== me.userId) {
-        await sendMessage({
-          senderId: me.userId,
-          recipientId: headCoach,
-          text: `Overdracht na ${day?.dayLabel ?? 'de training'} met ${logTarget.displayName?.trim() || 'je sporter'}:\n\n${draft.handover}`,
-        });
-      }
-      if (draft.toSporter) {
-        await sendMessage({ senderId: me.userId, recipientId: logTarget.userId, text: draft.toSporter });
-      }
-    },
-    [profileCtx?.profile, logTarget, day?.dayLabel]
-  );
+  const handleSaveHandover = useCallback(async (draft: { handover: string; toSporter: string }) => {
+    setHandover(draft.handover || null);
+  }, []);
 
   if (!day) {
     return null;
@@ -698,7 +681,7 @@ export const TrainingSessionView = ({
         onSave={handleCheckinSave}
         sporterName={logTarget ? logTarget.displayName?.trim() || logTarget.email || 'de sporter' : null}
         onRequestDraft={logTarget ? handleRequestDraft : undefined}
-        onSendHandover={logTarget ? handleSendHandover : undefined}
+        onSaveHandover={logTarget ? handleSaveHandover : undefined}
       />
       </PageLayout>
   );
