@@ -30,6 +30,27 @@ export interface FoodProduct {
   servingGrams: number | null;
   /** Verkocht in Nederland volgens Open Food Facts. Zulke producten staan hoger in de lijst. */
   nl?: boolean;
+  /** Inhoud van de verpakking in gram ("450 g"), voor de portie "hele verpakking". */
+  packageGrams?: number | null;
+  /** Grotere foto voor het productscherm; `imageUrl` is de kleine voor in de lijst. */
+  imageLargeUrl?: string | null;
+  nutriscore?: 'a' | 'b' | 'c' | 'd' | 'e' | null;
+  /** Wat het etiket verder zegt, per 100 g. Null als er niets van bekend is. */
+  details?: { sugars: number | null; fiber: number | null; saturatedFat: number | null; salt: number | null } | null;
+}
+
+/** Bij welk moment van de dag iets is gegeten. */
+export type MealMoment = 'ontbijt' | 'lunch' | 'diner' | 'tussendoor';
+export const MEAL_ORDER: MealMoment[] = ['ontbijt', 'lunch', 'diner', 'tussendoor'];
+export const MEAL_LABELS: Record<MealMoment, string> = { ontbijt: 'Ontbijt', lunch: 'Lunch', diner: 'Diner', tussendoor: 'Tussendoor' };
+
+/** Het eetmoment dat bij dit uur van de dag hoort — een goede eerste gok, geen wet. */
+export function defaultMealForNow(now: Date = new Date()): MealMoment {
+  const h = now.getHours() + now.getMinutes() / 60;
+  if (h < 10.5) return 'ontbijt';
+  if (h >= 11.5 && h < 14) return 'lunch';
+  if (h >= 17 && h < 20.5) return 'diner';
+  return 'tussendoor';
 }
 
 export interface NutritionLog {
@@ -47,6 +68,11 @@ export interface NutritionLog {
   protein: number;
   carbs: number;
   fat: number;
+  /** Ontbijt, lunch, diner of tussendoor. Oudere logs hebben dit niet. */
+  meal?: MealMoment | null;
+  /** Hoe het is ingevoerd: "2× Bakje". Alleen ter weergave; `grams` blijft de waarheid. */
+  portionLabel?: string | null;
+  quantity?: number | null;
   createdAt: string;
 }
 
@@ -172,7 +198,7 @@ export async function searchFoods(term: string): Promise<FoodSearchResult> {
 export async function getProductByBarcode(code: string): Promise<FoodProduct | null> {
   const c = code.trim();
   if (!c) return null;
-  const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(c)}.json?fields=code,product_name,brands,nutriments,serving_size,image_small_url`;
+  const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(c)}.json?fields=code,product_name,brands,nutriments,serving_size,quantity,image_small_url,image_url,nutriscore_grade`;
   const res = await fetch(url);
   if (!res.ok) return null;
   const data = await res.json().catch(() => null);
@@ -195,7 +221,21 @@ export async function getProductByBarcode(code: string): Promise<FoodProduct | n
       fat: Math.round(num(n['fat_100g']) * 10) / 10,
     },
     servingGrams: parseServingGrams(p.serving_size),
+    packageGrams: parseServingGrams(p.quantity),
+    imageLargeUrl: typeof p.image_url === 'string' ? p.image_url : null,
+    nutriscore: /^[a-e]$/.test(String(p.nutriscore_grade ?? '')) ? (String(p.nutriscore_grade) as FoodProduct['nutriscore']) : null,
+    details: detailsFromNutriments(n),
   };
+}
+
+function detailsFromNutriments(n: Record<string, unknown>): FoodProduct['details'] {
+  const opt = (k: string) => {
+    const v = n[k];
+    const x = typeof v === 'number' ? v : typeof v === 'string' && v !== '' ? Number(v) : NaN;
+    return Number.isFinite(x) ? Math.round(x * 10) / 10 : null;
+  };
+  const d = { sugars: opt('sugars_100g'), fiber: opt('fiber_100g'), saturatedFat: opt('saturated-fat_100g'), salt: opt('salt_100g') };
+  return Object.values(d).some((v) => v != null) ? d : null;
 }
 
 export interface RecognizedFood {
@@ -244,7 +284,10 @@ export async function saveNutritionLog(
     orgId: logInput.orgId || requireOrgId(),
     createdAt: logInput.createdAt ?? new Date().toISOString(),
   };
-  await setDoc(doc(db, COLLECTION, id), { ...full, updatedAt: serverTimestamp() }, { merge: true });
+  // Firestore weigert `undefined`; optionele velden die niet gezet zijn laten we gewoon weg.
+  const clean: Record<string, unknown> = { updatedAt: serverTimestamp() };
+  for (const [k, v] of Object.entries(full)) if (v !== undefined) clean[k] = v;
+  await setDoc(doc(db, COLLECTION, id), clean, { merge: true });
   return full;
 }
 
@@ -268,6 +311,9 @@ function toLog(data: Record<string, unknown>, id: string): NutritionLog {
     protein: num(data.protein),
     carbs: num(data.carbs),
     fat: num(data.fat),
+    meal: MEAL_ORDER.includes(data.meal as MealMoment) ? (data.meal as MealMoment) : null,
+    portionLabel: typeof data.portionLabel === 'string' && data.portionLabel ? data.portionLabel : null,
+    quantity: typeof data.quantity === 'number' && data.quantity > 0 ? data.quantity : null,
     createdAt: typeof data.createdAt === 'string' ? data.createdAt : new Date().toISOString(),
   };
 }

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
-  Chip,
   Typography,
   TextField,
   MenuItem,
@@ -53,11 +52,15 @@ import {
   type FoodProduct,
   type NutritionLog,
   type RecognizedFood,
+  defaultMealForNow,
+  MEAL_LABELS,
+  MEAL_ORDER,
+  type MealMoment,
 } from '../services/nutritionService';
 import { todayIso } from '../utils/format';
 import { fileToDataUrl } from '../utils/imageDataUrl';
 import { NumberField } from './NumberField';
-import { portionsFor } from '../utils/portions';
+import { ProductSheet, type PortionChoice } from './nutrition/ProductSheet';
 
 type Period = 'day' | 'week' | 'month';
 
@@ -89,6 +92,12 @@ function per100gFromLog(l: NutritionLog): FoodProduct['per100g'] {
 }
 
 const EMPTY_TOTALS = { kcal: 0, protein: 0, carbs: 0, fat: 0 };
+
+/** Volgorde van de dag, met achteraan wat vóór de eetmomenten is gelogd en dus geen moment heeft. */
+const MEAL_GROUPS: { key: MealMoment | null; label: string }[] = [
+  ...MEAL_ORDER.map((m) => ({ key: m as MealMoment | null, label: MEAL_LABELS[m] })),
+  { key: null, label: 'Zonder moment' },
+];
 function sumLogs(logs: NutritionLog[]) {
   return logs.reduce(
     (a, l) => ({
@@ -129,6 +138,8 @@ export function NutritionPage() {
   const [selected, setSelected] = useState<FoodProduct | null>(null);
   const [editingLog, setEditingLog] = useState<NutritionLog | null>(null);
   const [grams, setGrams] = useState('100');
+  const [meal, setMeal] = useState<MealMoment>(() => defaultMealForNow());
+  const [portion, setPortion] = useState<PortionChoice | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [goalOpen, setGoalOpen] = useState(false);
@@ -292,11 +303,14 @@ export function NutritionPage() {
     setEditingLog(l);
     setSelected({ code: `edit:${l.id}`, name: l.productName, brand: l.brand, imageUrl: null, per100g: per100gFromLog(l), servingGrams: l.grams });
     setGrams(String(l.grams));
+    setMeal(l.meal ?? defaultMealForNow());
+    setPortion(l.portionLabel && l.quantity ? { label: l.portionLabel, quantity: l.quantity } : null);
   };
 
   const closeDialog = () => {
     setSelected(null);
     setEditingLog(null);
+    setPortion(null);
   };
 
   const handleSave = async () => {
@@ -321,6 +335,9 @@ export function NutritionPage() {
         protein: m.protein,
         carbs: m.carbs,
         fat: m.fat,
+        meal,
+        portionLabel: portion?.label ?? null,
+        quantity: portion?.quantity ?? null,
       });
       closeDialog();
       setTerm('');
@@ -342,7 +359,6 @@ export function NutritionPage() {
     await loadLogs();
   };
 
-  const preview = selected ? macrosForGrams(selected.per100g, Number(grams) || 0) : null;
   const periodLabel = period === 'day' ? 'Deze dag' : period === 'week' ? 'Gemiddeld per dag (7 dagen)' : 'Gemiddeld per dag (30 dagen)';
 
   return (
@@ -532,25 +548,45 @@ export function NutritionPage() {
                 Nog niets gelogd op deze dag.
               </Typography>
             ) : (
-              <List dense>
-                {dayLogs.map((l) => (
-                  <ListItem
-                    key={l.id}
-                    secondaryAction={
-                      <Box>
-                        <IconButton edge="end" size="small" onClick={() => openEdit(l)} aria-label="Bewerken" sx={{ mr: 0.5 }}>
-                          <EditRoundedIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton edge="end" size="small" onClick={() => handleDelete(l.id)} aria-label="Verwijderen">
-                          <DeleteOutlineRoundedIcon fontSize="small" />
-                        </IconButton>
-                      </Box>
-                    }
-                  >
-                    <ListItemText primary={`${l.productName} · ${l.grams} g`} secondary={`${l.kcal} kcal · E ${l.protein} · K ${l.carbs} · V ${l.fat}`} />
-                  </ListItem>
-                ))}
-              </List>
+              MEAL_GROUPS.map((group) => {
+                const items = dayLogs.filter((l) => (l.meal ?? null) === group.key);
+                if (items.length === 0) return null;
+                const kcal = items.reduce((a, l) => a + l.kcal, 0);
+                return (
+                  <Box key={group.key ?? 'overig'} sx={{ mb: 1.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', px: 2, mb: 0.25 }}>
+                      <Typography variant="subtitle2" fontWeight={700}>
+                        {group.label}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {kcal} kcal
+                      </Typography>
+                    </Box>
+                    <List dense disablePadding>
+                      {items.map((l) => (
+                        <ListItem
+                          key={l.id}
+                          secondaryAction={
+                            <Box>
+                              <IconButton edge="end" size="small" onClick={() => openEdit(l)} aria-label="Bewerken" sx={{ mr: 0.5 }}>
+                                <EditRoundedIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton edge="end" size="small" onClick={() => handleDelete(l.id)} aria-label="Verwijderen">
+                                <DeleteOutlineRoundedIcon fontSize="small" />
+                              </IconButton>
+                            </Box>
+                          }
+                        >
+                          <ListItemText
+                            primary={l.productName}
+                            secondary={`${l.quantity && l.portionLabel ? `${l.quantity}× ${l.portionLabel} · ` : ''}${l.grams} g · ${l.kcal} kcal · E ${l.protein} · K ${l.carbs} · V ${l.fat}`}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Box>
+                );
+              })
             )}
           </>
         )}
@@ -590,7 +626,18 @@ export function NutritionPage() {
         </Suspense>
       )}
 
-      <AddDialog selected={selected} grams={grams} setGrams={setGrams} preview={preview} saving={saving} isEditing={editingLog != null} onClose={closeDialog} onSave={handleSave} />
+      <ProductSheet
+        product={selected}
+        grams={grams}
+        setGrams={setGrams}
+        meal={meal}
+        setMeal={setMeal}
+        onPortion={setPortion}
+        saving={saving}
+        isEditing={editingLog != null}
+        onClose={closeDialog}
+        onSave={handleSave}
+      />
       <GoalDialog
         open={goalOpen}
         initial={goal}
@@ -609,96 +656,6 @@ export function NutritionPage() {
         }}
       />
     </PageLayout>
-  );
-}
-
-function AddDialog({
-  selected,
-  grams,
-  setGrams,
-  preview,
-  saving,
-  isEditing,
-  onClose,
-  onSave,
-}: {
-  selected: FoodProduct | null;
-  grams: string;
-  setGrams: (v: string) => void;
-  preview: { kcal: number; protein: number; carbs: number; fat: number } | null;
-  saving: boolean;
-  isEditing: boolean;
-  onClose: () => void;
-  onSave: () => void;
-}) {
-  return (
-    <Dialog open={selected != null} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ pb: 0.5 }}>{isEditing ? 'Bewerken' : 'Toevoegen'}</DialogTitle>
-      <DialogContent>
-        {selected && (
-          <>
-            <Typography variant="subtitle1" fontWeight={600}>
-              {selected.name}
-            </Typography>
-            {selected.brand && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                {selected.brand}
-              </Typography>
-            )}
-            {/* Porties zoals je ze eet: bakje, snee, glas. "100 gram" tikt niemand uit zijn hoofd. */}
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 1.5 }}>
-              {portionsFor(selected.name, selected.servingGrams).map((p) => {
-                const active = Number(grams) === p.grams;
-                return (
-                  <Chip
-                    key={p.label}
-                    label={`${p.label} · ${p.grams} g`}
-                    size="small"
-                    onClick={() => setGrams(String(p.grams))}
-                    variant={active ? 'filled' : 'outlined'}
-                    sx={active ? { bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } } : undefined}
-                  />
-                );
-              })}
-            </Box>
-            <NumberField
-              label="Hoeveelheid (gram)"
-              size="small"
-              fullWidth
-              value={grams}
-              onChange={setGrams}
-              sx={{ mb: 2 }}
-              autoFocus
-            />
-            {preview && (
-              <Box sx={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', p: 1, bgcolor: 'rgba(0,0,0,0.04)', borderRadius: 1 }}>
-                <Macro v={preview.kcal} l="kcal" />
-                <Macro v={`${preview.protein} g`} l="eiwit" />
-                <Macro v={`${preview.carbs} g`} l="koolh." />
-                <Macro v={`${preview.fat} g`} l="vet" />
-              </Box>
-            )}
-          </>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Annuleren</Button>
-        <Button variant="contained" onClick={onSave} disabled={saving} sx={{ bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}>
-          {saving ? 'Bezig…' : isEditing ? 'Opslaan' : 'Toevoegen'}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
-function Macro({ v, l }: { v: string | number; l: string }) {
-  return (
-    <Box>
-      <Typography fontWeight={700}>{v}</Typography>
-      <Typography variant="caption" color="text.secondary">
-        {l}
-      </Typography>
-    </Box>
   );
 }
 

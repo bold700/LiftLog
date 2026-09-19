@@ -18,7 +18,7 @@ import { applyCors } from './_lib/cors.mjs';
  */
 const SEARCH_URL = 'https://search.openfoodfacts.org/search';
 const USER_AGENT = 'LiftLog/1.0 (https://lift-log-phi.vercel.app)';
-const FIELDS = 'code,product_name,brands,nutriments,serving_size,image_small_url,countries_tags';
+const FIELDS = 'code,product_name,brands,nutriments,serving_size,quantity,image_small_url,image_url,nutriscore_grade,countries_tags';
 const PAGE_SIZE = 50;
 /** Onder dit aantal Nederlandse treffers zoeken we er ook nog zonder taal bij. */
 const MIN_RESULTS_BEFORE_FALLBACK = 8;
@@ -59,6 +59,13 @@ function firstBrand(brands) {
 
 const NUTRIMENT_KEYS = ['energy-kcal_100g', 'energy_100g', 'proteins_100g', 'carbohydrates_100g', 'fat_100g'];
 
+/** Suiker, vezels, verzadigd vet en zout per 100 g, of null als het etiket ze niet noemt. */
+export function nutritionDetails(n) {
+  const opt = (k) => (n?.[k] != null && n[k] !== '' && Number.isFinite(Number(n[k])) ? Math.round(Number(n[k]) * 10) / 10 : null);
+  const d = { sugars: opt('sugars_100g'), fiber: opt('fiber_100g'), saturatedFat: opt('saturated-fat_100g'), salt: opt('salt_100g') };
+  return Object.values(d).some((v) => v != null) ? d : null;
+}
+
 /** Verkocht in Nederland? Zo'n product hoort in de lijst boven een Duits of Frans equivalent. */
 function soldInNl(countriesTags) {
   return Array.isArray(countriesTags) && countriesTags.includes('en:netherlands');
@@ -78,6 +85,7 @@ export function mapOffHits(hits) {
     if (!NUTRIMENT_KEYS.some((k) => n[k] != null)) continue;
     let kcal = num(n['energy-kcal_100g']);
     if (!kcal && n['energy_100g']) kcal = num(n['energy_100g']) / 4.184;
+    const grade = typeof p?.nutriscore_grade === 'string' ? p.nutriscore_grade.toLowerCase() : '';
     out.push({
       code: String(p?.code ?? ''),
       name,
@@ -90,6 +98,11 @@ export function mapOffHits(hits) {
         fat: Math.round(num(n['fat_100g']) * 10) / 10,
       },
       servingGrams: parseServingGrams(p?.serving_size),
+      // "450 g" op de verpakking: dan is "hele bak" een portie die je kunt aantikken.
+      packageGrams: parseServingGrams(p?.quantity),
+      imageLargeUrl: typeof p?.image_url === 'string' ? p.image_url : null,
+      nutriscore: /^[a-e]$/.test(grade) ? grade : null,
+      details: nutritionDetails(n),
       nl: soldInNl(p?.countries_tags),
     });
   }

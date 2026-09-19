@@ -64,14 +64,19 @@ function norm(s: string): string {
  * Porties die bij dit product passen. Een eigen portiegrootte van het product komt vooraan, dan
  * de porties uit de tabel, en anders vaste grammen zodat er altijd iets te tikken valt.
  */
-export function portionsFor(name: string, servingGrams: number | null = null): Portion[] {
+export function portionsFor(name: string, servingGrams: number | null = null, packageGrams: number | null = null): Portion[] {
   const n = norm(name);
   const rule = RULES.find((r) => r.match.test(n));
   const base = rule ? rule.portions : FALLBACK;
   const out: Portion[] = [];
   if (servingGrams != null && servingGrams > 0 && !base.some((p) => p.grams === servingGrams)) {
-    out.push({ label: 'Portie op de verpakking', grams: servingGrams });
+    out.push({ label: 'Portie', grams: servingGrams });
   }
-  for (const p of base) if (!out.some((o) => o.grams === p.grams)) out.push(p);
+  // Heet een portie uit de tabel toevallig ook "Portie", dan staan er geen twee met die naam.
+  for (const p of base) if (!out.some((o) => o.grams === p.grams || o.label === p.label)) out.push(p);
+  // De hele verpakking achteraan: wie een bak van 450 g leegeet, wil dat in één tik kwijt kunnen.
+  if (packageGrams != null && packageGrams > 0 && !out.some((o) => o.grams === packageGrams)) {
+    out.push({ label: 'Hele verpakking', grams: packageGrams });
+  }
   return out;
 }

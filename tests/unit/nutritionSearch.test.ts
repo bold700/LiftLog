@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { searchFoods } from '../../src/services/nutritionService';
+import { defaultMealForNow, searchFoods } from '../../src/services/nutritionService';
 
 describe('searchFoods', () => {
   it('geeft basisproducten terug als de server faalt', async () => {
@@ -38,5 +38,17 @@ describe('searchFoods', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true, products: remote }) }));
     const r = await searchFoods('volle kwark');
     expect(r.products.filter((p) => p.name === 'Volle kwark')[0].brand).toBe('Jumbo');
+  });
+});
+
+describe('defaultMealForNow', () => {
+  const at = (h: number, m = 0) => new Date(2026, 8, 19, h, m);
+  it('kiest het eetmoment bij het uur van de dag', () => {
+    expect(defaultMealForNow(at(7, 30))).toBe('ontbijt');
+    expect(defaultMealForNow(at(10, 45))).toBe('tussendoor');
+    expect(defaultMealForNow(at(12, 15))).toBe('lunch');
+    expect(defaultMealForNow(at(15))).toBe('tussendoor');
+    expect(defaultMealForNow(at(18, 30))).toBe('diner');
+    expect(defaultMealForNow(at(22))).toBe('tussendoor');
   });
 });
