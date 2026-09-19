@@ -89,7 +89,7 @@ Zonder het blok `match /leaderboardPublic/{userId}` in de gepubliceerde regels k
 > GitHub → Actions → **CI** → *Run workflow* met **deploy_rules** aangevinkt; die rolt de huidige
 > regels alsnog uit.
 >
-> **Twee rollen die het service-account nodig heeft.** Ga naar
+> **Drie rollen die het service-account nodig heeft.** Ga naar
 > [Google Cloud → IAM](https://console.cloud.google.com/iam-admin/iam?project=vanas-d1a25), zoek het
 > account `firebase-adminsdk-…@vanas-d1a25.iam.gserviceaccount.com`, klik op het potlood en voeg toe:
 >
@@ -98,10 +98,17 @@ Zonder het blok `match /leaderboardPublic/{userId}` in de gepubliceerde regels k
 >   regels eerst via die API, en een standaard service-account mag dat niet.
 > - **Service Usage Consumer** (`roles/serviceusage.serviceUsageConsumer`) — voor de storage-stap,
 >   die vóór het uitrollen opvraagt of de storage-API aanstaat (`serviceusage.services.get`).
+> - **Firebase Storage Admin** (`roles/firebasestorage.admin`) — ook voor de storage-stap: de CLI
+>   zoekt eerst de standaardbucket op (`firebasestorage.defaultBucket.get`). Zonder deze rol:
+>   `Unexpected error when fetching default storage bucket … HTTP Error: 403`. Dat gebeurde op
+>   19 september 2026; het gevolg was dat de regel voor studiologo's (`orgLogos/{orgId}`) alleen in
+>   de repo stond en "Logo uploaden mislukt" in Beheer → Huisstijl.
 >
 > De **storage**-regels gaan daarom in een aparte stap en mogen falen zonder de rest tegen te
 > houden: die regels veranderen zelden, en de fout blijft zichtbaar in de job zonder de
-> Firestore-regels tegen te houden.
+> Firestore-regels tegen te houden. Let wel: zolang die stap faalt, werkt een storage-regel die
+> alleen in de repo staat in de app nog niet. Snelste omweg: **Firebase Console → Storage →
+> Rules**, inhoud van `storage.rules` plakken, **Publish**.
 
 Met de hand:
 
