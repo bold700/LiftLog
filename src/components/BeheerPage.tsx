@@ -23,7 +23,6 @@ import {
   useTheme,
 } from '@mui/material';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
-import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useProfile } from '../context/ProfileContext';
@@ -47,7 +46,9 @@ import { AddSporterByEmailCard } from './beheer/AddSporterByEmailCard';
 import { NumberField } from './NumberField';
 import { designTokens } from '../theme/designTokens';
 
-type Section = 'leden' | 'huisstijl';
+type Section = 'leden' | 'lessoorten' | 'abonnementen' | 'huisstijl' | 'facturatie';
+/** Beheer loopt breder door dan de andere pagina's: de tabel en de tweekoloms-huisstijl vragen dat (ontwerp: 1220). */
+const ADMIN_MAX_WIDTH = 1180;
 
 interface EditState {
   displayName: string;
@@ -290,7 +291,7 @@ export function BeheerPage() {
 
   if (!isTrainer) {
     return (
-      <PageLayout>
+      <PageLayout maxWidth={ADMIN_MAX_WIDTH}>
         <ContentCard>
           <Typography color="text.secondary">{t('admin.onlyStaff')}</Typography>
         </ContentCard>
@@ -313,12 +314,22 @@ export function BeheerPage() {
     </>
   );
 
-  if (isAdmin && section === 'huisstijl') {
+  if (isAdmin && section !== 'leden') {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
-        <PageLayout>
+        <PageLayout maxWidth={ADMIN_MAX_WIDTH}>
           {header}
-          <BrandingSettings />
+          {section === 'huisstijl' ? (
+            <BrandingSettings />
+          ) : (
+            // Lessoorten, Abonnementen en Facturatie staan in het ontwerp en komen elk in hun eigen stap.
+            <ContentCard>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+                {t(`admin.tabs.${SECTION_KEY[section]}`)}
+              </Typography>
+              <Typography color="text.secondary">{t('admin.comingSoon')}</Typography>
+            </ContentCard>
+          )}
         </PageLayout>
       </Box>
     );
@@ -326,31 +337,28 @@ export function BeheerPage() {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
-    <PageLayout>
+    <PageLayout maxWidth={ADMIN_MAX_WIDTH}>
       {header}
 
       <RequestsBanner profiles={profiles} onChanged={load} />
 
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center', mb: 2 }}>
-        <TextField
-          size="small"
-          placeholder={t('admin.search')}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          sx={{ flex: '1 1 240px', '& .MuiOutlinedInput-root': { borderRadius: 999, bgcolor: designTokens.cardBackgroundHigh } }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchRoundedIcon fontSize="small" />
-              </InputAdornment>
-            ),
-          }}
-          inputProps={{ 'aria-label': t('admin.searchMembers') }}
-        />
-        <Button size="small" startIcon={<RefreshRoundedIcon />} onClick={load} disabled={loading}>
-          {t('admin.refresh')}
-        </Button>
-      </Box>
+      {/* Zoeken staat in het ontwerp alleen op de telefoon; op een groot scherm is de tabel zelf overzichtelijk. */}
+      <TextField
+        size="small"
+        fullWidth
+        placeholder={t('admin.search')}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        sx={{ mb: 2, display: { xs: 'flex', md: 'none' }, '& .MuiOutlinedInput-root': { borderRadius: 999, bgcolor: designTokens.cardBackgroundHigh } }}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchRoundedIcon fontSize="small" />
+            </InputAdornment>
+          ),
+        }}
+        inputProps={{ 'aria-label': t('admin.searchMembers') }}
+      />
       {message && (
         <Alert severity={message.type} sx={{ mb: 2 }} onClose={() => setMessage(null)}>
           {message.text}
@@ -358,10 +366,6 @@ export function BeheerPage() {
       )}
 
       <MembersList profiles={visible} credits={credits} selfId={selfId} loading={loading} hasAny={profiles.length > 0} onOpen={openEditor} />
-
-      <Box sx={{ mt: 3 }}>
-        <AddSporterByEmailCard onAdded={load} onMessage={setMessage} />
-      </Box>
 
       <Dialog open={!!target && !!edit} onClose={closeEditor} maxWidth="sm" fullWidth fullScreen={fullScreen}>
         <DialogTitle>Profiel bewerken</DialogTitle>
@@ -571,6 +575,14 @@ export function BeheerPage() {
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
               Geboortedatum, geslacht, lengte en rusthartslag vul je daarna in door op het profiel te tikken.
             </Typography>
+            {/* Tweede weg in dezelfde dialoog: iemand die al een account heeft aan jezelf koppelen. */}
+            <AddSporterByEmailCard
+              onAdded={async () => {
+                await load();
+                setNewAccount(null);
+              }}
+              onMessage={setMessage}
+            />
           </DialogContent>
         )}
         <DialogActions>
@@ -587,7 +599,16 @@ export function BeheerPage() {
   );
 }
 
-/** Leden of Huisstijl — alleen zichtbaar voor de eigenaar; een trainer ziet direct de leden. */
+const SECTIONS: Section[] = ['leden', 'lessoorten', 'abonnementen', 'huisstijl', 'facturatie'];
+const SECTION_KEY: Record<Section, 'members' | 'classTypes' | 'subscriptions' | 'branding' | 'billing'> = {
+  leden: 'members',
+  lessoorten: 'classTypes',
+  abonnementen: 'subscriptions',
+  huisstijl: 'branding',
+  facturatie: 'billing',
+};
+
+/** De vijf tabs uit het ontwerp — alleen zichtbaar voor de eigenaar; een trainer ziet direct de leden. */
 function SectionTabs({ value, onChange }: { value: Section; onChange: (v: Section) => void }) {
   const { t } = useI18n();
   return (
@@ -598,8 +619,9 @@ function SectionTabs({ value, onChange }: { value: Section; onChange: (v: Sectio
       variant="fullWidth"
       sx={{ minHeight: 44, mb: 2, borderBottom: '1px solid', borderColor: 'divider', '& .MuiTab-root': { minHeight: 44, textTransform: 'none', fontWeight: 600, px: 2 } }}
     >
-      <Tab value="leden" label={t('admin.tabs.members')} />
-      <Tab value="huisstijl" label={t('admin.tabs.branding')} />
+      {SECTIONS.map((sec) => (
+        <Tab key={sec} value={sec} label={t(`admin.tabs.${SECTION_KEY[sec]}`)} />
+      ))}
     </Tabs>
   );
 }

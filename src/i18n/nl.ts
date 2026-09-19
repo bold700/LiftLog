@@ -41,6 +41,7 @@ export const nl = {
       one: '1 open aanvraag',
       other: '{count} open aanvragen',
     },
+    comingSoon: 'Komt in een volgende stap.',
     review: 'Bekijken',
     searchMembers: 'Zoek leden',
     columns: {
