@@ -17,6 +17,9 @@ export function PageLayout({ children, maxWidth = designTokens.pageMaxWidth }: P
     <Box
       className="animate-fade-in-up"
       sx={{
+        // Expliciete breedte: als flex-kind (kolom) zou `mx: auto` de wrapper naar zijn inhoud
+        // laten krimpen of groeien, en dan loopt een tabel of tabrij buiten het scherm.
+        width: '100%',
         maxWidth,
         mx: 'auto',
         pb: designTokens.pagePaddingBottom,

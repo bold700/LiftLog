@@ -32,6 +32,13 @@ export function MembersList({ profiles, credits, selfId, loading, hasAny, onOpen
     return n == null ? t('common.none') : t('admin.creditsLeft', { count: n });
   };
 
+  // Telefoon: abonnement en credits onder de naam zodra die bekend zijn; anders het e-mailadres,
+  // want twee streepjes zeggen niets.
+  const sublineOf = (p: Profile) => {
+    const known = p.role === 'sporter' && credits[p.userId] != null;
+    return known ? `${subscriptionOf()} · ${creditsOf(p)}` : p.email ?? t('common.none');
+  };
+
   if (loading && !hasAny) {
     return <Empty text={t('admin.loading')} />;
   }
@@ -68,7 +75,7 @@ export function MembersList({ profiles, credits, selfId, loading, hasAny, onOpen
                 {nameOf(p)}
               </Typography>
               <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-                {p.role === 'sporter' ? `${subscriptionOf()} · ${creditsOf(p)}` : p.email ?? t('common.none')}
+                {sublineOf(p)}
               </Typography>
             </Box>
             <RoleChip role={p.role} />
