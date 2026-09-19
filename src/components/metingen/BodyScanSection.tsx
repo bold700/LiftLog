@@ -197,7 +197,7 @@ export function BodyScanSection({ draft, onDraftChange, onRecognized, onClear, p
             disabled={recognizing}
             onClick={recognize}
             startIcon={recognizing ? <CircularProgress size={14} color="inherit" /> : undefined}
-            sx={{ bgcolor: '#000', color: '#F2E4D3', textTransform: 'none', fontWeight: 600, '&:hover': { bgcolor: '#1a1a1a' } }}
+            sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', textTransform: 'none', fontWeight: 600, '&:hover': { bgcolor: 'primary.dark' } }}
           >
             {recognizing ? 'Uitlezen…' : `Waarden uitlezen (${pending.length} foto${pending.length === 1 ? '' : "'s"})`}
           </Button>

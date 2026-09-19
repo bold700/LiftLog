@@ -83,8 +83,8 @@ function RangeBar({ scan, fieldKey }: { scan: BodyScan; fieldKey: BodyScanValueK
             <Box sx={{ width: `${(RANGE_BAR_NORMAL.end - RANGE_BAR_NORMAL.start) * 100}%`, bgcolor: ZONE_BG.normaal }} />
             <Box sx={{ flex: 1, bgcolor: ZONE_BG.hoog }} />
             {/* Vulling tot de waarde, zoals op een InBody-uitdraai */}
-            <Box sx={{ position: 'absolute', left: 0, top: 3, height: 4, width: `${pos * 100}%`, bgcolor: '#000', borderRadius: 2 }} />
-            <Box sx={{ position: 'absolute', top: 0, height: 10, width: 3, bgcolor: '#000', left: `calc(${pos * 100}% - 1.5px)` }} />
+            <Box sx={{ position: 'absolute', left: 0, top: 3, height: 4, width: `${pos * 100}%`, bgcolor: 'primary.main', borderRadius: 2 }} />
+            <Box sx={{ position: 'absolute', top: 0, height: 10, width: 3, bgcolor: 'text.primary', left: `calc(${pos * 100}% - 1.5px)` }} />
           </Box>
           <Box sx={{ position: 'relative', height: 16, fontSize: 10, color: 'text.secondary' }} aria-hidden>
             <Box component="span" sx={{ position: 'absolute', left: 0 }}>

@@ -9,7 +9,7 @@ interface ContentCardProps {
 }
 
 /**
- * Hoofdcard: warme achtergrond (#FEF2E5), afgeronde hoeken.
+ * Hoofdcard: een tint donkerder dan de pagina (surfaceContainerLow), afgeronde hoeken.
  * Gebruik voor secties met titel + inhoud.
  */
 export function ContentCard({ children, sx }: ContentCardProps) {
@@ -34,7 +34,7 @@ export function ContentCard({ children, sx }: ContentCardProps) {
 }
 
 /**
- * Secundaire card: transparante achtergrond, rand (#D2C5B4).
+ * Secundaire card: transparante achtergrond, rand in outlineVariant.
  * Gebruik voor geneste blokken (grafieken, lijsten).
  */
 export function OutlineCard({

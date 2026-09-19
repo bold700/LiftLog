@@ -120,7 +120,7 @@ export function LimitationsEditor({ value, onChange, disabled }: LimitationsEdit
               size="small"
               variant="contained"
               onClick={add}
-              sx={{ textTransform: 'none', borderRadius: '24px', bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}
+              sx={{ textTransform: 'none', borderRadius: '24px', bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } }}
             >
               Toevoegen
             </Button>

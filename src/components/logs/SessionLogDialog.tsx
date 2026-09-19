@@ -102,7 +102,7 @@ export function SessionLogDialog({
               onClick={onClose}
               disableElevation
               sx={{
-                color: '#000000',
+                color: 'text.primary',
                 borderRadius: '20px',
                 textTransform: 'none',
                 fontWeight: 500,
@@ -119,14 +119,14 @@ export function SessionLogDialog({
               disabled={!schemaId}
               disableElevation
               sx={{
-                bgcolor: '#000000',
-                color: '#F2E4D3',
+                bgcolor: 'primary.main',
+                color: 'primary.contrastText',
                 borderRadius: '20px',
                 textTransform: 'none',
                 fontWeight: 500,
                 minHeight: 40,
                 px: 2,
-                '&:hover': { bgcolor: '#1a1a1a' },
+                '&:hover': { bgcolor: 'primary.dark' },
                 '&.Mui-disabled': {
                   bgcolor: 'rgba(0,0,0,0.12)',
                   color: 'rgba(29,27,26,0.38)',

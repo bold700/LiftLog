@@ -709,7 +709,7 @@ function GoalDialog({
             const g: NutritionGoal = { kcal: Number(kcal) || 0, protein: Number(protein) || 0, carbs: Number(carbs) || 0, fat: Number(fat) || 0 };
             onSave(g.kcal || g.protein || g.carbs || g.fat ? g : null);
           }}
-          sx={{ bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}
+          sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } }}
         >
           Opslaan
         </Button>

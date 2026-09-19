@@ -1,31 +1,32 @@
 /* Material Web Components theming via CSS variables - Light mode only */
 
 :root {
-  /* Light theme colors from theme.json */
-  --md-sys-color-primary: #000000;
+  /* Kleuren uit theme.json — het Material 3-schema van het Figma-ontwerp */
+  --md-sys-color-primary: #426833;
   --md-sys-color-on-primary: #FFFFFF;
-  --md-sys-color-primary-container: #1B1B1B;
-  --md-sys-color-on-primary-container: #FFFFFF;
+  --md-sys-color-primary-container: #C3EFAD;
+  --md-sys-color-on-primary-container: #2B4F1E;
   
-  --md-sys-color-secondary: #795900;
+  --md-sys-color-secondary: #55624C;
   --md-sys-color-on-secondary: #FFFFFF;
   
-  --md-sys-color-surface: #F2E4D3;
-  --md-sys-color-on-surface: #1D1B1A;
-  --md-sys-color-surface-variant: #EBE1D6;
-  --md-sys-color-on-surface-variant: #4C463E;
+  --md-sys-color-surface: #F8FAF0;
+  --md-sys-color-on-surface: #191D17;
+  --md-sys-color-surface-variant: #E0E4D6;
+  --md-sys-color-on-surface-variant: #43483F;
   
-  --md-sys-color-background: #F2E4D3;
-  --md-sys-color-on-background: #1D1B1A;
+  --md-sys-color-background: #F8FAF0;
+  --md-sys-color-on-background: #191D17;
   
-  --md-sys-color-outline: #7D766D;
-  --md-sys-color-outline-variant: #CEC5BB;
+  --md-sys-color-outline: #73796E;
+  --md-sys-color-outline-variant: #C3C8BB;
 }
 
-/* Navigation Bar specific styling - Fully beige like the rest of the app */
+/* Navigatiebalk: een tint donkerder dan de pagina, zoals in het ontwerp */
 md-navigation-bar {
-  --md-navigation-bar-container-color: #F2E4D3;
-  background-color: #F2E4D3;
+  --md-navigation-bar-container-color: #ECEFE5;
+  --md-navigation-bar-label-text-font: 'Roboto', sans-serif;
+  background-color: #ECEFE5;
   font-family: 'Roboto', sans-serif;
 }
 
@@ -55,45 +56,45 @@ md-navigation-tab .material-symbols-outlined {
 md-navigation-tab[active] .nav-icon,
 md-navigation-tab[active] .nav-svg-icon,
 md-navigation-tab[active] .material-symbols-outlined {
-  color: #F2E4D3 !important;
-  fill: #F2E4D3 !important;
+  color: #3D4B36 !important;
+  fill: #3D4B36 !important;
 }
 
-/* Navigation Tab styling - beige theme with black icons/text (3 items = compact) */
+/* Navigatietab: actief = zachtgroene pil met donkergroen icoon (Material 3) */
 md-navigation-tab {
   /* Force immediate transition to prevent delay */
   transition: none !important;
   margin: 12px 0 16px;
   
-  /* Active state - beige icon/text on black indicator */
-  --md-navigation-bar-active-icon-color: #F2E4D3;
-  --md-navigation-bar-active-label-text-color: #000000;
-  --md-navigation-bar-active-indicator-color: #000000;
-  --md-navigation-bar-active-pressed-icon-color: #F2E4D3;
-  --md-navigation-bar-active-pressed-label-text-color: #000000;
-  --md-navigation-bar-active-pressed-state-layer-color: rgba(0, 0, 0, 0.12);
-  --md-navigation-bar-active-hover-icon-color: #F2E4D3;
-  --md-navigation-bar-active-hover-label-text-color: #000000;
-  --md-navigation-bar-active-hover-state-layer-color: rgba(0, 0, 0, 0.08);
-  --md-navigation-bar-active-focus-icon-color: #F2E4D3;
-  --md-navigation-bar-active-focus-label-text-color: #000000;
-  --md-navigation-bar-active-focus-state-layer-color: rgba(0, 0, 0, 0.12);
+  /* Actief */
+  --md-navigation-bar-active-icon-color: #3D4B36;
+  --md-navigation-bar-active-label-text-color: #191D17;
+  --md-navigation-bar-active-indicator-color: #D8E7CC;
+  --md-navigation-bar-active-pressed-icon-color: #3D4B36;
+  --md-navigation-bar-active-pressed-label-text-color: #191D17;
+  --md-navigation-bar-active-pressed-state-layer-color: rgba(61, 75, 54, 0.12);
+  --md-navigation-bar-active-hover-icon-color: #3D4B36;
+  --md-navigation-bar-active-hover-label-text-color: #191D17;
+  --md-navigation-bar-active-hover-state-layer-color: rgba(61, 75, 54, 0.08);
+  --md-navigation-bar-active-focus-icon-color: #3D4B36;
+  --md-navigation-bar-active-focus-label-text-color: #191D17;
+  --md-navigation-bar-active-focus-state-layer-color: rgba(61, 75, 54, 0.12);
   
   /* Inactive state */
-  --md-navigation-bar-inactive-icon-color: #4C463E;
-  --md-navigation-bar-inactive-label-text-color: #4C463E;
-  --md-navigation-bar-inactive-pressed-icon-color: #4C463E;
-  --md-navigation-bar-inactive-pressed-label-text-color: #4C463E;
-  --md-navigation-bar-inactive-pressed-state-layer-color: rgba(76, 70, 62, 0.12);
-  --md-navigation-bar-inactive-hover-icon-color: #4C463E;
-  --md-navigation-bar-inactive-hover-label-text-color: #4C463E;
-  --md-navigation-bar-inactive-hover-state-layer-color: rgba(76, 70, 62, 0.08);
-  --md-navigation-bar-inactive-focus-icon-color: #4C463E;
-  --md-navigation-bar-inactive-focus-label-text-color: #4C463E;
-  --md-navigation-bar-inactive-focus-state-layer-color: rgba(76, 70, 62, 0.12);
+  --md-navigation-bar-inactive-icon-color: #43483F;
+  --md-navigation-bar-inactive-label-text-color: #43483F;
+  --md-navigation-bar-inactive-pressed-icon-color: #43483F;
+  --md-navigation-bar-inactive-pressed-label-text-color: #43483F;
+  --md-navigation-bar-inactive-pressed-state-layer-color: rgba(67, 72, 63, 0.12);
+  --md-navigation-bar-inactive-hover-icon-color: #43483F;
+  --md-navigation-bar-inactive-hover-label-text-color: #43483F;
+  --md-navigation-bar-inactive-hover-state-layer-color: rgba(67, 72, 63, 0.08);
+  --md-navigation-bar-inactive-focus-icon-color: #43483F;
+  --md-navigation-bar-inactive-focus-label-text-color: #43483F;
+  --md-navigation-bar-inactive-focus-state-layer-color: rgba(67, 72, 63, 0.12);
 }
 
-/* Material Web Components Button styling - beige theme - M3 compliant */
+/* Gevulde knop: donkergroen met wit, zoals 'Add food' en 'Save and finish' in het ontwerp */
 md-filled-button {
   /* Expliciete padding op het element (DevTools: 16px links en rechts) */
   padding-left: 16px;
@@ -102,7 +103,7 @@ md-filled-button {
   padding-bottom: 0;
 
   /* Container styling */
-  --md-filled-button-container-color: #000000;
+  --md-filled-button-container-color: #426833;
   --md-filled-button-container-shape: 20px; /* M3: 20dp corner radius */
   --md-filled-button-container-height: 40px; /* M3: 40dp height */
 
@@ -115,27 +116,27 @@ md-filled-button {
   --md-filled-button-with-trailing-icon-trailing-space: 16px;
   
   /* Label text styling - M3: Roboto Medium, 14sp, no text transform */
-  --md-filled-button-label-text-color: #F2E4D3;
+  --md-filled-button-label-text-color: #FFFFFF;
   --md-filled-button-label-text-font: 'Roboto', sans-serif;
   --md-filled-button-label-text-size: 0.875rem; /* 14px */
   --md-filled-button-label-text-weight: 500; /* Medium */
   
   /* State colors */
-  --md-filled-button-hover-label-text-color: #F2E4D3;
+  --md-filled-button-hover-label-text-color: #FFFFFF;
   --md-filled-button-hover-container-elevation: 1; /* M3: subtle elevation on hover */
-  --md-filled-button-focus-label-text-color: #F2E4D3;
+  --md-filled-button-focus-label-text-color: #FFFFFF;
   --md-filled-button-focus-container-elevation: 0;
-  --md-filled-button-pressed-label-text-color: #F2E4D3;
+  --md-filled-button-pressed-label-text-color: #FFFFFF;
   --md-filled-button-pressed-container-elevation: 0;
   
-  /* Disabled state – duidelijk zichtbaar op beige achtergrond */
-  --md-filled-button-disabled-container-color: rgba(0, 0, 0, 0.08);
+  /* Uitgeschakeld */
+  --md-filled-button-disabled-container-color: rgba(61, 75, 54, 0.08);
   --md-filled-button-disabled-outline-color: rgba(0, 0, 0, 0.25);
-  --md-filled-button-disabled-label-text-color: rgba(29, 27, 26, 0.6);
-  --md-filled-button-disabled-icon-color: rgba(29, 27, 26, 0.6);
+  --md-filled-button-disabled-label-text-color: rgba(25, 29, 23, 0.55);
+  --md-filled-button-disabled-icon-color: rgba(25, 29, 23, 0.55);
   
   /* Icon styling */
-  --md-filled-button-icon-color: #F2E4D3;
+  --md-filled-button-icon-color: #FFFFFF;
   --md-filled-button-icon-size: 18px;
 }
 
@@ -150,18 +151,18 @@ md-text-button {
   --md-text-button-trailing-space: 16px;
   
   /* Label text styling - M3: Roboto Medium, 14sp */
-  --md-text-button-label-text-color: #000000;
+  --md-text-button-label-text-color: #426833;
   --md-text-button-label-text-font: 'Roboto', sans-serif;
   --md-text-button-label-text-size: 0.875rem; /* 14px */
   --md-text-button-label-text-weight: 500; /* Medium */
   
   /* State colors */
-  --md-text-button-hover-label-text-color: #000000;
-  --md-text-button-focus-label-text-color: #000000;
-  --md-text-button-pressed-label-text-color: #000000;
+  --md-text-button-hover-label-text-color: #426833;
+  --md-text-button-focus-label-text-color: #426833;
+  --md-text-button-pressed-label-text-color: #426833;
   
   /* Disabled state */
-  --md-text-button-disabled-label-text-color: rgba(29, 27, 26, 0.38);
+  --md-text-button-disabled-label-text-color: rgba(25, 29, 23, 0.38);
   
   /* Container styling */
   --md-text-button-container-height: 40px; /* M3: 40dp height */

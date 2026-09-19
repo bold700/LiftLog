@@ -165,7 +165,7 @@ export function CheckinDialog({
             variant="contained"
             disabled={drafting || storing || !draft.handover.trim()}
             onClick={handleStore}
-            sx={{ textTransform: 'none', borderRadius: '24px', bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}
+            sx={{ textTransform: 'none', borderRadius: '24px', bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } }}
           >
             {storing ? 'Opslaan…' : 'Opslaan bij de training'}
           </Button>
@@ -225,7 +225,7 @@ export function CheckinDialog({
           variant="contained"
           disabled={saving || feeling === null}
           onClick={handleFirstSave}
-          sx={{ textTransform: 'none', borderRadius: '24px', bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}
+          sx={{ textTransform: 'none', borderRadius: '24px', bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } }}
         >
           {saving ? 'Opslaan…' : wantsHandover ? 'Volgende' : 'Opslaan'}
         </Button>

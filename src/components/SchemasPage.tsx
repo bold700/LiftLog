@@ -693,7 +693,7 @@ export const SchemasPage = () => {
                   <Button
                     variant="contained"
                     onClick={() => setRequestOpen(true)}
-                    sx={{ bgcolor: '#000', color: '#F2E4D3', borderRadius: '20px', textTransform: 'none', '&:hover': { bgcolor: '#1a1a1a' } }}
+                    sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', borderRadius: '20px', textTransform: 'none', '&:hover': { bgcolor: 'primary.dark' } }}
                   >
                     Workout aanvragen
                   </Button>

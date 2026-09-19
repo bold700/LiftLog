@@ -199,9 +199,9 @@ export function AppleHealthWorkoutCard({
             sx={{
               borderRadius: '20px',
               textTransform: 'none',
-              bgcolor: '#000',
-              color: '#F2E4D3',
-              '&:hover': { bgcolor: '#1a1a1a' },
+              bgcolor: 'primary.main',
+              color: 'primary.contrastText',
+              '&:hover': { bgcolor: 'primary.dark' },
             }}
           >
             Start workout (Gezondheid)

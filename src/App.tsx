@@ -1,21 +1,18 @@
-import { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useCallback } from 'react';
 import { ThemeProvider, CssBaseline, Box, Fab, Menu, MenuItem, Alert, Button } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import FitnessCenterRoundedIcon from '@mui/icons-material/FitnessCenterRounded';
 import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
 import EventNoteRoundedIcon from '@mui/icons-material/EventNoteRounded';
-import MenuRoundedIcon from '@mui/icons-material/MenuRounded';
 import DonutLargeRoundedIcon from '@mui/icons-material/DonutLargeRounded';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
-import EventAvailableRoundedIcon from '@mui/icons-material/EventAvailableRounded';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
 import MonitorWeightRoundedIcon from '@mui/icons-material/MonitorWeightRounded';
 import { lightTheme } from './theme';
-import { NavigationBar } from './components/NavigationBar';
+import { AppShell, type ShellDestination } from './components/AppShell';
 import { StudioSwitcher } from './components/StudioSwitcher';
-import { FullscreenMenu } from './components/FullscreenMenu';
 import { InzichtenPage } from './components/InzichtenPage';
 import { AddPage } from './components/AddPage';
 import { SchemasPage } from './components/SchemasPage';
@@ -41,7 +38,6 @@ import { isFirebaseConfigured } from './firebase/config';
 import './styles/material-web-theme.css';
 import './styles/animations.css';
 
-const TAB_MENU = 0;
 const TAB_INZICHTEN = 1;
 const TAB_SCHEMAS = 2;
 const TAB_PROFIEL = 3;
@@ -115,43 +111,26 @@ function AppContent() {
     setRequestedInsightsSubTab(INZICHTEN_SUB.LOGS);
   }, []);
 
-  const tabs = [
-    { label: 'Menu', icon: <MenuRoundedIcon fontSize="small" />, tabIndex: TAB_MENU },
-    // De assistent staat vooraan: hij is de snelste weg naar alles wat de app kan.
-    { label: 'Assistent', icon: <AutoAwesomeRoundedIcon fontSize="small" />, tabIndex: TAB_ASSISTENT },
+  // Vijf bestemmingen, zoals in het ontwerp. Wat daar niet in past staat op een groot scherm in
+  // de zijbalk onder een lijn en op de telefoon onder Profiel.
+  const destinations: ShellDestination[] = [
     { label: 'Inzichten', icon: <DonutLargeRoundedIcon fontSize="small" />, tabIndex: TAB_INZICHTEN },
-    { label: 'Workouts', icon: <CalendarMonthRoundedIcon fontSize="small" />, tabIndex: TAB_SCHEMAS },
+    { label: 'Workouts', icon: <FitnessCenterRoundedIcon fontSize="small" />, tabIndex: TAB_SCHEMAS },
+    { label: 'Lessen', icon: <CalendarMonthRoundedIcon fontSize="small" />, tabIndex: TAB_LESSEN },
+    { label: 'Voeding', icon: <RestaurantRoundedIcon fontSize="small" />, tabIndex: TAB_VOEDING },
+    { label: 'Profiel', icon: <PersonRoundedIcon fontSize="small" />, tabIndex: TAB_PROFIEL },
+  ];
+  const secondary: ShellDestination[] = [
+    { label: 'Assistent', icon: <AutoAwesomeRoundedIcon fontSize="small" />, tabIndex: TAB_ASSISTENT },
+    { label: 'Metingen', icon: <MonitorWeightRoundedIcon fontSize="small" />, tabIndex: TAB_METINGEN },
     ...(isTrainer ? [{ label: 'Beheer', icon: <GroupRoundedIcon fontSize="small" />, tabIndex: TAB_BEHEER }] : []),
   ];
-
-  const barIndexForActiveTab = tabs.findIndex((t) => t.tabIndex === activeTab);
-  const navBarValue = barIndexForActiveTab >= 0 ? barIndexForActiveTab : 0;
-  const tabsRef = useRef(tabs);
-  tabsRef.current = tabs;
-  const handleNavBarChange = useCallback((barIndex: number) => {
-    const t = tabsRef.current[barIndex];
-    if (t?.tabIndex != null) setActiveTab(t.tabIndex);
-  }, []);
+  const handleLogout = useCallback(() => {
+    void auth?.logout();
+  }, [auth]);
 
   const renderPage = () => {
     switch (activeTab) {
-      case TAB_MENU:
-        return (
-          <FullscreenMenu
-            onClose={() => setActiveTab(TAB_INZICHTEN)}
-            navItems={[
-              { label: 'Assistent', tabIndex: TAB_ASSISTENT, icon: <AutoAwesomeRoundedIcon fontSize="small" /> },
-              { label: 'Lessen', tabIndex: TAB_LESSEN, icon: <EventAvailableRoundedIcon fontSize="small" /> },
-              { label: 'Inzichten', tabIndex: TAB_INZICHTEN, icon: <DonutLargeRoundedIcon fontSize="small" /> },
-              { label: 'Workouts', tabIndex: TAB_SCHEMAS, icon: <CalendarMonthRoundedIcon fontSize="small" /> },
-              { label: 'Voeding', tabIndex: TAB_VOEDING, icon: <RestaurantRoundedIcon fontSize="small" /> },
-              { label: 'Metingen', tabIndex: TAB_METINGEN, icon: <MonitorWeightRoundedIcon fontSize="small" /> },
-              { label: 'Profiel', tabIndex: TAB_PROFIEL, icon: <PersonRoundedIcon fontSize="small" /> },
-            ]}
-            onNavigateToTab={setActiveTab}
-            beheerTabIndex={TAB_BEHEER}
-          />
-        );
       case TAB_INZICHTEN:
         return (
           <InzichtenPage
@@ -170,7 +149,12 @@ function AppContent() {
       case TAB_LESSEN:
         return <LessenPage />;
       case TAB_PROFIEL:
-        return <ProfielPage />;
+        return (
+          <ProfielPage
+            more={secondary.map((d) => ({ label: d.label, icon: d.icon, onClick: () => setActiveTab(d.tabIndex) }))}
+            onLogout={handleLogout}
+          />
+        );
       case TAB_VOEDING:
         return <NutritionPage />;
       case TAB_METINGEN:
@@ -214,18 +198,19 @@ function AppContent() {
         onSwitchToSchemasTab={switchToSchemasTab}
         onSwitchToLogsTab={switchToLogsTab}
       >
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            minHeight: '100vh',
-            pb: 10,
-          }}
+        <AppShell
+          activeTab={activeTab}
+          onNavigate={setActiveTab}
+          destinations={destinations}
+          secondary={secondary}
+          onLog={openAdd}
+          onLogout={handleLogout}
         >
           <Box
             sx={{
               flex: 1,
               p: 3,
+              pb: { xs: 12, md: 4 },
               paddingTop: {
                 xs: 'calc(24px + env(safe-area-inset-top, 0px))',
                 sm: 'calc(24px + env(safe-area-inset-top, 0px))',
@@ -268,15 +253,18 @@ function AppContent() {
           {!addOpen && (
             <>
               <Fab
-                color="primary"
                 aria-label="Log toevoegen"
                 sx={{
+                  display: { xs: 'inline-flex', md: 'none' },
                   position: 'fixed',
                   bottom: 92,
                   right: 16,
                   zIndex: 1001,
+                  bgcolor: 'primary.light',
+                  color: 'primary.dark',
                   transition: 'transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease',
                   '&:hover': {
+                    bgcolor: 'primary.light',
                     transform: 'scale(1.08)',
                     boxShadow: 4,
                   },
@@ -323,8 +311,7 @@ function AppContent() {
             </>
           )}
 
-          <NavigationBar key={`nav-${role}`} value={navBarValue} onChange={handleNavBarChange} tabs={tabs} />
-        </Box>
+        </AppShell>
 
         {addOpen && (
           <AddPage
