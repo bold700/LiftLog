@@ -2,13 +2,13 @@
  * Welke taal de app spreekt.
  *
  * De keuze staat op het profiel (`language`), zodat hij op elk apparaat hetzelfde is. Vóór het
- * inloggen, of zolang het profiel nog laadt, telt wat de browser eerder onthield en anders de
- * browsertaal. Kiezen schrijft beide weg en zet `<html lang>`.
+ * inloggen, of zolang het profiel nog laadt, telt wat de browser eerder onthield en anders
+ * Nederlands. Kiezen schrijft beide weg en zet `<html lang>`.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useProfile } from './ProfileContext';
 import { updateProfile } from '../services/profileService';
-import { browserLang, isLang, translate, LANG_STORAGE_KEY, type Lang, type MessageKey } from '../i18n';
+import { DEFAULT_LANG, isLang, translate, LANG_STORAGE_KEY, type Lang, type MessageKey } from '../i18n';
 
 export interface I18nValue {
   lang: Lang;
@@ -30,7 +30,9 @@ function rememberedLang(): Lang | null {
 export function I18nProvider({ children }: { children: ReactNode }) {
   const profile = useProfile();
   const profileLang = profile?.profile?.language ?? null;
-  const [local, setLocal] = useState<Lang>(() => rememberedLang() ?? browserLang());
+  // Standaard Nederlands: de studio's zijn Nederlands en veel telefoons staan op Engels. De
+  // browser onthoudt alleen een keuze die iemand zelf maakte.
+  const [local, setLocal] = useState<Lang>(() => rememberedLang() ?? DEFAULT_LANG);
 
   // Het profiel wint zodra het er is; de browser onthoudt het voor de volgende keer.
   useEffect(() => {
@@ -40,16 +42,16 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.lang = local;
-    try {
-      localStorage.setItem(LANG_STORAGE_KEY, local);
-    } catch {
-      /* privémodus */
-    }
   }, [local]);
 
   const setLang = useCallback(
     async (next: Lang) => {
       setLocal(next);
+      try {
+        localStorage.setItem(LANG_STORAGE_KEY, next);
+      } catch {
+        /* privémodus */
+      }
       const uid = profile?.profile?.userId;
       if (uid) {
         await updateProfile(uid, { language: next });
@@ -70,6 +72,6 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 export function useI18n(): I18nValue {
   const ctx = useContext(I18nContext);
   if (ctx) return ctx;
-  const lang = rememberedLang() ?? browserLang();
+  const lang = rememberedLang() ?? DEFAULT_LANG;
   return { lang, setLang: async () => {}, t: (key, vars) => translate(lang, key, vars) };
 }

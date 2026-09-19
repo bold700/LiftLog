@@ -611,12 +611,16 @@ const SECTION_KEY: Record<Section, 'members' | 'classTypes' | 'subscriptions' | 
 /** De vijf tabs uit het ontwerp — alleen zichtbaar voor de eigenaar; een trainer ziet direct de leden. */
 function SectionTabs({ value, onChange }: { value: Section; onChange: (v: Section) => void }) {
   const { t } = useI18n();
+  const theme = useTheme();
+  const wide = useMediaQuery(theme.breakpoints.up('md'));
   return (
     <Tabs
       value={value}
       onChange={(_, v: Section) => onChange(v)}
       aria-label={t('admin.title')}
-      variant="fullWidth"
+      variant={wide ? 'fullWidth' : 'scrollable'}
+      scrollButtons={false}
+      allowScrollButtonsMobile
       sx={{ minHeight: 44, mb: 2, borderBottom: '1px solid', borderColor: 'divider', '& .MuiTab-root': { minHeight: 44, textTransform: 'none', fontWeight: 600, px: 2 } }}
     >
       {SECTIONS.map((sec) => (
