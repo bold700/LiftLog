@@ -88,6 +88,11 @@ Zonder het blok `match /leaderboardPublic/{userId}` in de gepubliceerde regels k
 > Loopt de database achter op de repo, dan is er niets veranderd om op te reageren. Start dan
 > GitHub → Actions → **CI** → *Run workflow* met **deploy_rules** aangevinkt; die rolt de huidige
 > regels alsnog uit.
+>
+> De **storage**-regels gaan in een aparte stap en mogen falen zonder de rest tegen te houden. Een
+> standaard service-account mag namelijk niet opvragen of de storage-API aanstaat
+> (`serviceusage.services.get`), en de CLI controleert dat vóór het uitrollen. Wil je ook die stap
+> groen: geef het service-account in Google Cloud → IAM de rol **Service Usage Consumer**.
 
 Met de hand:
 
