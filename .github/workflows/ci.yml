@@ -111,12 +111,32 @@ jobs:
           echo "project=$project" >> "$GITHUB_OUTPUT"
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
-      - name: Uitrollen
+      # Firestore en storage apart, en in deze volgorde. Samen in één aanroep controleert de CLI
+      # eerst of de storage-API aanstaat, en struikelt daarover als het service-account dat niet
+      # mag opvragen — waarna de Firestore-regels niet eens aan de beurt komen. Juist die zijn
+      # nodig voor check-ins, berichten en logs.
+      - name: Firestore-regels uitrollen
         if: steps.auth.outputs.ok == 'true'
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/service-account.json
         run: |
           npx --yes firebase-tools@13 deploy \
-            --only firestore:rules,storage:rules \
+            --only firestore:rules \
+            --project "${{ steps.auth.outputs.project }}" \
+            --non-interactive
+
+      # De storage-regels veranderen zelden en hangen aan een extra recht dat het service-account
+      # niet standaard heeft (serviceusage.services.get). Struikelt dit, dan blijft het bij een
+      # waarschuwing: de Firestore-regels staan dan al goed en dát is wat de app tegenhoudt.
+      # Wie dit ook automatisch wil: geef het service-account in Google Cloud IAM de rol
+      # "Service Usage Consumer".
+      - name: Storage-regels uitrollen
+        if: steps.auth.outputs.ok == 'true'
+        continue-on-error: true
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/service-account.json
+        run: |
+          npx --yes firebase-tools@13 deploy \
+            --only storage:rules \
             --project "${{ steps.auth.outputs.project }}" \
             --non-interactive
