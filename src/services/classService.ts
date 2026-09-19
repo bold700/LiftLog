@@ -132,6 +132,22 @@ export async function getCreditBalance(userId: string): Promise<number> {
   return first ? num(first.data().balance) : 0;
 }
 
+/**
+ * Alle creditsaldo's van de actieve studio, per gebruiker (voor de ledenlijst in Beheer).
+ * Eén query op `orgId`; de regels laten dat toe voor trainers en beheerders van die studio.
+ */
+export async function getCreditBalancesForOrg(): Promise<Record<string, number>> {
+  if (!isFirebaseConfigured() || !db) return {};
+  const orgId = requireOrgId();
+  const snap = await getDocs(query(collection(db, ACCOUNTS), where('orgId', '==', orgId)));
+  const out: Record<string, number> = {};
+  for (const d of snap.docs) {
+    const data = d.data();
+    if (typeof data.userId === 'string') out[data.userId] = num(data.balance);
+  }
+  return out;
+}
+
 /** Een les op het rooster zetten of bijwerken. Alleen trainer of beheerder (regels dwingen dat af). */
 export async function saveClass(
   input: Omit<StudioClass, 'orgId' | 'bookedCount' | 'waitlistCount' | 'createdAt' | 'cancelledAt'> & {

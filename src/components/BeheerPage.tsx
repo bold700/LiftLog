@@ -10,7 +10,6 @@ import {
   Typography,
   TextField,
   MenuItem,
-  Chip,
   Alert,
   Button,
   Dialog,
@@ -18,12 +17,8 @@ import {
   DialogContent,
   DialogActions,
   InputAdornment,
-  List,
-  ListItemButton,
-  ListItemText,
   Tabs,
   Tab,
-  Card,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -32,6 +27,7 @@ import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useProfile } from '../context/ProfileContext';
+import { useI18n } from '../context/I18nContext';
 import { useAuth } from '../context/AuthContext';
 import { getAllProfiles, updateProfile } from '../services/profileService';
 import { deleteAccountAsAdmin } from '../services/adminAccountService';
@@ -44,39 +40,14 @@ import { heartRateZones } from '../utils/heartRate';
 import { HeartRateZonesTable } from './HeartRateZonesTable';
 import { LimitationsEditor } from './LimitationsEditor';
 import { todayIso } from '../utils/format';
-import { WorkoutRequestsCard } from './beheer/WorkoutRequestsCard';
+import { RequestsBanner } from './beheer/RequestsBanner';
+import { MembersList } from './beheer/MembersList';
+import { getCreditBalancesForOrg } from '../services/classService';
 import { AddSporterByEmailCard } from './beheer/AddSporterByEmailCard';
 import { NumberField } from './NumberField';
+import { designTokens } from '../theme/designTokens';
 
-type Filter = 'all' | 'sporter' | 'trainer' | 'incomplete';
-
-const FILTER_LABEL: Record<Filter, string> = { all: 'Alle', sporter: 'Sporters', trainer: 'Trainers', incomplete: 'Onvolledig' };
-const FILTERS: Filter[] = ['all', 'sporter', 'trainer', 'incomplete'];
-
-const ROLE_LABEL: Record<ProfileRole, string> = { sporter: 'Sporter', trainer: 'Trainer', admin: 'Beheerder' };
-
-
-/** Welke basisgegevens ontbreken; leeg = compleet. */
-function missingFields(p: Profile): string[] {
-  const m: string[] = [];
-  if (!p.displayName?.trim()) m.push('naam');
-  if (!p.birthDate) m.push('geboortedatum');
-  if (!p.gender) m.push('geslacht');
-  if (p.heightCm == null) m.push('lengte');
-  if (p.restingHrBpm == null) m.push('rusthartslag');
-  return m;
-}
-
-function summaryLine(p: Profile): string {
-  const parts: string[] = [];
-  const age = ageOnDate(p.birthDate, todayIso());
-  if (age != null) parts.push(`${age} jaar`);
-  if (p.gender) parts.push(p.gender);
-  if (p.heightCm != null) parts.push(`${p.heightCm} cm`);
-  if (p.restingHrBpm != null) parts.push(`rust ${p.restingHrBpm} bpm`);
-  if (p.weightGoalKg != null) parts.push(`doel ${p.weightGoalKg} kg`);
-  return parts.join(' · ');
-}
+type Section = 'leden' | 'huisstijl';
 
 interface EditState {
   displayName: string;
@@ -140,13 +111,14 @@ export function BeheerPage() {
   const selfId = profileCtx?.profile?.userId ?? '';
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
-  // Beheer heeft twee delen: de leden, en (alleen voor de eigenaar) de huisstijl van de studio.
-  const [section, setSection] = useState<'leden' | 'huisstijl'>('leden');
+  const { t } = useI18n();
+  // Beheer heeft tabs naar het ontwerp; Lessoorten en Abonnementen komen er in latere stappen bij.
+  const [section, setSection] = useState<Section>('leden');
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [credits, setCredits] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [target, setTarget] = useState<Profile | null>(null);
@@ -164,11 +136,12 @@ export function BeheerPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await getAllProfiles();
+      const [list, balances] = await Promise.all([getAllProfiles(), getCreditBalancesForOrg().catch(() => ({}))]);
       list.sort((a, b) =>
         (a.displayName || a.email || a.userId).localeCompare(b.displayName || b.email || b.userId, undefined, { sensitivity: 'base' })
       );
       setProfiles(list);
+      setCredits(balances);
     } catch (e) {
       setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Profielen laden mislukt.' });
     } finally {
@@ -192,23 +165,9 @@ export function BeheerPage() {
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return profiles.filter((p) => {
-      if (filter === 'sporter' && p.role !== 'sporter') return false;
-      if (filter === 'trainer' && p.role === 'sporter') return false;
-      if (filter === 'incomplete' && missingFields(p).length === 0) return false;
-      if (!q) return true;
-      return [p.displayName, p.email, nameOf(p.trainerId)].some((s) => s?.toLowerCase().includes(q));
-    });
-  }, [profiles, query, filter, nameOf]);
-
-  const incompleteCount = useMemo(() => profiles.filter((p) => missingFields(p).length > 0).length, [profiles]);
-  const sporterCount = useMemo(() => profiles.filter((p) => p.role === 'sporter').length, [profiles]);
-  const filterCount: Record<Filter, number> = {
-    all: profiles.length,
-    sporter: sporterCount,
-    trainer: trainers.length,
-    incomplete: incompleteCount,
-  };
+    if (!q) return profiles;
+    return profiles.filter((p) => [p.displayName, p.email, nameOf(p.trainerId)].some((s) => s?.toLowerCase().includes(q)));
+  }, [profiles, query, nameOf]);
 
   const openCreate = () => {
     setCreateError(null);
@@ -333,17 +292,32 @@ export function BeheerPage() {
     return (
       <PageLayout>
         <ContentCard>
-          <Typography color="text.secondary">Alleen trainers en beheerders kunnen profielen beheren.</Typography>
+          <Typography color="text.secondary">{t('admin.onlyStaff')}</Typography>
         </ContentCard>
       </PageLayout>
     );
   }
 
+  // Kop naar het ontwerp: titel links, "Account toevoegen" rechts, daaronder de tabs.
+  const header = (
+    <>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 1.5 }}>
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>
+          {t('admin.title')}
+        </Typography>
+        <Button variant="contained" disableElevation startIcon={<PersonAddRoundedIcon />} onClick={openCreate} disabled={!auth} sx={{ flexShrink: 0 }}>
+          {t('admin.addAccount')}
+        </Button>
+      </Box>
+      {isAdmin && <SectionTabs value={section} onChange={setSection} />}
+    </>
+  );
+
   if (isAdmin && section === 'huisstijl') {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
-        <SectionTabs value={section} onChange={setSection} />
         <PageLayout>
+          {header}
           <BrandingSettings />
         </PageLayout>
       </Box>
@@ -352,148 +326,42 @@ export function BeheerPage() {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
-      {isAdmin && <SectionTabs value={section} onChange={setSection} />}
-      <Tabs
-        value={filter}
-        onChange={(_, v: Filter) => setFilter(v)}
-        variant={fullScreen ? 'scrollable' : 'fullWidth'}
-        scrollButtons="auto"
-        allowScrollButtonsMobile
-        aria-label="Filter profielen"
-        sx={{
-          minHeight: 48,
-          mb: 2,
-          width: '100%',
-          '& .MuiTab-root': {
-            minHeight: 48,
-            minWidth: 'auto',
-            px: 2,
-            textTransform: 'none',
-            fontWeight: 600,
-            transition: 'color 0.2s ease',
-          },
-          '& .MuiTabs-indicator': {
-            height: 3,
-            borderRadius: '3px 3px 0 0',
-            transition: 'left 0.25s cubic-bezier(0.22, 1, 0.36, 1), width 0.25s cubic-bezier(0.22, 1, 0.36, 1)',
-          },
-        }}
-      >
-        {FILTERS.map((f) => (
-          <Tab key={f} value={f} label={`${FILTER_LABEL[f]} (${filterCount[f]})`} id={`profielen-tab-${f}`} />
-        ))}
-      </Tabs>
-    {/* Gewone Box als paneel: als direct kind van de flex-kolom zou PageLayout tot de inhoud krimpen. */}
-    <Box sx={{ flex: 1, minHeight: 0 }}>
     <PageLayout>
-      <ContentCard>
-        <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
-          {FILTER_LABEL[filter]}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Alle accounts op één plek. Tik op een profiel om gegevens aan te vullen of te wijzigen.
-        </Typography>
+      {header}
 
-        <WorkoutRequestsCard />
+      <RequestsBanner profiles={profiles} onChanged={load} />
 
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center', mb: 2 }}>
-          <TextField
-            size="small"
-            placeholder="Zoek op naam, e-mail of trainer"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            sx={{ flex: '1 1 240px' }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchRoundedIcon fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
-            inputProps={{ 'aria-label': 'Zoek profielen' }}
-          />
-          <Button size="small" startIcon={<RefreshRoundedIcon />} onClick={load} disabled={loading}>
-            {loading ? 'Laden…' : 'Vernieuwen'}
-          </Button>
-          <Button size="small" variant="contained" startIcon={<PersonAddRoundedIcon />} onClick={openCreate} disabled={!auth}>
-            Nieuw account
-          </Button>
-        </Box>
-        {message && (
-          <Alert severity={message.type} sx={{ mb: 2 }} onClose={() => setMessage(null)}>
-            {message.text}
-          </Alert>
-        )}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center', mb: 2 }}>
+        <TextField
+          size="small"
+          placeholder={t('admin.search')}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          sx={{ flex: '1 1 240px', '& .MuiOutlinedInput-root': { borderRadius: 999, bgcolor: designTokens.cardBackgroundHigh } }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchRoundedIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+          inputProps={{ 'aria-label': t('admin.searchMembers') }}
+        />
+        <Button size="small" startIcon={<RefreshRoundedIcon />} onClick={load} disabled={loading}>
+          {t('admin.refresh')}
+        </Button>
+      </Box>
+      {message && (
+        <Alert severity={message.type} sx={{ mb: 2 }} onClose={() => setMessage(null)}>
+          {message.text}
+        </Alert>
+      )}
 
-        <Card variant="outlined" sx={{ borderRadius: 2 }}>
-          {loading && profiles.length === 0 ? (
-            <Box sx={{ p: 3, textAlign: 'center' }}>
-              <Typography color="text.secondary">Profielen laden…</Typography>
-            </Box>
-          ) : visible.length === 0 ? (
-            <Box sx={{ p: 3 }}>
-              <Typography color="text.secondary">
-                {profiles.length === 0 ? 'Nog geen profielen.' : 'Geen profielen gevonden met dit filter.'}
-              </Typography>
-              {profiles.length === 0 && (
-                <Button size="small" startIcon={<PersonAddRoundedIcon />} onClick={openCreate} sx={{ mt: 1 }}>
-                  Nieuw account aanmaken
-                </Button>
-              )}
-            </Box>
-          ) : (
-            <List disablePadding>
-              {visible.map((p) => {
-                const missing = missingFields(p);
-                const summary = summaryLine(p);
-                const trainerName = p.role === 'sporter' ? nameOf(p.trainerId) : null;
-                return (
-                  <ListItemButton key={p.userId} divider onClick={() => openEditor(p)} sx={{ gap: 1.5, alignItems: 'flex-start', py: 1.5 }}>
-                    <Box sx={{ pt: 0.25 }}>
-                      <UserAvatar name={p.displayName} photoURL={p.photoURL} size={40} />
-                    </Box>
-                    <ListItemText
-                      disableTypography
-                      primary={
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.75 }}>
-                          <Typography variant="body1" fontWeight={600} sx={{ minWidth: 0 }}>
-                            {p.displayName?.trim() || p.email || p.userId}
-                            {p.userId === selfId ? ' (ik)' : ''}
-                          </Typography>
-                          <Chip label={ROLE_LABEL[p.role]} size="small" variant={p.role === 'sporter' ? 'outlined' : 'filled'} />
-                          {p.trainerRequested && <Chip label="Aanvraag trainer" size="small" color="warning" />}
-                        </Box>
-                      }
-                      secondary={
-                        <Box sx={{ mt: 0.25 }}>
-                          <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-                            {p.email ?? '—'}
-                            {trainerName ? ` · trainer: ${trainerName}` : p.role === 'sporter' ? ' · geen trainer' : ''}
-                          </Typography>
-                          {summary && (
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                              {summary}
-                            </Typography>
-                          )}
-                          {missing.length > 0 && (
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
-                              {missing.map((m) => (
-                                <Chip key={m} label={`geen ${m}`} size="small" variant="outlined" color="warning" sx={{ height: 22 }} />
-                              ))}
-                            </Box>
-                          )}
-                        </Box>
-                      }
-                      sx={{ m: 0, minWidth: 0 }}
-                    />
-                  </ListItemButton>
-                );
-              })}
-            </List>
-          )}
-        </Card>
+      <MembersList profiles={visible} credits={credits} selfId={selfId} loading={loading} hasAny={profiles.length > 0} onOpen={openEditor} />
+
+      <Box sx={{ mt: 3 }}>
         <AddSporterByEmailCard onAdded={load} onMessage={setMessage} />
-      </ContentCard>
+      </Box>
 
       <Dialog open={!!target && !!edit} onClose={closeEditor} maxWidth="sm" fullWidth fullScreen={fullScreen}>
         <DialogTitle>Profiel bewerken</DialogTitle>
@@ -716,21 +584,22 @@ export function BeheerPage() {
       </Dialog>
     </PageLayout>
     </Box>
-    </Box>
   );
 }
 
 /** Leden of Huisstijl — alleen zichtbaar voor de eigenaar; een trainer ziet direct de leden. */
-function SectionTabs({ value, onChange }: { value: 'leden' | 'huisstijl'; onChange: (v: 'leden' | 'huisstijl') => void }) {
+function SectionTabs({ value, onChange }: { value: Section; onChange: (v: Section) => void }) {
+  const { t } = useI18n();
   return (
     <Tabs
       value={value}
-      onChange={(_, v: 'leden' | 'huisstijl') => onChange(v)}
-      aria-label="Beheer"
-      sx={{ minHeight: 44, mb: 1, '& .MuiTab-root': { minHeight: 44, textTransform: 'none', fontWeight: 600, px: 2 } }}
+      onChange={(_, v: Section) => onChange(v)}
+      aria-label={t('admin.title')}
+      variant="fullWidth"
+      sx={{ minHeight: 44, mb: 2, borderBottom: '1px solid', borderColor: 'divider', '& .MuiTab-root': { minHeight: 44, textTransform: 'none', fontWeight: 600, px: 2 } }}
     >
-      <Tab value="leden" label="Leden" />
-      <Tab value="huisstijl" label="Huisstijl" />
+      <Tab value="leden" label={t('admin.tabs.members')} />
+      <Tab value="huisstijl" label={t('admin.tabs.branding')} />
     </Tabs>
   );
 }
