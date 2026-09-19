@@ -353,31 +353,6 @@ export function createStore(db, auth, orgId = null) {
       return { ...log, id, createdAt };
     },
 
-    /**
-     * Stuurt een bericht namens iemand. De aanroeper heeft de rechten al gecontroleerd;
-     * hier stampen we alleen de studio en de vaste velden.
-     */
-    async sendMessage({ senderId, recipientId, text, kind = 'text', checkin = null }) {
-      const id = newId('msg');
-      const createdAt = new Date().toISOString();
-      const doc = {
-        id,
-        orgId: requireOrg(),
-        threadId: [senderId, recipientId].sort().join('__'),
-        // Zie messageService.ts: de app filtert hierop bij het ophalen van een gesprek.
-        participants: [senderId, recipientId].sort(),
-        senderId,
-        recipientId,
-        text: String(text).slice(0, 4000),
-        kind,
-        checkin,
-        createdAt,
-        readAt: null,
-        updatedAt: FieldValue.serverTimestamp(),
-      };
-      await db.collection('messages').doc(id).set(doc);
-      return { id, createdAt };
-    },
 
     async getMeasurements(userId) {
       const snap = await db.collection('measurements').where('orgId', '==', requireOrg()).where('userId', '==', userId).get();

@@ -5,6 +5,9 @@
  * Gaf een trainer de training voor iemand anders, dan volgt een tweede stap: de overdracht aan de
  * vaste trainer plus een kort bericht aan de sporter. Die worden op basis van de gelogde oefeningen
  * voorgeschreven en zijn daarna gewoon te wijzigen — de trainer zet zijn naam eronder, niet de AI.
+ *
+ * De overdracht wordt opgeslagen bij de training, waar de volgende trainer hem tegenkomt. Versturen
+ * doet de app niet: daar is WhatsApp voor, met een knop die de tekst al klaarzet.
  */
 import { useState } from 'react';
 import {
@@ -22,6 +25,7 @@ import {
   Typography,
 } from '@mui/material';
 import { FEELING_LABELS } from '../utils/trainingFeedback';
+import { ShareTextButtons } from './ShareTextButtons';
 import { segmentedToggleItemSx, segmentedToggleSx } from '../theme/segmentedToggle';
 
 export type Feeling = 1 | 2 | 3 | 4 | 5;
@@ -44,8 +48,8 @@ interface CheckinDialogProps {
   sporterName?: string | null;
   /** Vraagt de server om een voorzet; krijgt het gevoel en de notitie van stap 1 mee. */
   onRequestDraft?: (feeling: Feeling, note: string) => Promise<HandoverDraft>;
-  /** Slaat de overdracht op en stuurt het bericht naar de sporter. */
-  onSendHandover?: (draft: HandoverDraft) => Promise<void>;
+  /** Slaat de overdracht op bij de training. Versturen doet de trainer zelf via WhatsApp. */
+  onSaveHandover?: (draft: HandoverDraft) => Promise<void>;
 }
 
 const FEELINGS: Feeling[] = [1, 2, 3, 4, 5];
@@ -58,17 +62,17 @@ export function CheckinDialog({
   onSave,
   sporterName,
   onRequestDraft,
-  onSendHandover,
+  onSaveHandover,
 }: CheckinDialogProps) {
   const [feeling, setFeeling] = useState<Feeling | null>(null);
   const [note, setNote] = useState('');
   const [step, setStep] = useState<'checkin' | 'handover'>('checkin');
   const [draft, setDraft] = useState<HandoverDraft>({ handover: '', toSporter: '' });
   const [drafting, setDrafting] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [storing, setStoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const wantsHandover = Boolean(sporterName && onRequestDraft && onSendHandover);
+  const wantsHandover = Boolean(sporterName && onRequestDraft && onSaveHandover);
 
   /** Stap 1 afronden. Voor jezelf is dat het einde; voor een sporter volgt de overdracht. */
   const handleFirstSave = async () => {
@@ -90,15 +94,15 @@ export function CheckinDialog({
     }
   };
 
-  const handleSend = async () => {
-    setSending(true);
+  const handleStore = async () => {
+    setStoring(true);
     setError(null);
     try {
-      await onSendHandover!({ handover: draft.handover.trim(), toSporter: draft.toSporter.trim() });
+      await onSaveHandover!({ handover: draft.handover.trim(), toSporter: draft.toSporter.trim() });
       onSave(feeling!, note.trim());
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Versturen mislukt. Probeer het opnieuw.');
-      setSending(false);
+      setError(e instanceof Error ? e.message : 'Opslaan mislukt. Probeer het opnieuw.');
+      setStoring(false);
     }
   };
 
@@ -131,10 +135,10 @@ export function CheckinDialog({
                 multiline
                 rows={5}
                 fullWidth
-                sx={{ mb: 2 }}
                 slotProps={{ inputLabel: { shrink: true } }}
-                helperText="De sporter ziet dit niet."
+                helperText="Komt bij deze training te staan. De sporter ziet dit niet."
               />
+              <ShareTextButtons text={draft.handover} label="Stuur naar de trainer" sx={{ mb: 2.5 }} />
               <TextField
                 label={`Bericht aan ${sporterName}`}
                 value={draft.toSporter}
@@ -143,26 +147,27 @@ export function CheckinDialog({
                 rows={3}
                 fullWidth
                 slotProps={{ inputLabel: { shrink: true } }}
-                helperText="Laat leeg om geen bericht te sturen."
+                helperText="Stuur je zelf, in het gesprek dat je toch al hebt."
               />
+              <ShareTextButtons text={draft.toSporter} label={`Stuur naar ${sporterName}`} />
             </>
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
             onClick={() => feeling !== null && onSave(feeling, note.trim())}
-            disabled={sending}
+            disabled={storing}
             sx={{ textTransform: 'none', borderRadius: '24px' }}
           >
             Overslaan
           </Button>
           <Button
             variant="contained"
-            disabled={drafting || sending || !draft.handover.trim()}
-            onClick={handleSend}
+            disabled={drafting || storing || !draft.handover.trim()}
+            onClick={handleStore}
             sx={{ textTransform: 'none', borderRadius: '24px', bgcolor: '#000', color: '#F2E4D3', '&:hover': { bgcolor: '#1a1a1a' } }}
           >
-            {sending ? 'Versturen…' : 'Versturen'}
+            {storing ? 'Opslaan…' : 'Opslaan bij de training'}
           </Button>
         </DialogActions>
       </Dialog>
