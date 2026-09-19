@@ -297,7 +297,11 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         {list}
         <Dialog open={!!draft} onClose={() => setDraft(null)} fullScreen>
           <DialogTitle>{isNew ? t('classTypes.newType') : draft?.name}</DialogTitle>
-          <DialogContent sx={{ pt: 1 }}>{editor}</DialogContent>
+          {/* Eigen Box voor de ruimte: MUI zet padding-top van DialogContent na een titel op 0, en dan
+              valt het label van het eerste veld half weg. */}
+          <DialogContent>
+            <Box sx={{ pt: 1.5 }}>{editor}</Box>
+          </DialogContent>
           <DialogActions>
             <Button onClick={() => setDraft(null)}>{t('common.cancel')}</Button>
           </DialogActions>

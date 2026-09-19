@@ -350,7 +350,7 @@ function NewClassDialog({
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <DialogTitle>Les toevoegen</DialogTitle>
-      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, '&&': { pt: 1.5 } }}>
         {types.length > 0 && (
           <TextField label={t('classTypes.classType')} select value={typeId} onChange={(e) => pickType(e.target.value)} size="small">
             <MenuItem value="">{t('classTypes.looseClass')}</MenuItem>
@@ -470,7 +470,7 @@ function GrantCreditsDialog({
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <DialogTitle>Credits toekennen</DialogTitle>
-      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, '&&': { pt: 1.5 } }}>
         <TextField label="Sporter" select value={userId} onChange={(e) => setUserId(e.target.value)} size="small">
           {sporters.map((p) => (
             <MenuItem key={p.userId} value={p.userId}>
