@@ -240,7 +240,7 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
             </TextField>
 
             {/* Wat het etiket verder zegt */}
-            <Accordion disableGutters elevation={0} sx={{ bgcolor: designTokens.cardBackground, borderRadius: 3, '&:before': { display: 'none' }, mb: 1 }}>
+            <Accordion disableGutters elevation={0} sx={{ bgcolor: designTokens.cardBackground, mb: 1 }}>
               <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
                 <Typography fontWeight={600}>Voedingswaarden</Typography>
               </AccordionSummary>

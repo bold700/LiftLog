@@ -2,13 +2,14 @@
 // Alleen bedoeld voor de sectiecomponenten in deze map; geen generieke UI-bouwsteen.
 import { Accordion, AccordionSummary, AccordionDetails, Typography } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { designTokens } from '../../theme/designTokens';
 
 export const SECTION_STYLE = {
   margin: 0,
   p: 1.5,
-  borderRadius: 2,
-  border: '1px solid rgba(0,0,0,0.08)',
-  backgroundColor: 'rgba(0,0,0,0.02)',
+  borderRadius: 4,
+  border: `1px solid ${designTokens.cardBorder}`,
+  backgroundColor: designTokens.cardBackgroundHigh,
   display: 'flex',
   flexDirection: 'column' as const,
   gap: 1.5,

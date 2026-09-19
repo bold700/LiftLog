@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { PageLayout, ContentCard } from './layout';
+import { designTokens } from '../theme/designTokens';
 import { WeeklyCheckinDialog } from './WeeklyCheckinDialog';
 import { NumberField } from './NumberField';
 import { useProfile } from '../context/ProfileContext';
@@ -69,9 +70,9 @@ const EMPTY_PHOTOS = Object.fromEntries(PHOTO_VIEWS.map((v) => [v.view, EMPTY_PH
 const ACCORDION_SX = {
   margin: 0,
   p: 1.5,
-  borderRadius: 2,
-  border: '1px solid rgba(0,0,0,0.08)',
-  backgroundColor: 'rgba(0,0,0,0.02)',
+  borderRadius: 4,
+  border: `1px solid ${designTokens.cardBorder}`,
+  backgroundColor: designTokens.cardBackgroundHigh,
   '&:before': { display: 'none' },
   boxShadow: 'none',
   '& .MuiAccordionSummary-root': { py: 0.5, minHeight: 44, px: 0 },
