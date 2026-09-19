@@ -391,6 +391,21 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Lessoorten (Beheer → Lessoorten): de vaste vormen waaruit een les op het rooster wordt gemaakt.
+    // Iedereen in de studio mag ze zien; trainers en beheerders van die studio beheren ze.
+    match /classTypes/{typeId} {
+      allow read: if isSignedIn() && sameOrg();
+      allow create: if isStaffInSameOrgForNew()
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.durationMin is int
+        && request.resource.data.durationMin > 0
+        && request.resource.data.creditCost is int
+        && request.resource.data.creditCost >= 0;
+      allow update: if isSignedIn() && sameOrg() && writesMyOrg() && isTrainerOrAdmin();
+      allow delete: if isSignedIn() && sameOrg() && isTrainerOrAdmin();
+    }
+
     // Groepsles-sessies. Trainer beheert; deelnemers mogen hun sessie lezen. Altijd binnen één studio.
     match /sessions/{sessionId} {
       allow read: if isSignedIn()

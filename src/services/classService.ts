@@ -31,6 +31,8 @@ export interface StudioClass {
   waitlistCount: number;
   /** Optionele koppeling aan een groepsles-schema, zodat de les weet welk programma erbij hoort. */
   schemaId: string | null;
+  /** Lessoort waaruit deze les is gemaakt (Beheer → Lessoorten); null bij een losse les. */
+  classTypeId: string | null;
   cancelledAt: string | null;
   createdAt: string;
 }
@@ -69,6 +71,7 @@ function toClass(data: Record<string, unknown>, id: string): StudioClass {
     bookedCount: num(data.bookedCount),
     waitlistCount: num(data.waitlistCount),
     schemaId: data.schemaId ? str(data.schemaId) : null,
+    classTypeId: typeof data.classTypeId === 'string' ? data.classTypeId : null,
     cancelledAt: data.cancelledAt ? str(data.cancelledAt) : null,
     createdAt: str(data.createdAt),
   };
@@ -170,6 +173,7 @@ export async function saveClass(
       capacity: input.capacity,
       creditCost: input.creditCost,
       schemaId: input.schemaId,
+      classTypeId: input.classTypeId ?? null,
       createdAt: input.createdAt ?? new Date().toISOString(),
       updatedAt: serverTimestamp(),
     },
@@ -193,6 +197,7 @@ export async function createClass(
     capacity: input.capacity,
     creditCost: input.creditCost,
     schemaId: input.schemaId,
+    classTypeId: input.classTypeId ?? null,
     bookedCount: 0,
     waitlistCount: 0,
     createdAt: new Date().toISOString(),

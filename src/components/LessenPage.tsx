@@ -18,6 +18,8 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import ConfirmationNumberRoundedIcon from '@mui/icons-material/ConfirmationNumberRounded';
 import { PageLayout, ContentCard, PageTitle, EmptyState } from './layout';
 import { useProfile } from '../context/ProfileContext';
+import { useI18n } from '../context/I18nContext';
+import { getClassTypes } from '../services/classTypeService';
 import { useNotify } from '../context/NotifyContext';
 import {
   getUpcomingClasses,
@@ -33,9 +35,17 @@ import {
   type Booking,
 } from '../services/classService';
 import { designTokens } from '../theme/designTokens';
-import type { Profile } from '../types';
+import type { ClassType, Profile } from '../types';
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+/** "09:00" + 60 → "10:00"; blijft binnen de dag. */
+function addMinutes(hhmm: string, minutes: number): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return hhmm;
+  const total = Math.min(h * 60 + m + minutes, 23 * 60 + 59);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
 
 const dayLabel = (date: string) =>
   new Date(`${date}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -280,6 +290,9 @@ function NewClassDialog({
   onCreated: () => void;
 }) {
   const notify = useNotify();
+  const { t } = useI18n();
+  const [types, setTypes] = useState<ClassType[]>([]);
+  const [typeId, setTypeId] = useState('');
   const [title, setTitle] = useState('Small Group Training');
   const [date, setDate] = useState(today());
   const [startTime, setStartTime] = useState('09:00');
@@ -288,10 +301,27 @@ function NewClassDialog({
   const [creditCost, setCreditCost] = useState('1');
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    if (open) getClassTypes().then(setTypes).catch(() => setTypes([]));
+  }, [open]);
+
+  // Lessoort gekozen: naam, eindtijd, plekken en credits invullen (Beheer → Lessoorten).
+  const pickType = (id: string) => {
+    setTypeId(id);
+    const ct = types.find((c) => c.id === id);
+    if (!ct) return;
+    setTitle(ct.name);
+    setEndTime(addMinutes(startTime, ct.durationMin));
+    setCapacity(ct.capacity == null ? '' : String(ct.capacity));
+    setCreditCost(String(Math.min(ct.creditCost, 3)));
+  };
+
   const submit = async () => {
     setBusy(true);
     try {
-      const plekken = Number(capacity);
+      const chosen = types.find((c) => c.id === typeId) ?? null;
+      // Geen limiet op de lessoort: het rooster vraagt toch een getal (de regels eisen dat).
+      const plekken = capacity.trim() === '' && chosen?.capacity == null ? 999 : Number(capacity);
       const kosten = Number(creditCost);
       if (!Number.isInteger(plekken) || plekken < 1) throw new Error('Vul een geldig aantal plekken in.');
       if (!Number.isInteger(kosten) || kosten < 0) throw new Error('Vul een geldig aantal credits in.');
@@ -302,10 +332,11 @@ function NewClassDialog({
         date,
         startTime,
         endTime: endTime || null,
-        trainerId,
+        trainerId: chosen?.defaultTrainerId ?? trainerId,
         capacity: plekken,
         creditCost: kosten,
-        schemaId: null,
+        schemaId: chosen?.schemaId ?? null,
+        classTypeId: chosen?.id ?? null,
       });
       notify?.success('Les staat op het rooster.');
       onCreated();
@@ -320,6 +351,16 @@ function NewClassDialog({
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <DialogTitle>Les toevoegen</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+        {types.length > 0 && (
+          <TextField label={t('classTypes.classType')} select value={typeId} onChange={(e) => pickType(e.target.value)} size="small">
+            <MenuItem value="">{t('classTypes.looseClass')}</MenuItem>
+            {types.map((c) => (
+              <MenuItem key={c.id} value={c.id}>
+                {c.name}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
         <TextField label="Naam" value={title} onChange={(e) => setTitle(e.target.value)} size="small" />
         <TextField
           label="Datum"

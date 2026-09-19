@@ -380,6 +380,27 @@ export interface Profile {
  * - open: beschikbaar voor iedereen
  * - group: groepsles met vaste deelnemers (participantIds) → per-account loggen
  */
+/**
+ * Lessoort: de vaste vorm van een les (Small group strength, Personal training, …). Een les op het
+ * rooster kiest een lessoort en neemt duur, plekken, credits en trainer over. Beheer → Lessoorten.
+ */
+export interface ClassType {
+  id: string;
+  orgId: string;
+  name: string;
+  durationMin: number;
+  /** Maximum aantal deelnemers; null = geen limiet (open gym). */
+  capacity: number | null;
+  /** Wat een les van deze soort kost; 0 = gratis. */
+  creditCost: number;
+  /** Vaste trainer; null = elke trainer. */
+  defaultTrainerId: string | null;
+  /** Gekoppeld schema (workout) dat bij deze lessoort hoort. */
+  schemaId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type SchemaAudience = 'single' | 'multiple' | 'open' | 'group';
 
 export interface Schema {

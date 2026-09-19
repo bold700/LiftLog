@@ -24,6 +24,7 @@ import {
 } from '@mui/material';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useProfile } from '../context/ProfileContext';
 import { useI18n } from '../context/I18nContext';
@@ -41,14 +42,15 @@ import { LimitationsEditor } from './LimitationsEditor';
 import { todayIso } from '../utils/format';
 import { RequestsBanner } from './beheer/RequestsBanner';
 import { MembersList } from './beheer/MembersList';
+import { ClassTypesPanel } from './beheer/ClassTypesPanel';
 import { getCreditBalancesForOrg } from '../services/classService';
 import { AddSporterByEmailCard } from './beheer/AddSporterByEmailCard';
 import { NumberField } from './NumberField';
 import { designTokens } from '../theme/designTokens';
 
 type Section = 'leden' | 'lessoorten' | 'abonnementen' | 'huisstijl' | 'facturatie';
-/** Beheer loopt breder door dan de andere pagina's: de tabel en de tweekoloms-huisstijl vragen dat (ontwerp: 1220). */
-const ADMIN_MAX_WIDTH = 1180;
+/** Beheer gebruikt de hele breedte van het hoofdvlak, zoals in het ontwerp; de andere pagina's blijven op 800. */
+const ADMIN_MAX_WIDTH = 'none';
 
 interface EditState {
   displayName: string;
@@ -115,6 +117,8 @@ export function BeheerPage() {
   const { t } = useI18n();
   // Beheer heeft tabs naar het ontwerp; Lessoorten en Abonnementen komen er in latere stappen bij.
   const [section, setSection] = useState<Section>('leden');
+  // Kop-knop op Lessoorten: elke klik telt op, het paneel opent dan een lege lessoort.
+  const [newTypeSignal, setNewTypeSignal] = useState(0);
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [credits, setCredits] = useState<Record<string, number>>({});
@@ -306,9 +310,15 @@ export function BeheerPage() {
         <Typography variant="h5" sx={{ fontWeight: 600 }}>
           {t('admin.title')}
         </Typography>
-        <Button variant="contained" disableElevation startIcon={<PersonAddRoundedIcon />} onClick={openCreate} disabled={!auth} sx={{ flexShrink: 0 }}>
-          {t('admin.addAccount')}
-        </Button>
+        {section === 'lessoorten' ? (
+          <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewTypeSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
+            {t('classTypes.newType')}
+          </Button>
+        ) : (
+          <Button variant="contained" disableElevation startIcon={<PersonAddRoundedIcon />} onClick={openCreate} disabled={!auth} sx={{ flexShrink: 0 }}>
+            {t('admin.addAccount')}
+          </Button>
+        )}
       </Box>
       {isAdmin && <SectionTabs value={section} onChange={setSection} />}
     </>
@@ -321,6 +331,8 @@ export function BeheerPage() {
           {header}
           {section === 'huisstijl' ? (
             <BrandingSettings />
+          ) : section === 'lessoorten' ? (
+            <ClassTypesPanel staff={trainers} createSignal={newTypeSignal} />
           ) : (
             // Lessoorten, Abonnementen en Facturatie staan in het ontwerp en komen elk in hun eigen stap.
             <ContentCard>
