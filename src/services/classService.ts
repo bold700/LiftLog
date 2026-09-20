@@ -15,6 +15,14 @@ const CLASSES = 'classes';
 const BOOKINGS = 'bookings';
 const ACCOUNTS = 'creditAccounts';
 
+/** Vaste kleur per sessiesoort, voor de legenda en kleurstip op het rooster (los van de huisstijl). */
+export const SESSION_KIND_COLORS: Record<SessionKind, string> = {
+  '1on1': '#4E8AC7',
+  duo: '#8B6FCB',
+  group: '#5FA777',
+  concept: '#E39A3B',
+};
+
 export interface StudioClass {
   id: string;
   orgId: string;

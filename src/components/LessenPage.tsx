@@ -13,9 +13,13 @@ import {
   TextField,
   MenuItem,
   IconButton,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
+import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import ConfirmationNumberRoundedIcon from '@mui/icons-material/ConfirmationNumberRounded';
 import { PageLayout, ContentCard, PageTitle, EmptyState } from './layout';
 import { useProfile } from '../context/ProfileContext';
@@ -33,19 +37,44 @@ import {
   deleteClass,
   grantCredits,
   newClassId,
+  SESSION_KIND_COLORS,
   type StudioClass,
   type Booking,
 } from '../services/classService';
 import { designTokens } from '../theme/designTokens';
-import { addMinutes } from '../utils/format';
+import { addMinutes, addWeeks } from '../utils/format';
 import type { ClassType, Profile, SessionKind } from '../types';
 
 const SESSION_KIND_KEYS: SessionKind[] = ['1on1', 'duo', 'group', 'concept'];
+const SESSION_KIND_LABELS: Record<SessionKind, string> = { '1on1': '1-op-1', duo: 'Duo PT', group: 'Groep', concept: 'Concept' };
+const WEEKDAY_SHORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
+
+type ViewMode = 'week' | 'day' | 'makeups';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 const dayLabel = (date: string) =>
   new Date(`${date}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
+
+/** Korte dagkop voor de weeklijst: "Vandaag", "Morgen" of "maandag 15 sep". */
+function relativeDayLabel(date: string): string {
+  const diff = Math.round((new Date(`${date}T12:00:00`).getTime() - new Date(`${today()}T12:00:00`).getTime()) / 86_400_000);
+  if (diff === 0) return 'Vandaag';
+  if (diff === 1) return 'Morgen';
+  return new Date(`${date}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'short' });
+}
+
+/** Maandag t/m zondag van de week waar `date` in valt. */
+function weekOf(date: string): string[] {
+  const d = new Date(`${date}T12:00:00`);
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(monday);
+    day.setDate(monday.getDate() + i);
+    return day.toISOString().slice(0, 10);
+  });
+}
 
 export function LessenPage() {
   const profileCtx = useProfile();
@@ -60,6 +89,9 @@ export function LessenPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('week');
+  const [selectedDate, setSelectedDate] = useState(today());
+  const [roomFilter, setRoomFilter] = useState('');
 
   const load = useCallback(async () => {
     if (!me) return;
@@ -92,6 +124,22 @@ export function LessenPage() {
     }
     return map;
   }, [bookings]);
+
+  /** Ruimtes die daadwerkelijk in gebruik zijn, voor het filter. */
+  const roomOptions = useMemo(() => Array.from(new Set(classes.map((c) => c.room).filter((r): r is string => !!r))).sort(), [classes]);
+  const visibleClasses = useMemo(() => (roomFilter ? classes.filter((c) => c.room === roomFilter) : classes), [classes, roomFilter]);
+  /** Voor de weeklijst: gegroepeerd per dag, chronologisch. */
+  const classesByDay = useMemo(() => {
+    const map = new Map<string, StudioClass[]>();
+    for (const c of visibleClasses) {
+      const list = map.get(c.date) ?? [];
+      list.push(c);
+      map.set(c.date, list);
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [visibleClasses]);
+  const dayClasses = useMemo(() => visibleClasses.filter((c) => c.date === selectedDate), [visibleClasses, selectedDate]);
+  const weekStrip = useMemo(() => weekOf(selectedDate), [selectedDate]);
 
   const handleBook = useCallback(
     async (cls: StudioClass) => {
@@ -155,6 +203,65 @@ export function LessenPage() {
 
   if (!me) return null;
 
+  const renderClassRow = (cls: StudioClass) => {
+    const mine = myBookingByClass.get(cls.id);
+    const full = cls.bookedCount >= cls.capacity;
+    const busy = busyId === cls.id;
+    return (
+      <Box
+        key={cls.id}
+        sx={{
+          border: `1px solid ${designTokens.cardBorder}`,
+          borderRadius: `${designTokens.cardRadius}px`,
+          bgcolor: designTokens.cardBackground,
+          p: 2,
+          display: 'flex',
+          gap: 2,
+          alignItems: 'flex-start',
+          opacity: cls.cancelledAt ? 0.6 : 1,
+        }}
+      >
+        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: SESSION_KIND_COLORS[cls.sessionKind], mt: 0.75, flexShrink: 0 }} />
+        <Box sx={{ flex: '1 1 auto', minWidth: 0 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+            {cls.title}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {dayLabel(cls.date)} · {cls.startTime}
+            {cls.endTime ? `–${cls.endTime}` : ''}
+            {cls.room ? ` · ${cls.room}` : ''}
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 0.75, mt: 1, flexWrap: 'wrap' }}>
+            <Chip size="small" label={`${cls.bookedCount}/${cls.capacity} plekken`} color={full ? 'warning' : 'default'} />
+            {cls.waitlistCount > 0 && <Chip size="small" variant="outlined" label={`${cls.waitlistCount} op wachtlijst`} />}
+            {cls.creditCost !== 1 && <Chip size="small" variant="outlined" label={`${cls.creditCost} credits`} />}
+            {cls.cancelledAt && <Chip size="small" color="error" label="Afgelast" />}
+            {mine?.status === 'waitlist' && <Chip size="small" color="info" label="Op wachtlijst" />}
+            {mine?.status === 'booked' && <Chip size="small" color="success" label="Ingeschreven" />}
+          </Box>
+        </Box>
+
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0, alignItems: 'flex-end' }}>
+          {!cls.cancelledAt &&
+            (mine ? (
+              <Button size="small" variant="outlined" disabled={busy} onClick={() => void handleCancel(mine)}>
+                Afmelden
+              </Button>
+            ) : (
+              <Button size="small" variant="contained" disabled={busy} onClick={() => void handleBook(cls)}>
+                {full ? 'Wachtlijst' : 'Reserveren'}
+              </Button>
+            ))}
+          {isStaff && !cls.cancelledAt && (
+            <IconButton size="small" onClick={() => void handleDelete(cls)} disabled={busy} aria-label="Les verwijderen">
+              <DeleteOutlineRoundedIcon fontSize="small" />
+            </IconButton>
+          )}
+        </Box>
+      </Box>
+    );
+  };
+
   return (
     <PageLayout>
       <PageTitle>Lessen</PageTitle>
@@ -181,10 +288,96 @@ export function LessenPage() {
         </Box>
       )}
 
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5, flexWrap: 'wrap' }}>
+        <ToggleButtonGroup size="small" exclusive value={viewMode} onChange={(_, v: ViewMode | null) => v && setViewMode(v)}>
+          <ToggleButton value="week">Week</ToggleButton>
+          <ToggleButton value="day">Dag</ToggleButton>
+          <ToggleButton value="makeups">Inhaallessen</ToggleButton>
+        </ToggleButtonGroup>
+        {roomOptions.length > 0 && (
+          <ToggleButtonGroup size="small" exclusive value={roomFilter} onChange={(_, v: string | null) => setRoomFilter(v ?? '')}>
+            <ToggleButton value="">Alle ruimtes</ToggleButton>
+            {roomOptions.map((r) => (
+              <ToggleButton key={r} value={r}>
+                {r}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        )}
+      </Box>
+
+      {viewMode !== 'makeups' && (
+        <Box sx={{ display: 'flex', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
+          {SESSION_KIND_KEYS.map((k) => (
+            <Box key={k} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: SESSION_KIND_COLORS[k] }} />
+              <Typography variant="caption" color="text.secondary">
+                {SESSION_KIND_LABELS[k]}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      )}
+
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress size={24} />
         </Box>
+      ) : viewMode === 'makeups' ? (
+        <ContentCard>
+          <EmptyState>Inhaallessen komen in een volgende stap: gemiste sessies als tegoed, in te plannen in een vrij gat.</EmptyState>
+        </ContentCard>
+      ) : viewMode === 'day' ? (
+        <>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 2 }}>
+            <IconButton size="small" onClick={() => setSelectedDate((d) => addWeeks(d, -1))} aria-label="Vorige week">
+              <ChevronLeftRoundedIcon fontSize="small" />
+            </IconButton>
+            <Box sx={{ display: 'flex', flex: 1, gap: 0.5 }}>
+              {weekStrip.map((d) => {
+                const isToday = d === today();
+                const isPast = d < today();
+                const selected = d === selectedDate;
+                const dt = new Date(`${d}T12:00:00`);
+                return (
+                  <Box
+                    key={d}
+                    role="button"
+                    tabIndex={isPast ? -1 : 0}
+                    onClick={() => !isPast && setSelectedDate(d)}
+                    sx={{
+                      flex: 1,
+                      textAlign: 'center',
+                      py: 0.75,
+                      borderRadius: 2,
+                      cursor: isPast ? 'default' : 'pointer',
+                      opacity: isPast ? 0.35 : 1,
+                      bgcolor: selected ? designTokens.primaryContainer : 'transparent',
+                      color: selected ? designTokens.onPrimaryContainer : 'text.primary',
+                    }}
+                  >
+                    <Typography variant="caption" sx={{ display: 'block', textTransform: 'capitalize' }} color={selected ? 'inherit' : 'text.secondary'}>
+                      {WEEKDAY_SHORT[dt.getDay()]}
+                    </Typography>
+                    <Typography variant="body2" fontWeight={isToday ? 700 : 400}>
+                      {dt.getDate()}
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </Box>
+            <IconButton size="small" onClick={() => setSelectedDate((d) => addWeeks(d, 1))} aria-label="Volgende week">
+              <ChevronRightRoundedIcon fontSize="small" />
+            </IconButton>
+          </Box>
+          {dayClasses.length === 0 ? (
+            <ContentCard>
+              <EmptyState>Nog niets gepland op {relativeDayLabel(selectedDate).toLowerCase()}.</EmptyState>
+            </ContentCard>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>{dayClasses.map(renderClassRow)}</Box>
+          )}
+        </>
       ) : classes.length === 0 ? (
         <ContentCard>
           <EmptyState>
@@ -193,64 +386,20 @@ export function LessenPage() {
               : 'Er staan nog geen lessen gepland. Je trainer zet ze hier neer.'}
           </EmptyState>
         </ContentCard>
+      ) : classesByDay.length === 0 ? (
+        <ContentCard>
+          <EmptyState>Geen lessen in {roomFilter}.</EmptyState>
+        </ContentCard>
       ) : (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          {classes.map((cls) => {
-            const mine = myBookingByClass.get(cls.id);
-            const full = cls.bookedCount >= cls.capacity;
-            const busy = busyId === cls.id;
-            return (
-              <Box
-                key={cls.id}
-                sx={{
-                  border: `1px solid ${designTokens.cardBorder}`,
-                  borderRadius: `${designTokens.cardRadius}px`,
-                  bgcolor: designTokens.cardBackground,
-                  p: 2,
-                  display: 'flex',
-                  gap: 2,
-                  alignItems: 'flex-start',
-                  opacity: cls.cancelledAt ? 0.6 : 1,
-                }}
-              >
-                <Box sx={{ flex: '1 1 auto', minWidth: 0 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                    {cls.title}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {dayLabel(cls.date)} · {cls.startTime}
-                    {cls.endTime ? `–${cls.endTime}` : ''}
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 0.75, mt: 1, flexWrap: 'wrap' }}>
-                    <Chip size="small" label={`${cls.bookedCount}/${cls.capacity} plekken`} color={full ? 'warning' : 'default'} />
-                    {cls.waitlistCount > 0 && <Chip size="small" variant="outlined" label={`${cls.waitlistCount} op wachtlijst`} />}
-                    {cls.creditCost !== 1 && <Chip size="small" variant="outlined" label={`${cls.creditCost} credits`} />}
-                    {cls.cancelledAt && <Chip size="small" color="error" label="Afgelast" />}
-                    {mine?.status === 'waitlist' && <Chip size="small" color="info" label="Op wachtlijst" />}
-                    {mine?.status === 'booked' && <Chip size="small" color="success" label="Ingeschreven" />}
-                  </Box>
-                </Box>
-
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0, alignItems: 'flex-end' }}>
-                  {!cls.cancelledAt &&
-                    (mine ? (
-                      <Button size="small" variant="outlined" disabled={busy} onClick={() => void handleCancel(mine)}>
-                        Afmelden
-                      </Button>
-                    ) : (
-                      <Button size="small" variant="contained" disabled={busy} onClick={() => void handleBook(cls)}>
-                        {full ? 'Wachtlijst' : 'Reserveren'}
-                      </Button>
-                    ))}
-                  {isStaff && !cls.cancelledAt && (
-                    <IconButton size="small" onClick={() => void handleDelete(cls)} disabled={busy} aria-label="Les verwijderen">
-                      <DeleteOutlineRoundedIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                </Box>
-              </Box>
-            );
-          })}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+          {classesByDay.map(([date, dayList]) => (
+            <Box key={date}>
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, textTransform: 'capitalize' }}>
+                {relativeDayLabel(date)}
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>{dayList.map(renderClassRow)}</Box>
+            </Box>
+          ))}
         </Box>
       )}
 
