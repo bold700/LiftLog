@@ -535,9 +535,9 @@ export function NutritionPage() {
                 onClick={() => fileInputRef.current?.click()}
                 sx={{ flex: 1, flexDirection: 'column', gap: 0.25, py: 1, borderRadius: `${Math.max(0, designTokens.buttonRadius - 4)}px` }}
               >
-                <PhotoCameraRoundedIcon fontSize="small" />
+                {recognizing ? <CircularProgress size={20} sx={{ color: designTokens.primary }} /> : <PhotoCameraRoundedIcon fontSize="small" />}
                 <Typography variant="caption" fontWeight={600}>
-                  {recognizing ? 'Bezig…' : 'Foto'}
+                  Foto
                 </Typography>
               </ButtonBase>
               <ButtonBase
@@ -545,12 +545,39 @@ export function NutritionPage() {
                 onClick={() => setScannerOpen(true)}
                 sx={{ flex: 1, flexDirection: 'column', gap: 0.25, py: 1, borderRadius: `${Math.max(0, designTokens.buttonRadius - 4)}px` }}
               >
-                <QrCodeScannerRoundedIcon fontSize="small" />
+                {lookingUp ? <CircularProgress size={20} sx={{ color: designTokens.primary }} /> : <QrCodeScannerRoundedIcon fontSize="small" />}
                 <Typography variant="caption" fontWeight={600}>
-                  {lookingUp ? 'Bezig…' : 'Barcode'}
+                  Barcode
                 </Typography>
               </ButtonBase>
             </Box>
+            {/*
+              Duidelijk zichtbare "bezig"-melding na het maken van een foto: een kleine tekstwijziging
+              in de knop hierboven viel niet op (Kenny: "heel onduidelijk dat hij bezig is, heel klein").
+              Material 3 heeft naast deze cirkelvormige progress-indicator ook een nieuwe "loading
+              indicator" (vloeiend van vorm veranderend, bedoeld voor processen onder de 5 seconden —
+              precies dit geval); die vraagt eigen vormdata die we niet hebben, dus voorlopig deze
+              brede, prominente balk met de standaard M3-indicator.
+            */}
+            {(recognizing || lookingUp) && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  p: 1.5,
+                  mb: 1.5,
+                  borderRadius: `${designTokens.cardRadius}px`,
+                  bgcolor: designTokens.primaryContainer,
+                  color: designTokens.onPrimaryContainer,
+                }}
+              >
+                <CircularProgress size={26} sx={{ color: 'inherit' }} />
+                <Typography variant="body2" fontWeight={600}>
+                  {recognizing ? 'Foto wordt herkend…' : 'Barcode wordt opgezocht…'}
+                </Typography>
+              </Box>
+            )}
             {photoError && (
               <Typography variant="caption" color="error" sx={{ display: 'block', mb: 1 }}>
                 {photoError}
