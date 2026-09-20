@@ -286,6 +286,22 @@ await t('beheerder leest de lidmaatschappen van zijn studio → mag', true, getD
 await t('sporter koppelt zichzelf een abonnement → geweigerd', false, setDoc(doc(as('sporter3'), 'memberships/mbZelf'), { orgId: 'vanas', userId: 'sporter3', planId: 'pl1', status: 'active' }));
 await t('beheerder schrijft een lidmaatschap buiten de server om → geweigerd', false, setDoc(doc(as('admin1'), 'memberships/mbAdmin'), { orgId: 'vanas', userId: 'sporter3', planId: 'pl1', status: 'active' }));
 
+console.log('Facturatie');
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'charges/ch1'), { orgId: 'vanas', userId: 'sporter2', planName: 'Maand 8', amount: 139, status: 'open', note: '' });
+  await setDoc(doc(ctx.firestore(), 'charges/chB'), { orgId: 'studiob', userId: 'sporterB', planName: 'B', amount: 50, status: 'open', note: '' });
+});
+await t('sporter leest zijn eigen post → mag', true, getDoc(doc(as('sporter2'), 'charges/ch1')));
+await t('andere sporter leest die post → geweigerd', false, getDoc(doc(as('sporter3'), 'charges/ch1')));
+await t('beheerder leest de posten van zijn studio → mag', true, getDocs(query(collection(as('admin1'), 'charges'), where('orgId', '==', 'vanas'))));
+await t('beheerder zet een post op betaald → mag', true, updateDoc(doc(as('admin1'), 'charges/ch1'), { status: 'paid', paidAt: '2026-09-20', paidBy: 'admin1' }));
+await t('beheerder verandert het bedrag → geweigerd', false, updateDoc(doc(as('admin1'), 'charges/ch1'), { amount: 1 }));
+await t('beheerder geeft een onbekende status → geweigerd', false, updateDoc(doc(as('admin1'), 'charges/ch1'), { status: 'gratis' }));
+await t('sporter zet zijn eigen post op betaald → geweigerd', false, updateDoc(doc(as('sporter2'), 'charges/ch1'), { status: 'paid' }));
+await t('beheerder studio A raakt een post van studio B → geweigerd', false, updateDoc(doc(as('admin1'), 'charges/chB'), { status: 'paid' }));
+await t('post aanmaken buiten de server om → geweigerd', false, setDoc(doc(as('admin1'), 'charges/chZelf'), { orgId: 'vanas', userId: 'sporter2', amount: 1, status: 'open' }));
+await t('post verwijderen → geweigerd', false, deleteDoc(doc(as('admin1'), 'charges/ch1')));
+
 console.log('Lessen, reserveringen en credits');
 const les = (extra = {}) => ({
   orgId: 'vanas', title: 'Small Group', date: '2026-09-10', startTime: '09:00',

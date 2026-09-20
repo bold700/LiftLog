@@ -44,6 +44,8 @@ import { RequestsBanner } from './beheer/RequestsBanner';
 import { MembersList } from './beheer/MembersList';
 import { ClassTypesPanel } from './beheer/ClassTypesPanel';
 import { SubscriptionsPanel } from './beheer/SubscriptionsPanel';
+import { BillingPanel } from './beheer/BillingPanel';
+import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import { assignPlan, getActiveMembershipsForOrg, getPlans, renewDue, unassignPlan } from '../services/planService';
 import { getCreditBalancesForOrg } from '../services/classService';
 import { AddSporterByEmailCard } from './beheer/AddSporterByEmailCard';
@@ -146,6 +148,7 @@ export function BeheerPage() {
   const [memberships, setMemberships] = useState<Record<string, Membership>>({});
   const [plans, setPlans] = useState<Plan[]>([]);
   const [newPlanSignal, setNewPlanSignal] = useState(0);
+  const [exportSignal, setExportSignal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -357,6 +360,10 @@ export function BeheerPage() {
           <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewPlanSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
             {t('plans.newPlan')}
           </Button>
+        ) : section === 'facturatie' ? (
+          <Button variant="contained" disableElevation startIcon={<DownloadRoundedIcon />} onClick={() => setExportSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
+            {t('billing.export')}
+          </Button>
         ) : (
           <Button variant="contained" disableElevation startIcon={<PersonAddRoundedIcon />} onClick={openCreate} disabled={!auth} sx={{ flexShrink: 0 }}>
             {t('admin.addAccount')}
@@ -378,6 +385,8 @@ export function BeheerPage() {
             <ClassTypesPanel staff={trainers} createSignal={newTypeSignal} />
           ) : section === 'abonnementen' ? (
             <SubscriptionsPanel memberships={memberships} credits={credits} createSignal={newPlanSignal} onChanged={load} />
+          ) : section === 'facturatie' ? (
+            <BillingPanel profiles={profiles} memberships={memberships} plans={plans} selfId={selfId} exportSignal={exportSignal} />
           ) : (
             // Lessoorten, Abonnementen en Facturatie staan in het ontwerp en komen elk in hun eigen stap.
             <ContentCard>

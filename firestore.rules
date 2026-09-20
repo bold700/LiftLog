@@ -407,6 +407,18 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Posten (Beheer → Facturatie): wat een lid verschuldigd is per periode. De server maakt ze aan
+    // bij koppelen en verlengen; staf zet ze op betaald of schrijft ze af en mag verder niets
+    // veranderen (bedrag en lid liggen vast). Leden zien hun eigen posten.
+    match /charges/{chargeId} {
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow create, delete: if false;
+      allow update: if isStaffInSameOrg()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'paidAt', 'paidBy', 'note', 'updatedAt'])
+        && request.resource.data.status in ['open', 'paid', 'void'];
+    }
+
     // Grootboek van creditmutaties: waar komt elk saldo vandaan. Zelfde leesrechten, nooit schrijven.
     match /creditLedger/{entryId} {
       allow read: if isSignedIn()

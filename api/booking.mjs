@@ -21,7 +21,7 @@ import { applyCors } from './_lib/cors.mjs';
 import { getAdmin } from './_lib/firebaseAdmin.mjs';
 import { orgIdOf, newId } from './_lib/liftlogData.mjs';
 import { FieldValue } from 'firebase-admin/firestore';
-import { activeMembership, newMembership, settleMembership } from './_lib/subscriptions.mjs';
+import { activeMembership, newCharge, newMembership, settleMembership } from './_lib/subscriptions.mjs';
 
 const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
 
@@ -421,6 +421,11 @@ async function assign(res, db, uid, myOrgs, body) {
     const saldo = Number(aSnap.exists ? aSnap.data().balance : 0) || 0;
     if (current) tx.set(db.collection('memberships').doc(current.id), { status: 'cancelled', cancelledAt: nowIso, updatedAt: nowIso }, { merge: true });
     tx.set(db.collection('memberships').doc(membership.id), membership);
+    // Eerste post: de eerste periode (maand of de kaart zelf), tenzij het plan gratis is.
+    if ((Number(plan.price) || 0) > 0) {
+      const charge = newCharge({ id: newId('ch'), orgId, userId: targetUserId, plan, membershipId: membership.id, periodStartIso: nowIso, nowIso });
+      tx.set(db.collection('charges').doc(charge.id), charge);
+    }
     if (credits > 0) {
       tx.set(accountRef, { orgId, userId: targetUserId, balance: saldo + credits, updatedAt: nowIso }, { merge: true });
       tx.set(db.collection('creditLedger').doc(newId('cl')), {

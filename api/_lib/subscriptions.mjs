@@ -84,6 +84,39 @@ export function newMembership({ id, orgId, userId, plan, nowIso, byUserId }) {
   };
 }
 
+/** Maandlabel voor een post: "2026-09". */
+export function periodOf(iso) {
+  return String(iso).slice(0, 7);
+}
+
+/**
+ * Openstaande post voor een periode van een plan (Beheer → Facturatie). Gratis plannen krijgen
+ * geen post. Betalen gebeurt (nog) buiten de app; staf zet de post op betaald.
+ */
+export function newCharge({ id, orgId, userId, plan, membershipId, periodStartIso, nowIso }) {
+  const monthly = plan.period === 'month';
+  const period = monthly ? periodOf(periodStartIso) : null;
+  return {
+    id,
+    orgId,
+    userId,
+    membershipId,
+    planId: plan.id,
+    planName: plan.name,
+    description: monthly ? `${plan.name} · ${period}` : plan.name,
+    amount: Number(plan.price) || 0,
+    period,
+    issuedAt: nowIso,
+    dueAt: periodStartIso,
+    status: 'open',
+    paidAt: null,
+    paidBy: null,
+    note: '',
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+}
+
 const accountId = (orgId, userId) => `${orgId}__${userId}`;
 
 /**
@@ -107,6 +140,11 @@ export async function settleMembership(db, newId, membershipRef, nowIso) {
     if (result.steps.length === 0) return { steps: 0 };
 
     for (const step of result.steps) {
+      // Elke verlenging van een betaald plan is een post op Facturatie.
+      if (step.kind === 'renewal' && (Number(plan.price) || 0) > 0) {
+        const charge = newCharge({ id: newId('ch'), orgId: m.orgId, userId: m.userId, plan, membershipId: mSnap.id, periodStartIso: step.periodStart, nowIso });
+        tx.set(db.collection('charges').doc(charge.id), charge);
+      }
       if (step.delta === 0) continue;
       tx.set(db.collection('creditLedger').doc(newId('cl')), {
         orgId: m.orgId,
