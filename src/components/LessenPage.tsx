@@ -48,6 +48,7 @@ import {
 } from '../services/classService';
 import { getOrg } from '../services/orgService';
 import { designTokens } from '../theme/designTokens';
+import { segmentedToggleSx } from '../theme/segmentedToggle';
 import { addWeeks } from '../utils/format';
 import type { ClassType, Profile, SessionKind, StandingBooking } from '../types';
 
@@ -267,12 +268,17 @@ export function LessenPage() {
             {cls.room ? ` · ${cls.room}` : ''}
           </Typography>
           <Box sx={{ display: 'flex', gap: 0.75, mt: 1, flexWrap: 'wrap' }}>
-            <Chip size="small" label={`${cls.bookedCount}/${cls.capacity} plekken`} color={full ? 'warning' : 'default'} />
+            <Chip
+              size="small"
+              label={`${cls.bookedCount}/${cls.capacity} plekken`}
+              sx={full ? { bgcolor: designTokens.cardBackgroundHigh, color: 'text.secondary' } : undefined}
+            />
             {cls.waitlistCount > 0 && <Chip size="small" variant="outlined" label={`${cls.waitlistCount} op wachtlijst`} />}
             {cls.creditCost !== 1 && <Chip size="small" variant="outlined" label={`${cls.creditCost} credits`} />}
             {cls.cancelledAt && <Chip size="small" color="error" label="Afgelast" />}
-            {mine?.status === 'waitlist' && <Chip size="small" color="info" label="Op wachtlijst" />}
-            {mine?.status === 'booked' && <Chip size="small" color="success" label="Ingeschreven" />}
+            {/* Kleuren volgen het ontwerp: wachtlijst is neutraal (Surface Container High), geboekt is Tertiary Container. */}
+            {mine?.status === 'waitlist' && <Chip size="small" label="Op wachtlijst" sx={{ bgcolor: designTokens.cardBackgroundHigh, color: 'text.secondary' }} />}
+            {mine?.status === 'booked' && <Chip size="small" label="Ingeschreven" sx={{ bgcolor: designTokens.tertiaryContainer, color: designTokens.onTertiaryContainer }} />}
           </Box>
         </Box>
 
@@ -329,13 +335,13 @@ export function LessenPage() {
       )}
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5, flexWrap: 'wrap' }}>
-        <ToggleButtonGroup size="small" exclusive value={viewMode} onChange={(_, v: ViewMode | null) => v && setViewMode(v)}>
+        <ToggleButtonGroup size="small" exclusive value={viewMode} onChange={(_, v: ViewMode | null) => v && setViewMode(v)} sx={segmentedToggleSx}>
           <ToggleButton value="week">Week</ToggleButton>
           <ToggleButton value="day">Dag</ToggleButton>
           <ToggleButton value="makeups">Inhaallessen</ToggleButton>
         </ToggleButtonGroup>
         {roomOptions.length > 0 && (
-          <ToggleButtonGroup size="small" exclusive value={roomFilter} onChange={(_, v: string | null) => setRoomFilter(v ?? '')}>
+          <ToggleButtonGroup size="small" exclusive value={roomFilter} onChange={(_, v: string | null) => setRoomFilter(v ?? '')} sx={segmentedToggleSx}>
             <ToggleButton value="">Alle ruimtes</ToggleButton>
             {roomOptions.map((r) => (
               <ToggleButton key={r} value={r}>
@@ -392,8 +398,9 @@ export function LessenPage() {
                       borderRadius: 2,
                       cursor: isPast ? 'default' : 'pointer',
                       opacity: isPast ? 0.35 : 1,
-                      bgcolor: selected ? designTokens.primaryContainer : 'transparent',
-                      color: selected ? designTokens.onPrimaryContainer : 'text.primary',
+                      // Volgt het ontwerp: de geselecteerde dag is Primary (gevuld), geen zachte container.
+                      bgcolor: selected ? designTokens.primary : 'transparent',
+                      color: selected ? designTokens.onPrimary : 'text.primary',
                     }}
                   >
                     <Typography variant="caption" sx={{ display: 'block', textTransform: 'capitalize' }} color={selected ? 'inherit' : 'text.secondary'}>
