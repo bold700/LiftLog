@@ -328,18 +328,18 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
             {t('classTypes.schedule.needsTrainer')}
           </Typography>
         )}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 1.5 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 1.5 }}>
           {draft.schedule.map((slot, i) => (
-            <Box key={i} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <Box key={i} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
               <TextField
                 select
                 size="small"
+                fullWidth
                 value={slot.weekday}
                 onChange={(e) => {
                   const schedule = draft.schedule.map((s, j) => (j === i ? { ...s, weekday: Number(e.target.value) } : s));
                   setDraft({ ...draft, schedule });
                 }}
-                sx={{ flex: 1 }}
               >
                 {WEEKDAY_ORDER.map((w) => (
                   <MenuItem key={w.weekday} value={w.weekday}>
@@ -347,37 +347,39 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
                   </MenuItem>
                 ))}
               </TextField>
-              <TextField
-                type="time"
-                size="small"
-                label={t('classTypes.schedule.start')}
-                value={slot.startTime}
-                onChange={(e) => {
-                  const schedule = draft.schedule.map((s, j) => (j === i ? { ...s, startTime: e.target.value } : s));
-                  setDraft({ ...draft, schedule });
-                }}
-                InputLabelProps={{ shrink: true }}
-                sx={{ width: 120 }}
-              />
-              <TextField
-                type="time"
-                size="small"
-                label={t('classTypes.schedule.end')}
-                value={slot.endTime}
-                onChange={(e) => {
-                  const schedule = draft.schedule.map((s, j) => (j === i ? { ...s, endTime: e.target.value } : s));
-                  setDraft({ ...draft, schedule });
-                }}
-                InputLabelProps={{ shrink: true }}
-                sx={{ width: 120 }}
-              />
-              <IconButton
-                size="small"
-                aria-label={t('classTypes.schedule.removeSlot')}
-                onClick={() => setDraft({ ...draft, schedule: draft.schedule.filter((_, j) => j !== i) })}
-              >
-                <DeleteOutlineRoundedIcon fontSize="small" />
-              </IconButton>
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                <TextField
+                  type="time"
+                  size="small"
+                  label={t('classTypes.schedule.start')}
+                  value={slot.startTime}
+                  onChange={(e) => {
+                    const schedule = draft.schedule.map((s, j) => (j === i ? { ...s, startTime: e.target.value } : s));
+                    setDraft({ ...draft, schedule });
+                  }}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ flex: 1 }}
+                />
+                <TextField
+                  type="time"
+                  size="small"
+                  label={t('classTypes.schedule.end')}
+                  value={slot.endTime}
+                  onChange={(e) => {
+                    const schedule = draft.schedule.map((s, j) => (j === i ? { ...s, endTime: e.target.value } : s));
+                    setDraft({ ...draft, schedule });
+                  }}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ flex: 1 }}
+                />
+                <IconButton
+                  size="small"
+                  aria-label={t('classTypes.schedule.removeSlot')}
+                  onClick={() => setDraft({ ...draft, schedule: draft.schedule.filter((_, j) => j !== i) })}
+                >
+                  <DeleteOutlineRoundedIcon fontSize="small" />
+                </IconButton>
+              </Box>
             </Box>
           ))}
         </Box>
