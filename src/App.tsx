@@ -212,10 +212,7 @@ function AppContent() {
         return <LessenPage />;
       case TAB_PROFIEL:
         return (
-          <ProfielPage
-            more={secondary.map((d) => ({ label: d.label, icon: d.icon, onClick: () => setActiveTab(d.tabIndex) }))}
-            onLogout={handleLogout}
-          />
+          <ProfielPage />
         );
       case TAB_VOEDING:
         return <NutritionPage />;
@@ -247,6 +244,7 @@ function AppContent() {
           onLog={openAdd}
           onLogout={handleLogout}
           brand={{ name: branding?.name ?? 'VORM', logoUrl: branding?.logoUrl ?? null }}
+          profileTabIndex={TAB_PROFIEL}
         >
           <Box
             sx={{

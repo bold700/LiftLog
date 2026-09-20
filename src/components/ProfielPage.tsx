@@ -18,10 +18,6 @@ import {
   RadioGroup,
   TextField,
   Typography,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
 } from '@mui/material';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import MailOutlineRoundedIcon from '@mui/icons-material/MailOutlineRounded';
@@ -32,8 +28,6 @@ import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
 import { useProfile } from '../context/ProfileContext';
 import { useI18n } from '../context/I18nContext';
 import { LANGS, type Lang } from '../i18n';
-import type { ReactNode } from 'react';
-import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import { useAuth } from '../context/AuthContext';
 import { updateProfile } from '../services/profileService';
 import { uploadAvatar, deleteAvatar } from '../services/avatarService';
@@ -49,14 +43,7 @@ import { todayIso } from '../utils/format';
 import { LimitationsEditor } from './LimitationsEditor';
 import { NumberField } from './NumberField';
 
-/** Een regel onder "Meer": wat niet in de navigatiebalk past (Assistent, Metingen, Beheer). */
-export interface ProfileMoreItem {
-  label: string;
-  icon: ReactNode;
-  onClick: () => void;
-}
-
-export function ProfielPage({ more = [], onLogout }: { more?: ProfileMoreItem[]; onLogout?: () => void }) {
+export function ProfielPage() {
   const profile = useProfile();
   const { t, lang, setLang } = useI18n();
   const auth = useAuth();
@@ -454,30 +441,6 @@ export function ProfielPage({ more = [], onLogout }: { more?: ProfileMoreItem[];
       {uid && <PushNotificationsCard userId={uid} />}
 
       {uid && <AiChatConnectCard userId={uid} />}
-
-      {(more.length > 0 || onLogout) && (
-        <ContentCard>
-          <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 0.5 }}>
-            {t('profile.more')}
-          </Typography>
-          <List disablePadding>
-            {more.map((item) => (
-              <ListItemButton key={item.label} onClick={item.onClick} sx={{ borderRadius: 2, px: 1 }}>
-                <ListItemIcon sx={{ minWidth: 36 }}>{item.icon}</ListItemIcon>
-                <ListItemText primary={item.label} />
-              </ListItemButton>
-            ))}
-            {onLogout && (
-              <ListItemButton onClick={onLogout} sx={{ borderRadius: 2, px: 1, color: 'text.secondary' }}>
-                <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
-                  <LogoutRoundedIcon fontSize="small" />
-                </ListItemIcon>
-                <ListItemText primary={t('nav.signOut')} />
-              </ListItemButton>
-            )}
-          </List>
-        </ContentCard>
-      )}
 
       <Dialog open={emailDialogOpen} onClose={() => setEmailDialogOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>E-mail wijzigen</DialogTitle>
