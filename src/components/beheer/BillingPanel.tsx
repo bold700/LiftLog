@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useI18n } from '../../context/I18nContext';
 import { useNotify } from '../../context/NotifyContext';
-import { canShareFiles, chargesToCsv, downloadInvoicePdf, getChargesForOrg, isOverdue, markChargePaid, reopenCharge, saveChargeNote, shareInvoicePdf, vatSplit, writeOffCharge } from '../../services/chargeService';
+import { canShareFiles, chargesToCsv, downloadInvoicePdf, getChargesForOrg, getMailStatus, isOverdue, markChargePaid, reopenCharge, saveChargeNote, sendInvoiceEmail, shareInvoicePdf, vatSplit, writeOffCharge } from '../../services/chargeService';
 import { useBranding } from '../../context/BrandingContext';
 import { designTokens } from '../../theme/designTokens';
 import type { Charge, Membership, Plan, Profile } from '../../types';
@@ -42,6 +42,14 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [mailReady, setMailReady] = useState(false);
+
+  useEffect(() => {
+    void getMailStatus()
+      .then((r) => setMailReady(r.configured))
+      .catch(() => setMailReady(false));
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -250,6 +258,25 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
     }
   };
 
+  const send = async () => {
+    if (!selected) return;
+    const to = profiles.find((p) => p.userId === selected.userId)?.email?.trim();
+    if (!to) {
+      notify.error(t('billing.noEmail'));
+      return;
+    }
+    setSending(true);
+    try {
+      const r = await sendInvoiceEmail(selected.id);
+      notify.success(t('billing.sendDone', { number: r.invoiceNumber, email: r.sentTo }));
+      await load();
+    } catch (e) {
+      notify.error(t('billing.failed'), e);
+    } finally {
+      setSending(false);
+    }
+  };
+
   const vat = selected ? vatSplit(selected.amount, selected.vatRate) : null;
 
   const detail = selected && vat && (
@@ -275,12 +302,12 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
               {t('billing.share')}
             </Button>
           )}
-          <Button variant="contained" disableElevation disabled title={t('billing.emailSoon')}>
-            {t('billing.sendEmail')}
+          <Button variant="contained" disableElevation disabled={!mailReady || sending || downloading} title={mailReady ? undefined : t('billing.emailSoon')} onClick={() => void send()}>
+            {sending ? t('common.saving') : selected.invoiceSentAt ? t('billing.resend') : t('billing.sendEmail')}
           </Button>
         </Box>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-          {t('billing.emailSoon')}
+          {!mailReady ? t('billing.emailSoon') : selected.invoiceSentAt ? t('billing.sent', { date: fmt(selected.invoiceSentAt), email: selected.invoiceSentTo ?? '' }) : t('billing.notSent')}
         </Typography>
       </Box>
 

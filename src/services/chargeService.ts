@@ -32,6 +32,8 @@ function toCharge(data: Record<string, unknown>, id: string): Charge {
     vatRate: toVatRate(data.vatRate),
     invoiceNumber: str(data.invoiceNumber),
     invoiceIssuedAt: str(data.invoiceIssuedAt),
+    invoiceSentAt: str(data.invoiceSentAt),
+    invoiceSentTo: str(data.invoiceSentTo),
   };
 }
 
@@ -109,6 +111,16 @@ export async function shareInvoicePdf(chargeId: string, text: string): Promise<{
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
   return { invoiceNumber: pdf.invoiceNumber, shared: false };
+}
+
+/** Is versturen per mail ingericht op de server (Resend-sleutel en afzender in Vercel)? */
+export function getMailStatus(): Promise<{ configured: boolean }> {
+  return callBooking({ action: 'mailStatus' });
+}
+
+/** Factuur per mail naar het lid, met de PDF als bijlage (staf). */
+export function sendInvoiceEmail(chargeId: string): Promise<{ invoiceNumber: string; sentTo: string; sentAt: string }> {
+  return callBooking({ action: 'sendInvoice', chargeId });
 }
 
 /** Inclusief bedrag splitsen in exclusief en btw, afgerond op centen (dezelfde rekensom als de server). */

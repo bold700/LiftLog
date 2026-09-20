@@ -52,8 +52,12 @@ function makeDb() {
       set: async (value, opts) => {
         const path = `${name}/${id}`;
         data.set(path, opts?.merge ? applyValue(data.get(path), value) : applyValue(null, value));
+        store = Object.fromEntries(data);
       },
-      delete: async () => data.delete(`${name}/${id}`),
+      delete: async () => {
+        data.delete(`${name}/${id}`);
+        store = Object.fromEntries(data);
+      },
     }),
   });
 
@@ -345,5 +349,57 @@ describe('facturen', () => {
     store['charges/chB'] = { orgId: 'studiob', userId: 'sporterB', planName: 'B', amount: 50, status: 'open' };
     const res = await post({ action: 'invoice', chargeId: 'chB' }, 'trainer1');
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('factuur per mail', () => {
+  const seedCharge = () => {
+    store['charges/ch1'] = { orgId: 'vanas', userId: 'sporter1', planName: 'Maand 8', description: 'Maand 8 · 2026-09', amount: 139, period: '2026-09', status: 'open', vatRate: 9, invoiceNumber: 'VAS-2026-0142', invoiceIssuedAt: '2026-09-01T00:00:00.000Z', issuedAt: '2026-09-01T00:00:00.000Z', dueAt: '2026-09-01T00:00:00.000Z' };
+    store['profiles/sporter1'] = { ...store['profiles/sporter1'], email: 'jan@x.nl', displayName: 'Jan de Vries' };
+    store['orgs/vanas'] = { name: 'Van As', business: { legalName: 'Van As PT', invoiceEmail: 'info@vanaspt.nl' } };
+  };
+
+  it('meldt of mail is ingericht en weigert versturen zolang dat niet zo is', async () => {
+    seedCharge();
+    delete process.env.RESEND_API_KEY;
+    delete process.env.INVOICE_FROM_EMAIL;
+    const status = await post({ action: 'mailStatus' }, 'trainer1');
+    expect(status.body.configured).toBe(false);
+    const res = await post({ action: 'sendInvoice', chargeId: 'ch1' }, 'trainer1');
+    expect(res.statusCode).toBe(409);
+    expect(store['charges/ch1'].invoiceSentAt).toBeUndefined();
+  });
+
+  it('verstuurt via Resend met de PDF als bijlage en zet dat op de post', async () => {
+    seedCharge();
+    process.env.RESEND_API_KEY = 'test-key';
+    process.env.INVOICE_FROM_EMAIL = 'facturen@vanaspt.nl';
+    const calls = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+      if (String(url).startsWith('https://api.resend.com/')) {
+        calls.push(JSON.parse(init.body));
+        return { ok: true, json: async () => ({ id: 'msg_42' }) };
+      }
+      return { ok: false, status: 404, headers: { get: () => null }, arrayBuffer: async () => new ArrayBuffer(0) };
+    };
+    try {
+      const sporter = await post({ action: 'sendInvoice', chargeId: 'ch1' }, 'sporter1');
+      expect(sporter.statusCode).toBe(403);
+      const res = await post({ action: 'sendInvoice', chargeId: 'ch1' }, 'trainer1');
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toMatchObject({ invoiceNumber: 'VAS-2026-0142', sentTo: 'jan@x.nl' });
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toMatchObject({ from: 'Van As PT <facturen@vanaspt.nl>', to: ['jan@x.nl'], reply_to: 'info@vanaspt.nl' });
+      expect(calls[0].subject).toBe('Factuur VAS-2026-0142 · Van As PT · € 139,00');
+      expect(calls[0].attachments[0].filename).toBe('Factuur-VAS-2026-0142.pdf');
+      expect(Buffer.from(calls[0].attachments[0].content, 'base64').subarray(0, 5).toString()).toBe('%PDF-');
+      expect(store['charges/ch1']).toMatchObject({ invoiceSentTo: 'jan@x.nl', invoiceMessageId: 'msg_42' });
+      expect(store['charges/ch1'].invoiceSentAt).toBeTruthy();
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.RESEND_API_KEY;
+      delete process.env.INVOICE_FROM_EMAIL;
+    }
   });
 });

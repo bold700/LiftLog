@@ -14,6 +14,8 @@ import { applyCors } from './_lib/cors.mjs';
  *   { action: 'grant',   userId, amount, note }        credits toekennen (alleen trainer/beheerder)
  *   { action: 'assign' | 'unassign' | 'renewDue' }     abonnementen (zie onder)
  *   { action: 'invoice', chargeId }                    factuur-PDF van een post (staf, of het lid zelf)
+ *   { action: 'sendInvoice', chargeId }                factuur per mail naar het lid, PDF als bijlage (staf)
+ *   { action: 'mailStatus' }                           is versturen ingericht? (staf)
  *
  * Beveiliging:
  *  - Vereist een geldig Firebase ID-token (Bearer).
@@ -27,6 +29,7 @@ import { activeMembership, newCharge, newMembership, settleMembership } from './
 import { businessOf, reserveInvoiceNumber, vatRateOf } from './_lib/invoice.mjs';
 import { buildInvoicePdf, invoiceFileName } from './_lib/invoicePdf.mjs';
 import { logoToDataUrl } from './_lib/invoiceLogo.mjs';
+import { buildInvoiceEmail, mailConfigured, sendViaResend } from './_lib/invoiceEmail.mjs';
 
 const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
 
@@ -123,6 +126,12 @@ export default async function handler(req, res) {
         return await renewDue(res, db, myOrgs, body);
       case 'invoice':
         return await invoice(res, db, uid, myOrgs, isStaff, String(body.chargeId ?? '').trim());
+      case 'mailStatus':
+        if (!isStaff) return json(res, 403, { error: 'Alleen staf.', build: BUILD });
+        return json(res, 200, { configured: mailConfigured(), build: BUILD });
+      case 'sendInvoice':
+        if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan een factuur versturen.', build: BUILD });
+        return await sendInvoice(res, db, myOrgs, String(body.chargeId ?? '').trim());
       default:
         return json(res, 400, { error: 'Onbekende actie.', build: BUILD });
     }
@@ -505,54 +514,92 @@ async function fetchLogo(url) {
 }
 
 /**
- * Factuur-PDF van een post. Staf van de studio mag elke post; een lid alleen zijn eigen. Een post
- * van vóór de nummering krijgt bij de eerste aanvraag alsnog een nummer, in een transactie, zodat
- * de reeks doorloopt zonder gaten. Het antwoord draagt de PDF als base64.
+ * Post ophalen en zo nodig een factuurnummer toekennen. Een post van vóór de nummering krijgt er
+ * bij de eerste aanvraag alsnog een, in een transactie, zodat de reeks doorloopt zonder gaten.
+ * Geeft null als de post niet bestaat.
  */
-async function invoice(res, db, uid, myOrgs, isStaff, chargeId) {
-  if (!chargeId) return json(res, 400, { error: 'Geen post opgegeven.', build: BUILD });
+async function loadInvoiceCharge(db, chargeId) {
   const ref = db.collection('charges').doc(chargeId);
   const snap = await ref.get();
-  if (!snap.exists) return json(res, 404, { error: 'Post niet gevonden.', build: BUILD });
-  let charge = { id: snap.id, ...snap.data() };
+  if (!snap.exists) return null;
+  const charge = { id: snap.id, ...snap.data() };
+  if (charge.invoiceNumber) return charge;
+  const nowIso = new Date().toISOString();
   const orgId = orgIdOf(charge.orgId);
-  const mine = String(charge.userId) === uid;
-  if (!(mine || (isStaff && myOrgs.includes(orgId)))) return json(res, 403, { error: 'Deze post is niet van jou.', build: BUILD });
+  return db.runTransaction(async (tx) => {
+    const cSnap = await tx.get(ref);
+    const c = { id: cSnap.id, ...cSnap.data() };
+    if (c.invoiceNumber) return c;
+    const orgRef = db.collection('orgs').doc(orgId);
+    const orgSnap = await tx.get(orgRef);
+    const invoiceNumber = reserveInvoiceNumber(tx, orgRef, orgSnap, nowIso);
+    const patch = { invoiceNumber, invoiceIssuedAt: nowIso, vatRate: vatRateOf(c.vatRate), updatedAt: nowIso };
+    tx.set(ref, patch, { merge: true });
+    return { ...c, ...patch };
+  });
+}
 
-  if (!charge.invoiceNumber) {
-    const nowIso = new Date().toISOString();
-    charge = await db.runTransaction(async (tx) => {
-      const cSnap = await tx.get(ref);
-      const c = { id: cSnap.id, ...cSnap.data() };
-      if (c.invoiceNumber) return c;
-      const orgRef = db.collection('orgs').doc(orgId);
-      const orgSnap = await tx.get(orgRef);
-      const invoiceNumber = reserveInvoiceNumber(tx, orgRef, orgSnap, nowIso);
-      const patch = { invoiceNumber, invoiceIssuedAt: nowIso, vatRate: vatRateOf(c.vatRate), updatedAt: nowIso };
-      tx.set(ref, patch, { merge: true });
-      return { ...c, ...patch };
-    });
-  }
-
+/** Alles wat factuur en mail nodig hebben: studio, bedrijfsgegevens, lid, taal, logo, en de PDF. */
+async function renderInvoice(db, charge) {
+  const orgId = orgIdOf(charge.orgId);
   const [orgSnap, memberSnap] = await Promise.all([db.collection('orgs').doc(orgId).get(), db.collection('profiles').doc(String(charge.userId)).get()]);
   const org = orgSnap.exists ? orgSnap.data() : {};
   const memberData = memberSnap.exists ? memberSnap.data() : {};
   const lang = memberData.language === 'en' ? 'en' : 'nl';
   const business = businessOf({ ...org, name: org.name || orgId });
-  // Drukversie (PNG, ook van een SVG-logo) gaat voor; anders het gewone logo als dat PNG of JPEG is.
+  const member = { name: String(memberData.displayName || memberData.email || charge.userId), email: String(memberData.email || '') };
+  // Drukversie (PNG, ook van een SVG-logo) gaat voor; anders het gewone logo, dat de server zo nodig rastert.
   const logoDataUrl = (await fetchLogo(org.branding?.logoPrintUrl)) ?? (await fetchLogo(org.branding?.logoUrl));
-  const pdf = buildInvoicePdf({
-    lang,
-    business,
-    charge,
-    member: { name: String(memberData.displayName || memberData.email || charge.userId), email: String(memberData.email || '') },
-    logoDataUrl,
-    brandColor: org.branding?.seedColor ?? null,
+  const brandColor = org.branding?.seedColor ?? null;
+  const pdf = buildInvoicePdf({ lang, business, charge, member, logoDataUrl, brandColor });
+  return { lang, business, member, pdf, fileName: invoiceFileName(lang, charge.invoiceNumber), logoPrintUrl: org.branding?.logoPrintUrl ?? null, brandColor };
+}
+
+/**
+ * Factuur-PDF van een post. Staf van de studio mag elke post; een lid alleen zijn eigen. Het
+ * antwoord draagt de PDF als base64.
+ */
+async function invoice(res, db, uid, myOrgs, isStaff, chargeId) {
+  if (!chargeId) return json(res, 400, { error: 'Geen post opgegeven.', build: BUILD });
+  const peek = await db.collection('charges').doc(chargeId).get();
+  if (!peek.exists) return json(res, 404, { error: 'Post niet gevonden.', build: BUILD });
+  const orgId = orgIdOf(peek.data().orgId);
+  const mine = String(peek.data().userId) === uid;
+  if (!(mine || (isStaff && myOrgs.includes(orgId)))) return json(res, 403, { error: 'Deze post is niet van jou.', build: BUILD });
+
+  const charge = await loadInvoiceCharge(db, chargeId);
+  const r = await renderInvoice(db, charge);
+  return json(res, 200, { invoiceNumber: charge.invoiceNumber, fileName: r.fileName, pdfBase64: Buffer.from(r.pdf).toString('base64'), build: BUILD });
+}
+
+/**
+ * Factuur per mail naar het lid, met de PDF als bijlage, via Resend. Alleen staf van de studio.
+ * Op de post komt te staan wanneer en naar welk adres hij ging; opnieuw versturen mag altijd.
+ */
+async function sendInvoice(res, db, myOrgs, chargeId) {
+  if (!chargeId) return json(res, 400, { error: 'Geen post opgegeven.', build: BUILD });
+  if (!mailConfigured()) return json(res, 409, { error: 'Mail is nog niet ingericht: zet RESEND_API_KEY en INVOICE_FROM_EMAIL in Vercel.', build: BUILD });
+  const peek = await db.collection('charges').doc(chargeId).get();
+  if (!peek.exists) return json(res, 404, { error: 'Post niet gevonden.', build: BUILD });
+  const orgId = orgIdOf(peek.data().orgId);
+  if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Deze post is niet van jouw studio.', build: BUILD });
+
+  const charge = await loadInvoiceCharge(db, chargeId);
+  const r = await renderInvoice(db, charge);
+  const to = r.member.email.trim();
+  if (!to) return json(res, 409, { error: 'Dit lid heeft geen e-mailadres.', build: BUILD });
+
+  const mail = buildInvoiceEmail({ lang: r.lang, business: r.business, charge, member: r.member, logoUrl: r.logoPrintUrl, brandColor: r.brandColor });
+  const messageId = await sendViaResend({
+    fromName: r.business.legalName,
+    to,
+    replyTo: r.business.invoiceEmail || undefined,
+    subject: mail.subject,
+    html: mail.html,
+    text: mail.text,
+    attachments: [{ filename: r.fileName, content: Buffer.from(r.pdf).toString('base64') }],
   });
-  return json(res, 200, {
-    invoiceNumber: charge.invoiceNumber,
-    fileName: invoiceFileName(lang, charge.invoiceNumber),
-    pdfBase64: Buffer.from(pdf).toString('base64'),
-    build: BUILD,
-  });
+  const sentAt = new Date().toISOString();
+  await db.collection('charges').doc(chargeId).set({ invoiceSentAt: sentAt, invoiceSentTo: to, invoiceMessageId: messageId, updatedAt: sentAt }, { merge: true });
+  return json(res, 200, { invoiceNumber: charge.invoiceNumber, sentTo: to, sentAt, build: BUILD });
 }
