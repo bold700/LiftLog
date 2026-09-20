@@ -234,6 +234,25 @@ describe('reserveren', () => {
     expect(res.statusCode).toBe(409);
     expect(res.body.error).toMatch(/afgelast/i);
   });
+
+  it('laat staf altijd gratis reserveren, ook zonder credits', async () => {
+    const res = await post({ action: 'book', classId: 'c1' }, 'trainer1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.status).toBe('booked');
+    expect(store['classes/c1'].bookedCount).toBe(1);
+    // Geen creditAccount voor trainer1: geen saldo aangemaakt en geen boeking in het grootboek.
+    expect(store['creditAccounts/vanas__trainer1']).toBeUndefined();
+    const ledger = Object.entries(store).filter(([k]) => k.startsWith('creditLedger/'));
+    expect(ledger).toHaveLength(0);
+  });
+
+  it('zet staf op de wachtlijst als de les vol zit, net als een sporter', async () => {
+    await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    const res = await post({ action: 'book', classId: 'c1' }, 'trainer1');
+    expect(res.body.status).toBe('waitlist');
+    expect(store['classes/c1'].bookedCount).toBe(1);
+    expect(store['classes/c1'].waitlistCount).toBe(1);
+  });
 });
 
 describe('afmelden', () => {
