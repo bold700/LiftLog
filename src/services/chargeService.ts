@@ -49,20 +49,66 @@ export async function getMyCharges(userId: string): Promise<Charge[]> {
   return snap.docs.map((d) => toCharge(d.data(), d.id)).sort((a, b) => b.dueAt.localeCompare(a.dueAt));
 }
 
+export interface InvoicePdf {
+  invoiceNumber: string;
+  fileName: string;
+  file: File;
+}
+
 /**
- * Factuur-PDF ophalen bij de server en als download aanbieden. De server kent zo nodig eerst een
- * factuurnummer toe; dat nummer komt terug zodat de lijst het meteen kan tonen.
+ * Factuur-PDF ophalen bij de server. De server kent zo nodig eerst een factuurnummer toe; dat
+ * nummer komt terug zodat de lijst het meteen kan tonen.
  */
-export async function downloadInvoicePdf(chargeId: string): Promise<{ invoiceNumber: string; fileName: string }> {
+export async function fetchInvoicePdf(chargeId: string): Promise<InvoicePdf> {
   const r = await callBooking<{ invoiceNumber: string; fileName: string; pdfBase64: string }>({ action: 'invoice', chargeId });
   const bytes = Uint8Array.from(atob(r.pdfBase64), (c) => c.charCodeAt(0));
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+  return { invoiceNumber: r.invoiceNumber, fileName: r.fileName, file: new File([bytes], r.fileName, { type: 'application/pdf' }) };
+}
+
+/** Factuur als download aanbieden. */
+export async function downloadInvoicePdf(chargeId: string): Promise<{ invoiceNumber: string; fileName: string }> {
+  const pdf = await fetchInvoicePdf(chargeId);
+  const url = URL.createObjectURL(pdf.file);
   const a = document.createElement('a');
   a.href = url;
-  a.download = r.fileName;
+  a.download = pdf.fileName;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  return { invoiceNumber: r.invoiceNumber, fileName: r.fileName };
+  return { invoiceNumber: pdf.invoiceNumber, fileName: pdf.fileName };
+}
+
+/** Kan dit apparaat een PDF delen via het deelmenu (WhatsApp, Mail, AirDrop…)? Op de telefoon wel, op de meeste desktops niet. */
+export function canShareFiles(): boolean {
+  if (typeof navigator === 'undefined' || typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return false;
+  try {
+    return navigator.canShare({ files: [new File([new Uint8Array([37, 80, 68, 70])], 'x.pdf', { type: 'application/pdf' })] });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Factuur delen via het deelmenu van het apparaat, met de PDF als bijlage; daar kiest de
+ * gebruiker WhatsApp. Kan dat niet, dan wordt het een download. `shared` zegt wat het werd;
+ * annuleren van het deelmenu telt als gedeeld (de gebruiker koos dat zelf).
+ */
+export async function shareInvoicePdf(chargeId: string, text: string): Promise<{ invoiceNumber: string; shared: boolean }> {
+  const pdf = await fetchInvoicePdf(chargeId);
+  if (canShareFiles() && navigator.canShare({ files: [pdf.file] })) {
+    try {
+      await navigator.share({ files: [pdf.file], title: pdf.fileName, text });
+    } catch (e) {
+      if ((e as { name?: string })?.name !== 'AbortError') throw e;
+    }
+    return { invoiceNumber: pdf.invoiceNumber, shared: true };
+  }
+  const url = URL.createObjectURL(pdf.file);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = pdf.fileName;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return { invoiceNumber: pdf.invoiceNumber, shared: false };
 }
 
 /** Inclusief bedrag splitsen in exclusief en btw, afgerond op centen (dezelfde rekensom als de server). */

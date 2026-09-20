@@ -40,6 +40,13 @@ service firebase.storage {
         && (request.resource == null || isImageUnder(2 * 1024 * 1024));
     }
 
+    // Drukversie van het logo (PNG) voor facturen en mail; de app maakt hem zelf bij het uploaden.
+    match /orgLogos/print/{orgId} {
+      allow read: if true;
+      allow write: if signedIn() && myRole() == 'admin' && myOrgId() == orgId
+        && (request.resource == null || isImageUnder(2 * 1024 * 1024));
+    }
+
     // Profielfoto's: iedereen die is ingelogd mag ze zien (ranglijst), alleen de eigenaar schrijft.
     match /avatars/{uid} {
       allow read: if signedIn();

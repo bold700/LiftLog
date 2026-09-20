@@ -8,7 +8,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useI18n } from '../../context/I18nContext';
 import { useNotify } from '../../context/NotifyContext';
-import { chargesToCsv, downloadInvoicePdf, getChargesForOrg, isOverdue, markChargePaid, reopenCharge, saveChargeNote, vatSplit, writeOffCharge } from '../../services/chargeService';
+import { canShareFiles, chargesToCsv, downloadInvoicePdf, getChargesForOrg, isOverdue, markChargePaid, reopenCharge, saveChargeNote, shareInvoicePdf, vatSplit, writeOffCharge } from '../../services/chargeService';
+import { useBranding } from '../../context/BrandingContext';
 import { designTokens } from '../../theme/designTokens';
 import type { Charge, Membership, Plan, Profile } from '../../types';
 
@@ -29,8 +30,10 @@ const euro2 = (n: number) => `€ ${new Intl.NumberFormat('nl-NL', { minimumFrac
 export function BillingPanel({ profiles, memberships, plans, selfId, exportSignal }: BillingPanelProps) {
   const { t, lang } = useI18n();
   const notify = useNotify();
+  const branding = useBranding();
   const theme = useTheme();
   const wide = useMediaQuery(theme.breakpoints.up('md'));
+  const shareable = useMemo(() => canShareFiles(), []);
 
   const [charges, setCharges] = useState<Charge[]>([]);
   const [loading, setLoading] = useState(true);
@@ -232,6 +235,21 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
     }
   };
 
+  const share = async () => {
+    if (!selected) return;
+    setDownloading(true);
+    try {
+      const text = t('billing.shareText', { number: selected.invoiceNumber ?? '', studio: branding?.name ?? 'VORM', amount: euro2(selected.amount) });
+      const r = await shareInvoicePdf(selected.id, text);
+      notify.success(r.shared ? t('billing.shared', { number: r.invoiceNumber }) : t('billing.downloaded', { number: r.invoiceNumber }));
+      if (!selected.invoiceNumber) await load();
+    } catch (e) {
+      notify.error(t('billing.failed'), e);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const vat = selected ? vatSplit(selected.amount, selected.vatRate) : null;
 
   const detail = selected && vat && (
@@ -252,6 +270,11 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
           <Button variant="outlined" disabled={downloading} onClick={() => void download()}>
             {downloading ? t('common.saving') : t('billing.downloadPdf')}
           </Button>
+          {shareable && (
+            <Button variant="outlined" disabled={downloading} onClick={() => void share()}>
+              {t('billing.share')}
+            </Button>
+          )}
           <Button variant="contained" disableElevation disabled title={t('billing.emailSoon')}>
             {t('billing.sendEmail')}
           </Button>

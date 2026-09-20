@@ -15,7 +15,7 @@ import { useProfile } from '../../context/ProfileContext';
 import { useBranding } from '../../context/BrandingContext';
 import { useNotify } from '../../context/NotifyContext';
 import { getOrg, saveOrg, saveOrgBranding, saveOrgBusiness } from '../../services/orgService';
-import { deleteOrgLogo, uploadOrgLogo } from '../../services/orgLogoService';
+import { deleteOrgLogo, makePrintLogoFromUrl, uploadOrgLogo } from '../../services/orgLogoService';
 import { isHexColor, parseThemeBuilderExport, resolveScheme, SWATCH_KEYS, type LightScheme } from '../../theme/brandingTheme';
 import type { OrgBranding, OrgBusiness } from '../../types';
 
@@ -52,6 +52,7 @@ export function BrandingSettings() {
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [allowSelfSignup, setAllowSelfSignup] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoPrintUrl, setLogoPrintUrl] = useState<string | null>(null);
   const [seed, setSeed] = useState('#426833');
   const [exportText, setExportText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -70,7 +71,16 @@ export function BrandingSettings() {
       setOwnerId(org.ownerId);
       setAllowSelfSignup(org.allowSelfSignup);
       setLogoUrl(org.branding?.logoUrl ?? null);
+      setLogoPrintUrl(org.branding?.logoPrintUrl ?? null);
       setSeed(org.branding?.seedColor ?? '#426833');
+      // Logo van vóór de drukversie: die alsnog maken, zodat hij op de factuur komt.
+      if (org.branding?.logoUrl && !org.branding.logoPrintUrl) {
+        void makePrintLogoFromUrl(orgId, org.branding.logoUrl).then(async (url) => {
+          if (cancelled || !url) return;
+          setLogoPrintUrl(url);
+          await saveOrgBranding(orgId, { ...org.branding, logoPrintUrl: url }).catch(() => undefined);
+        });
+      }
       setExportText(org.branding?.lightScheme ? JSON.stringify({ schemes: { light: org.branding.lightScheme } }, null, 2) : '');
       setBusiness(org.business ?? emptyBusiness(org.name));
       setLoaded(true);
@@ -87,10 +97,11 @@ export function BrandingSettings() {
   const draft: OrgBranding = useMemo(
     () => ({
       logoUrl,
+      logoPrintUrl,
       seedColor: seedValid ? seed.trim().toUpperCase() : null,
       lightScheme: exportScheme,
     }),
-    [logoUrl, seed, seedValid, exportScheme]
+    [logoUrl, logoPrintUrl, seed, seedValid, exportScheme]
   );
   const preview: LightScheme = useMemo(() => resolveScheme(draft), [draft]);
 
@@ -98,7 +109,9 @@ export function BrandingSettings() {
     if (!file || !orgId) return;
     setUploading(true);
     try {
-      setLogoUrl(await uploadOrgLogo(orgId, file));
+      const up = await uploadOrgLogo(orgId, file);
+      setLogoUrl(up.logoUrl);
+      setLogoPrintUrl(up.logoPrintUrl);
     } catch (e) {
       notify.error('Logo uploaden mislukt.', e);
     } finally {
@@ -110,6 +123,7 @@ export function BrandingSettings() {
     if (!orgId) return;
     await deleteOrgLogo(orgId);
     setLogoUrl(null);
+    setLogoPrintUrl(null);
   };
 
   const handleSave = async () => {
@@ -160,6 +174,7 @@ export function BrandingSettings() {
       await deleteOrgLogo(orgId);
       await saveOrgBranding(orgId, null);
       setLogoUrl(null);
+      setLogoPrintUrl(null);
       setSeed('#426833');
       setExportText('');
       await branding?.refresh();
@@ -213,7 +228,7 @@ export function BrandingSettings() {
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography fontWeight={600}>{logoUrl ? 'Huidig logo' : 'Nog geen logo'}</Typography>
             <Typography variant="caption" color="text.secondary">
-              PNG of SVG, liefst zonder achtergrond. Max 2 MB.
+              {logoUrl && !logoPrintUrl ? t('billing.logoHint') : 'PNG of SVG, liefst zonder achtergrond. Max 2 MB.'}
             </Typography>
           </Box>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => void handleLogo(e.target.files?.[0] ?? null)} />

@@ -540,7 +540,8 @@ async function invoice(res, db, uid, myOrgs, isStaff, chargeId) {
   const memberData = memberSnap.exists ? memberSnap.data() : {};
   const lang = memberData.language === 'en' ? 'en' : 'nl';
   const business = businessOf({ ...org, name: org.name || orgId });
-  const logoDataUrl = await fetchLogo(org.branding?.logoUrl);
+  // Drukversie (PNG, ook van een SVG-logo) gaat voor; anders het gewone logo als dat PNG of JPEG is.
+  const logoDataUrl = (await fetchLogo(org.branding?.logoPrintUrl)) ?? (await fetchLogo(org.branding?.logoUrl));
   const pdf = buildInvoicePdf({
     lang,
     business,
