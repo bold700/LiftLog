@@ -216,7 +216,7 @@ export function newClassId(): string {
 
 // --- Schrijfacties die via de server lopen -----------------------------------
 
-async function callBooking<T>(body: Record<string, unknown>): Promise<T> {
+export async function callBooking<T>(body: Record<string, unknown>): Promise<T> {
   const user = auth?.currentUser;
   if (!user) throw new Error('Je bent niet ingelogd.');
   const token = await user.getIdToken();

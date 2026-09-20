@@ -7,25 +7,27 @@ import { Box, Chip, Table, TableBody, TableCell, TableHead, TableRow, Typography
 import { useI18n } from '../../context/I18nContext';
 import { UserAvatar } from '../UserAvatar';
 import { designTokens } from '../../theme/designTokens';
-import type { Profile, ProfileRole } from '../../types';
+import type { Membership, Profile, ProfileRole } from '../../types';
 
 interface MembersListProps {
   profiles: Profile[];
   /** Creditsaldo per userId; ontbreekt iemand, dan is er nog geen rekening. */
   credits: Record<string, number>;
+  /** Actief lidmaatschap per userId (Beheer → Abonnementen). */
+  memberships?: Record<string, Membership>;
   selfId: string;
   loading: boolean;
   hasAny: boolean;
   onOpen: (p: Profile) => void;
 }
 
-export function MembersList({ profiles, credits, selfId, loading, hasAny, onOpen }: MembersListProps) {
+export function MembersList({ profiles, credits, memberships = {}, selfId, loading, hasAny, onOpen }: MembersListProps) {
   const { t } = useI18n();
   const theme = useTheme();
   const wide = useMediaQuery(theme.breakpoints.up('md'));
 
   const nameOf = (p: Profile) => `${p.displayName?.trim() || p.email || p.userId}${p.userId === selfId ? ` ${t('admin.me')}` : ''}`;
-  const subscriptionOf = () => t('common.none');
+  const subscriptionOf = (p: Profile) => memberships[p.userId]?.planName || t('common.none');
   const creditsOf = (p: Profile) => {
     if (p.role !== 'sporter') return t('common.none');
     const n = credits[p.userId];
@@ -35,8 +37,8 @@ export function MembersList({ profiles, credits, selfId, loading, hasAny, onOpen
   // Telefoon: abonnement en credits onder de naam zodra die bekend zijn; anders het e-mailadres,
   // want twee streepjes zeggen niets.
   const sublineOf = (p: Profile) => {
-    const known = p.role === 'sporter' && credits[p.userId] != null;
-    return known ? `${subscriptionOf()} · ${creditsOf(p)}` : p.email ?? t('common.none');
+    const known = p.role === 'sporter' && (credits[p.userId] != null || !!memberships[p.userId]);
+    return known ? `${subscriptionOf(p)} · ${creditsOf(p)}` : p.email ?? t('common.none');
   };
 
   if (loading && !hasAny) {
@@ -112,7 +114,7 @@ export function MembersList({ profiles, credits, selfId, loading, hasAny, onOpen
               <TableCell>
                 <RoleChip role={p.role} />
               </TableCell>
-              <TableCell sx={{ color: 'text.secondary' }}>{subscriptionOf()}</TableCell>
+              <TableCell sx={{ color: 'text.secondary' }}>{subscriptionOf(p)}</TableCell>
               <TableCell sx={{ color: 'text.secondary' }}>{creditsOf(p)}</TableCell>
             </TableRow>
           ))}
