@@ -13,6 +13,7 @@ import {
   DialogContent,
   DialogActions,
   Button,
+  ButtonBase,
   List,
   ListItem,
   ListItemButton,
@@ -22,15 +23,20 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   LinearProgress,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
 import QrCodeScannerRoundedIcon from '@mui/icons-material/QrCodeScannerRounded';
 import AddCircleRoundedIcon from '@mui/icons-material/AddCircleRounded';
 import { lazy, Suspense } from 'react';
+import { designTokens } from '../theme/designTokens';
 
 // Barcode-scanner (zxing, ~150 kB) pas laden als de scanner opent.
 const BarcodeScannerDialog = lazy(() =>
@@ -55,6 +61,7 @@ import {
   defaultMealForNow,
   MEAL_LABELS,
   MEAL_ORDER,
+  MACRO_COLORS,
   type MealMoment,
 } from '../services/nutritionService';
 import { todayIso } from '../utils/format';
@@ -110,12 +117,30 @@ function sumLogs(logs: NutritionLog[]) {
   );
 }
 
-const MACROS = [
-  { key: 'kcal' as const, label: 'kcal', unit: '' },
-  { key: 'protein' as const, label: 'eiwit', unit: 'g' },
-  { key: 'carbs' as const, label: 'koolh.', unit: 'g' },
-  { key: 'fat' as const, label: 'vet', unit: 'g' },
+/** Rijen onder de kcal-balk: label, sleutel in de totalen en macro-kleur. */
+const MACRO_ROWS = [
+  { key: 'protein' as const, label: 'Eiwit', color: MACRO_COLORS.protein },
+  { key: 'carbs' as const, label: 'Koolhydraten', color: MACRO_COLORS.carbs },
+  { key: 'fat' as const, label: 'Vet', color: MACRO_COLORS.fat },
 ];
+
+/**
+ * Zelfde geneste-kaart-stijl als de ACCORDION_SX in LogsPage/MetingenPage: een tint dieper dan de
+ * omringende ContentCard, anders vallen de kaarten er tegenaan weg.
+ */
+const NESTED_CARD_SX = {
+  backgroundColor: designTokens.cardBackgroundHigh,
+  border: `1px solid ${designTokens.cardBorder}`,
+  boxShadow: 'none',
+  borderRadius: `${designTokens.cardRadius}px`,
+} as const;
+
+const MEAL_ACCORDION_SX = {
+  ...NESTED_CARD_SX,
+  margin: 0,
+  mb: 1,
+  '&:before': { display: 'none' },
+} as const;
 
 export function NutritionPage() {
   const profileCtx = useProfile();
@@ -131,6 +156,7 @@ export function NutritionPage() {
   const [allLogs, setAllLogs] = useState<NutritionLog[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [term, setTerm] = useState('');
   const [results, setResults] = useState<FoodProduct[]>([]);
   const [searching, setSearching] = useState(false);
@@ -153,6 +179,10 @@ export function NutritionPage() {
   // Barcode scannen
   const [scannerOpen, setScannerOpen] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
+
+  // Welke eetmoment-groepen zijn uitgeklapt (dicht bij Figma: standaard alleen een regel per moment)
+  const [openMeals, setOpenMeals] = useState<string[]>([]);
+  const toggleMeal = (k: string) => setOpenMeals((o) => (o.includes(k) ? o.filter((x) => x !== k) : [...o, k]));
 
   const handleBarcode = useCallback(async (code: string) => {
     setScannerOpen(false);
@@ -397,39 +427,54 @@ export function NutritionPage() {
           <TextField type="date" size="small" label={period === 'day' ? 'Datum' : 'Tot en met'} value={date} onChange={(e) => setDate(e.target.value)} InputLabelProps={{ shrink: true }} />
         </Box>
 
-        {/* Samenvatting */}
-        <Card sx={{ backgroundColor: 'transparent', border: '1px solid', borderColor: 'divider', boxShadow: 'none', borderRadius: 2, mb: 2 }}>
+        {/* Samenvatting: kcal groot bovenaan, macro's als rijen met eigen kleur (zoals het Figma-ontwerp) */}
+        <Card sx={{ ...NESTED_CARD_SX, mb: 2 }}>
           <CardContent sx={{ '&:last-child': { pb: 2 } }}>
             <Typography variant="caption" color="text.secondary">
               {periodLabel}
             </Typography>
-            <Box sx={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', flexWrap: 'wrap', gap: 1, mt: 1 }}>
-              {MACROS.map((m) => (
-                <Box key={m.key} sx={{ minWidth: 64 }}>
-                  <Typography variant="h6" fontWeight={700}>
-                    {shown[m.key]}
-                    {m.unit && <Typography component="span" variant="caption" color="text.secondary">{' '}{m.unit}</Typography>}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {m.label}
-                    {goal && goal[m.key] ? ` / ${goal[m.key]}${m.unit}` : ''}
-                  </Typography>
-                  {goal && goal[m.key] > 0 && (
-                    <LinearProgress
-                      variant="determinate"
-                      value={Math.min(100, (shown[m.key] / goal[m.key]) * 100)}
-                      sx={{ mt: 0.5, height: 5, borderRadius: 1 }}
-                    />
-                  )}
-                </Box>
-              ))}
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
+              <Typography variant="h4" fontWeight={800}>
+                {shown.kcal}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {goal?.kcal ? `van ${goal.kcal} kcal` : 'kcal'}
+              </Typography>
             </Box>
+            {goal?.kcal ? (
+              <LinearProgress
+                variant="determinate"
+                value={Math.min(100, (shown.kcal / goal.kcal) * 100)}
+                sx={{ mt: 1, mb: 2, height: 8, borderRadius: 1, bgcolor: designTokens.cardBorder, '& .MuiLinearProgress-bar': { bgcolor: designTokens.primary } }}
+              />
+            ) : (
+              <Box sx={{ mb: 2 }} />
+            )}
+            {MACRO_ROWS.map((m) => (
+              <Box key={m.key} sx={{ mb: 1.5, '&:last-child': { mb: 0 } }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
+                  <Typography variant="body2" fontWeight={600}>
+                    {m.label}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {shown[m.key]} g{goal && goal[m.key] ? ` van ${goal[m.key]} g` : ''}
+                  </Typography>
+                </Box>
+                {goal && goal[m.key] > 0 && (
+                  <LinearProgress
+                    variant="determinate"
+                    value={Math.min(100, (shown[m.key] / goal[m.key]) * 100)}
+                    sx={{ mt: 0.5, height: 5, borderRadius: 1, bgcolor: designTokens.cardBorder, '& .MuiLinearProgress-bar': { bgcolor: m.color } }}
+                  />
+                )}
+              </Box>
+            ))}
           </CardContent>
         </Card>
 
         {/* Week/Maand: dagbalken */}
         {period !== 'day' && (
-          <Card sx={{ backgroundColor: 'transparent', border: '1px solid', borderColor: 'divider', boxShadow: 'none', borderRadius: 2, mb: 2 }}>
+          <Card sx={{ ...NESTED_CARD_SX, mb: 2 }}>
             <CardContent sx={{ '&:last-child': { pb: 2 } }}>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                 kcal per dag
@@ -474,25 +519,37 @@ export function NutritionPage() {
                 e.target.value = '';
               }}
             />
-            <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap' }}>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<PhotoCameraRoundedIcon />}
+            {/* Drie gelijke ingangen om voeding toe te voegen, zoals in het Figma-ontwerp */}
+            <Box sx={{ display: 'flex', bgcolor: designTokens.cardBackgroundHigh, borderRadius: `${designTokens.buttonRadius}px`, p: 0.5, gap: 0.5, mb: 1.5 }}>
+              <ButtonBase
+                onClick={() => searchInputRef.current?.focus()}
+                sx={{ flex: 1, flexDirection: 'column', gap: 0.25, py: 1, borderRadius: `${Math.max(0, designTokens.buttonRadius - 4)}px` }}
+              >
+                <SearchRoundedIcon fontSize="small" />
+                <Typography variant="caption" fontWeight={600}>
+                  Zoeken
+                </Typography>
+              </ButtonBase>
+              <ButtonBase
                 disabled={recognizing}
                 onClick={() => fileInputRef.current?.click()}
+                sx={{ flex: 1, flexDirection: 'column', gap: 0.25, py: 1, borderRadius: `${Math.max(0, designTokens.buttonRadius - 4)}px` }}
               >
-                {recognizing ? 'Herkennen…' : 'Foto herkennen (AI)'}
-              </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<QrCodeScannerRoundedIcon />}
+                <PhotoCameraRoundedIcon fontSize="small" />
+                <Typography variant="caption" fontWeight={600}>
+                  {recognizing ? 'Bezig…' : 'Foto'}
+                </Typography>
+              </ButtonBase>
+              <ButtonBase
                 disabled={lookingUp}
                 onClick={() => setScannerOpen(true)}
+                sx={{ flex: 1, flexDirection: 'column', gap: 0.25, py: 1, borderRadius: `${Math.max(0, designTokens.buttonRadius - 4)}px` }}
               >
-                {lookingUp ? 'Opzoeken…' : 'Scan barcode'}
-              </Button>
+                <QrCodeScannerRoundedIcon fontSize="small" />
+                <Typography variant="caption" fontWeight={600}>
+                  {lookingUp ? 'Bezig…' : 'Barcode'}
+                </Typography>
+              </ButtonBase>
             </Box>
             {photoError && (
               <Typography variant="caption" color="error" sx={{ display: 'block', mb: 1 }}>
@@ -502,6 +559,7 @@ export function NutritionPage() {
             <TextField
               fullWidth
               size="small"
+              inputRef={searchInputRef}
               placeholder="Zoek een product, bijv. 'magere kwark'"
               value={term}
               onChange={(e) => setTerm(e.target.value)}
@@ -519,7 +577,7 @@ export function NutritionPage() {
               </Typography>
             )}
             {results.length > 0 && (
-              <List dense sx={{ maxHeight: 260, overflow: 'auto', mb: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+              <List dense sx={{ maxHeight: 260, overflow: 'auto', mb: 2, bgcolor: designTokens.cardBackgroundHigh, border: `1px solid ${designTokens.cardBorder}`, borderRadius: 2 }}>
                 {results.map((p) => (
                   <ListItemButton key={p.code || p.name} onClick={() => openAdd(p)}>
                     <ListItemAvatar sx={{ minWidth: 52 }}>
@@ -552,39 +610,56 @@ export function NutritionPage() {
                 const items = dayLogs.filter((l) => (l.meal ?? null) === group.key);
                 if (items.length === 0) return null;
                 const kcal = items.reduce((a, l) => a + l.kcal, 0);
+                const groupKey = group.key ?? 'overig';
+                const summary = items.map((l) => l.productName).join(', ');
                 return (
-                  <Box key={group.key ?? 'overig'} sx={{ mb: 1.5 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', px: 2, mb: 0.25 }}>
-                      <Typography variant="subtitle2" fontWeight={700}>
-                        {group.label}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {kcal} kcal
-                      </Typography>
-                    </Box>
-                    <List dense disablePadding>
-                      {items.map((l) => (
-                        <ListItem
-                          key={l.id}
-                          secondaryAction={
-                            <Box>
-                              <IconButton edge="end" size="small" onClick={() => openEdit(l)} aria-label="Bewerken" sx={{ mr: 0.5 }}>
-                                <EditRoundedIcon fontSize="small" />
-                              </IconButton>
-                              <IconButton edge="end" size="small" onClick={() => handleDelete(l.id)} aria-label="Verwijderen">
-                                <DeleteOutlineRoundedIcon fontSize="small" />
-                              </IconButton>
-                            </Box>
-                          }
-                        >
-                          <ListItemText
-                            primary={l.productName}
-                            secondary={`${l.quantity && l.portionLabel ? `${l.quantity}× ${l.portionLabel} · ` : ''}${l.grams} g · ${l.kcal} kcal · E ${l.protein} · K ${l.carbs} · V ${l.fat}`}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                  </Box>
+                  <Accordion
+                    key={groupKey}
+                    disableGutters
+                    expanded={openMeals.includes(groupKey)}
+                    onChange={() => toggleMeal(groupKey)}
+                    sx={MEAL_ACCORDION_SX}
+                  >
+                    <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
+                      <Box sx={{ display: 'flex', minWidth: 0, flex: 1, alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="subtitle2" fontWeight={700}>
+                            {group.label}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                            {summary}
+                          </Typography>
+                        </Box>
+                        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                          {kcal} kcal
+                        </Typography>
+                      </Box>
+                    </AccordionSummary>
+                    <AccordionDetails sx={{ px: 0, pt: 0, pb: 0.5 }}>
+                      <List dense disablePadding>
+                        {items.map((l) => (
+                          <ListItem
+                            key={l.id}
+                            secondaryAction={
+                              <Box>
+                                <IconButton edge="end" size="small" onClick={() => openEdit(l)} aria-label="Bewerken" sx={{ mr: 0.5 }}>
+                                  <EditRoundedIcon fontSize="small" />
+                                </IconButton>
+                                <IconButton edge="end" size="small" onClick={() => handleDelete(l.id)} aria-label="Verwijderen">
+                                  <DeleteOutlineRoundedIcon fontSize="small" />
+                                </IconButton>
+                              </Box>
+                            }
+                          >
+                            <ListItemText
+                              primary={l.productName}
+                              secondary={`${l.quantity && l.portionLabel ? `${l.quantity}× ${l.portionLabel} · ` : ''}${l.grams} g · ${l.kcal} kcal · E ${l.protein} · K ${l.carbs} · V ${l.fat}`}
+                            />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </AccordionDetails>
+                  </Accordion>
                 );
               })
             )}
