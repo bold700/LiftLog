@@ -113,6 +113,7 @@ export const nl = {
       add: 'Moment toevoegen',
       removeSlot: 'Moment verwijderen',
       time: 'Tijd',
+      endsAt: 'tot {time}',
       weekdayLabels: {
         sun: 'Zondag',
         mon: 'Maandag',

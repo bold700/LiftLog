@@ -111,6 +111,7 @@ export const en: Messages = {
       add: 'Add a slot',
       removeSlot: 'Remove slot',
       time: 'Time',
+      endsAt: 'until {time}',
       weekdayLabels: {
         sun: 'Sunday',
         mon: 'Monday',

@@ -53,6 +53,14 @@ export function addWeeks(dateStr: string, weeks: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** "09:00" + 60 → "10:00"; blijft binnen de dag (loopt niet door naar de volgende). */
+export function addMinutes(hhmm: string, minutes: number): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return hhmm;
+  const total = Math.min(h * 60 + m + minutes, 23 * 60 + 59);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
 /** Aantal weken tussen twee datums (YYYY-MM-DD), afgerond. Voor init uit bestaand schema. */
 export function getWeeksBetween(startStr: string, endStr: string): number {
   const start = new Date(startStr + 'T12:00:00');

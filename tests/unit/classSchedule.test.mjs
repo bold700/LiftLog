@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classIdForOccurrence, missingOccurrences, occurrencesForSchedule } from '../../api/_lib/classSchedule.mjs';
+import { addMinutes, classIdForOccurrence, missingOccurrences, occurrencesForSchedule } from '../../api/_lib/classSchedule.mjs';
 
 // Donderdag 2026-09-24, voor een voorspelbaar vertrekpunt (weekday-tabel: zo=0 .. za=6).
 const THURSDAY = '2026-09-24';
@@ -60,5 +60,16 @@ describe('lesrooster: wat nog ontbreekt', () => {
     const schedule = [{ weekday: 4, startTime: '19:00' }];
     const out = missingOccurrences('ct_1', schedule, THURSDAY, 2, new Set());
     expect(out).toHaveLength(2);
+  });
+});
+
+describe('lesrooster: eindtijd uit de duur', () => {
+  it('telt de duur van de lessoort op bij de starttijd', () => {
+    expect(addMinutes('19:00', 60)).toBe('20:00');
+    expect(addMinutes('09:00', 45)).toBe('09:45');
+  });
+
+  it('loopt niet door naar de volgende dag', () => {
+    expect(addMinutes('23:30', 90)).toBe('23:59');
   });
 });
