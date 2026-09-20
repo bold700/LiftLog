@@ -106,6 +106,23 @@ export const nl = {
     durationInvalid: 'Vul een duur in minuten in.',
     classType: 'Lessoort',
     looseClass: 'Losse les',
+    schedule: {
+      title: 'Terugkerend',
+      help: 'Kies vaste weekmomenten; die komen dan zelf op het rooster, tot 8 weken vooruit.',
+      needsTrainer: 'Kies eerst een vaste trainer om dit te kunnen plannen.',
+      add: 'Moment toevoegen',
+      removeSlot: 'Moment verwijderen',
+      time: 'Tijd',
+      weekdayLabels: {
+        sun: 'Zondag',
+        mon: 'Maandag',
+        tue: 'Dinsdag',
+        wed: 'Woensdag',
+        thu: 'Donderdag',
+        fri: 'Vrijdag',
+        sat: 'Zaterdag',
+      },
+    },
   },
   plans: {
     newPlan: 'Nieuw abonnement',

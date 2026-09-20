@@ -27,6 +27,7 @@ import {
   getCreditBalance,
   bookClass,
   cancelBooking,
+  cancelClass,
   createClass,
   deleteClass,
   grantCredits,
@@ -142,7 +143,10 @@ export function LessenPage() {
       }
       setBusyId(cls.id);
       try {
-        await deleteClass(cls.id);
+        // Een les uit een terugkerende lessoort afgelasten in plaats van verwijderen: anders zet de
+        // dagelijkse planning 'm de volgende dag gewoon weer terug (zie cancelClass).
+        if (cls.classTypeId) await cancelClass(cls.id);
+        else await deleteClass(cls.id);
         await load();
       } catch (e) {
         notify?.error(e instanceof Error ? e.message : 'Les verwijderen mislukt');
@@ -242,7 +246,7 @@ export function LessenPage() {
                         {full ? 'Wachtlijst' : 'Reserveren'}
                       </Button>
                     ))}
-                  {isStaff && (
+                  {isStaff && !cls.cancelledAt && (
                     <IconButton size="small" onClick={() => void handleDelete(cls)} disabled={busy} aria-label="Les verwijderen">
                       <DeleteOutlineRoundedIcon fontSize="small" />
                     </IconButton>

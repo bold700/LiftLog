@@ -13,12 +13,15 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   MenuItem,
   TextField,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useI18n } from '../../context/I18nContext';
 import { useNotify } from '../../context/NotifyContext';
 import { useProfile } from '../../context/ProfileContext';
@@ -26,7 +29,18 @@ import { deleteClassType, getClassTypes, newClassTypeId, saveClassType } from '.
 import { getWorkoutsForUser } from '../../services/workoutFirestore';
 import { NumberField } from '../NumberField';
 import { designTokens } from '../../theme/designTokens';
-import type { ClassType, Profile, Schema } from '../../types';
+import type { ClassScheduleSlot, ClassType, Profile, Schema } from '../../types';
+
+/** Volgorde in de dropdown: maandag eerst, ook al is weekday 0 (zondag) in het datamodel. */
+const WEEKDAY_ORDER: { weekday: number; key: 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun' }[] = [
+  { weekday: 1, key: 'mon' },
+  { weekday: 2, key: 'tue' },
+  { weekday: 3, key: 'wed' },
+  { weekday: 4, key: 'thu' },
+  { weekday: 5, key: 'fri' },
+  { weekday: 6, key: 'sat' },
+  { weekday: 0, key: 'sun' },
+];
 
 interface ClassTypesPanelProps {
   /** Trainers en beheerders van de studio, voor "Vaste trainer". */
@@ -43,10 +57,11 @@ interface Draft {
   creditCost: string;
   defaultTrainerId: string;
   schemaId: string;
+  schedule: ClassScheduleSlot[];
   createdAt?: string;
 }
 
-const emptyDraft = (): Draft => ({ id: newClassTypeId(), name: '', durationMin: '60', capacity: '8', creditCost: '1', defaultTrainerId: '', schemaId: '' });
+const emptyDraft = (): Draft => ({ id: newClassTypeId(), name: '', durationMin: '60', capacity: '8', creditCost: '1', defaultTrainerId: '', schemaId: '', schedule: [] });
 const toDraft = (c: ClassType): Draft => ({
   id: c.id,
   name: c.name,
@@ -55,6 +70,7 @@ const toDraft = (c: ClassType): Draft => ({
   creditCost: String(c.creditCost),
   defaultTrainerId: c.defaultTrainerId ?? '',
   schemaId: c.schemaId ?? '',
+  schedule: c.schedule,
   createdAt: c.createdAt || undefined,
 });
 
@@ -129,6 +145,7 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
     const creditCost = Number(draft.creditCost);
     if (!name) return setError(t('classTypes.nameRequired'));
     if (!Number.isInteger(durationMin) || durationMin <= 0) return setError(t('classTypes.durationInvalid'));
+    if (draft.schedule.length > 0 && !draft.defaultTrainerId) return setError(t('classTypes.schedule.needsTrainer'));
     setSaving(true);
     setError(null);
     try {
@@ -140,6 +157,7 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         creditCost: Number.isInteger(creditCost) && creditCost >= 0 ? creditCost : 0,
         defaultTrainerId: draft.defaultTrainerId || null,
         schemaId: draft.schemaId || null,
+        schedule: draft.schedule,
         createdAt: draft.createdAt,
       });
       notify.success(t('classTypes.saved'));
@@ -261,6 +279,70 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
           </MenuItem>
         ))}
       </TextField>
+
+      <Box sx={{ pt: 1, borderTop: `1px solid ${designTokens.cardBorder}` }}>
+        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5 }}>
+          {t('classTypes.schedule.title')}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+          {t('classTypes.schedule.help')}
+        </Typography>
+        {!draft.defaultTrainerId && (
+          <Typography variant="caption" color="warning.main" sx={{ display: 'block', mb: 1.5 }}>
+            {t('classTypes.schedule.needsTrainer')}
+          </Typography>
+        )}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 1.5 }}>
+          {draft.schedule.map((slot, i) => (
+            <Box key={i} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <TextField
+                select
+                size="small"
+                value={slot.weekday}
+                onChange={(e) => {
+                  const schedule = draft.schedule.map((s, j) => (j === i ? { ...s, weekday: Number(e.target.value) } : s));
+                  setDraft({ ...draft, schedule });
+                }}
+                sx={{ flex: 1 }}
+              >
+                {WEEKDAY_ORDER.map((w) => (
+                  <MenuItem key={w.weekday} value={w.weekday}>
+                    {t(`classTypes.schedule.weekdayLabels.${w.key}`)}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                type="time"
+                size="small"
+                label={t('classTypes.schedule.time')}
+                value={slot.startTime}
+                onChange={(e) => {
+                  const schedule = draft.schedule.map((s, j) => (j === i ? { ...s, startTime: e.target.value } : s));
+                  setDraft({ ...draft, schedule });
+                }}
+                InputLabelProps={{ shrink: true }}
+                sx={{ width: 120 }}
+              />
+              <IconButton
+                size="small"
+                aria-label={t('classTypes.schedule.removeSlot')}
+                onClick={() => setDraft({ ...draft, schedule: draft.schedule.filter((_, j) => j !== i) })}
+              >
+                <DeleteOutlineRoundedIcon fontSize="small" />
+              </IconButton>
+            </Box>
+          ))}
+        </Box>
+        <Button
+          size="small"
+          startIcon={<AddRoundedIcon />}
+          disabled={!draft.defaultTrainerId}
+          onClick={() => setDraft({ ...draft, schedule: [...draft.schedule, { weekday: 1, startTime: '19:00' }] })}
+        >
+          {t('classTypes.schedule.add')}
+        </Button>
+      </Box>
+
       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', pt: 0.5 }}>
         <Button variant="contained" disableElevation onClick={() => void save()} disabled={saving}>
           {saving ? t('common.saving') : t('common.save')}

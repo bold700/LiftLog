@@ -104,6 +104,23 @@ export const en: Messages = {
     durationInvalid: 'Enter a duration in minutes.',
     classType: 'Class type',
     looseClass: 'One-off class',
+    schedule: {
+      title: 'Recurring',
+      help: 'Pick fixed weekly slots; these get added to the schedule automatically, up to 8 weeks ahead.',
+      needsTrainer: 'Pick a default trainer first to schedule this.',
+      add: 'Add a slot',
+      removeSlot: 'Remove slot',
+      time: 'Time',
+      weekdayLabels: {
+        sun: 'Sunday',
+        mon: 'Monday',
+        tue: 'Tuesday',
+        wed: 'Wednesday',
+        thu: 'Thursday',
+        fri: 'Friday',
+        sat: 'Saturday',
+      },
+    },
   },
   plans: {
     newPlan: 'New plan',

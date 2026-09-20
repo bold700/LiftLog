@@ -5,7 +5,7 @@
 import { collection, deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
-import type { ClassType } from '../types';
+import type { ClassScheduleSlot, ClassType } from '../types';
 
 const COLLECTION = 'classTypes';
 
@@ -13,6 +13,20 @@ const num = (v: unknown, fallback: number) => {
   const n = typeof v === 'number' ? v : Number(v);
   return Number.isFinite(n) ? n : fallback;
 };
+
+function toSchedule(v: unknown): ClassScheduleSlot[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((s): ClassScheduleSlot | null => {
+      if (!s || typeof s !== 'object') return null;
+      const weekday = num((s as Record<string, unknown>).weekday, NaN);
+      const startTime = (s as Record<string, unknown>).startTime;
+      if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return null;
+      if (typeof startTime !== 'string' || !/^\d{2}:\d{2}$/.test(startTime)) return null;
+      return { weekday, startTime };
+    })
+    .filter((s): s is ClassScheduleSlot => s != null);
+}
 
 function toClassType(data: Record<string, unknown>, id: string): ClassType {
   return {
@@ -24,6 +38,7 @@ function toClassType(data: Record<string, unknown>, id: string): ClassType {
     creditCost: num(data.creditCost, 1),
     defaultTrainerId: typeof data.defaultTrainerId === 'string' ? data.defaultTrainerId : null,
     schemaId: typeof data.schemaId === 'string' ? data.schemaId : null,
+    schedule: toSchedule(data.schedule),
     createdAt: typeof data.createdAt === 'string' ? data.createdAt : '',
     updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
   };
@@ -54,6 +69,7 @@ export async function saveClassType(input: Omit<ClassType, 'orgId' | 'createdAt'
       creditCost: input.creditCost,
       defaultTrainerId: input.defaultTrainerId,
       schemaId: input.schemaId,
+      schedule: input.schedule,
       createdAt: input.createdAt || new Date().toISOString(),
       updatedAt: serverTimestamp(),
     },
