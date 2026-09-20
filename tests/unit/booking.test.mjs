@@ -403,3 +403,43 @@ describe('factuur per mail', () => {
     }
   });
 });
+
+describe('factuurlink', () => {
+  const seed = () => {
+    store['charges/ch1'] = { orgId: 'vanas', userId: 'sporter1', planName: 'Maand 8', description: 'Maand 8 · 2026-09', amount: 139, period: '2026-09', status: 'open', vatRate: 9, invoiceNumber: 'VAS-2026-0142', invoiceIssuedAt: '2026-09-01T00:00:00.000Z', issuedAt: '2026-09-01T00:00:00.000Z', dueAt: '2026-09-01T00:00:00.000Z' };
+    store['profiles/sporter1'] = { ...store['profiles/sporter1'], displayName: 'Jan de Vries', email: 'jan@x.nl' };
+    store['orgs/vanas'] = { name: 'Van As', business: { legalName: 'Van As PT' } };
+  };
+
+  it('maakt één vaste code per post en een WhatsApp-tekst in de taal van het lid', async () => {
+    seed();
+    const res = await post({ action: 'invoiceLink', chargeId: 'ch1' }, 'trainer1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.url).toMatch(/^https:\/\/lift-log-phi\.vercel\.app\/f\/[0-9a-f]{32}$/);
+    expect(res.body.text).toBe(`Hoi Jan, hier is je factuur VAS-2026-0142 van Van As PT: € 139,00, te betalen vóór 15 september 2026. Bekijken en downloaden: ${res.body.url}`);
+    const again = await post({ action: 'invoiceLink', chargeId: 'ch1' }, 'sporter1');
+    expect(again.body.url).toBe(res.body.url);
+    const ander = await post({ action: 'invoiceLink', chargeId: 'ch1' }, 'sporter2');
+    expect(ander.statusCode).toBe(403);
+  });
+
+  it('geeft de PDF op GET met de code, en niets zonder geldige code', async () => {
+    seed();
+    const link = await post({ action: 'invoiceLink', chargeId: 'ch1' }, 'trainer1');
+    const token = link.body.url.split('/f/')[1];
+    const get = async (invoice) => {
+      const res = makeRes();
+      const chunks = [];
+      res.end = (payload) => {
+        chunks.push(payload);
+      };
+      await handler({ method: 'GET', headers: {}, query: { invoice } }, res);
+      return { status: res.statusCode, body: chunks[0] };
+    };
+    const ok = await get(token);
+    expect(ok.status).toBe(200);
+    expect(Buffer.from(ok.body).subarray(0, 5).toString()).toBe('%PDF-');
+    expect((await get('ffffffffffffffffffffffffffffffff')).status).toBe(404);
+    expect((await get('../etc')).status).toBe(404);
+  });
+});

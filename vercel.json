@@ -36,6 +36,10 @@
   },
   "rewrites": [
     {
+      "source": "/f/:token",
+      "destination": "/api/booking?invoice=:token"
+    },
+    {
       "source": "/api/mcp/:key",
       "destination": "/api/mcp?key=:key"
     },

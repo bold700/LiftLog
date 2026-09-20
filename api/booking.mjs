@@ -15,6 +15,10 @@ import { applyCors } from './_lib/cors.mjs';
  *   { action: 'assign' | 'unassign' | 'renewDue' }     abonnementen (zie onder)
  *   { action: 'invoice', chargeId }                    factuur-PDF van een post (staf, of het lid zelf)
  *   { action: 'sendInvoice', chargeId }                factuur per mail naar het lid, PDF als bijlage (staf)
+ *   { action: 'invoiceLink', chargeId }                openbare link naar de factuur + WhatsApp-tekst (staf, of het lid zelf)
+ *
+ * GET /f/{token} (rewrite naar ?invoice={token}): de factuur-PDF zonder inloggen, voor wie de link
+ * heeft. De code is 32 hexcijfers uit een veilige toevalsbron en staat alleen op de post.
  *   { action: 'mailStatus' }                           is versturen ingericht? (staf)
  *
  * Beveiliging:
@@ -24,9 +28,10 @@ import { applyCors } from './_lib/cors.mjs';
  */
 import { getAdmin } from './_lib/firebaseAdmin.mjs';
 import { orgIdOf, newId } from './_lib/liftlogData.mjs';
+import { randomBytes } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { activeMembership, newCharge, newMembership, settleMembership } from './_lib/subscriptions.mjs';
-import { businessOf, reserveInvoiceNumber, vatRateOf } from './_lib/invoice.mjs';
+import { businessOf, dueDateOf, reserveInvoiceNumber, vatRateOf } from './_lib/invoice.mjs';
 import { buildInvoicePdf, invoiceFileName } from './_lib/invoicePdf.mjs';
 import { logoToDataUrl } from './_lib/invoiceLogo.mjs';
 import { buildInvoiceEmail, mailConfigured, sendViaResend } from './_lib/invoiceEmail.mjs';
@@ -72,7 +77,8 @@ function classStartsAt(data) {
 
 export default async function handler(req, res) {
   if (applyCors(req, res)) return;
-  if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed', build: BUILD });
+  const publicToken = req.method === 'GET' ? String(req.query?.invoice ?? '').trim() : '';
+  if (req.method !== 'POST' && !publicToken) return json(res, 405, { error: 'Method not allowed', build: BUILD });
 
   const admin = getAdmin();
   if (admin.error) {
@@ -80,6 +86,8 @@ export default async function handler(req, res) {
     return json(res, 500, { error: 'Serverconfiguratie onvolledig.', build: BUILD });
   }
   const { auth, db } = admin;
+
+  if (publicToken) return publicInvoice(res, db, publicToken);
 
   const authHeader = req.headers.authorization || req.headers.Authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
@@ -126,6 +134,8 @@ export default async function handler(req, res) {
         return await renewDue(res, db, myOrgs, body);
       case 'invoice':
         return await invoice(res, db, uid, myOrgs, isStaff, String(body.chargeId ?? '').trim());
+      case 'invoiceLink':
+        return await invoiceLink(req, res, db, uid, myOrgs, isStaff, String(body.chargeId ?? '').trim());
       case 'mailStatus':
         if (!isStaff) return json(res, 403, { error: 'Alleen staf.', build: BUILD });
         return json(res, 200, { configured: mailConfigured(), build: BUILD });
@@ -602,4 +612,81 @@ async function sendInvoice(res, db, myOrgs, chargeId) {
   const sentAt = new Date().toISOString();
   await db.collection('charges').doc(chargeId).set({ invoiceSentAt: sentAt, invoiceSentTo: to, invoiceMessageId: messageId, updatedAt: sentAt }, { merge: true });
   return json(res, 200, { invoiceNumber: charge.invoiceNumber, sentTo: to, sentAt, build: BUILD });
+}
+
+/** Basis-URL van de app voor openbare links: uit de aanvraag, of vast via PUBLIC_APP_ORIGIN. */
+function appOrigin(req) {
+  const fixed = String(process.env.PUBLIC_APP_ORIGIN ?? '').trim();
+  if (fixed) return fixed.replace(/\/+$/, '');
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'lift-log-phi.vercel.app').split(',')[0].trim();
+  const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
+  return `${proto}://${host}`;
+}
+
+/** Korte WhatsApp-tekst bij de factuurlink, in de taal van het lid. */
+function invoiceMessage(lang, { firstName, number, studio, amount, due, url, paid }) {
+  if (lang === 'en') {
+    return paid
+      ? `Hi ${firstName}, here is your invoice ${number} from ${studio} (${amount}, paid). View and download: ${url}`
+      : `Hi ${firstName}, here is your invoice ${number} from ${studio}: ${amount}, due before ${due}. View and download: ${url}`;
+  }
+  return paid
+    ? `Hoi ${firstName}, hier is je factuur ${number} van ${studio} (${amount}, betaald). Bekijken en downloaden: ${url}`
+    : `Hoi ${firstName}, hier is je factuur ${number} van ${studio}: ${amount}, te betalen vóór ${due}. Bekijken en downloaden: ${url}`;
+}
+
+/**
+ * Openbare link naar de factuur, plus een korte tekst voor WhatsApp. De code wordt één keer
+ * gemaakt en blijft daarna gelijk, zodat een eerder gestuurde link blijft werken.
+ */
+async function invoiceLink(req, res, db, uid, myOrgs, isStaff, chargeId) {
+  if (!chargeId) return json(res, 400, { error: 'Geen post opgegeven.', build: BUILD });
+  const ref = db.collection('charges').doc(chargeId);
+  const peek = await ref.get();
+  if (!peek.exists) return json(res, 404, { error: 'Post niet gevonden.', build: BUILD });
+  const orgId = orgIdOf(peek.data().orgId);
+  const mine = String(peek.data().userId) === uid;
+  if (!(mine || (isStaff && myOrgs.includes(orgId)))) return json(res, 403, { error: 'Deze post is niet van jou.', build: BUILD });
+
+  let charge = await loadInvoiceCharge(db, chargeId);
+  if (!charge.invoiceToken) {
+    const invoiceToken = randomBytes(16).toString('hex');
+    await ref.set({ invoiceToken, updatedAt: new Date().toISOString() }, { merge: true });
+    charge = { ...charge, invoiceToken };
+  }
+  const [orgSnap, memberSnap] = await Promise.all([db.collection('orgs').doc(orgId).get(), db.collection('profiles').doc(String(charge.userId)).get()]);
+  const org = orgSnap.exists ? orgSnap.data() : {};
+  const memberData = memberSnap.exists ? memberSnap.data() : {};
+  const lang = memberData.language === 'en' ? 'en' : 'nl';
+  const locale = lang === 'en' ? 'en-GB' : 'nl-NL';
+  const business = businessOf({ ...org, name: org.name || orgId });
+  const url = `${appOrigin(req)}/f/${charge.invoiceToken}`;
+  const amount = `€ ${new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(charge.amount) || 0)}`;
+  const issued = charge.invoiceIssuedAt || charge.issuedAt || new Date().toISOString();
+  const due = new Date(dueDateOf(issued)).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
+  const firstName = String(memberData.displayName || '').trim().split(/\s+/)[0] || (lang === 'en' ? 'there' : 'daar');
+  const text = invoiceMessage(lang, { firstName, number: charge.invoiceNumber, studio: business.legalName, amount, due, url, paid: charge.status === 'paid' });
+  return json(res, 200, { invoiceNumber: charge.invoiceNumber, url, text, build: BUILD });
+}
+
+/** GET /f/{token}: de PDF voor wie de link heeft. Geen inlog; de code is het geheim. */
+async function publicInvoice(res, db, token) {
+  const plain = (status, text) => {
+    res.statusCode = status;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.end(text);
+  };
+  if (!/^[0-9a-f]{32}$/.test(token)) return plain(404, 'Factuur niet gevonden.');
+  const snap = await db.collection('charges').where('invoiceToken', '==', token).get();
+  const d = snap.docs[0];
+  if (!d) return plain(404, 'Factuur niet gevonden.');
+  const charge = await loadInvoiceCharge(db, d.id);
+  const r = await renderInvoice(db, charge);
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${r.fileName}"`);
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('X-Robots-Tag', 'noindex');
+  res.end(Buffer.from(r.pdf));
 }

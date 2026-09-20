@@ -113,6 +113,11 @@ export async function shareInvoicePdf(chargeId: string, text: string): Promise<{
   return { invoiceNumber: pdf.invoiceNumber, shared: false };
 }
 
+/** Openbare link naar de factuur (zonder inloggen te openen) plus een korte WhatsApp-tekst in de taal van het lid. */
+export function getInvoiceLink(chargeId: string): Promise<{ invoiceNumber: string; url: string; text: string }> {
+  return callBooking({ action: 'invoiceLink', chargeId });
+}
+
 /** Is versturen per mail ingericht op de server (Resend-sleutel en afzender in Vercel)? */
 export function getMailStatus(): Promise<{ configured: boolean }> {
   return callBooking({ action: 'mailStatus' });
