@@ -135,6 +135,18 @@ await t('beheerder studio B leest eigen studio → mag', true, getDoc(doc(as('ad
 await t('beheerder studio B leest andere studio → geweigerd', false, getDoc(doc(as('adminB'), 'orgs/vanas')));
 await t('beheerder slaat bedrijfsgegevens van eigen studio op → mag', true, updateDoc(doc(as('admin1'), 'orgs/vanas'), { business: { legalName: 'Van As PT', kvk: '12345678', nextInvoiceNumber: 1 } }));
 await t('trainer slaat bedrijfsgegevens op → geweigerd', false, updateDoc(doc(as('trainer1'), 'orgs/vanas'), { business: { legalName: 'X' } }));
+await t('beheerder zet zelf de actieve betaalmodus → mag (geen geheim)', true, updateDoc(doc(as('admin1'), 'orgs/vanas'), { payments: { mode: 'live' } }));
+
+// orgSecrets: de Mollie-sleutels. Nooit leesbaar of schrijfbaar via de client, ook niet voor de
+// eigen beheerder van de studio — alleen de server (Admin SDK) mag hierbij, na de sleutel bij
+// Mollie zelf geverifieerd te hebben.
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'orgSecrets/vanas'), { mollieTestKey: 'test_x', updatedAt: '2026-09-20' });
+});
+await t('beheerder leest de Mollie-sleutel van zijn eigen studio → geweigerd', false, getDoc(doc(as('admin1'), 'orgSecrets/vanas')));
+await t('beheerder overschrijft de Mollie-sleutel rechtstreeks → geweigerd', false, setDoc(doc(as('admin1'), 'orgSecrets/vanas'), { mollieTestKey: 'test_y' }));
+await t('beheerder verwijdert de Mollie-sleutel rechtstreeks → geweigerd', false, deleteDoc(doc(as('admin1'), 'orgSecrets/vanas')));
+await t('beheerder maakt een nieuw orgSecrets-document → geweigerd', false, setDoc(doc(as('admin1'), 'orgSecrets/nieuw'), { mollieTestKey: 'test_z' }));
 await t('trainer studio B maakt workout in eigen studio → mag', true, setDoc(doc(as('trainerB'), 'workouts/wB2'), { orgId: 'studiob', trainerId: 'trainerB', name: 'ok' }));
 
 // De ledenlijst zoals de app hem opvraagt (profileService.getAllProfiles): een filter op lidmaatschap

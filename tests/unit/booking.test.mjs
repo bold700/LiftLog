@@ -16,12 +16,22 @@ function makeDb() {
 
   const increments = [];
   const isIncrement = (v) => v && typeof v === 'object' && v.__increment !== undefined;
+  const isDelete = (v) => v && typeof v === 'object' && v.__delete === true;
+  const isServerTimestamp = (v) => v && typeof v === 'object' && v.__serverTimestamp;
+  const isPlainObject = (v) => v && typeof v === 'object' && !Array.isArray(v) && !isIncrement(v) && !isDelete(v) && !isServerTimestamp(v);
 
+  /**
+   * Zoals echte Firestore: set(..., {merge: true}) vervangt een nested map-veld niet in zijn
+   * geheel, maar voegt de opgegeven velden erin samen (net als bij een plat veld). Zonder dit zou
+   * bijvoorbeeld een testsleutel opslaan een eerder opgeslagen livesleutel wegvegen.
+   */
   const applyValue = (existing, value) => {
     const out = { ...(existing ?? {}) };
     for (const [k, v] of Object.entries(value)) {
       if (isIncrement(v)) out[k] = (Number(out[k]) || 0) + v.__increment;
-      else if (v && typeof v === 'object' && v.__serverTimestamp) out[k] = '2026-09-07T00:00:00.000Z';
+      else if (isDelete(v)) delete out[k];
+      else if (isServerTimestamp(v)) out[k] = '2026-09-07T00:00:00.000Z';
+      else if (isPlainObject(v)) out[k] = applyValue(out[k], v);
       else out[k] = v;
     }
     return out;
@@ -91,6 +101,7 @@ vi.mock('firebase-admin/firestore', () => ({
   FieldValue: {
     increment: (n) => ({ __increment: n }),
     serverTimestamp: () => ({ __serverTimestamp: true }),
+    delete: () => ({ __delete: true }),
   },
 }));
 
@@ -441,5 +452,118 @@ describe('factuurlink', () => {
     expect(Buffer.from(ok.body).subarray(0, 5).toString()).toBe('%PDF-');
     expect((await get('ffffffffffffffffffffffffffffffff')).status).toBe(404);
     expect((await get('../etc')).status).toBe(404);
+  });
+});
+
+describe('betalingen (Mollie)', () => {
+  beforeEach(() => {
+    store['profiles/admin1'] = { userId: 'admin1', orgId: 'vanas', orgIds: ['vanas'], role: 'admin' };
+  });
+
+  const mockMollie = (behavior) => {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+      if (String(url) === 'https://api.mollie.com/v2/organizations/me') return behavior(init);
+      return { ok: false, status: 404, headers: { get: () => null }, arrayBuffer: async () => new ArrayBuffer(0) };
+    };
+    return () => {
+      globalThis.fetch = realFetch;
+    };
+  };
+
+  it('weigert voor een trainer; alleen een beheerder mag betaalgegevens instellen', async () => {
+    const res = await post({ action: 'savePaymentKey', orgId: 'vanas', mode: 'test', apiKey: 'test_abcdefghij1234' }, 'trainer1');
+    expect(res.statusCode).toBe(403);
+    expect(store['orgSecrets/vanas']).toBeUndefined();
+  });
+
+  it('weigert een sleutel van de verkeerde vorm, zonder Mollie te bellen', async () => {
+    const restore = mockMollie(() => {
+      throw new Error('had niet gebeld moeten worden');
+    });
+    try {
+      const res = await post({ action: 'savePaymentKey', orgId: 'vanas', mode: 'test', apiKey: 'live_abcdefghij1234' }, 'admin1');
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toMatch(/live-sleutel/);
+    } finally {
+      restore();
+    }
+  });
+
+  it('weigert een sleutel die Mollie zelf niet herkent, en slaat niets op', async () => {
+    const restore = mockMollie(() => ({ ok: false, status: 401, json: async () => ({}) }));
+    try {
+      const res = await post({ action: 'savePaymentKey', orgId: 'vanas', mode: 'test', apiKey: 'test_abcdefghij1234' }, 'admin1');
+      expect(res.statusCode).toBe(409);
+      expect(store['orgSecrets/vanas']).toBeUndefined();
+      expect(store['orgs/vanas']?.payments).toBeUndefined();
+    } finally {
+      restore();
+    }
+  });
+
+  it('koppelt een geldige sleutel: de sleutel gaat naar orgSecrets, alleen het restje naar orgs', async () => {
+    const restore = mockMollie(() => ({ ok: true, status: 200, json: async () => ({ name: 'Van As Personal Training' }) }));
+    try {
+      const res = await post({ action: 'savePaymentKey', orgId: 'vanas', mode: 'test', apiKey: 'test_abcdefghij1234' }, 'admin1');
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toMatchObject({ mode: 'test', last4: '1234', organizationName: 'Van As Personal Training' });
+      expect(res.body.apiKey).toBeUndefined();
+
+      expect(store['orgSecrets/vanas'].mollieTestKey).toBe('test_abcdefghij1234');
+      expect(store['orgs/vanas'].payments).toMatchObject({
+        provider: 'mollie',
+        testKeyLast4: '1234',
+        testOrganizationName: 'Van As Personal Training',
+      });
+      expect(store['orgs/vanas'].payments.testConnectedAt).toBeTruthy();
+      // Nooit de sleutel zelf op het document dat de client wél mag lezen.
+      expect(JSON.stringify(store['orgs/vanas'])).not.toContain('test_abcdefghij1234');
+    } finally {
+      restore();
+    }
+  });
+
+  it('bewaart de sleutel van de andere modus als je de tweede koppelt', async () => {
+    const restore = mockMollie(() => ({ ok: true, status: 200, json: async () => ({ name: 'Van As Personal Training' }) }));
+    try {
+      await post({ action: 'savePaymentKey', orgId: 'vanas', mode: 'test', apiKey: 'test_abcdefghij1234' }, 'admin1');
+      const live = await post({ action: 'savePaymentKey', orgId: 'vanas', mode: 'live', apiKey: 'live_abcdefghij5678' }, 'admin1');
+      expect(live.statusCode).toBe(200);
+      expect(store['orgSecrets/vanas']).toMatchObject({ mollieTestKey: 'test_abcdefghij1234', mollieLiveKey: 'live_abcdefghij5678' });
+      expect(store['orgs/vanas'].payments).toMatchObject({ testKeyLast4: '1234', liveKeyLast4: '5678' });
+    } finally {
+      restore();
+    }
+  });
+
+  it('weigert een studio die niet van de aanvrager is', async () => {
+    const restore = mockMollie(() => {
+      throw new Error('had niet gebeld moeten worden');
+    });
+    try {
+      const res = await post({ action: 'savePaymentKey', orgId: 'studiob', mode: 'test', apiKey: 'test_abcdefghij1234' }, 'admin1');
+      expect(res.statusCode).toBe(403);
+    } finally {
+      restore();
+    }
+  });
+
+  it('koppelt los: de sleutel verdwijnt uit orgSecrets, het restje wordt leeg', async () => {
+    const restore = mockMollie(() => ({ ok: true, status: 200, json: async () => ({ name: 'Van As Personal Training' }) }));
+    try {
+      await post({ action: 'savePaymentKey', orgId: 'vanas', mode: 'test', apiKey: 'test_abcdefghij1234' }, 'admin1');
+      const res = await post({ action: 'removePaymentKey', orgId: 'vanas', mode: 'test' }, 'admin1');
+      expect(res.statusCode).toBe(200);
+      expect('mollieTestKey' in (store['orgSecrets/vanas'] ?? {})).toBe(false);
+      expect(store['orgs/vanas'].payments).toMatchObject({ testKeyLast4: null, testConnectedAt: null, testOrganizationName: null });
+    } finally {
+      restore();
+    }
+  });
+
+  it('een trainer mag geen sleutel loskoppelen', async () => {
+    const res = await post({ action: 'removePaymentKey', orgId: 'vanas', mode: 'test' }, 'trainer1');
+    expect(res.statusCode).toBe(403);
   });
 });

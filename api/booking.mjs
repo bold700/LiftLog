@@ -20,6 +20,8 @@ import { applyCors } from './_lib/cors.mjs';
  * GET /f/{token} (rewrite naar ?invoice={token}): de factuur-PDF zonder inloggen, voor wie de link
  * heeft. De code is 32 hexcijfers uit een veilige toevalsbron en staat alleen op de post.
  *   { action: 'mailStatus' }                           is versturen ingericht? (staf)
+ *   { action: 'savePaymentKey', orgId, mode, apiKey }  Mollie-sleutel koppelen, geverifieerd (beheerder)
+ *   { action: 'removePaymentKey', orgId, mode }        Mollie-sleutel loskoppelen (beheerder)
  *
  * Beveiliging:
  *  - Vereist een geldig Firebase ID-token (Bearer).
@@ -35,6 +37,7 @@ import { businessOf, dueDateOf, reserveInvoiceNumber, vatRateOf } from './_lib/i
 import { buildInvoicePdf, invoiceFileName } from './_lib/invoicePdf.mjs';
 import { logoToDataUrl } from './_lib/invoiceLogo.mjs';
 import { buildInvoiceEmail, mailConfigured, sendViaResend } from './_lib/invoiceEmail.mjs';
+import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey } from './_lib/molliePayments.mjs';
 
 const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
 
@@ -139,6 +142,12 @@ export default async function handler(req, res) {
       case 'mailStatus':
         if (!isStaff) return json(res, 403, { error: 'Alleen staf.', build: BUILD });
         return json(res, 200, { configured: mailConfigured(), build: BUILD });
+      case 'savePaymentKey':
+        if (myRole !== 'admin') return json(res, 403, { error: 'Alleen een beheerder kan betaalgegevens instellen.', build: BUILD });
+        return await savePaymentKey(res, db, myOrgs, body);
+      case 'removePaymentKey':
+        if (myRole !== 'admin') return json(res, 403, { error: 'Alleen een beheerder kan betaalgegevens instellen.', build: BUILD });
+        return await removePaymentKey(res, db, myOrgs, body);
       case 'sendInvoice':
         if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan een factuur versturen.', build: BUILD });
         return await sendInvoice(res, db, myOrgs, String(body.chargeId ?? '').trim());
@@ -689,4 +698,63 @@ async function publicInvoice(res, db, token) {
   res.setHeader('Cache-Control', 'private, no-store');
   res.setHeader('X-Robots-Tag', 'noindex');
   res.end(Buffer.from(r.pdf));
+}
+
+// --- Betalingen (Mollie) ------------------------------------------------------------
+
+/**
+ * Mollie-sleutel koppelen. Eerst het formaat controleren, dan bij Mollie zelf laten bevestigen
+ * (dat levert ook de bedrijfsnaam op); pas daarna de sleutel opslaan. Zo staat er nooit een
+ * sleutel die niet werkt, en hoeft niemand dat via een mislukte betaling te ontdekken.
+ */
+async function savePaymentKey(res, db, myOrgs, body) {
+  const orgId = orgIdOf(body?.orgId);
+  if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Niet jouw studio.', build: BUILD });
+  const mode = body?.mode === 'live' ? 'live' : body?.mode === 'test' ? 'test' : null;
+  const apiKey = String(body?.apiKey ?? '').trim();
+  if (!mode) return json(res, 400, { error: 'Kies test of live.', build: BUILD });
+  const formatError = mollieKeyFormatError(mode, apiKey);
+  if (formatError) return json(res, 400, { error: formatError, build: BUILD });
+
+  const check = await verifyMollieKey(apiKey);
+  if (!check.ok) return json(res, 409, { error: check.error, build: BUILD });
+
+  const nowIso = new Date().toISOString();
+  await db.collection('orgSecrets').doc(orgId).set({ [secretFieldFor(mode)]: apiKey, updatedAt: nowIso }, { merge: true });
+  const keyLast4 = last4(apiKey);
+  await db
+    .collection('orgs')
+    .doc(orgId)
+    .set(
+      {
+        payments: {
+          provider: 'mollie',
+          [`${mode}KeyLast4`]: keyLast4,
+          [`${mode}ConnectedAt`]: nowIso,
+          [`${mode}OrganizationName`]: check.organizationName ?? null,
+        },
+        updatedAt: nowIso,
+      },
+      { merge: true }
+    );
+  return json(res, 200, { mode, last4: keyLast4, connectedAt: nowIso, organizationName: check.organizationName ?? null, build: BUILD });
+}
+
+/** Sleutel loskoppelen: uit orgSecrets weg, en het zichtbare restje op orgs mee leegmaken. */
+async function removePaymentKey(res, db, myOrgs, body) {
+  const orgId = orgIdOf(body?.orgId);
+  if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Niet jouw studio.', build: BUILD });
+  const mode = body?.mode === 'live' ? 'live' : body?.mode === 'test' ? 'test' : null;
+  if (!mode) return json(res, 400, { error: 'Kies test of live.', build: BUILD });
+
+  const nowIso = new Date().toISOString();
+  await db.collection('orgSecrets').doc(orgId).set({ [secretFieldFor(mode)]: FieldValue.delete(), updatedAt: nowIso }, { merge: true });
+  await db
+    .collection('orgs')
+    .doc(orgId)
+    .set(
+      { payments: { [`${mode}KeyLast4`]: null, [`${mode}ConnectedAt`]: null, [`${mode}OrganizationName`]: null }, updatedAt: nowIso },
+      { merge: true }
+    );
+  return json(res, 200, { mode, build: BUILD });
 }

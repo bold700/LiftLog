@@ -6,7 +6,9 @@
  */
 import { doc, getDoc, setDoc, serverTimestamp, type Timestamp } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
-import type { Org, OrgBranding, OrgBusiness } from '../types';
+import { requireOrgId } from './orgContext';
+import { callBooking } from './classService';
+import type { Org, OrgBranding, OrgBusiness, OrgPaymentsStatus } from '../types';
 
 const COLLECTION = 'orgs';
 
@@ -22,6 +24,7 @@ function toOrg(data: Record<string, unknown>, id: string): Org {
     allowSelfSignup: data.allowSelfSignup === true,
     branding: toBranding(data.branding),
     business: toBusiness(data.business),
+    payments: toPaymentsStatus(data.payments),
     createdAt: ts(data.createdAt),
     updatedAt: ts(data.updatedAt),
   };
@@ -50,6 +53,47 @@ export function toBranding(raw: unknown): OrgBranding | null {
     lightScheme,
   };
   return Object.values(out).some((v) => v != null) ? out : null;
+}
+
+/** Betaalstatus in vaste vorm; zonder instelling telt "test" als modus en staat de rest op null. */
+export function toPaymentsStatus(raw: unknown): OrgPaymentsStatus {
+  const p = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  return {
+    provider: 'mollie',
+    mode: p.mode === 'live' ? 'live' : 'test',
+    testKeyLast4: str(p.testKeyLast4),
+    liveKeyLast4: str(p.liveKeyLast4),
+    testConnectedAt: str(p.testConnectedAt),
+    liveConnectedAt: str(p.liveConnectedAt),
+    testOrganizationName: str(p.testOrganizationName),
+    liveOrganizationName: str(p.liveOrganizationName),
+  };
+}
+
+/**
+ * Actieve modus wisselen (Test/Live). Geen geheim, dus een gewone client-write op het studiodoc,
+ * net als de rest van de instellingen hier; de sleutels zelf staan los in orgSecrets.
+ */
+export async function setPaymentMode(orgId: string, mode: 'test' | 'live'): Promise<void> {
+  if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
+  await setDoc(doc(db, COLLECTION, orgId), { payments: { mode }, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+/**
+ * Mollie-sleutel koppelen. Gaat via de server: die verifieert de sleutel bij Mollie zelf en slaat
+ * hem op in orgSecrets (nooit door de client te lezen). Geeft terug wat wél getoond mag worden.
+ */
+export function savePaymentKey(
+  mode: 'test' | 'live',
+  apiKey: string
+): Promise<{ mode: 'test' | 'live'; last4: string; connectedAt: string; organizationName: string | null }> {
+  return callBooking({ action: 'savePaymentKey', orgId: requireOrgId(), mode, apiKey });
+}
+
+/** Sleutel loskoppelen. */
+export function removePaymentKey(mode: 'test' | 'live'): Promise<{ mode: 'test' | 'live' }> {
+  return callBooking({ action: 'removePaymentKey', orgId: requireOrgId(), mode });
 }
 
 /** Bedrijfsgegevens in vaste vorm; null als er nog niets is ingevuld. */

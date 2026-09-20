@@ -113,6 +113,16 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
+    // Mollie-sleutels per studio (Beheer → Huisstijl → Betalingen). Elk bedrijf ontvangt geld op
+    // zijn eigen rekening, dus is dit geen platformbrede sleutel maar een instelling per studio.
+    // Nooit leesbaar of schrijfbaar via de client, ook niet voor de eigen beheerder: alleen de
+    // server (Admin SDK, api/booking.mjs) raakt dit document aan, na de sleutel bij Mollie zelf
+    // te hebben geverifieerd. Het zichtbare restje (modus, laatste vier tekens) staat gewoon op
+    // orgs/{orgId}.payments, onder de normale orgs-regels hierboven.
+    match /orgSecrets/{orgId} {
+      allow read, write: if false;
+    }
+
     // Profielen.
     // - Lezen: eigen profiel, en verder alleen binnen je eigen studio (je eigen sporters, of
     //   als trainer/beheerder de ledenlijst en ranglijst van je studio).
