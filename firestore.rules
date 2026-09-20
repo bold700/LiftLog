@@ -449,8 +449,6 @@ service cloud.firestore {
       allow create: if isStaffInSameOrgForNew()
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
-        && request.resource.data.durationMin is int
-        && request.resource.data.durationMin > 0
         && request.resource.data.creditCost is int
         && request.resource.data.creditCost >= 0;
       allow update: if isSignedIn() && sameOrg() && writesMyOrg() && isTrainerOrAdmin();

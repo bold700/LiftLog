@@ -30,7 +30,6 @@ import { deleteClassType, getClassTypes, newClassTypeId, saveClassType } from '.
 import { getWorkoutsForUser } from '../../services/workoutFirestore';
 import { NumberField } from '../NumberField';
 import { designTokens } from '../../theme/designTokens';
-import { addMinutes } from '../../utils/format';
 import type { ClassScheduleSlot, ClassType, Profile, Schema, SessionKind } from '../../types';
 
 /** Volgorde in de dropdown: maandag eerst, ook al is weekday 0 (zondag) in het datamodel. */
@@ -57,7 +56,6 @@ interface ClassTypesPanelProps {
 interface Draft {
   id: string;
   name: string;
-  durationMin: string;
   capacity: string;
   creditCost: string;
   defaultTrainerId: string;
@@ -71,7 +69,6 @@ interface Draft {
 const emptyDraft = (): Draft => ({
   id: newClassTypeId(),
   name: '',
-  durationMin: '60',
   capacity: '8',
   creditCost: '1',
   defaultTrainerId: '',
@@ -83,7 +80,6 @@ const emptyDraft = (): Draft => ({
 const toDraft = (c: ClassType): Draft => ({
   id: c.id,
   name: c.name,
-  durationMin: String(c.durationMin),
   capacity: c.capacity == null ? '' : String(c.capacity),
   creditCost: String(c.creditCost),
   defaultTrainerId: c.defaultTrainerId ?? '',
@@ -148,7 +144,6 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
   const summary = useCallback(
     (c: ClassType) =>
       [
-        `${c.durationMin} min`,
         c.capacity == null ? t('classTypes.noLimit') : t('classTypes.people', { count: c.capacity }),
         staffName(c.defaultTrainerId),
         c.room,
@@ -166,19 +161,17 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
   const save = async () => {
     if (!draft) return;
     const name = draft.name.trim();
-    const durationMin = Number(draft.durationMin);
     const capacity = draft.capacity.trim() === '' ? null : Number(draft.capacity);
     const creditCost = Number(draft.creditCost);
     if (!name) return setError(t('classTypes.nameRequired'));
-    if (!Number.isInteger(durationMin) || durationMin <= 0) return setError(t('classTypes.durationInvalid'));
     if (draft.schedule.length > 0 && !draft.defaultTrainerId) return setError(t('classTypes.schedule.needsTrainer'));
+    if (draft.schedule.some((s) => s.endTime <= s.startTime)) return setError(t('classTypes.schedule.timeInvalid'));
     setSaving(true);
     setError(null);
     try {
       await saveClassType({
         id: draft.id,
         name,
-        durationMin,
         capacity: capacity && Number.isInteger(capacity) && capacity > 0 ? capacity : null,
         creditCost: Number.isInteger(creditCost) && creditCost >= 0 ? creditCost : 0,
         defaultTrainerId: draft.defaultTrainerId || null,
@@ -280,10 +273,7 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         </Typography>
       )}
       <TextField label={t('classTypes.name')} size="small" fullWidth autoFocus={isNew} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-        <NumberField label={t('classTypes.duration')} size="small" fullWidth value={draft.durationMin} onChange={(v) => setDraft({ ...draft, durationMin: v })} />
-        <NumberField label={t('classTypes.capacity')} size="small" fullWidth value={draft.capacity} onChange={(v) => setDraft({ ...draft, capacity: v })} helperText={t('classTypes.capacityHelp')} />
-      </Box>
+      <NumberField label={t('classTypes.capacity')} size="small" fullWidth value={draft.capacity} onChange={(v) => setDraft({ ...draft, capacity: v })} helperText={t('classTypes.capacityHelp')} />
       <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
         <TextField select label={t('classTypes.sessionKind')} size="small" fullWidth value={draft.sessionKind} onChange={(e) => setDraft({ ...draft, sessionKind: e.target.value as SessionKind })}>
           {SESSION_KINDS.map((k) => (
@@ -360,7 +350,7 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
               <TextField
                 type="time"
                 size="small"
-                label={t('classTypes.schedule.time')}
+                label={t('classTypes.schedule.start')}
                 value={slot.startTime}
                 onChange={(e) => {
                   const schedule = draft.schedule.map((s, j) => (j === i ? { ...s, startTime: e.target.value } : s));
@@ -369,9 +359,18 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
                 InputLabelProps={{ shrink: true }}
                 sx={{ width: 120 }}
               />
-              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 70 }}>
-                {t('classTypes.schedule.endsAt', { time: addMinutes(slot.startTime, Number(draft.durationMin) || 60) })}
-              </Typography>
+              <TextField
+                type="time"
+                size="small"
+                label={t('classTypes.schedule.end')}
+                value={slot.endTime}
+                onChange={(e) => {
+                  const schedule = draft.schedule.map((s, j) => (j === i ? { ...s, endTime: e.target.value } : s));
+                  setDraft({ ...draft, schedule });
+                }}
+                InputLabelProps={{ shrink: true }}
+                sx={{ width: 120 }}
+              />
               <IconButton
                 size="small"
                 aria-label={t('classTypes.schedule.removeSlot')}
@@ -386,7 +385,7 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
           size="small"
           startIcon={<AddRoundedIcon />}
           disabled={!draft.defaultTrainerId}
-          onClick={() => setDraft({ ...draft, schedule: [...draft.schedule, { weekday: 1, startTime: '19:00' }] })}
+          onClick={() => setDraft({ ...draft, schedule: [...draft.schedule, { weekday: 1, startTime: '19:00', endTime: '20:00' }] })}
         >
           {t('classTypes.schedule.add')}
         </Button>

@@ -22,9 +22,11 @@ function toSchedule(v: unknown): ClassScheduleSlot[] {
       if (!s || typeof s !== 'object') return null;
       const weekday = num((s as Record<string, unknown>).weekday, NaN);
       const startTime = (s as Record<string, unknown>).startTime;
+      const endTime = (s as Record<string, unknown>).endTime;
       if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return null;
       if (typeof startTime !== 'string' || !/^\d{2}:\d{2}$/.test(startTime)) return null;
-      return { weekday, startTime };
+      if (typeof endTime !== 'string' || !/^\d{2}:\d{2}$/.test(endTime)) return null;
+      return { weekday, startTime, endTime };
     })
     .filter((s): s is ClassScheduleSlot => s != null);
 }
@@ -34,7 +36,6 @@ function toClassType(data: Record<string, unknown>, id: string): ClassType {
     id,
     orgId: typeof data.orgId === 'string' ? data.orgId : '',
     name: typeof data.name === 'string' ? data.name : '',
-    durationMin: num(data.durationMin, 60),
     capacity: data.capacity == null ? null : num(data.capacity, 0) || null,
     creditCost: num(data.creditCost, 1),
     defaultTrainerId: typeof data.defaultTrainerId === 'string' ? data.defaultTrainerId : null,
@@ -67,7 +68,6 @@ export async function saveClassType(input: Omit<ClassType, 'orgId' | 'createdAt'
       id: input.id,
       orgId: requireOrgId(),
       name: input.name,
-      durationMin: input.durationMin,
       capacity: input.capacity,
       creditCost: input.creditCost,
       defaultTrainerId: input.defaultTrainerId,

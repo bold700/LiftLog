@@ -42,7 +42,7 @@ import {
   type Booking,
 } from '../services/classService';
 import { designTokens } from '../theme/designTokens';
-import { addMinutes, addWeeks } from '../utils/format';
+import { addWeeks } from '../utils/format';
 import type { ClassType, Profile, SessionKind } from '../types';
 
 const SESSION_KIND_KEYS: SessionKind[] = ['1on1', 'duo', 'group', 'concept'];
@@ -458,13 +458,12 @@ function NewClassDialog({
 
   const roomOptions = useMemo(() => Array.from(new Set(types.map((c) => c.room).filter((r): r is string => !!r))).sort(), [types]);
 
-  // Lessoort gekozen: naam, eindtijd, plekken, credits, ruimte en sessiesoort invullen (Beheer → Lessoorten).
+  // Lessoort gekozen: naam, plekken, credits, ruimte en sessiesoort invullen (Beheer → Lessoorten); begin/eindtijd blijft handmatig.
   const pickType = (id: string) => {
     setTypeId(id);
     const ct = types.find((c) => c.id === id);
     if (!ct) return;
     setTitle(ct.name);
-    setEndTime(addMinutes(startTime, ct.durationMin));
     setCapacity(ct.capacity == null ? '' : String(ct.capacity));
     setCreditCost(String(Math.min(ct.creditCost, 3)));
     setRoom(ct.room ?? '');

@@ -616,9 +616,9 @@ describe('terugkerende lessen (cron)', () => {
 
   it('zet de ontbrekende les van een lessoort met schema op het rooster', async () => {
     store['classTypes/ct1'] = {
-      orgId: 'vanas', name: 'Kicking', durationMin: 60, capacity: 8, creditCost: 1,
+      orgId: 'vanas', name: 'Kicking', capacity: 8, creditCost: 1,
       defaultTrainerId: 'trainer1', schemaId: null,
-      schedule: [{ weekday: new Date().getDay(), startTime: '19:00' }],
+      schedule: [{ weekday: new Date().getDay(), startTime: '19:00', endTime: '20:00' }],
     };
     const res = await getCron('Bearer test-secret');
     expect(res.statusCode).toBe(200);
@@ -629,9 +629,9 @@ describe('terugkerende lessen (cron)', () => {
 
   it('slaat een lessoort zonder vaste trainer over (de cron kiest zelf geen trainer)', async () => {
     store['classTypes/ct2'] = {
-      orgId: 'vanas', name: 'Open gym', durationMin: 60, capacity: null, creditCost: 0,
+      orgId: 'vanas', name: 'Open gym', capacity: null, creditCost: 0,
       defaultTrainerId: null, schemaId: null,
-      schedule: [{ weekday: new Date().getDay(), startTime: '08:00' }],
+      schedule: [{ weekday: new Date().getDay(), startTime: '08:00', endTime: '09:00' }],
     };
     const res = await getCron('Bearer test-secret');
     expect(res.statusCode).toBe(200);
@@ -642,9 +642,9 @@ describe('terugkerende lessen (cron)', () => {
   it('maakt een moment niet nog een keer aan als het al bestaat, ook als het is afgelast', async () => {
     const id = `classes/cls_gen_ct3_${todayIso()}_1900`;
     store['classTypes/ct3'] = {
-      orgId: 'vanas', name: 'Kicking', durationMin: 60, capacity: 8, creditCost: 1,
+      orgId: 'vanas', name: 'Kicking', capacity: 8, creditCost: 1,
       defaultTrainerId: 'trainer1', schemaId: null,
-      schedule: [{ weekday: new Date().getDay(), startTime: '19:00' }],
+      schedule: [{ weekday: new Date().getDay(), startTime: '19:00', endTime: '20:00' }],
     };
     store[id] = { orgId: 'vanas', title: 'Kicking', classTypeId: 'ct3', cancelledAt: '2026-01-01T00:00:00.000Z' };
     const res = await getCron('Bearer test-secret');
