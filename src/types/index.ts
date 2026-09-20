@@ -401,6 +401,41 @@ export interface ClassType {
   updatedAt: string;
 }
 
+/** Abonnement (Beheer → Abonnementen): wat een lid krijgt en wat het kost. */
+export interface Plan {
+  id: string;
+  orgId: string;
+  name: string;
+  /** Prijs in euro's. */
+  price: number;
+  /** Per maand, of eenmalig (strippenkaart, proefles). */
+  period: 'month' | 'once';
+  /** Credits per periode; null = onbeperkt. */
+  credits: number | null;
+  /** Alleen bij eenmalig: hoeveel maanden de kaart geldig is; null = onbeperkt geldig. */
+  validityMonths: number | null;
+  /** Wat er met ongebruikte credits gebeurt bij een verlenging. */
+  rollover: 'expire' | 'carry';
+  availableTo: 'all' | 'invite';
+  status: 'active' | 'paused';
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Lidmaatschap: dit lid heeft dit abonnement. Alleen de server schrijft ze. */
+export interface Membership {
+  id: string;
+  orgId: string;
+  userId: string;
+  planId: string;
+  planName: string;
+  status: 'active' | 'cancelled' | 'expired';
+  startedAt: string;
+  nextRenewalAt: string | null;
+  expiresAt: string | null;
+  lastRenewedAt: string | null;
+}
+
 export type SchemaAudience = 'single' | 'multiple' | 'open' | 'group';
 
 export interface Schema {

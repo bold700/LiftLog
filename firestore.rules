@@ -384,6 +384,29 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Abonnementen (Beheer → Abonnementen): wat een lid krijgt en wat het kost. Iedereen in de
+    // studio mag ze zien (staat straks op Profiel); trainers en beheerders beheren ze.
+    match /plans/{planId} {
+      allow read: if isSignedIn() && sameOrg();
+      allow create: if isStaffInSameOrgForNew()
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.period in ['month', 'once']
+        && request.resource.data.price is number
+        && request.resource.data.price >= 0;
+      allow update: if isSignedIn() && sameOrg() && writesMyOrg() && isTrainerOrAdmin();
+      allow delete: if isSignedIn() && sameOrg() && isTrainerOrAdmin();
+    }
+
+    // Lidmaatschappen: wie welk abonnement heeft en wanneer het verlengt. Lezen: jezelf of de
+    // staf van je studio. Schrijven: alleen de server (api/booking.mjs), die tegelijk het
+    // grootboek bijwerkt.
+    match /memberships/{membershipId} {
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow write: if false;
+    }
+
     // Grootboek van creditmutaties: waar komt elk saldo vandaan. Zelfde leesrechten, nooit schrijven.
     match /creditLedger/{entryId} {
       allow read: if isSignedIn()

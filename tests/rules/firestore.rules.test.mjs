@@ -266,6 +266,26 @@ await t('trainer werkt een lessoort bij → mag', true, updateDoc(doc(as('traine
 await t('sporter werkt een lessoort bij → geweigerd', false, updateDoc(doc(as('sporter2'), 'classTypes/ct1'), { capacity: 1 }));
 await t('trainer verwijdert een lessoort → mag', true, deleteDoc(doc(as('trainer1'), 'classTypes/ct2')));
 
+console.log('Abonnementen');
+const plan = (extra = {}) => ({ orgId: 'vanas', name: 'Maand 8', period: 'month', price: 139, credits: 8, rollover: 'expire', availableTo: 'all', status: 'active', ...extra });
+await t('beheerder maakt een abonnement → mag', true, setDoc(doc(as('admin1'), 'plans/pl1'), plan()));
+await t('trainer maakt een abonnement → mag', true, setDoc(doc(as('trainer1'), 'plans/pl2'), plan({ name: '10-rittenkaart', period: 'once', credits: 10, validityMonths: 6, price: 120 })));
+await t('sporter maakt een abonnement → geweigerd', false, setDoc(doc(as('sporter2'), 'plans/pl3'), plan()));
+await t('abonnement met negatieve prijs → geweigerd', false, setDoc(doc(as('admin1'), 'plans/pl4'), plan({ price: -1 })));
+await t('abonnement met onbekende periode → geweigerd', false, setDoc(doc(as('admin1'), 'plans/pl5'), plan({ period: 'week' })));
+await t('sporter leest de abonnementen van zijn studio → mag', true, getDocs(query(collection(as('sporter2'), 'plans'), where('orgId', '==', 'vanas'))));
+await t('studio B leest een abonnement van studio A → geweigerd', false, getDoc(doc(as('adminB'), 'plans/pl1')));
+await t('sporter werkt een abonnement bij → geweigerd', false, updateDoc(doc(as('sporter2'), 'plans/pl1'), { price: 1 }));
+await t('beheerder pauzeert een abonnement → mag', true, updateDoc(doc(as('admin1'), 'plans/pl1'), { status: 'paused' }));
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'memberships/mb1'), { orgId: 'vanas', userId: 'sporter2', planId: 'pl1', planName: 'Maand 8', status: 'active' });
+});
+await t('sporter leest zijn eigen lidmaatschap → mag', true, getDoc(doc(as('sporter2'), 'memberships/mb1')));
+await t('andere sporter leest dat lidmaatschap → geweigerd', false, getDoc(doc(as('sporter3'), 'memberships/mb1')));
+await t('beheerder leest de lidmaatschappen van zijn studio → mag', true, getDocs(query(collection(as('admin1'), 'memberships'), where('orgId', '==', 'vanas'))));
+await t('sporter koppelt zichzelf een abonnement → geweigerd', false, setDoc(doc(as('sporter3'), 'memberships/mbZelf'), { orgId: 'vanas', userId: 'sporter3', planId: 'pl1', status: 'active' }));
+await t('beheerder schrijft een lidmaatschap buiten de server om → geweigerd', false, setDoc(doc(as('admin1'), 'memberships/mbAdmin'), { orgId: 'vanas', userId: 'sporter3', planId: 'pl1', status: 'active' }));
+
 console.log('Lessen, reserveringen en credits');
 const les = (extra = {}) => ({
   orgId: 'vanas', title: 'Small Group', date: '2026-09-10', startTime: '09:00',

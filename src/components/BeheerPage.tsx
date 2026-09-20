@@ -31,7 +31,7 @@ import { useI18n } from '../context/I18nContext';
 import { useAuth } from '../context/AuthContext';
 import { getAllProfiles, updateProfile } from '../services/profileService';
 import { deleteAccountAsAdmin } from '../services/adminAccountService';
-import type { LeaderboardVisibility, Profile, ProfileRole, Limitation } from '../types';
+import type { LeaderboardVisibility, Membership, Plan, Profile, ProfileRole, Limitation } from '../types';
 import { PageLayout, ContentCard } from './layout';
 import { BrandingSettings } from './beheer/BrandingSettings';
 import { UserAvatar } from './UserAvatar';
@@ -43,6 +43,8 @@ import { todayIso } from '../utils/format';
 import { RequestsBanner } from './beheer/RequestsBanner';
 import { MembersList } from './beheer/MembersList';
 import { ClassTypesPanel } from './beheer/ClassTypesPanel';
+import { SubscriptionsPanel } from './beheer/SubscriptionsPanel';
+import { assignPlan, getActiveMembershipsForOrg, getPlans, renewDue, unassignPlan } from '../services/planService';
 import { getCreditBalancesForOrg } from '../services/classService';
 import { AddSporterByEmailCard } from './beheer/AddSporterByEmailCard';
 import { NumberField } from './NumberField';
@@ -63,9 +65,11 @@ interface EditState {
   weightGoalKg: string;
   leaderboardVisibility: LeaderboardVisibility;
   limitations: Limitation[];
+  /** Actief abonnement (planId), '' = geen. */
+  planId: string;
 }
 
-function toEditState(p: Profile): EditState {
+function toEditState(p: Profile, planId = ''): EditState {
   return {
     displayName: p.displayName ?? '',
     role: p.role,
@@ -77,6 +81,7 @@ function toEditState(p: Profile): EditState {
     weightGoalKg: p.weightGoalKg != null ? String(p.weightGoalKg) : '',
     leaderboardVisibility: p.leaderboardVisibility ?? 'named',
     limitations: p.limitations ?? [],
+    planId,
   };
 }
 
@@ -138,6 +143,9 @@ export function BeheerPage() {
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [credits, setCredits] = useState<Record<string, number>>({});
+  const [memberships, setMemberships] = useState<Record<string, Membership>>({});
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [newPlanSignal, setNewPlanSignal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -157,12 +165,21 @@ export function BeheerPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [list, balances] = await Promise.all([getAllProfiles(), getCreditBalancesForOrg().catch(() => ({}))]);
+      // Eerst openstaande verlengingen laten verwerken (idempotent), dan pas saldo's en lidmaatschappen lezen.
+      await renewDue().catch(() => null);
+      const [list, balances, active, planList] = await Promise.all([
+        getAllProfiles(),
+        getCreditBalancesForOrg().catch(() => ({})),
+        getActiveMembershipsForOrg().catch(() => ({})),
+        getPlans().catch(() => []),
+      ]);
       list.sort((a, b) =>
         (a.displayName || a.email || a.userId).localeCompare(b.displayName || b.email || b.userId, undefined, { sensitivity: 'base' })
       );
       setProfiles(list);
       setCredits(balances);
+      setMemberships(active);
+      setPlans(planList);
     } catch (e) {
       setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Profielen laden mislukt.' });
     } finally {
@@ -236,7 +253,7 @@ export function BeheerPage() {
 
   const openEditor = (p: Profile) => {
     setTarget(p);
-    setEdit(toEditState(p));
+    setEdit(toEditState(p, memberships[p.userId]?.planId ?? ''));
     setMessage(null);
   };
 
@@ -262,6 +279,12 @@ export function BeheerPage() {
         weightGoalKg: num(edit.weightGoalKg),
         leaderboardVisibility: edit.leaderboardVisibility,
       });
+      // Abonnement gewijzigd? Dat loopt via de server (saldo en grootboek in één keer).
+      const hadPlan = memberships[target.userId]?.planId ?? '';
+      if (edit.planId !== hadPlan) {
+        if (edit.planId) await assignPlan(target.userId, edit.planId);
+        else await unassignPlan(target.userId);
+      }
       await load();
       await profileCtx?.refreshProfile();
       setMessage({ type: 'success', text: `Profiel van ${edit.displayName.trim() || target.email || 'gebruiker'} bijgewerkt.` });
@@ -330,6 +353,10 @@ export function BeheerPage() {
           <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewTypeSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
             {t('classTypes.newType')}
           </Button>
+        ) : section === 'abonnementen' ? (
+          <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewPlanSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
+            {t('plans.newPlan')}
+          </Button>
         ) : (
           <Button variant="contained" disableElevation startIcon={<PersonAddRoundedIcon />} onClick={openCreate} disabled={!auth} sx={{ flexShrink: 0 }}>
             {t('admin.addAccount')}
@@ -349,6 +376,8 @@ export function BeheerPage() {
             <BrandingSettings />
           ) : section === 'lessoorten' ? (
             <ClassTypesPanel staff={trainers} createSignal={newTypeSignal} />
+          ) : section === 'abonnementen' ? (
+            <SubscriptionsPanel memberships={memberships} credits={credits} createSignal={newPlanSignal} onChanged={load} />
           ) : (
             // Lessoorten, Abonnementen en Facturatie staan in het ontwerp en komen elk in hun eigen stap.
             <ContentCard>
@@ -393,7 +422,7 @@ export function BeheerPage() {
         </Alert>
       )}
 
-      <MembersList profiles={visible} credits={credits} selfId={selfId} loading={loading} hasAny={profiles.length > 0} onOpen={openEditor} />
+      <MembersList profiles={visible} credits={credits} memberships={memberships} selfId={selfId} loading={loading} hasAny={profiles.length > 0} onOpen={openEditor} />
 
       <Dialog open={!!target && !!edit} onClose={closeEditor} maxWidth="sm" fullWidth fullScreen={fullScreen}>
         <DialogTitle>Profiel bewerken</DialogTitle>
@@ -441,11 +470,31 @@ export function BeheerPage() {
                 helperText={edit.role !== 'sporter' ? 'Alleen voor sporters.' : ' '}
               >
                 <MenuItem value="none">Geen trainer</MenuItem>
-                {trainers.map((t) => (
-                  <MenuItem key={t.userId} value={t.userId}>
-                    {t.displayName?.trim() || t.email || t.userId}
+                {trainers.map((tr) => (
+                  <MenuItem key={tr.userId} value={tr.userId}>
+                    {tr.displayName?.trim() || tr.email || tr.userId}
                   </MenuItem>
                 ))}
+              </TextField>
+              <TextField
+                select
+                label={t('plans.membership')}
+                size="small"
+                fullWidth
+                value={edit.planId}
+                onChange={(e) => setEdit({ ...edit, planId: e.target.value })}
+                disabled={edit.role !== 'sporter'}
+                helperText={edit.role !== 'sporter' ? 'Alleen voor sporters.' : ' '}
+                sx={{ gridColumn: { sm: '1 / -1' } }}
+              >
+                <MenuItem value="">{t('plans.none')}</MenuItem>
+                {plans
+                  .filter((pl) => pl.status === 'active' || pl.id === edit.planId)
+                  .map((pl) => (
+                    <MenuItem key={pl.id} value={pl.id}>
+                      {pl.name}
+                    </MenuItem>
+                  ))}
               </TextField>
               <TextField label="Geboortedatum" type="date" size="small" fullWidth value={edit.birthDate} onChange={(e) => setEdit({ ...edit, birthDate: e.target.value })} InputLabelProps={{ shrink: true }} />
               <TextField select label="Geslacht" size="small" fullWidth value={edit.gender || 'none'} onChange={(e) => setEdit({ ...edit, gender: e.target.value === 'none' ? '' : (e.target.value as EditState['gender']) })}>

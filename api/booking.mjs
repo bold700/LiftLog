@@ -21,6 +21,7 @@ import { applyCors } from './_lib/cors.mjs';
 import { getAdmin } from './_lib/firebaseAdmin.mjs';
 import { orgIdOf, newId } from './_lib/liftlogData.mjs';
 import { FieldValue } from 'firebase-admin/firestore';
+import { activeMembership, newMembership, settleMembership } from './_lib/subscriptions.mjs';
 
 const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
 
@@ -106,6 +107,15 @@ export default async function handler(req, res) {
       case 'grant':
         if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan credits toekennen.', build: BUILD });
         return await grant(res, db, uid, myOrgs, body);
+      case 'assign':
+        if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan een abonnement koppelen.', build: BUILD });
+        return await assign(res, db, uid, myOrgs, body);
+      case 'unassign':
+        if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan een abonnement stoppen.', build: BUILD });
+        return await unassign(res, db, uid, myOrgs, body);
+      case 'renewDue':
+        if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan verlengingen verwerken.', build: BUILD });
+        return await renewDue(res, db, myOrgs, body);
       default:
         return json(res, 400, { error: 'Onbekende actie.', build: BUILD });
     }
@@ -132,6 +142,23 @@ function refuse(message) {
 async function book(res, db, uid, myOrgs, classId) {
   if (!classId) return json(res, 400, { error: 'Geen les opgegeven.', build: BUILD });
 
+  // Eerst het eigen abonnement bijwerken (verlenging die nog openstond), dan pas reserveren.
+  // Onbeperkt plan: de les kost niets.
+  const preSnap = await db.collection('classes').doc(classId).get();
+  const preOrg = preSnap.exists ? orgIdOf(preSnap.data().orgId) : null;
+  let unlimited = false;
+  if (preOrg && myOrgs.includes(preOrg)) {
+    const m = await activeMembership(db, preOrg, uid);
+    if (m) {
+      await settleMembership(db, newId, db.collection('memberships').doc(m.id), new Date().toISOString());
+      const still = await activeMembership(db, preOrg, uid);
+      if (still) {
+        const pSnap = await db.collection('plans').doc(String(still.planId)).get();
+        unlimited = pSnap.exists && pSnap.data().credits == null;
+      }
+    }
+  }
+
   const result = await db.runTransaction(async (tx) => {
     const classRef = db.collection('classes').doc(classId);
     const classSnap = await tx.get(classRef);
@@ -154,7 +181,7 @@ async function book(res, db, uid, myOrgs, classId) {
 
     const capacity = Number(cls.capacity) || 0;
     const booked = Number(cls.bookedCount) || 0;
-    const cost = Number(cls.creditCost ?? 1) || 0;
+    const cost = unlimited ? 0 : Number(cls.creditCost ?? 1) || 0;
     const onWaitlist = booked >= capacity;
 
     const accountRef = db.collection('creditAccounts').doc(accountId(orgId, uid));
@@ -354,4 +381,94 @@ async function grant(res, db, uid, myOrgs, body) {
   });
 
   return json(res, 200, { ...result, build: BUILD });
+}
+
+// --- Abonnementen -----------------------------------------------------------------
+
+/** Studio waar staf en lid elkaar treffen, of null. */
+function sharedOrg(myOrgs, target) {
+  const targetOrgs = Array.isArray(target.orgIds) && target.orgIds.length ? target.orgIds.map(String) : [orgIdOf(target.orgId)];
+  return myOrgs.find((o) => targetOrgs.includes(o)) ?? null;
+}
+
+/**
+ * Een lid aan een plan koppelen. Een lopend lidmaatschap stopt; het eerste tegoed komt er via het
+ * grootboek bij (bij "vervalt" telt een restant van vroeger gewoon nog mee, dat verdwijnt pas bij
+ * de eerste verlenging).
+ */
+async function assign(res, db, uid, myOrgs, body) {
+  const targetUserId = String(body?.userId ?? '').trim();
+  const planId = String(body?.planId ?? '').trim();
+  if (!targetUserId || !planId) return json(res, 400, { error: 'Lid of abonnement ontbreekt.', build: BUILD });
+
+  const targetSnap = await db.collection('profiles').doc(targetUserId).get();
+  if (!targetSnap.exists) return json(res, 404, { error: 'Lid niet gevonden.', build: BUILD });
+  const orgId = sharedOrg(myOrgs, targetSnap.data() ?? {});
+  if (!orgId) return json(res, 403, { error: 'Dit lid zit niet in jouw studio.', build: BUILD });
+
+  const planSnap = await db.collection('plans').doc(planId).get();
+  if (!planSnap.exists || orgIdOf(planSnap.data().orgId) !== orgId) return json(res, 404, { error: 'Abonnement niet gevonden.', build: BUILD });
+  const plan = { id: planSnap.id, ...planSnap.data() };
+
+  const nowIso = new Date().toISOString();
+  const current = await activeMembership(db, orgId, targetUserId);
+  const membership = newMembership({ id: newId('mb'), orgId, userId: targetUserId, plan, nowIso, byUserId: uid });
+  const credits = plan.credits == null ? 0 : Number(plan.credits) || 0;
+
+  const balance = await db.runTransaction(async (tx) => {
+    const accountRef = db.collection('creditAccounts').doc(accountId(orgId, targetUserId));
+    const aSnap = await tx.get(accountRef);
+    const saldo = Number(aSnap.exists ? aSnap.data().balance : 0) || 0;
+    if (current) tx.set(db.collection('memberships').doc(current.id), { status: 'cancelled', cancelledAt: nowIso, updatedAt: nowIso }, { merge: true });
+    tx.set(db.collection('memberships').doc(membership.id), membership);
+    if (credits > 0) {
+      tx.set(accountRef, { orgId, userId: targetUserId, balance: saldo + credits, updatedAt: nowIso }, { merge: true });
+      tx.set(db.collection('creditLedger').doc(newId('cl')), {
+        orgId,
+        userId: targetUserId,
+        delta: credits,
+        reason: 'plan',
+        planId: plan.id,
+        note: `${plan.name} gestart`,
+        byUserId: uid,
+        createdAt: nowIso,
+      });
+    }
+    return saldo + credits;
+  });
+
+  return json(res, 200, { membershipId: membership.id, balance, build: BUILD });
+}
+
+/** Lidmaatschap stoppen; credits die er staan blijven staan. */
+async function unassign(res, db, uid, myOrgs, body) {
+  const targetUserId = String(body?.userId ?? '').trim();
+  if (!targetUserId) return json(res, 400, { error: 'Geen lid opgegeven.', build: BUILD });
+  const targetSnap = await db.collection('profiles').doc(targetUserId).get();
+  if (!targetSnap.exists) return json(res, 404, { error: 'Lid niet gevonden.', build: BUILD });
+  const orgId = sharedOrg(myOrgs, targetSnap.data() ?? {});
+  if (!orgId) return json(res, 403, { error: 'Dit lid zit niet in jouw studio.', build: BUILD });
+
+  const current = await activeMembership(db, orgId, targetUserId);
+  if (!current) return json(res, 200, { stopped: false, build: BUILD });
+  const nowIso = new Date().toISOString();
+  await db.collection('memberships').doc(current.id).set({ status: 'cancelled', cancelledAt: nowIso, byUserId: uid, updatedAt: nowIso }, { merge: true });
+  return json(res, 200, { stopped: true, build: BUILD });
+}
+
+/**
+ * Alle openstaande verlengingen en verlopen kaarten van een studio verwerken. Wordt aangeroepen
+ * zodra staf Beheer opent; idempotent, dus vaker aanroepen kan geen kwaad.
+ */
+async function renewDue(res, db, myOrgs, body) {
+  const orgId = orgIdOf(body?.orgId);
+  if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Niet jouw studio.', build: BUILD });
+  const nowIso = new Date().toISOString();
+  const snap = await db.collection('memberships').where('orgId', '==', orgId).where('status', '==', 'active').get();
+  let steps = 0;
+  for (const d of snap.docs) {
+    const r = await settleMembership(db, newId, d.ref, nowIso);
+    steps += r.steps;
+  }
+  return json(res, 200, { memberships: snap.size, steps, build: BUILD });
 }
