@@ -5,7 +5,7 @@ import type { Charge } from '../../src/types';
 const charge = (extra: Partial<Charge> = {}): Charge => ({
   id: 'ch1', orgId: 'vanas', userId: 'u1', membershipId: 'm1', planId: 'p1', planName: 'Maand 8', description: 'Maand 8 · 2026-09',
   amount: 139, period: '2026-09', issuedAt: '2026-09-01T00:00:00.000Z', dueAt: '2026-09-01T00:00:00.000Z', status: 'open', paidAt: null, note: '',
-  vatRate: 9, invoiceNumber: 'VAS-2026-0142', invoiceIssuedAt: '2026-09-01T00:00:00.000Z', ...extra,
+  vatRate: 9, invoiceNumber: 'VAS-2026-0142', invoiceIssuedAt: '2026-09-01T00:00:00.000Z', invoiceSentAt: null, invoiceSentTo: null, ...extra,
 });
 
 describe('facturatie', () => {

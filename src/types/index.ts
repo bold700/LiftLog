@@ -491,6 +491,9 @@ export interface Charge {
   invoiceNumber: string | null;
   /** Wanneer het factuurnummer is toegekend: de factuurdatum. */
   invoiceIssuedAt: string | null;
+  /** Laatste keer dat de factuur per mail is verstuurd, en aan welk adres. */
+  invoiceSentAt: string | null;
+  invoiceSentTo: string | null;
 }
 
 export type SchemaAudience = 'single' | 'multiple' | 'open' | 'group';

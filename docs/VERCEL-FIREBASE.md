@@ -27,6 +27,15 @@ Op de Vercel-deploy (https://lift-log-phi.vercel.app/) zie je nu geen inlog en w
 
    De waarden kun je 1-op-1 uit je `.env` overnemen (niet de `.env` zelf uploaden – alleen de variabelen in Vercel invullen).
 
+   **Facturen per mail (Beheer → Facturatie → Verstuur per mail)** lopen via [Resend](https://resend.com). Maak daar een account, verifieer je domein (DNS-records die Resend toont) en voeg toe:
+
+   | Name | Value |
+   |------|--------|
+   | `RESEND_API_KEY` | API-sleutel uit Resend (alleen hier, nooit in de code of chat) |
+   | `INVOICE_FROM_EMAIL` | afzenderadres op het geverifieerde domein, bijv. `facturen@vanaspt.nl` |
+
+   Zonder deze twee blijft de knop uitgeschakeld en zegt Facturatie dat mail nog niet is ingericht. De naam van de afzender is de bedrijfsnaam uit Huisstijl; antwoorden gaan naar het factuur-e-mailadres daar.
+
 3. **Opnieuw deployen**  
    Na het opslaan van de variabelen een **nieuwe deploy** doen (bijv. *Deployments* → *…* bij de laatste deploy → *Redeploy*, of een nieuwe commit pushen).
 
