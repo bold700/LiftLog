@@ -106,6 +106,14 @@ export const nl = {
     durationInvalid: 'Vul een duur in minuten in.',
     classType: 'Lessoort',
     looseClass: 'Losse les',
+    sessionKind: 'Sessiesoort',
+    sessionKinds: {
+      '1on1': '1-op-1',
+      duo: 'Duo PT',
+      group: 'Groep',
+      concept: 'Concept',
+    },
+    room: 'Ruimte',
     schedule: {
       title: 'Terugkerend',
       help: 'Kies vaste weekmomenten; die komen dan zelf op het rooster, tot 8 weken vooruit.',

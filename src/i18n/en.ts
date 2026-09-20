@@ -104,6 +104,14 @@ export const en: Messages = {
     durationInvalid: 'Enter a duration in minutes.',
     classType: 'Class type',
     looseClass: 'One-off class',
+    sessionKind: 'Session kind',
+    sessionKinds: {
+      '1on1': '1-on-1',
+      duo: 'Duo PT',
+      group: 'Group',
+      concept: 'Concept',
+    },
+    room: 'Room',
     schedule: {
       title: 'Recurring',
       help: 'Pick fixed weekly slots; these get added to the schedule automatically, up to 8 weeks ahead.',

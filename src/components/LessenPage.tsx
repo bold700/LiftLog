@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Autocomplete,
   Box,
   Typography,
   Button,
@@ -37,7 +38,9 @@ import {
 } from '../services/classService';
 import { designTokens } from '../theme/designTokens';
 import { addMinutes } from '../utils/format';
-import type { ClassType, Profile } from '../types';
+import type { ClassType, Profile, SessionKind } from '../types';
+
+const SESSION_KIND_KEYS: SessionKind[] = ['1on1', 'duo', 'group', 'concept'];
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -296,13 +299,17 @@ function NewClassDialog({
   const [endTime, setEndTime] = useState('10:00');
   const [capacity, setCapacity] = useState('8');
   const [creditCost, setCreditCost] = useState('1');
+  const [room, setRoom] = useState('');
+  const [sessionKind, setSessionKind] = useState<SessionKind>('group');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (open) getClassTypes().then(setTypes).catch(() => setTypes([]));
   }, [open]);
 
-  // Lessoort gekozen: naam, eindtijd, plekken en credits invullen (Beheer → Lessoorten).
+  const roomOptions = useMemo(() => Array.from(new Set(types.map((c) => c.room).filter((r): r is string => !!r))).sort(), [types]);
+
+  // Lessoort gekozen: naam, eindtijd, plekken, credits, ruimte en sessiesoort invullen (Beheer → Lessoorten).
   const pickType = (id: string) => {
     setTypeId(id);
     const ct = types.find((c) => c.id === id);
@@ -311,6 +318,8 @@ function NewClassDialog({
     setEndTime(addMinutes(startTime, ct.durationMin));
     setCapacity(ct.capacity == null ? '' : String(ct.capacity));
     setCreditCost(String(Math.min(ct.creditCost, 3)));
+    setRoom(ct.room ?? '');
+    setSessionKind(ct.sessionKind);
   };
 
   const submit = async () => {
@@ -334,6 +343,8 @@ function NewClassDialog({
         creditCost: kosten,
         schemaId: chosen?.schemaId ?? null,
         classTypeId: chosen?.id ?? null,
+        room: room.trim() || null,
+        sessionKind,
       });
       notify?.success('Les staat op het rooster.');
       onCreated();
@@ -410,6 +421,24 @@ function NewClassDialog({
               </MenuItem>
             ))}
           </TextField>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <TextField label={t('classTypes.sessionKind')} select value={sessionKind} onChange={(e) => setSessionKind(e.target.value as SessionKind)} size="small" fullWidth>
+            {SESSION_KIND_KEYS.map((k) => (
+              <MenuItem key={k} value={k}>
+                {t(`classTypes.sessionKinds.${k}`)}
+              </MenuItem>
+            ))}
+          </TextField>
+          <Autocomplete
+            freeSolo
+            size="small"
+            fullWidth
+            options={roomOptions}
+            value={room}
+            onInputChange={(_, v) => setRoom(v)}
+            renderInput={(params) => <TextField {...params} label={t('classTypes.room')} />}
+          />
         </Box>
       </DialogContent>
       <DialogActions>

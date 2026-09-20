@@ -767,6 +767,8 @@ async function generateClasses(req, res, db) {
         creditCost: ct.creditCost ?? 1,
         schemaId: ct.schemaId ?? null,
         classTypeId: typeDoc.id,
+        room: ct.room ?? null,
+        sessionKind: ct.sessionKind ?? 'group',
         bookedCount: 0,
         waitlistCount: 0,
         cancelledAt: null,
