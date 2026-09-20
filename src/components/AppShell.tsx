@@ -79,8 +79,6 @@ function MobileTopBar({ title, onNavigate, profileTabIndex }: { title: string; o
 
 /** Hoogte van de navigatiebalk plus de marge erboven: waar de "+"-knop en de toolbar op rusten (App.tsx: FAB op bottom 92). */
 const TOOLBAR_BOTTOM = 92;
-/** Ruimte rechts voor de "+"-knop (56) met 8 ertussen en 16 vanaf de rand. */
-const TOOLBAR_RIGHT = 16 + 56 + 8;
 
 /**
  * Zwevende toolbar (Material 3 floating toolbar, standaardkleur): 64 hoog, volledig rond,
@@ -97,7 +95,8 @@ function FloatingToolbar({ items, activeTab, onNavigate }: { items: ShellDestina
       sx={{
         position: 'fixed',
         bottom: TOOLBAR_BOTTOM,
-        right: TOOLBAR_RIGHT,
+        left: '50%',
+        transform: 'translateX(-50%)',
         zIndex: 1001,
         display: 'flex',
         alignItems: 'center',
