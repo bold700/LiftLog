@@ -20,6 +20,7 @@ export const nl = {
     measurements: 'Metingen',
     admin: 'Beheer',
     signOut: 'Uitloggen',
+    shortcuts: 'Snel naar',
     mainNavigation: 'Hoofdnavigatie',
   },
   profile: {
