@@ -23,8 +23,15 @@ import { applyCors } from './_lib/cors.mjs';
  *   { action: 'savePaymentKey', orgId, mode, apiKey }  Mollie-sleutel koppelen, geverifieerd (beheerder)
  *   { action: 'removePaymentKey', orgId, mode }        Mollie-sleutel loskoppelen (beheerder)
  *
+ * GET /api/cron/generate-classes (rewrite naar ?cron=generateClasses): dagelijkse Vercel-cron die
+ * lessen van een terugkerende lessoort op het rooster zet (zie api/_lib/classSchedule.mjs). Zit
+ * bewust in dit endpoint in plaats van een eigen bestand: het Hobby-plan van Vercel staat maximaal
+ * 12 Serverless Functions per deployment toe, en dat aantal zat al vol.
+ *
  * Beveiliging:
- *  - Vereist een geldig Firebase ID-token (Bearer).
+ *  - Vereist een geldig Firebase ID-token (Bearer), behalve de cron hierboven: die controleert
+ *    in plaats daarvan `Authorization: Bearer $CRON_SECRET` (Vercel stuurt dat automatisch mee
+ *    zodra die env-var gezet is).
  *  - Alles blijft binnen de studio van de aanvrager; een sporter reserveert alleen voor zichzelf.
  *  - Credits toekennen kan alleen staf, en alleen aan iemand in de eigen studio.
  */
@@ -38,6 +45,7 @@ import { buildInvoicePdf, invoiceFileName } from './_lib/invoicePdf.mjs';
 import { logoToDataUrl } from './_lib/invoiceLogo.mjs';
 import { buildInvoiceEmail, mailConfigured, sendViaResend } from './_lib/invoiceEmail.mjs';
 import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey } from './_lib/molliePayments.mjs';
+import { classIdForOccurrence, missingOccurrences, occurrencesForSchedule } from './_lib/classSchedule.mjs';
 
 const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
 
@@ -81,7 +89,8 @@ function classStartsAt(data) {
 export default async function handler(req, res) {
   if (applyCors(req, res)) return;
   const publicToken = req.method === 'GET' ? String(req.query?.invoice ?? '').trim() : '';
-  if (req.method !== 'POST' && !publicToken) return json(res, 405, { error: 'Method not allowed', build: BUILD });
+  const isCron = req.method === 'GET' && req.query?.cron === 'generateClasses';
+  if (req.method !== 'POST' && !publicToken && !isCron) return json(res, 405, { error: 'Method not allowed', build: BUILD });
 
   const admin = getAdmin();
   if (admin.error) {
@@ -91,6 +100,7 @@ export default async function handler(req, res) {
   const { auth, db } = admin;
 
   if (publicToken) return publicInvoice(res, db, publicToken);
+  if (isCron) return generateClasses(req, res, db);
 
   const authHeader = req.headers.authorization || req.headers.Authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
@@ -698,6 +708,77 @@ async function publicInvoice(res, db, token) {
   res.setHeader('Cache-Control', 'private, no-store');
   res.setHeader('X-Robots-Tag', 'noindex');
   res.end(Buffer.from(r.pdf));
+}
+
+// --- Terugkerende lessen (Beheer → Lessoorten → "Terugkerend") -------------------------
+
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Hoeveel weken vooruit de ontbrekende lessen van een schema worden aangemaakt. */
+const WEEKS_AHEAD = 8;
+
+/**
+ * Dagelijkse cron: zet voor elke lessoort met een `schedule` de ontbrekende lessen op het rooster.
+ * Rekenkant in api/_lib/classSchedule.mjs (puur, met tests); hier alleen het lezen/schrijven.
+ */
+async function generateClasses(req, res, db) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return json(res, 500, { error: 'CRON_SECRET ontbreekt in de serveromgeving.', build: BUILD });
+  const authHeader = req.headers.authorization || req.headers.Authorization || '';
+  if (authHeader !== `Bearer ${secret}`) return json(res, 401, { error: 'Niet geautoriseerd.', build: BUILD });
+
+  const from = todayIso();
+  const typesSnap = await db.collection('classTypes').get();
+  let created = 0;
+  const skippedNoTrainer = [];
+
+  for (const typeDoc of typesSnap.docs) {
+    const ct = typeDoc.data();
+    const schedule = Array.isArray(ct.schedule) ? ct.schedule : [];
+    if (schedule.length === 0) continue;
+    if (!ct.defaultTrainerId) {
+      skippedNoTrainer.push(typeDoc.id);
+      continue;
+    }
+
+    const all = occurrencesForSchedule(schedule, from, WEEKS_AHEAD);
+    if (all.length === 0) continue;
+    const allRefs = all.map((o) => db.collection('classes').doc(classIdForOccurrence(typeDoc.id, o.date, o.startTime)));
+    const existingDocs = await db.getAll(...allRefs);
+    const existingKeys = new Set(existingDocs.filter((d) => d.exists).map((d) => d.id));
+
+    const missing = missingOccurrences(typeDoc.id, schedule, from, WEEKS_AHEAD, existingKeys);
+    if (missing.length === 0) continue;
+    const batch = db.batch();
+    for (const o of missing) {
+      const ref = db.collection('classes').doc(classIdForOccurrence(typeDoc.id, o.date, o.startTime));
+      batch.set(ref, {
+        id: ref.id,
+        orgId: ct.orgId,
+        title: ct.name,
+        date: o.date,
+        startTime: o.startTime,
+        endTime: null,
+        trainerId: ct.defaultTrainerId,
+        capacity: ct.capacity ?? 999,
+        creditCost: ct.creditCost ?? 1,
+        schemaId: ct.schemaId ?? null,
+        classTypeId: typeDoc.id,
+        bookedCount: 0,
+        waitlistCount: 0,
+        cancelledAt: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      created++;
+    }
+    await batch.commit();
+  }
+
+  return json(res, 200, { created, skippedNoTrainer, build: BUILD });
 }
 
 // --- Betalingen (Mollie) ------------------------------------------------------------

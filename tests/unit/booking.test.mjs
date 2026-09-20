@@ -5,7 +5,7 @@
  * die reserveert zonder saldo, twee mensen op dezelfde laatste plek, of een credit die kwijtraakt
  * bij afmelden. Daarom draait deze test de hele transactie af op een nagebootste Firestore.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 /** Bevat na elke test de volledige inhoud van de nagebootste database. */
 let store;
@@ -75,6 +75,21 @@ function makeDb() {
     _data: data,
     _increments: increments,
     collection,
+    getAll: async (...refs) =>
+      refs.map((ref) => {
+        const v = data.get(ref.__path);
+        return { exists: v !== undefined, id: ref.__path.slice(ref.__path.lastIndexOf('/') + 1), data: () => v };
+      }),
+    batch: () => {
+      const ops = [];
+      return {
+        set: (ref, value) => ops.push([ref, value]),
+        commit: async () => {
+          for (const [ref, value] of ops) data.set(ref.__path, applyValue(null, value));
+          store = Object.fromEntries(data);
+        },
+      };
+    },
     /** Eén poging, geen herhaling: genoeg om de logica te testen. */
     runTransaction: async (fn) => {
       const tx = {
@@ -565,5 +580,75 @@ describe('betalingen (Mollie)', () => {
   it('een trainer mag geen sleutel loskoppelen', async () => {
     const res = await post({ action: 'removePaymentKey', orgId: 'vanas', mode: 'test' }, 'trainer1');
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('terugkerende lessen (cron)', () => {
+  const getCron = async (authHeader) => {
+    const res = makeRes();
+    await handler({ method: 'GET', headers: authHeader ? { authorization: authHeader } : {}, query: { cron: 'generateClasses' } }, res);
+    return res;
+  };
+  const todayIso = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const ORIGINAL_SECRET = process.env.CRON_SECRET;
+  beforeEach(() => {
+    process.env.CRON_SECRET = 'test-secret';
+  });
+  afterEach(() => {
+    if (ORIGINAL_SECRET === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = ORIGINAL_SECRET;
+  });
+
+  it('weigert als CRON_SECRET niet is ingesteld op de server', async () => {
+    delete process.env.CRON_SECRET;
+    const res = await getCron('Bearer whatever');
+    expect(res.statusCode).toBe(500);
+  });
+
+  it('weigert een verkeerde of ontbrekende sleutel', async () => {
+    expect((await getCron('Bearer verkeerd')).statusCode).toBe(401);
+    expect((await getCron(undefined)).statusCode).toBe(401);
+  });
+
+  it('zet de ontbrekende les van een lessoort met schema op het rooster', async () => {
+    store['classTypes/ct1'] = {
+      orgId: 'vanas', name: 'Kicking', durationMin: 60, capacity: 8, creditCost: 1,
+      defaultTrainerId: 'trainer1', schemaId: null,
+      schedule: [{ weekday: new Date().getDay(), startTime: '19:00' }],
+    };
+    const res = await getCron('Bearer test-secret');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.created).toBeGreaterThan(0);
+    const createdId = `classes/cls_gen_ct1_${todayIso()}_1900`;
+    expect(store[createdId]).toMatchObject({ orgId: 'vanas', title: 'Kicking', trainerId: 'trainer1', classTypeId: 'ct1', bookedCount: 0 });
+  });
+
+  it('slaat een lessoort zonder vaste trainer over (de cron kiest zelf geen trainer)', async () => {
+    store['classTypes/ct2'] = {
+      orgId: 'vanas', name: 'Open gym', durationMin: 60, capacity: null, creditCost: 0,
+      defaultTrainerId: null, schemaId: null,
+      schedule: [{ weekday: new Date().getDay(), startTime: '08:00' }],
+    };
+    const res = await getCron('Bearer test-secret');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.skippedNoTrainer).toContain('ct2');
+    expect(store[`classes/cls_gen_ct2_${todayIso()}_0800`]).toBeUndefined();
+  });
+
+  it('maakt een moment niet nog een keer aan als het al bestaat, ook als het is afgelast', async () => {
+    const id = `classes/cls_gen_ct3_${todayIso()}_1900`;
+    store['classTypes/ct3'] = {
+      orgId: 'vanas', name: 'Kicking', durationMin: 60, capacity: 8, creditCost: 1,
+      defaultTrainerId: 'trainer1', schemaId: null,
+      schedule: [{ weekday: new Date().getDay(), startTime: '19:00' }],
+    };
+    store[id] = { orgId: 'vanas', title: 'Kicking', classTypeId: 'ct3', cancelledAt: '2026-01-01T00:00:00.000Z' };
+    const res = await getCron('Bearer test-secret');
+    expect(res.statusCode).toBe(200);
+    expect(store[id].cancelledAt).toBe('2026-01-01T00:00:00.000Z');
   });
 });
