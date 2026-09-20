@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classIdForOccurrence, missingOccurrences, occurrencesForSchedule } from '../../api/_lib/classSchedule.mjs';
+import { classIdForOccurrence, missingOccurrences, occurrencesForSchedule, standingBookingId } from '../../api/_lib/classSchedule.mjs';
 
 // Donderdag 2026-09-24, voor een voorspelbaar vertrekpunt (weekday-tabel: zo=0 .. za=6).
 const THURSDAY = '2026-09-24';
@@ -9,6 +9,15 @@ describe('lesrooster: id per moment', () => {
     expect(classIdForOccurrence('ct_1', '2026-09-24', '19:00')).toBe('cls_gen_ct_1_2026-09-24_1900');
     expect(classIdForOccurrence('ct_1', '2026-09-24', '19:00')).toBe(classIdForOccurrence('ct_1', '2026-09-24', '19:00'));
     expect(classIdForOccurrence('ct_1', '2026-09-24', '19:00')).not.toBe(classIdForOccurrence('ct_1', '2026-10-01', '19:00'));
+  });
+});
+
+describe('lesrooster: id per "elke week"-inschrijving', () => {
+  it('is deterministisch en uniek per lessoort, sporter en weekmoment', () => {
+    expect(standingBookingId('ct_1', 'u1', 4, '19:00')).toBe('sb_ct_1_u1_4_1900');
+    expect(standingBookingId('ct_1', 'u1', 4, '19:00')).toBe(standingBookingId('ct_1', 'u1', 4, '19:00'));
+    expect(standingBookingId('ct_1', 'u1', 4, '19:00')).not.toBe(standingBookingId('ct_1', 'u1', 1, '19:00'));
+    expect(standingBookingId('ct_1', 'u1', 4, '19:00')).not.toBe(standingBookingId('ct_1', 'u2', 4, '19:00'));
   });
 });
 

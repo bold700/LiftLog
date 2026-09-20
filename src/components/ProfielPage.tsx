@@ -38,6 +38,7 @@ import { PushNotificationsCard } from './PushNotificationsCard';
 import { UserAvatar } from './UserAvatar';
 import { AiChatConnectCard } from './AiChatConnectCard';
 import { SubscriptionCard } from './SubscriptionCard';
+import { BookingsCard } from './BookingsCard';
 import { ageOnDate } from '../utils/bodyFat';
 import { heartRateZones } from '../utils/heartRate';
 import { todayIso } from '../utils/format';
@@ -217,6 +218,7 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
   return (
     <PageLayout>
       {uid && p?.role === 'sporter' && <SubscriptionCard userId={uid} />}
+      {uid && p?.role === 'sporter' && <BookingsCard userId={uid} />}
       <ContentCard>
         <Typography variant="h5" component="h1" sx={{ fontWeight: 600, mb: 1 }}>
           Mijn profiel

@@ -9,8 +9,11 @@ import { applyCors } from './_lib/cors.mjs';
  * kunnen reserveren zonder saldo. Een Firestore-transactie lost dat wel op.
  *
  * POST, JSON:
- *   { action: 'book',    classId }                     sporter reserveert (of komt op de wachtlijst)
+ *   { action: 'book',    classId, weekly? }             sporter reserveert (of komt op de wachtlijst);
+ *                                                        weekly: true zet dit weekmoment ook op "elke week"
  *   { action: 'cancel',  bookingId }                   afmelden; credit terug binnen de annuleertermijn
+ *                                                        (instelbaar per studio, zie bookingPolicy hieronder)
+ *   { action: 'setStandingBooking', standingBookingId, active }  "elke week inschrijven" aan/uit zetten
  *   { action: 'grant',   userId, amount, note }        credits toekennen (alleen trainer/beheerder)
  *   { action: 'assign' | 'unassign' | 'renewDue' }     abonnementen (zie onder)
  *   { action: 'invoice', chargeId }                    factuur-PDF van een post (staf, of het lid zelf)
@@ -26,7 +29,9 @@ import { applyCors } from './_lib/cors.mjs';
  * GET /api/cron/generate-classes (rewrite naar ?cron=generateClasses): dagelijkse Vercel-cron die
  * lessen van een terugkerende lessoort op het rooster zet (zie api/_lib/classSchedule.mjs). Zit
  * bewust in dit endpoint in plaats van een eigen bestand: het Hobby-plan van Vercel staat maximaal
- * 12 Serverless Functions per deployment toe, en dat aantal zat al vol.
+ * 12 Serverless Functions per deployment toe, en dat aantal zat al vol. Boekt daarna ook meteen
+ * iedereen met een actieve "elke week"-inschrijving voor dat weekmoment in (plek/saldo toegestaan?
+ * geboekt; vol? wachtlijst; geen saldo? die week overgeslagen — zie `lastOutcome` op het document).
  *
  * Beveiliging:
  *  - Vereist een geldig Firebase ID-token (Bearer), behalve de cron hierboven: die controleert
@@ -45,7 +50,7 @@ import { buildInvoicePdf, invoiceFileName } from './_lib/invoicePdf.mjs';
 import { logoToDataUrl } from './_lib/invoiceLogo.mjs';
 import { buildInvoiceEmail, mailConfigured, sendViaResend } from './_lib/invoiceEmail.mjs';
 import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey } from './_lib/molliePayments.mjs';
-import { classIdForOccurrence, missingOccurrences, occurrencesForSchedule } from './_lib/classSchedule.mjs';
+import { classIdForOccurrence, missingOccurrences, occurrencesForSchedule, standingBookingId } from './_lib/classSchedule.mjs';
 
 const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
 
@@ -130,9 +135,11 @@ export default async function handler(req, res) {
   try {
     switch (body?.action) {
       case 'book':
-        return await book(res, db, uid, myOrgs, String(body.classId ?? '').trim());
+        return await book(res, db, uid, myOrgs, String(body.classId ?? '').trim(), body.weekly === true);
       case 'cancel':
         return await cancel(res, db, uid, myOrgs, isStaff, String(body.bookingId ?? '').trim());
+      case 'setStandingBooking':
+        return await setStandingBooking(res, db, uid, myOrgs, String(body.standingBookingId ?? '').trim(), body.active === true);
       case 'grant':
         if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan credits toekennen.', build: BUILD });
         return await grant(res, db, uid, myOrgs, body);
@@ -184,7 +191,7 @@ function refuse(message) {
  * Reserveren. In één transactie: plek controleren, credit afschrijven, reservering vastleggen.
  * Zit de les vol, dan kom je op de wachtlijst — zonder dat er een credit af gaat.
  */
-async function book(res, db, uid, myOrgs, classId) {
+async function book(res, db, uid, myOrgs, classId, weekly) {
   if (!classId) return json(res, 400, { error: 'Geen les opgegeven.', build: BUILD });
 
   // Eerst het eigen abonnement bijwerken (verlenging die nog openstond), dan pas reserveren.
@@ -273,6 +280,33 @@ async function book(res, db, uid, myOrgs, classId) {
       }
     }
 
+    // "Elke week inschrijven" aangevinkt: dit weekmoment van de lessoort voortaan ook automatisch
+    // boeken (cron in generateClasses). Opnieuw aanvinken zet een bestaande, uitgezette inschrijving
+    // gewoon weer aan — het id is deterministisch, dus dit levert nooit een dubbele op.
+    if (weekly && cls.classTypeId) {
+      const weekday = new Date(`${cls.date}T00:00:00`).getDay();
+      const sbRef = db
+        .collection('standingBookings')
+        .doc(standingBookingId(cls.classTypeId, uid, weekday, cls.startTime));
+      tx.set(
+        sbRef,
+        {
+          id: sbRef.id,
+          orgId,
+          userId: uid,
+          classTypeId: cls.classTypeId,
+          weekday,
+          startTime: cls.startTime,
+          active: true,
+          lastOutcome: onWaitlist ? 'skippedFull' : 'booked',
+          lastOutcomeDate: cls.date,
+          createdAt: now,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+    }
+
     return {
       bookingId,
       status: onWaitlist ? 'waitlist' : 'booked',
@@ -307,11 +341,16 @@ async function cancel(res, db, uid, myOrgs, isStaff, bookingId) {
     const classSnap = await tx.get(classRef);
     const cls = classSnap.exists ? classSnap.data() : null;
 
+    // Studio's stellen zelf in tot hoeveel uur van tevoren afmelden gratis is (Beheer → Huisstijl);
+    // zonder instelling geldt het standaard aantal uur van de server.
+    const orgSnap = await tx.get(db.collection('orgs').doc(orgId));
+    const freeCancelHours = Number(orgSnap.data()?.bookingPolicy?.freeCancelHours) || FREE_CANCEL_HOURS;
+
     const startsAt = cls ? classStartsAt(cls) : null;
     const hoursLeft = startsAt ? (startsAt.getTime() - Date.now()) / 3_600_000 : Infinity;
     const spent = Number(booking.creditsSpent) || 0;
     // De les is afgelast: dan altijd terug, ongeacht het tijdstip.
-    const refund = spent > 0 && (cls?.cancelledAt ? true : hoursLeft >= FREE_CANCEL_HOURS);
+    const refund = spent > 0 && (cls?.cancelledAt ? true : hoursLeft >= freeCancelHours);
 
     // Eerste van de wachtlijst laten doorschuiven als er een plek vrijkomt.
     let promoted = null;
@@ -382,6 +421,19 @@ async function cancel(res, db, uid, myOrgs, isStaff, bookingId) {
   });
 
   return json(res, 200, { ...result, build: BUILD });
+}
+
+/** "Elke week inschrijven" aan- of uitzetten. Alleen de sporter van wie de inschrijving is. */
+async function setStandingBooking(res, db, uid, myOrgs, standingId, active) {
+  if (!standingId) return json(res, 400, { error: 'Geen inschrijving opgegeven.', build: BUILD });
+  const ref = db.collection('standingBookings').doc(standingId);
+  const snap = await ref.get();
+  if (!snap.exists) return json(res, 404, { error: 'Deze inschrijving bestaat niet (meer).', build: BUILD });
+  const data = snap.data();
+  if (!myOrgs.includes(orgIdOf(data.orgId))) return json(res, 403, { error: 'Deze inschrijving hoort niet bij jouw studio.', build: BUILD });
+  if (data.userId !== uid) return json(res, 403, { error: 'Dit is niet jouw inschrijving.', build: BUILD });
+  await ref.set({ active, updatedAt: new Date().toISOString() }, { merge: true });
+  return json(res, 200, { active, build: BUILD });
 }
 
 /** Credits toekennen of afboeken. Elke mutatie komt ook in het grootboek te staan. */
@@ -733,6 +785,9 @@ async function generateClasses(req, res, db) {
   const from = todayIso();
   const typesSnap = await db.collection('classTypes').get();
   let created = 0;
+  let autoBooked = 0;
+  let autoWaitlisted = 0;
+  let autoSkippedNoCredits = 0;
   const skippedNoTrainer = [];
 
   for (const typeDoc of typesSnap.docs) {
@@ -778,9 +833,115 @@ async function generateClasses(req, res, db) {
       created++;
     }
     await batch.commit();
+
+    // Nieuw gemaakte lessen: iedereen met een actieve "elke week"-inschrijving op dit weekmoment
+    // meteen meeboeken. Alleen voor deze net aangemaakte lessen — die zijn per definitie nog niet
+    // eerder geprobeerd, dus dit gebeurt precies één keer per les.
+    for (const o of missing) {
+      const weekday = new Date(`${o.date}T00:00:00`).getDay();
+      const classId = classIdForOccurrence(typeDoc.id, o.date, o.startTime);
+      const outcome = await autoBookStandingBookings(db, ct.orgId, classId, typeDoc.id, weekday, o.startTime);
+      autoBooked += outcome.booked;
+      autoWaitlisted += outcome.skippedFull;
+      autoSkippedNoCredits += outcome.skippedNoCredits;
+    }
   }
 
-  return json(res, 200, { created, skippedNoTrainer, build: BUILD });
+  return json(res, 200, { created, skippedNoTrainer, autoBooked, autoWaitlisted, autoSkippedNoCredits, build: BUILD });
+}
+
+/**
+ * Voor één nieuw gegenereerde les: alle actieve "elke week"-inschrijvingen op dat weekmoment
+ * (lessoort + weekdag + starttijd) proberen te boeken, net als een gewone reservering — plek en
+ * saldo toegestaan? geboekt. Vol? wachtlijst. Geen saldo? die week overgeslagen, met een reden op
+ * de inschrijving zodat de sporter dat op zijn Profiel kan zien.
+ */
+async function autoBookStandingBookings(db, orgId, classId, classTypeId, weekday, startTime) {
+  const counts = { booked: 0, skippedFull: 0, skippedNoCredits: 0 };
+  const snap = await db
+    .collection('standingBookings')
+    .where('orgId', '==', orgId)
+    .where('classTypeId', '==', classTypeId)
+    .where('weekday', '==', weekday)
+    .where('startTime', '==', startTime)
+    .where('active', '==', true)
+    .get();
+
+  for (const doc of snap.docs) {
+    const result = await attemptStandingBooking(db, orgId, classId, doc.data());
+    if (result) counts[result.outcome]++;
+  }
+  return counts;
+}
+
+/**
+ * Eén automatische boekpoging, in een eigen transactie zodat een misser bij de een de anderen
+ * niet blokkeert. Retourneert `{ outcome, date }` ('booked' | 'skippedFull' | 'skippedNoCredits'),
+ * of null als de sporter al op een andere manier voor deze les staat (dan blijft de inschrijving
+ * ongemoeid — niet overschrijven met een uitkomst die niet klopt).
+ */
+async function attemptStandingBooking(db, orgId, classId, standing) {
+  const userId = String(standing.userId);
+  const nowIso = new Date().toISOString();
+
+  const result = await db.runTransaction(async (tx) => {
+    const classRef = db.collection('classes').doc(classId);
+    const classSnap = await tx.get(classRef);
+    if (!classSnap.exists || classSnap.data().cancelledAt) return null;
+    const cls = classSnap.data();
+
+    const mine = await tx.get(db.collection('bookings').where('classId', '==', classId).where('userId', '==', userId));
+    if (mine.docs.some((d) => ['booked', 'waitlist'].includes(String(d.data().status)))) return null;
+
+    const capacity = Number(cls.capacity) || 0;
+    const booked = Number(cls.bookedCount) || 0;
+    const cost = Number(cls.creditCost ?? 1) || 0;
+    const onWaitlist = booked >= capacity;
+
+    const accountRef = db.collection('creditAccounts').doc(accountId(orgId, userId));
+    const accountSnap = await tx.get(accountRef);
+    const balance = Number(accountSnap.exists ? accountSnap.data().balance : 0) || 0;
+
+    if (!onWaitlist && balance < cost) return { outcome: 'skippedNoCredits', date: cls.date };
+
+    const bookingId = newId('bk');
+    tx.set(db.collection('bookings').doc(bookingId), {
+      id: bookingId,
+      orgId,
+      classId,
+      userId,
+      status: onWaitlist ? 'waitlist' : 'booked',
+      creditsSpent: onWaitlist ? 0 : cost,
+      createdAt: nowIso,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    if (onWaitlist) {
+      tx.set(classRef, { waitlistCount: FieldValue.increment(1) }, { merge: true });
+    } else {
+      tx.set(classRef, { bookedCount: FieldValue.increment(1) }, { merge: true });
+      if (cost > 0) {
+        tx.set(accountRef, { orgId, userId, balance: balance - cost, updatedAt: nowIso }, { merge: true });
+        tx.set(db.collection('creditLedger').doc(newId('cl')), {
+          orgId,
+          userId,
+          delta: -cost,
+          reason: 'booking',
+          classId,
+          byUserId: userId,
+          createdAt: nowIso,
+        });
+      }
+    }
+    return { outcome: onWaitlist ? 'skippedFull' : 'booked', date: cls.date };
+  });
+
+  if (result) {
+    await db
+      .collection('standingBookings')
+      .doc(standing.id)
+      .set({ lastOutcome: result.outcome, lastOutcomeDate: result.date, updatedAt: nowIso }, { merge: true });
+  }
+  return result;
 }
 
 // --- Betalingen (Mollie) ------------------------------------------------------------

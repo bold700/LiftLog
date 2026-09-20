@@ -4,12 +4,14 @@ import {
   Box,
   Typography,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
+  FormControlLabel,
   TextField,
   MenuItem,
   IconButton,
@@ -21,6 +23,7 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import ConfirmationNumberRoundedIcon from '@mui/icons-material/ConfirmationNumberRounded';
+import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
 import { PageLayout, ContentCard, PageTitle, EmptyState } from './layout';
 import { useProfile } from '../context/ProfileContext';
 import { useI18n } from '../context/I18nContext';
@@ -29,6 +32,8 @@ import { useNotify } from '../context/NotifyContext';
 import {
   getUpcomingClasses,
   getMyBookings,
+  getMyStandingBookings,
+  getBookingsForClass,
   getCreditBalance,
   bookClass,
   cancelBooking,
@@ -41,9 +46,13 @@ import {
   type StudioClass,
   type Booking,
 } from '../services/classService';
+import { getOrg } from '../services/orgService';
 import { designTokens } from '../theme/designTokens';
 import { addWeeks } from '../utils/format';
-import type { ClassType, Profile, SessionKind } from '../types';
+import type { ClassType, Profile, SessionKind, StandingBooking } from '../types';
+
+/** Zonder eigen instelling geldt dit aantal uur, zoals de server standaard hanteert. */
+const DEFAULT_FREE_CANCEL_HOURS = 12;
 
 const SESSION_KIND_KEYS: SessionKind[] = ['1on1', 'duo', 'group', 'concept'];
 const SESSION_KIND_LABELS: Record<SessionKind, string> = { '1on1': '1-op-1', duo: 'Duo PT', group: 'Groep', concept: 'Concept' };
@@ -76,6 +85,12 @@ function weekOf(date: string): string[] {
   });
 }
 
+/** 0 = zondag .. 6 = zaterdag, zoals ClassScheduleSlot/StandingBooking. */
+const weekdayOf = (date: string) => new Date(`${date}T12:00:00`).getDay();
+
+/** Sleutel om een les te koppelen aan een "elke week"-instelling: zelfde lessoort en weekmoment. */
+const standingKey = (classTypeId: string, weekday: number, startTime: string) => `${classTypeId}_${weekday}_${startTime}`;
+
 export function LessenPage() {
   const profileCtx = useProfile();
   const notify = useNotify();
@@ -84,6 +99,7 @@ export function LessenPage() {
 
   const [classes, setClasses] = useState<StudioClass[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [standingBookings, setStandingBookings] = useState<StandingBooking[]>([]);
   const [credits, setCredits] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -92,19 +108,24 @@ export function LessenPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [selectedDate, setSelectedDate] = useState(today());
   const [roomFilter, setRoomFilter] = useState('');
+  const [confirmClass, setConfirmClass] = useState<StudioClass | null>(null);
+  const [participantsClass, setParticipantsClass] = useState<StudioClass | null>(null);
+  const [freeCancelHours, setFreeCancelHours] = useState(DEFAULT_FREE_CANCEL_HOURS);
 
   const load = useCallback(async () => {
     if (!me) return;
     setLoading(true);
     try {
-      const [cls, mine, balance] = await Promise.all([
+      const [cls, mine, balance, standing] = await Promise.all([
         getUpcomingClasses(today()),
         getMyBookings(me.userId),
         getCreditBalance(me.userId),
+        getMyStandingBookings(me.userId),
       ]);
       setClasses(cls);
       setBookings(mine);
       setCredits(balance);
+      setStandingBookings(standing);
     } catch (e) {
       notify?.error(e instanceof Error ? e.message : 'Rooster laden mislukt');
     } finally {
@@ -115,6 +136,13 @@ export function LessenPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!profileCtx?.activeOrgId) return;
+    void getOrg(profileCtx.activeOrgId).then((org) => {
+      if (org?.bookingPolicy?.freeCancelHours != null) setFreeCancelHours(org.bookingPolicy.freeCancelHours);
+    });
+  }, [profileCtx?.activeOrgId]);
 
   /** Actieve reservering per les, zodat elke kaart weet of je meedoet. */
   const myBookingByClass = useMemo(() => {
@@ -141,16 +169,23 @@ export function LessenPage() {
   const dayClasses = useMemo(() => visibleClasses.filter((c) => c.date === selectedDate), [visibleClasses, selectedDate]);
   const weekStrip = useMemo(() => weekOf(selectedDate), [selectedDate]);
 
+  /** Weekmomenten waar al "elke week" voor aanstaat, zodat het vinkje bij een les die daarbij hoort meteen goed staat. */
+  const activeStandingKeys = useMemo(
+    () => new Set(standingBookings.filter((s) => s.active).map((s) => standingKey(s.classTypeId, s.weekday, s.startTime))),
+    [standingBookings]
+  );
+
   const handleBook = useCallback(
-    async (cls: StudioClass) => {
+    async (cls: StudioClass, weekly: boolean) => {
       setBusyId(cls.id);
       try {
-        const result = await bookClass(cls.id);
+        const result = await bookClass(cls.id, weekly);
         notify?.success(
           result.status === 'waitlist'
             ? 'De les is vol. Je staat op de wachtlijst en betaalt pas als je doorschuift.'
             : 'Je staat ingeschreven.'
         );
+        setConfirmClass(null);
         await load();
       } catch (e) {
         notify?.error(e instanceof Error ? e.message : 'Reserveren mislukt');
@@ -248,10 +283,15 @@ export function LessenPage() {
                 Afmelden
               </Button>
             ) : (
-              <Button size="small" variant="contained" disabled={busy} onClick={() => void handleBook(cls)}>
+              <Button size="small" variant="contained" disabled={busy} onClick={() => setConfirmClass(cls)}>
                 {full ? 'Wachtlijst' : 'Reserveren'}
               </Button>
             ))}
+          {isStaff && !cls.cancelledAt && (
+            <IconButton size="small" onClick={() => setParticipantsClass(cls)} disabled={busy} aria-label="Deelnemers">
+              <GroupRoundedIcon fontSize="small" />
+            </IconButton>
+          )}
           {isStaff && !cls.cancelledAt && (
             <IconButton size="small" onClick={() => void handleDelete(cls)} disabled={busy} aria-label="Les verwijderen">
               <DeleteOutlineRoundedIcon fontSize="small" />
@@ -421,6 +461,27 @@ export function LessenPage() {
           setCreditsOpen(false);
           void load();
         }}
+      />
+
+      <BookConfirmDialog
+        cls={confirmClass}
+        credits={credits}
+        freeCancelHours={freeCancelHours}
+        busy={confirmClass != null && busyId === confirmClass.id}
+        alreadyWeekly={
+          confirmClass?.classTypeId
+            ? activeStandingKeys.has(standingKey(confirmClass.classTypeId, weekdayOf(confirmClass.date), confirmClass.startTime))
+            : false
+        }
+        onClose={() => setConfirmClass(null)}
+        onConfirm={(weekly) => confirmClass && void handleBook(confirmClass, weekly)}
+      />
+
+      <ParticipantsDialog
+        cls={participantsClass}
+        sporters={profileCtx?.allSporters ?? []}
+        onClose={() => setParticipantsClass(null)}
+        onChanged={() => void load()}
       />
     </PageLayout>
   );
@@ -675,6 +736,172 @@ function GrantCreditsDialog({
         <Button variant="contained" onClick={() => void submit()} disabled={busy}>
           Toekennen
         </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+/**
+ * Bevestigen voor je reserveert: wanneer, hoeveel plekken, wat het kost en tot wanneer gratis
+ * afmelden mag. Bij een les uit een lessoort kun je 'm meteen ook op "elke week" zetten.
+ */
+function BookConfirmDialog({
+  cls,
+  credits,
+  freeCancelHours,
+  busy,
+  alreadyWeekly,
+  onClose,
+  onConfirm,
+}: {
+  cls: StudioClass | null;
+  credits: number;
+  freeCancelHours: number;
+  busy: boolean;
+  alreadyWeekly: boolean;
+  onClose: () => void;
+  onConfirm: (weekly: boolean) => void;
+}) {
+  const [weekly, setWeekly] = useState(alreadyWeekly);
+
+  useEffect(() => {
+    setWeekly(alreadyWeekly);
+  }, [cls?.id, alreadyWeekly]);
+
+  if (!cls) return null;
+  const full = cls.bookedCount >= cls.capacity;
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="xs">
+      <DialogTitle>{cls.title}</DialogTitle>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, '&&': { pt: 1.5 } }}>
+        <Typography variant="body2" color="text.secondary">
+          {dayLabel(cls.date)} · {cls.startTime}
+          {cls.endTime ? `–${cls.endTime}` : ''}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {[cls.room, `${cls.bookedCount} van ${cls.capacity} plekken bezet`].filter(Boolean).join(' · ')}
+        </Typography>
+
+        {!full && (
+          <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: designTokens.cardBackgroundHigh, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+            <Typography variant="body2" fontWeight={600}>
+              {cls.creditCost === 0 ? 'Gratis' : cls.creditCost === 1 ? 'Kost 1 credit' : `Kost ${cls.creditCost} credits`}
+            </Typography>
+            {cls.creditCost > 0 && (
+              <Typography variant="caption" color="text.secondary">
+                {credits - cls.creditCost} over na deze
+              </Typography>
+            )}
+          </Box>
+        )}
+
+        <Typography variant="caption" color="text.secondary">
+          Gratis afmelden tot {freeCancelHours} uur van tevoren. Daarna kost het je de credit.
+        </Typography>
+
+        {cls.classTypeId && (
+          <FormControlLabel
+            control={<Checkbox size="small" checked={weekly} onChange={(e) => setWeekly(e.target.checked)} />}
+            label="Elke week inschrijven"
+          />
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={busy}>
+          Sluiten
+        </Button>
+        <Button variant="contained" disabled={busy} onClick={() => onConfirm(weekly)}>
+          {full ? 'Wachtlijst' : cls.creditCost === 0 ? 'Reserveren' : `Reserveren · ${cls.creditCost} credit${cls.creditCost > 1 ? 's' : ''}`}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+/**
+ * Deelnemers van één les, voor de trainer: wie staat er straks in de zaal, en iemand verwijderen
+ * die zich via WhatsApp heeft afgemeld in plaats van in de app.
+ */
+function ParticipantsDialog({
+  cls,
+  sporters,
+  onClose,
+  onChanged,
+}: {
+  cls: StudioClass | null;
+  sporters: Profile[];
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const notify = useNotify();
+  const [rows, setRows] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!cls) return;
+    setLoading(true);
+    getBookingsForClass(cls.id)
+      .then((list) => setRows(list.filter((b) => b.status === 'booked' || b.status === 'waitlist')))
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, [cls]);
+
+  const nameFor = (userId: string) => {
+    const p = sporters.find((s) => s.userId === userId);
+    return p?.displayName?.trim() || p?.email || userId;
+  };
+
+  const remove = async (booking: Booking) => {
+    setBusyId(booking.id);
+    try {
+      await cancelBooking(booking.id);
+      setRows((prev) => prev.filter((b) => b.id !== booking.id));
+      onChanged();
+    } catch (e) {
+      notify?.error(e instanceof Error ? e.message : 'Verwijderen mislukt');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (!cls) return null;
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="xs">
+      <DialogTitle>{cls.title}</DialogTitle>
+      <DialogContent sx={{ '&&': { pt: 1.5 } }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          {dayLabel(cls.date)} · {cls.startTime}
+          {cls.endTime ? `–${cls.endTime}` : ''}
+        </Typography>
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+            <CircularProgress size={20} />
+          </Box>
+        ) : rows.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            Nog niemand ingeschreven.
+          </Typography>
+        ) : (
+          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+            {rows.map((b) => (
+              <Box key={b.id} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1, borderTop: `1px solid ${designTokens.cardBackgroundHigh}` }}>
+                <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>
+                  {nameFor(b.userId)}
+                </Typography>
+                <Chip size="small" label={b.status === 'waitlist' ? 'Wachtlijst' : 'Ingeschreven'} />
+                <Button size="small" color="error" disabled={busyId === b.id} onClick={() => void remove(b)}>
+                  Verwijderen
+                </Button>
+              </Box>
+            ))}
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Sluiten</Button>
       </DialogActions>
     </Dialog>
   );
