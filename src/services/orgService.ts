@@ -6,7 +6,7 @@
  */
 import { doc, getDoc, setDoc, serverTimestamp, type Timestamp } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
-import type { Org, OrgBranding } from '../types';
+import type { Org, OrgBranding, OrgBusiness } from '../types';
 
 const COLLECTION = 'orgs';
 
@@ -21,6 +21,7 @@ function toOrg(data: Record<string, unknown>, id: string): Org {
     ownerId: typeof data.ownerId === 'string' ? data.ownerId : null,
     allowSelfSignup: data.allowSelfSignup === true,
     branding: toBranding(data.branding),
+    business: toBusiness(data.business),
     createdAt: ts(data.createdAt),
     updatedAt: ts(data.updatedAt),
   };
@@ -48,6 +49,50 @@ export function toBranding(raw: unknown): OrgBranding | null {
     lightScheme,
   };
   return Object.values(out).some((v) => v != null) ? out : null;
+}
+
+/** Bedrijfsgegevens in vaste vorm; null als er nog niets is ingevuld. */
+export function toBusiness(raw: unknown): OrgBusiness | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const b = raw as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const n = Number(b.nextInvoiceNumber);
+  const out: OrgBusiness = {
+    legalName: str(b.legalName),
+    street: str(b.street),
+    postcode: str(b.postcode),
+    city: str(b.city),
+    kvk: str(b.kvk),
+    vatNumber: str(b.vatNumber),
+    iban: str(b.iban),
+    invoiceEmail: str(b.invoiceEmail),
+    phone: str(b.phone),
+    invoicePrefix: str(b.invoicePrefix),
+    nextInvoiceNumber: Number.isFinite(n) && n >= 1 ? Math.trunc(n) : 1,
+  };
+  const filled = Object.entries(out).some(([k, v]) => k !== 'nextInvoiceNumber' && v !== '');
+  return filled ? out : null;
+}
+
+/** Bedrijfsgegevens opslaan (Beheer → Huisstijl). Alleen een beheerder mag dit (Firestore-regels). */
+export async function saveOrgBusiness(orgId: string, business: OrgBusiness): Promise<void> {
+  if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
+  const id = orgId.trim();
+  if (!id) throw new Error('Studio-id ontbreekt');
+  const clean: OrgBusiness = {
+    legalName: business.legalName.trim(),
+    street: business.street.trim(),
+    postcode: business.postcode.trim().toUpperCase(),
+    city: business.city.trim(),
+    kvk: business.kvk.trim(),
+    vatNumber: business.vatNumber.trim().toUpperCase().replace(/\s+/g, ''),
+    iban: business.iban.trim().toUpperCase(),
+    invoiceEmail: business.invoiceEmail.trim(),
+    phone: business.phone.trim(),
+    invoicePrefix: business.invoicePrefix.trim(),
+    nextInvoiceNumber: Math.max(1, Math.trunc(Number(business.nextInvoiceNumber) || 1)),
+  };
+  await setDoc(doc(db, COLLECTION, id), { business: clean, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 /** Huisstijl opslaan. Alleen een beheerder van de studio mag dit (Firestore-regels). */

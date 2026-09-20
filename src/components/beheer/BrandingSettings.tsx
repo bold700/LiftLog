@@ -10,17 +10,36 @@ import { Alert, Box, Button, Chip, CircularProgress, TextField, Typography } fro
 import UploadRoundedIcon from '@mui/icons-material/UploadRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { ContentCard } from '../layout';
+import { useI18n } from '../../context/I18nContext';
 import { useProfile } from '../../context/ProfileContext';
 import { useBranding } from '../../context/BrandingContext';
 import { useNotify } from '../../context/NotifyContext';
-import { getOrg, saveOrg, saveOrgBranding } from '../../services/orgService';
+import { getOrg, saveOrg, saveOrgBranding, saveOrgBusiness } from '../../services/orgService';
 import { deleteOrgLogo, uploadOrgLogo } from '../../services/orgLogoService';
 import { isHexColor, parseThemeBuilderExport, resolveScheme, SWATCH_KEYS, type LightScheme } from '../../theme/brandingTheme';
-import type { OrgBranding } from '../../types';
+import type { OrgBranding, OrgBusiness } from '../../types';
 
 const THEME_BUILDER_URL = 'https://material-foundation.github.io/material-theme-builder/';
 
+/** Lege bedrijfsgegevens: naam van de studio, voorvoegsel met het jaar, teller op 1. */
+const emptyBusiness = (orgName: string): OrgBusiness => ({
+  legalName: orgName,
+  street: '',
+  postcode: '',
+  city: '',
+  kvk: '',
+  vatNumber: '',
+  iban: '',
+  invoiceEmail: '',
+  phone: '',
+  invoicePrefix: `${new Date().getFullYear()}-`,
+  nextInvoiceNumber: 1,
+});
+
+const pad4 = (n: number) => String(Math.max(1, Math.trunc(n) || 1)).padStart(4, '0');
+
 export function BrandingSettings() {
+  const { t } = useI18n();
   const profile = useProfile();
   const branding = useBranding();
   const notify = useNotify();
@@ -37,6 +56,8 @@ export function BrandingSettings() {
   const [exportText, setExportText] = useState('');
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [business, setBusiness] = useState<OrgBusiness>(() => emptyBusiness(''));
+  const [savingBusiness, setSavingBusiness] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -51,6 +72,7 @@ export function BrandingSettings() {
       setLogoUrl(org.branding?.logoUrl ?? null);
       setSeed(org.branding?.seedColor ?? '#426833');
       setExportText(org.branding?.lightScheme ? JSON.stringify({ schemes: { light: org.branding.lightScheme } }, null, 2) : '');
+      setBusiness(org.business ?? emptyBusiness(org.name));
       setLoaded(true);
     });
     return () => {
@@ -116,6 +138,21 @@ export function BrandingSettings() {
     }
   };
 
+  const setBiz = (patch: Partial<OrgBusiness>) => setBusiness((b) => ({ ...b, ...patch }));
+
+  const handleSaveBusiness = async () => {
+    if (!orgId) return;
+    setSavingBusiness(true);
+    try {
+      await saveOrgBusiness(orgId, business);
+      notify.success(t('business.saved'));
+    } catch (e) {
+      notify.error(t('business.failed'), e);
+    } finally {
+      setSavingBusiness(false);
+    }
+  };
+
   const handleReset = async () => {
     if (!orgId) return;
     setBusy(true);
@@ -147,6 +184,7 @@ export function BrandingSettings() {
 
   return (
     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, alignItems: 'start' }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
       <ContentCard>
         <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
           Huisstijl
@@ -267,6 +305,58 @@ export function BrandingSettings() {
         </Box>
       </ContentCard>
 
+      {/* Bedrijfsgegevens voor op de factuur (ontwerp "Business details") */}
+      <ContentCard>
+        <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
+          {t('business.title')}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+          {t('business.intro')}
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <TextField label={t('business.legalName')} size="small" fullWidth value={business.legalName} onChange={(e) => setBiz({ legalName: e.target.value })} />
+          <TextField label={t('business.street')} size="small" fullWidth value={business.street} onChange={(e) => setBiz({ street: e.target.value })} />
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+            <TextField label={t('business.postcode')} size="small" fullWidth value={business.postcode} onChange={(e) => setBiz({ postcode: e.target.value })} />
+            <TextField label={t('business.city')} size="small" fullWidth value={business.city} onChange={(e) => setBiz({ city: e.target.value })} />
+          </Box>
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+            <TextField label={t('business.kvk')} size="small" fullWidth value={business.kvk} onChange={(e) => setBiz({ kvk: e.target.value })} inputProps={{ inputMode: 'numeric' }} />
+            <TextField label={t('business.vatNumber')} size="small" fullWidth value={business.vatNumber} onChange={(e) => setBiz({ vatNumber: e.target.value })} placeholder="NL001234567B01" />
+          </Box>
+          <TextField label={t('business.iban')} size="small" fullWidth value={business.iban} onChange={(e) => setBiz({ iban: e.target.value })} placeholder="NL12 RABO 0123 4567 89" />
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+            <TextField label={t('business.invoiceEmail')} type="email" size="small" fullWidth value={business.invoiceEmail} onChange={(e) => setBiz({ invoiceEmail: e.target.value })} />
+            <TextField label={t('business.phone')} type="tel" size="small" fullWidth value={business.phone} onChange={(e) => setBiz({ phone: e.target.value })} />
+          </Box>
+          <Box>
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+              <TextField label={t('business.invoicePrefix')} size="small" fullWidth value={business.invoicePrefix} onChange={(e) => setBiz({ invoicePrefix: e.target.value })} inputProps={{ spellCheck: false }} />
+              <TextField
+                label={t('business.nextNumber')}
+                size="small"
+                fullWidth
+                value={String(business.nextInvoiceNumber)}
+                onChange={(e) => setBiz({ nextInvoiceNumber: Math.max(1, Math.trunc(Number(e.target.value) || 1)) })}
+                inputProps={{ inputMode: 'numeric' }}
+              />
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+              {t('business.numberingHelp', { example: `${business.invoicePrefix}${pad4(business.nextInvoiceNumber)}` })}
+            </Typography>
+          </Box>
+          <Alert severity="info" icon={false}>
+            {t('business.vatNote')}
+          </Alert>
+          <Box>
+            <Button variant="contained" onClick={() => void handleSaveBusiness()} disabled={savingBusiness}>
+              {savingBusiness ? t('common.saving') : t('common.save')}
+            </Button>
+          </Box>
+        </Box>
+      </ContentCard>
+      </Box>
+
       {/* Voorbeeld */}
       <ContentCard>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mb: 1.5 }}>
@@ -309,6 +399,49 @@ export function BrandingSettings() {
         <Alert severity="info" icon={false} sx={{ mt: 2 }}>
           Het inlogscherm blijft VORM: daar is nog niet bekend bij welke studio iemand hoort.
         </Alert>
+
+        {/* Voorbeeld van de factuur: zo landen logo en bedrijfsgegevens op de PDF. */}
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 3, mb: 1.5 }}>
+          {t('business.preview')}
+        </Typography>
+        <Box sx={{ mx: 'auto', maxWidth: 420, borderRadius: 3, border: `1px solid ${preview.outlineVariant}`, bgcolor: '#fff', color: '#191d17', p: 3, fontSize: 11 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+            <Box sx={{ width: 32, height: 32, borderRadius: 2, bgcolor: preview.primary, overflow: 'hidden', flexShrink: 0 }}>
+              {logoUrl && <Box component="img" src={logoUrl} alt="" sx={{ width: '100%', height: '100%', objectFit: 'contain', bgcolor: '#fff' }} />}
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="body2" fontWeight={600} noWrap>
+                {business.legalName || shownName}
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#43483f' }} noWrap>
+                {[business.street, [business.postcode, business.city].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || '—'}
+              </Typography>
+            </Box>
+            <Typography sx={{ fontWeight: 700, fontSize: 16, color: preview.primary }}>FACTUUR</Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 3, mb: 2 }}>
+            {[
+              ['Factuurnummer', `${business.invoicePrefix}${pad4(business.nextInvoiceNumber)}`],
+              ['Factuurdatum', new Date().toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })],
+              ['Aan', firstName],
+            ].map(([k, v]) => (
+              <Box key={k}>
+                <Typography sx={{ fontSize: 9, fontWeight: 600, color: '#43483f' }}>{k}</Typography>
+                <Typography sx={{ fontSize: 11 }}>{v}</Typography>
+              </Box>
+            ))}
+          </Box>
+          <Box sx={{ borderTop: '1px solid #c3c8bd', borderBottom: '1px solid #c3c8bd', py: 1, display: 'flex', justifyContent: 'space-between' }}>
+            <span>Abonnement · periode</span>
+            <span>€ 0,00</span>
+          </Box>
+          <Typography sx={{ fontSize: 9, color: '#43483f', mt: 2 }} noWrap>
+            {[business.kvk && `KvK ${business.kvk}`, business.vatNumber && `btw ${business.vatNumber}`, business.iban].filter(Boolean).join(' · ') || '—'}
+          </Typography>
+        </Box>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
+          {t('business.previewHint')}
+        </Typography>
       </ContentCard>
     </Box>
   );

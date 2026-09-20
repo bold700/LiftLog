@@ -23,7 +23,7 @@ import { useNotify } from '../../context/NotifyContext';
 import { deletePlan, getPlans, newPlanId, savePlan } from '../../services/planService';
 import { NumberField } from '../NumberField';
 import { designTokens } from '../../theme/designTokens';
-import type { Membership, Plan } from '../../types';
+import { DEFAULT_VAT_RATE, VAT_RATES, type Membership, type Plan, type VatRate } from '../../types';
 
 interface SubscriptionsPanelProps {
   /** Actieve lidmaatschappen per userId (uit BeheerPage, zodat Leden en dit tabblad één bron delen). */
@@ -47,10 +47,11 @@ interface Draft {
   rollover: Plan['rollover'];
   availableTo: Plan['availableTo'];
   status: Plan['status'];
+  vatRate: VatRate;
   createdAt?: string;
 }
 
-const emptyDraft = (): Draft => ({ id: newPlanId(), name: '', price: '', period: 'month', unlimited: false, credits: '8', validityMonths: '', rollover: 'expire', availableTo: 'all', status: 'active' });
+const emptyDraft = (): Draft => ({ id: newPlanId(), name: '', price: '', period: 'month', unlimited: false, credits: '8', validityMonths: '', rollover: 'expire', availableTo: 'all', status: 'active', vatRate: DEFAULT_VAT_RATE });
 const toDraft = (p: Plan): Draft => ({
   id: p.id,
   name: p.name,
@@ -62,6 +63,7 @@ const toDraft = (p: Plan): Draft => ({
   rollover: p.rollover,
   availableTo: p.availableTo,
   status: p.status,
+  vatRate: p.vatRate,
   createdAt: p.createdAt || undefined,
 });
 
@@ -148,6 +150,7 @@ export function SubscriptionsPanel({ memberships, credits, createSignal, onChang
         rollover: draft.rollover,
         availableTo: draft.availableTo,
         status: draft.status,
+        vatRate: draft.vatRate,
         createdAt: draft.createdAt,
       });
       notify.success(t('plans.saved'));
@@ -274,6 +277,13 @@ export function SubscriptionsPanel({ memberships, credits, createSignal, onChang
           <MenuItem value="once">{t('plans.once')}</MenuItem>
         </TextField>
       </Box>
+      <TextField select label={t('plans.vat')} size="small" fullWidth value={String(draft.vatRate)} helperText={t('plans.vatHelp')} onChange={(e) => setDraft({ ...draft, vatRate: Number(e.target.value) as VatRate })}>
+        {VAT_RATES.map((r) => (
+          <MenuItem key={r} value={String(r)}>
+            {t(`plans.vatOption.r${r}`)}
+          </MenuItem>
+        ))}
+      </TextField>
       <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
         <TextField select label={t('plans.allowance')} size="small" fullWidth value={draft.unlimited ? 'unlimited' : 'credits'} onChange={(e) => setDraft({ ...draft, unlimited: e.target.value === 'unlimited' })}>
           <MenuItem value="credits">{t('plans.credits')}</MenuItem>

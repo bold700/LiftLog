@@ -73,6 +73,11 @@ service cloud.firestore {
     function isStaffInSameOrg() {
       return isTrainerOrAdmin() && sameOrg();
     }
+    // Btw-tarief van een plan: de drie Nederlandse tarieven, of niet meegegeven (dan geldt het standaardtarief).
+    function validVatRate() {
+      return !('vatRate' in request.resource.data) || request.resource.data.vatRate in [0, 9, 21];
+    }
+
     /** Idem, maar voor een document dat nog niet bestaat: dan telt de studio in de aanvraag. */
     function isStaffInSameOrgForNew() {
       return isTrainerOrAdmin() && writesMyOrg();
@@ -393,8 +398,9 @@ service cloud.firestore {
         && request.resource.data.name.size() > 0
         && request.resource.data.period in ['month', 'once']
         && request.resource.data.price is number
-        && request.resource.data.price >= 0;
-      allow update: if isSignedIn() && sameOrg() && writesMyOrg() && isTrainerOrAdmin();
+        && request.resource.data.price >= 0
+        && validVatRate();
+      allow update: if isSignedIn() && sameOrg() && writesMyOrg() && isTrainerOrAdmin() && validVatRate();
       allow delete: if isSignedIn() && sameOrg() && isTrainerOrAdmin();
     }
 

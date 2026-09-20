@@ -7,6 +7,8 @@
  * saldo en herkomst nooit uit elkaar lopen. De zuivere functies staan bovenaan en worden getest.
  */
 
+import { reserveInvoiceNumber, vatRateOf } from './invoice.mjs';
+
 /** Zoveel maanden verder, op dezelfde dag van de maand (31 januari + 1 → 28/29 februari). */
 export function addMonths(iso, months) {
   const d = new Date(iso);
@@ -91,9 +93,11 @@ export function periodOf(iso) {
 
 /**
  * Openstaande post voor een periode van een plan (Beheer → Facturatie). Gratis plannen krijgen
- * geen post. Betalen gebeurt (nog) buiten de app; staf zet de post op betaald.
+ * geen post. Betalen gebeurt (nog) buiten de app; staf zet de post op betaald. Het factuurnummer
+ * komt van `reserveInvoiceNumber` in dezelfde transactie; het btw-tarief van het plan reist mee,
+ * zodat een latere tariefwijziging oude facturen niet verandert.
  */
-export function newCharge({ id, orgId, userId, plan, membershipId, periodStartIso, nowIso }) {
+export function newCharge({ id, orgId, userId, plan, membershipId, periodStartIso, nowIso, invoiceNumber = null }) {
   const monthly = plan.period === 'month';
   const period = monthly ? periodOf(periodStartIso) : null;
   return {
@@ -112,6 +116,9 @@ export function newCharge({ id, orgId, userId, plan, membershipId, periodStartIs
     paidAt: null,
     paidBy: null,
     note: '',
+    vatRate: vatRateOf(plan.vatRate),
+    invoiceNumber,
+    invoiceIssuedAt: invoiceNumber ? nowIso : null,
     createdAt: nowIso,
     updatedAt: nowIso,
   };
@@ -135,14 +142,20 @@ export async function settleMembership(db, newId, membershipRef, nowIso) {
     const accountRef = db.collection('creditAccounts').doc(accountId(m.orgId, m.userId));
     const aSnap = await tx.get(accountRef);
     const balance = Number(aSnap.exists ? aSnap.data().balance : 0) || 0;
+    // Studiodocument voor de factuurteller: lezen vóór de eerste write (Firestore eist dat).
+    const orgRef = db.collection('orgs').doc(m.orgId);
+    const orgSnap = await tx.get(orgRef);
 
     const result = planRenewals(m, plan, balance, nowIso);
     if (result.steps.length === 0) return { steps: 0 };
 
+    let counterSnap = orgSnap;
     for (const step of result.steps) {
-      // Elke verlenging van een betaald plan is een post op Facturatie.
+      // Elke verlenging van een betaald plan is een post op Facturatie, met een eigen factuurnummer.
       if (step.kind === 'renewal' && (Number(plan.price) || 0) > 0) {
-        const charge = newCharge({ id: newId('ch'), orgId: m.orgId, userId: m.userId, plan, membershipId: mSnap.id, periodStartIso: step.periodStart, nowIso });
+        const invoiceNumber = reserveInvoiceNumber(tx, orgRef, counterSnap, nowIso);
+        counterSnap = bumpedCounter(counterSnap);
+        const charge = newCharge({ id: newId('ch'), orgId: m.orgId, userId: m.userId, plan, membershipId: mSnap.id, periodStartIso: step.periodStart, nowIso, invoiceNumber });
         tx.set(db.collection('charges').doc(charge.id), charge);
       }
       if (step.delta === 0) continue;
@@ -161,6 +174,18 @@ export async function settleMembership(db, newId, membershipRef, nowIso) {
     tx.set(membershipRef, { ...result.membership, updatedAt: nowIso }, { merge: true });
     return { steps: result.steps.length };
   });
+}
+
+/**
+ * Meerdere nummers in één transactie: de teller in Firestore is pas na de commit bijgewerkt, dus
+ * we schuiven hem hier in het geheugen door voor de volgende post.
+ */
+export function bumpedCounter(orgSnap) {
+  const data = orgSnap.exists ? orgSnap.data() : {};
+  const b = data.business && typeof data.business === 'object' ? data.business : {};
+  const next = Math.max(1, Math.trunc(Number(b.nextInvoiceNumber) || 1)) + 1;
+  const bumped = { ...data, business: { ...b, nextInvoiceNumber: next } };
+  return { exists: true, data: () => bumped };
 }
 
 /** Actief lidmaatschap van iemand in een studio, of null. */

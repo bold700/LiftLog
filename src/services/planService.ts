@@ -9,7 +9,7 @@ import { collection, deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, wh
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
 import { callBooking } from './classService';
-import type { Membership, Plan } from '../types';
+import { DEFAULT_VAT_RATE, VAT_RATES, type Membership, type Plan, type VatRate } from '../types';
 
 const PLANS = 'plans';
 const MEMBERSHIPS = 'memberships';
@@ -19,6 +19,12 @@ const num = (v: unknown, fallback: number) => {
   return Number.isFinite(n) ? n : fallback;
 };
 const str = (v: unknown) => (typeof v === 'string' ? v : null);
+
+/** Alleen 0, 9 of 21; een plan van vóór de btw-instelling telt als het standaardtarief. */
+export function toVatRate(raw: unknown): VatRate {
+  const n = Number(raw);
+  return (VAT_RATES as readonly number[]).includes(n) ? (n as VatRate) : DEFAULT_VAT_RATE;
+}
 
 function toPlan(data: Record<string, unknown>, id: string): Plan {
   return {
@@ -32,6 +38,7 @@ function toPlan(data: Record<string, unknown>, id: string): Plan {
     rollover: data.rollover === 'carry' ? 'carry' : 'expire',
     availableTo: data.availableTo === 'invite' ? 'invite' : 'all',
     status: data.status === 'paused' ? 'paused' : 'active',
+    vatRate: toVatRate(data.vatRate),
     createdAt: str(data.createdAt) ?? '',
     updatedAt: str(data.updatedAt) ?? '',
   };
@@ -78,6 +85,7 @@ export async function savePlan(input: Omit<Plan, 'orgId' | 'createdAt' | 'update
       rollover: input.rollover,
       availableTo: input.availableTo,
       status: input.status,
+      vatRate: input.vatRate,
       createdAt: input.createdAt || new Date().toISOString(),
       updatedAt: serverTimestamp(),
     },

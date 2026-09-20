@@ -12,6 +12,8 @@ import { applyCors } from './_lib/cors.mjs';
  *   { action: 'book',    classId }                     sporter reserveert (of komt op de wachtlijst)
  *   { action: 'cancel',  bookingId }                   afmelden; credit terug binnen de annuleertermijn
  *   { action: 'grant',   userId, amount, note }        credits toekennen (alleen trainer/beheerder)
+ *   { action: 'assign' | 'unassign' | 'renewDue' }     abonnementen (zie onder)
+ *   { action: 'invoice', chargeId }                    factuur-PDF van een post (staf, of het lid zelf)
  *
  * Beveiliging:
  *  - Vereist een geldig Firebase ID-token (Bearer).
@@ -22,6 +24,8 @@ import { getAdmin } from './_lib/firebaseAdmin.mjs';
 import { orgIdOf, newId } from './_lib/liftlogData.mjs';
 import { FieldValue } from 'firebase-admin/firestore';
 import { activeMembership, newCharge, newMembership, settleMembership } from './_lib/subscriptions.mjs';
+import { businessOf, reserveInvoiceNumber, vatRateOf } from './_lib/invoice.mjs';
+import { buildInvoicePdf, invoiceFileName } from './_lib/invoicePdf.mjs';
 
 const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
 
@@ -116,6 +120,8 @@ export default async function handler(req, res) {
       case 'renewDue':
         if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan verlengingen verwerken.', build: BUILD });
         return await renewDue(res, db, myOrgs, body);
+      case 'invoice':
+        return await invoice(res, db, uid, myOrgs, isStaff, String(body.chargeId ?? '').trim());
       default:
         return json(res, 400, { error: 'Onbekende actie.', build: BUILD });
     }
@@ -419,11 +425,14 @@ async function assign(res, db, uid, myOrgs, body) {
     const accountRef = db.collection('creditAccounts').doc(accountId(orgId, targetUserId));
     const aSnap = await tx.get(accountRef);
     const saldo = Number(aSnap.exists ? aSnap.data().balance : 0) || 0;
+    const orgRef = db.collection('orgs').doc(orgId);
+    const orgSnap = await tx.get(orgRef);
     if (current) tx.set(db.collection('memberships').doc(current.id), { status: 'cancelled', cancelledAt: nowIso, updatedAt: nowIso }, { merge: true });
     tx.set(db.collection('memberships').doc(membership.id), membership);
-    // Eerste post: de eerste periode (maand of de kaart zelf), tenzij het plan gratis is.
+    // Eerste post: de eerste periode (maand of de kaart zelf), tenzij het plan gratis is. Met factuurnummer.
     if ((Number(plan.price) || 0) > 0) {
-      const charge = newCharge({ id: newId('ch'), orgId, userId: targetUserId, plan, membershipId: membership.id, periodStartIso: nowIso, nowIso });
+      const invoiceNumber = reserveInvoiceNumber(tx, orgRef, orgSnap, nowIso);
+      const charge = newCharge({ id: newId('ch'), orgId, userId: targetUserId, plan, membershipId: membership.id, periodStartIso: nowIso, nowIso, invoiceNumber });
       tx.set(db.collection('charges').doc(charge.id), charge);
     }
     if (credits > 0) {
@@ -476,4 +485,74 @@ async function renewDue(res, db, myOrgs, body) {
     steps += r.steps;
   }
   return json(res, 200, { memberships: snap.size, steps, build: BUILD });
+}
+
+// --- Facturen ---------------------------------------------------------------------
+
+/** Logo van de studio als data-URL voor in de PDF; alleen PNG en JPEG, anders null. */
+async function fetchLogo(url) {
+  if (!url) return null;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const type = String(r.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+    if (type !== 'image/png' && type !== 'image/jpeg') return null;
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length > 2 * 1024 * 1024) return null;
+    return `data:${type};base64,${buf.toString('base64')}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Factuur-PDF van een post. Staf van de studio mag elke post; een lid alleen zijn eigen. Een post
+ * van vóór de nummering krijgt bij de eerste aanvraag alsnog een nummer, in een transactie, zodat
+ * de reeks doorloopt zonder gaten. Het antwoord draagt de PDF als base64.
+ */
+async function invoice(res, db, uid, myOrgs, isStaff, chargeId) {
+  if (!chargeId) return json(res, 400, { error: 'Geen post opgegeven.', build: BUILD });
+  const ref = db.collection('charges').doc(chargeId);
+  const snap = await ref.get();
+  if (!snap.exists) return json(res, 404, { error: 'Post niet gevonden.', build: BUILD });
+  let charge = { id: snap.id, ...snap.data() };
+  const orgId = orgIdOf(charge.orgId);
+  const mine = String(charge.userId) === uid;
+  if (!(mine || (isStaff && myOrgs.includes(orgId)))) return json(res, 403, { error: 'Deze post is niet van jou.', build: BUILD });
+
+  if (!charge.invoiceNumber) {
+    const nowIso = new Date().toISOString();
+    charge = await db.runTransaction(async (tx) => {
+      const cSnap = await tx.get(ref);
+      const c = { id: cSnap.id, ...cSnap.data() };
+      if (c.invoiceNumber) return c;
+      const orgRef = db.collection('orgs').doc(orgId);
+      const orgSnap = await tx.get(orgRef);
+      const invoiceNumber = reserveInvoiceNumber(tx, orgRef, orgSnap, nowIso);
+      const patch = { invoiceNumber, invoiceIssuedAt: nowIso, vatRate: vatRateOf(c.vatRate), updatedAt: nowIso };
+      tx.set(ref, patch, { merge: true });
+      return { ...c, ...patch };
+    });
+  }
+
+  const [orgSnap, memberSnap] = await Promise.all([db.collection('orgs').doc(orgId).get(), db.collection('profiles').doc(String(charge.userId)).get()]);
+  const org = orgSnap.exists ? orgSnap.data() : {};
+  const memberData = memberSnap.exists ? memberSnap.data() : {};
+  const lang = memberData.language === 'en' ? 'en' : 'nl';
+  const business = businessOf({ ...org, name: org.name || orgId });
+  const logoDataUrl = await fetchLogo(org.branding?.logoUrl);
+  const pdf = buildInvoicePdf({
+    lang,
+    business,
+    charge,
+    member: { name: String(memberData.displayName || memberData.email || charge.userId), email: String(memberData.email || '') },
+    logoDataUrl,
+    brandColor: org.branding?.seedColor ?? null,
+  });
+  return json(res, 200, {
+    invoiceNumber: charge.invoiceNumber,
+    fileName: invoiceFileName(lang, charge.invoiceNumber),
+    pdfBase64: Buffer.from(pdf).toString('base64'),
+    build: BUILD,
+  });
 }

@@ -305,3 +305,45 @@ describe('credits toekennen', () => {
     expect(store['creditAccounts/vanas__sporter1'].balance).toBe(3);
   });
 });
+
+describe('facturen', () => {
+  const seedPlan = () => {
+    store['plans/pl1'] = { orgId: 'vanas', name: 'Maand 8', period: 'month', price: 139, credits: 8, rollover: 'expire', vatRate: 9 };
+    store['orgs/vanas'] = { name: 'Van As Personal Training', business: { legalName: 'Van As PT', invoicePrefix: 'VAS-2026-', nextInvoiceNumber: 142 } };
+  };
+
+  it('koppelen geeft de eerste post een factuurnummer en schuift de teller door', async () => {
+    seedPlan();
+    const res = await post({ action: 'assign', userId: 'sporter1', planId: 'pl1' }, 'trainer1');
+    expect(res.statusCode).toBe(200);
+    const charge = Object.entries(store).find(([k]) => k.startsWith('charges/'))[1];
+    expect(charge).toMatchObject({ userId: 'sporter1', amount: 139, vatRate: 9, invoiceNumber: 'VAS-2026-0142', status: 'open' });
+    expect(charge.invoiceIssuedAt).toBeTruthy();
+    expect(store['orgs/vanas'].business.nextInvoiceNumber).toBe(143);
+  });
+
+  it('een lid haalt zijn eigen factuur op, een ander lid niet; een oude post krijgt alsnog een nummer', async () => {
+    store['charges/ch1'] = { orgId: 'vanas', userId: 'sporter1', planName: 'Maand 8', description: 'Maand 8 · 2026-09', amount: 139, period: '2026-09', status: 'open', issuedAt: '2026-09-01T00:00:00.000Z', dueAt: '2026-09-01T00:00:00.000Z' };
+    const ander = await post({ action: 'invoice', chargeId: 'ch1' }, 'sporter2');
+    expect(ander.statusCode).toBe(403);
+
+    const eigen = await post({ action: 'invoice', chargeId: 'ch1' }, 'sporter1');
+    expect(eigen.statusCode).toBe(200);
+    expect(eigen.body.invoiceNumber).toMatch(/^\d{4}-0001$/);
+    expect(eigen.body.fileName).toBe(`Factuur-${eigen.body.invoiceNumber}.pdf`);
+    expect(eigen.body.pdfBase64.startsWith('JVBERi')).toBe(true);
+    expect(store['charges/ch1']).toMatchObject({ invoiceNumber: eigen.body.invoiceNumber, vatRate: 9 });
+
+    // De staf krijgt dezelfde factuur: het nummer verandert niet meer.
+    const staf = await post({ action: 'invoice', chargeId: 'ch1' }, 'trainer1');
+    expect(staf.statusCode).toBe(200);
+    expect(staf.body.invoiceNumber).toBe(eigen.body.invoiceNumber);
+    expect(store['orgs/vanas'].business.nextInvoiceNumber).toBe(2);
+  });
+
+  it('weigert een factuur van een andere studio voor staf', async () => {
+    store['charges/chB'] = { orgId: 'studiob', userId: 'sporterB', planName: 'B', amount: 50, status: 'open' };
+    const res = await post({ action: 'invoice', chargeId: 'chB' }, 'trainer1');
+    expect(res.statusCode).toBe(403);
+  });
+});

@@ -4,7 +4,8 @@ import type { Charge } from '../../src/types';
 
 const charge = (extra: Partial<Charge> = {}): Charge => ({
   id: 'ch1', orgId: 'vanas', userId: 'u1', membershipId: 'm1', planId: 'p1', planName: 'Maand 8', description: 'Maand 8 · 2026-09',
-  amount: 139, period: '2026-09', issuedAt: '2026-09-01T00:00:00.000Z', dueAt: '2026-09-01T00:00:00.000Z', status: 'open', paidAt: null, note: '', ...extra,
+  amount: 139, period: '2026-09', issuedAt: '2026-09-01T00:00:00.000Z', dueAt: '2026-09-01T00:00:00.000Z', status: 'open', paidAt: null, note: '',
+  vatRate: 9, invoiceNumber: 'VAS-2026-0142', invoiceIssuedAt: '2026-09-01T00:00:00.000Z', ...extra,
 });
 
 describe('facturatie', () => {
@@ -18,7 +19,14 @@ describe('facturatie', () => {
   it('exporteert een CSV met kopregel, puntkomma en ontsnapte aanhalingstekens', () => {
     const csv = chargesToCsv([charge({ note: 'zei "later"' })], () => 'Jan de Vries');
     const lines = csv.split('\n');
-    expect(lines[0]).toBe('"Lid";"Omschrijving";"Periode";"Vervaldatum";"Bedrag";"Status";"Betaald op";"Notitie"');
-    expect(lines[1]).toBe('"Jan de Vries";"Maand 8 · 2026-09";"2026-09";"2026-09-01";"139.00";"open";"";"zei ""later"""');
+    expect(lines[0]).toBe('"Factuurnummer";"Lid";"Omschrijving";"Periode";"Vervaldatum";"Bedrag";"Excl. btw";"Btw";"Btw %";"Status";"Betaald op";"Notitie"');
+    expect(lines[1]).toBe('"VAS-2026-0142";"Jan de Vries";"Maand 8 · 2026-09";"2026-09";"2026-09-01";"139.00";"127.52";"11.48";"9";"open";"";"zei ""later"""');
+  });
+});
+
+describe('btw in de app', () => {
+  it('splitst hetzelfde als de server', async () => {
+    const { vatSplit } = await import('../../src/services/chargeService');
+    expect(vatSplit(139, 9)).toEqual({ incl: 139, excl: 127.52, vat: 11.48, rate: 9 });
   });
 });
