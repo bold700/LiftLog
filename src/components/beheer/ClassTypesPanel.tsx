@@ -330,7 +330,7 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         )}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 1.5 }}>
           {draft.schedule.map((slot, i) => (
-            <Box key={i} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Box key={i} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <TextField
                 select
                 size="small"
