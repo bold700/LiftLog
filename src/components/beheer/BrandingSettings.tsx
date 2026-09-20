@@ -10,14 +10,15 @@ import { Alert, Box, Button, Chip, CircularProgress, TextField, Typography } fro
 import UploadRoundedIcon from '@mui/icons-material/UploadRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { ContentCard } from '../layout';
+import { PaymentsSettings } from './PaymentsSettings';
 import { useI18n } from '../../context/I18nContext';
 import { useProfile } from '../../context/ProfileContext';
 import { useBranding } from '../../context/BrandingContext';
 import { useNotify } from '../../context/NotifyContext';
-import { getOrg, saveOrg, saveOrgBranding, saveOrgBusiness } from '../../services/orgService';
+import { getOrg, saveOrg, saveOrgBranding, saveOrgBusiness, toPaymentsStatus } from '../../services/orgService';
 import { deleteOrgLogo, makePrintLogoFromUrl, uploadOrgLogo } from '../../services/orgLogoService';
 import { isHexColor, parseThemeBuilderExport, resolveScheme, SWATCH_KEYS, type LightScheme } from '../../theme/brandingTheme';
-import type { OrgBranding, OrgBusiness } from '../../types';
+import type { OrgBranding, OrgBusiness, OrgPaymentsStatus } from '../../types';
 
 const THEME_BUILDER_URL = 'https://material-foundation.github.io/material-theme-builder/';
 
@@ -59,6 +60,7 @@ export function BrandingSettings() {
   const [uploading, setUploading] = useState(false);
   const [business, setBusiness] = useState<OrgBusiness>(() => emptyBusiness(''));
   const [savingBusiness, setSavingBusiness] = useState(false);
+  const [payments, setPayments] = useState<OrgPaymentsStatus>(() => toPaymentsStatus(null));
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -83,6 +85,7 @@ export function BrandingSettings() {
       }
       setExportText(org.branding?.lightScheme ? JSON.stringify({ schemes: { light: org.branding.lightScheme } }, null, 2) : '');
       setBusiness(org.business ?? emptyBusiness(org.name));
+      setPayments(org.payments);
       setLoaded(true);
     });
     return () => {
@@ -370,6 +373,9 @@ export function BrandingSettings() {
           </Box>
         </Box>
       </ContentCard>
+
+      {/* Betalingen: elk bedrijf koppelt zijn eigen Mollie-account (ontwerp "Payments — Mollie") */}
+      <PaymentsSettings orgId={orgId} payments={payments} onChange={setPayments} />
       </Box>
 
       {/* Voorbeeld */}

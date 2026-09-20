@@ -311,6 +311,12 @@ export interface Org {
   branding?: OrgBranding | null;
   /** Bedrijfsgegevens voor op de factuur (Beheer → Huisstijl). Ontbreekt dit, dan staat alleen de naam op de factuur. */
   business?: OrgBusiness | null;
+  /**
+   * Status van de betaalkoppeling (Beheer → Huisstijl → Betalingen). Nooit de sleutels zelf: die
+   * staan los in `orgSecrets/{orgId}`, ongelezen door de client. Alleen wat een beheerder mag
+   * zien: welke modus actief is en, per modus, de laatste vier tekens en wanneer gekoppeld.
+   */
+  payments: OrgPaymentsStatus;
   createdAt: string;
   updatedAt: string;
 }
@@ -326,6 +332,24 @@ export interface Org {
  * factuur moet naam, adres, KvK- en btw-nummer dragen; de rest is service voor het lid. De nummering
  * loopt per studio door zonder gaten: de server kent bij elke nieuwe post het volgende nummer toe.
  */
+/**
+ * Elk bedrijf koppelt zijn eigen Mollie-account: het geld gaat rechtstreeks naar hun rekening,
+ * dus dit is geen omgevingsvariabele van het platform (zoals Resend) maar een instelling per
+ * studio. De sleutels zelf staan nooit op dit object; alleen het zichtbare restje.
+ */
+export interface OrgPaymentsStatus {
+  provider: 'mollie';
+  /** Welke sleutel een nieuwe betaallink gebruikt zodra die functie gebouwd is. */
+  mode: 'test' | 'live';
+  testKeyLast4: string | null;
+  liveKeyLast4: string | null;
+  testConnectedAt: string | null;
+  liveConnectedAt: string | null;
+  /** Naam van de Mollie-organisatie die de sleutel opleverde, ter herkenning ("Verbonden met …"). */
+  testOrganizationName: string | null;
+  liveOrganizationName: string | null;
+}
+
 export interface OrgBusiness {
   legalName: string;
   street: string;
