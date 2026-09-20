@@ -37,12 +37,6 @@
       "maxDuration": 30
     }
   },
-  "crons": [
-    {
-      "path": "/api/generate-classes",
-      "schedule": "0 3 * * *"
-    }
-  ],
   "rewrites": [
     {
       "source": "/f/:token",
