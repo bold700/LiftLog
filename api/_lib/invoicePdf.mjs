@@ -152,7 +152,8 @@ export function buildInvoicePdf({ lang, business, charge, member, logoDataUrl = 
       const ratio = props.width && props.height ? props.width / props.height : 1;
       const w = ratio >= 1 ? box : box * ratio;
       const h = ratio >= 1 ? box / ratio : box;
-      doc.addImage(logoDataUrl, props.fileType === 'JPEG' ? 'JPEG' : 'PNG', M, y - 6, w, h);
+      // 'FAST' = gecomprimeerd opslaan; zonder dat is het logo als ruwe pixels honderden kB.
+      doc.addImage(logoDataUrl, props.fileType === 'JPEG' ? 'JPEG' : 'PNG', M, y - 6, w, h, undefined, 'FAST');
       nameX = M + box + 14;
     } catch {
       /* logo overslaan als het niet leesbaar is */
