@@ -1,15 +1,24 @@
 /**
  * Terugkerende lessen (Beheer → Lessoorten → "Terugkerend"): een lessoort met een `schedule`
  * (bijv. "elke donderdag 19:00") hoeft niet elke week met de hand op het rooster gezet te worden.
- * `api/generate-classes.mjs` roept `missingOccurrences` hier dagelijks voor aan en zet de
- * ontbrekende lessen zelf op het rooster, tot `weeksAhead` weken vooruit.
+ * De cron-actie in api/booking.mjs (?cron=generateClasses) roept `missingOccurrences` hier
+ * dagelijks voor aan en zet de ontbrekende lessen zelf op het rooster, tot `weeksAhead` weken
+ * vooruit.
  *
- * Puur en zonder Firestore, zodat dit los te testen is; de cron-endpoint doet het lezen/schrijven.
+ * Puur en zonder Firestore, zodat dit los te testen is; booking.mjs doet het lezen/schrijven.
  */
 
 /** Deterministieke id, zodat "bestaat deze les al" een simpele lookup is en er nooit een dubbele ontstaat. */
 export function classIdForOccurrence(classTypeId, date, startTime) {
   return `cls_gen_${classTypeId}_${date}_${startTime.replace(':', '')}`;
+}
+
+/** "09:00" + 60 → "10:00"; blijft binnen de dag (loopt niet door naar de volgende). */
+export function addMinutes(hhmm, minutes) {
+  const [h, m] = hhmm.split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return hhmm;
+  const total = Math.min(h * 60 + m + minutes, 23 * 60 + 59);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
 function isoDay(d) {

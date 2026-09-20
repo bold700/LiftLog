@@ -36,17 +36,10 @@ import {
   type Booking,
 } from '../services/classService';
 import { designTokens } from '../theme/designTokens';
+import { addMinutes } from '../utils/format';
 import type { ClassType, Profile } from '../types';
 
 const today = () => new Date().toISOString().slice(0, 10);
-
-/** "09:00" + 60 → "10:00"; blijft binnen de dag. */
-function addMinutes(hhmm: string, minutes: number): string {
-  const [h, m] = hhmm.split(':').map(Number);
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return hhmm;
-  const total = Math.min(h * 60 + m + minutes, 23 * 60 + 59);
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-}
 
 const dayLabel = (date: string) =>
   new Date(`${date}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });

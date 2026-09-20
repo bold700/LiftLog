@@ -29,6 +29,7 @@ import { deleteClassType, getClassTypes, newClassTypeId, saveClassType } from '.
 import { getWorkoutsForUser } from '../../services/workoutFirestore';
 import { NumberField } from '../NumberField';
 import { designTokens } from '../../theme/designTokens';
+import { addMinutes } from '../../utils/format';
 import type { ClassScheduleSlot, ClassType, Profile, Schema } from '../../types';
 
 /** Volgorde in de dropdown: maandag eerst, ook al is weekday 0 (zondag) in het datamodel. */
@@ -323,6 +324,9 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
                 InputLabelProps={{ shrink: true }}
                 sx={{ width: 120 }}
               />
+              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 70 }}>
+                {t('classTypes.schedule.endsAt', { time: addMinutes(slot.startTime, Number(draft.durationMin) || 60) })}
+              </Typography>
               <IconButton
                 size="small"
                 aria-label={t('classTypes.schedule.removeSlot')}
