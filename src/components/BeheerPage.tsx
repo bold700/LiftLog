@@ -349,7 +349,7 @@ export function BeheerPage() {
   const header = (
     <>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 1.5 }}>
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>
+        <Typography variant="h5" sx={{ fontWeight: 600, display: { xs: 'none', md: 'block' } }}>
           {t('admin.title')}
         </Typography>
         {section === 'lessoorten' ? (
