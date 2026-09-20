@@ -5,6 +5,7 @@
 import { collection, deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
+import { callBooking } from './classService';
 import type { ClassScheduleSlot, ClassType, SessionKind } from '../types';
 
 const COLLECTION = 'classTypes';
@@ -85,4 +86,15 @@ export async function saveClassType(input: Omit<ClassType, 'orgId' | 'createdAt'
 export async function deleteClassType(id: string): Promise<void> {
   if (!isFirebaseConfigured() || !db) return;
   await deleteDoc(doc(db, COLLECTION, id));
+}
+
+/**
+ * Rooster meteen vullen voor deze lessoort, in plaats van tot de volgende dagelijkse cron te
+ * wachten. Aanroepen nadat een lessoort met een terugkerend weekmoment is opgeslagen, anders zou
+ * de eerste les pas de volgende dag verschijnen.
+ */
+export function generateClassOccurrencesNow(
+  classTypeId: string
+): Promise<{ created: number; autoBooked: number; autoWaitlisted: number; autoSkippedNoCredits: number }> {
+  return callBooking({ action: 'generateClassOccurrences', classTypeId });
 }

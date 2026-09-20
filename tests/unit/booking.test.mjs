@@ -813,3 +813,39 @@ describe('terugkerende lessen (cron)', () => {
     });
   });
 });
+
+describe('rooster meteen vullen na het opslaan van een lessoort', () => {
+  beforeEach(() => {
+    store['classTypes/ct5'] = {
+      orgId: 'vanas', name: 'Kickboksen', capacity: 12, creditCost: 1,
+      defaultTrainerId: 'trainer1', schemaId: null,
+      schedule: [{ weekday: new Date().getDay(), startTime: '19:00', endTime: '20:00' }],
+    };
+  });
+
+  it('zet de les op het rooster zonder op de cron te wachten', async () => {
+    const res = await post({ action: 'generateClassOccurrences', classTypeId: 'ct5' }, 'trainer1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.created).toBeGreaterThan(0);
+    const todayIso2 = new Date().toISOString().slice(0, 10);
+    expect(store[`classes/cls_gen_ct5_${todayIso2}_1900`]).toMatchObject({ title: 'Kickboksen', classTypeId: 'ct5' });
+  });
+
+  it('weigert dit voor een sporter', async () => {
+    const res = await post({ action: 'generateClassOccurrences', classTypeId: 'ct5' }, 'sporter1');
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('weigert een lessoort van een andere studio', async () => {
+    store['classTypes/ct5'].orgId = 'studiob';
+    const res = await post({ action: 'generateClassOccurrences', classTypeId: 'ct5' }, 'trainer1');
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('doet niets voor een lessoort zonder schema, in plaats van te crashen', async () => {
+    store['classTypes/ct6'] = { orgId: 'vanas', name: 'Losse les', schedule: [], defaultTrainerId: null };
+    const res = await post({ action: 'generateClassOccurrences', classTypeId: 'ct6' }, 'trainer1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.created).toBe(0);
+  });
+});

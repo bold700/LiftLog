@@ -121,6 +121,7 @@ export const nl = {
       start: 'Van',
       end: 'Tot',
       timeInvalid: 'Eindtijd moet na de starttijd liggen.',
+      generateFailed: 'Lessoort opgeslagen, maar het rooster kon niet meteen gevuld worden. Dat gebeurt automatisch bij de volgende dagelijkse update.',
       weekdayLabels: {
         sun: 'Zondag',
         mon: 'Maandag',
