@@ -6,6 +6,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -30,7 +31,7 @@ import { getWorkoutsForUser } from '../../services/workoutFirestore';
 import { NumberField } from '../NumberField';
 import { designTokens } from '../../theme/designTokens';
 import { addMinutes } from '../../utils/format';
-import type { ClassScheduleSlot, ClassType, Profile, Schema } from '../../types';
+import type { ClassScheduleSlot, ClassType, Profile, Schema, SessionKind } from '../../types';
 
 /** Volgorde in de dropdown: maandag eerst, ook al is weekday 0 (zondag) in het datamodel. */
 const WEEKDAY_ORDER: { weekday: number; key: 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun' }[] = [
@@ -42,6 +43,9 @@ const WEEKDAY_ORDER: { weekday: number; key: 'mon' | 'tue' | 'wed' | 'thu' | 'fr
   { weekday: 6, key: 'sat' },
   { weekday: 0, key: 'sun' },
 ];
+
+/** Vorm van de sessie (Figma-legenda "05 · Schedule"), voor filtering/kleur op het rooster. */
+const SESSION_KINDS: SessionKind[] = ['1on1', 'duo', 'group', 'concept'];
 
 interface ClassTypesPanelProps {
   /** Trainers en beheerders van de studio, voor "Vaste trainer". */
@@ -59,10 +63,23 @@ interface Draft {
   defaultTrainerId: string;
   schemaId: string;
   schedule: ClassScheduleSlot[];
+  room: string;
+  sessionKind: SessionKind;
   createdAt?: string;
 }
 
-const emptyDraft = (): Draft => ({ id: newClassTypeId(), name: '', durationMin: '60', capacity: '8', creditCost: '1', defaultTrainerId: '', schemaId: '', schedule: [] });
+const emptyDraft = (): Draft => ({
+  id: newClassTypeId(),
+  name: '',
+  durationMin: '60',
+  capacity: '8',
+  creditCost: '1',
+  defaultTrainerId: '',
+  schemaId: '',
+  schedule: [],
+  room: '',
+  sessionKind: 'group',
+});
 const toDraft = (c: ClassType): Draft => ({
   id: c.id,
   name: c.name,
@@ -72,6 +89,8 @@ const toDraft = (c: ClassType): Draft => ({
   defaultTrainerId: c.defaultTrainerId ?? '',
   schemaId: c.schemaId ?? '',
   schedule: c.schedule,
+  room: c.room ?? '',
+  sessionKind: c.sessionKind,
   createdAt: c.createdAt || undefined,
 });
 
@@ -132,11 +151,17 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         `${c.durationMin} min`,
         c.capacity == null ? t('classTypes.noLimit') : t('classTypes.people', { count: c.capacity }),
         staffName(c.defaultTrainerId),
-      ].join(' · '),
+        c.room,
+      ]
+        .filter(Boolean)
+        .join(' · '),
     [staffName, t]
   );
 
   const isNew = useMemo(() => !!draft && !types.some((c) => c.id === draft.id), [draft, types]);
+
+  /** Al gebruikte ruimtenamen, als suggesties — geen aparte lijst om te beheren, gewoon vrije tekst. */
+  const roomOptions = useMemo(() => Array.from(new Set(types.map((c) => c.room).filter((r): r is string => !!r))).sort(), [types]);
 
   const save = async () => {
     if (!draft) return;
@@ -159,6 +184,8 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         defaultTrainerId: draft.defaultTrainerId || null,
         schemaId: draft.schemaId || null,
         schedule: draft.schedule,
+        room: draft.room.trim() || null,
+        sessionKind: draft.sessionKind,
         createdAt: draft.createdAt,
       });
       notify.success(t('classTypes.saved'));
@@ -256,6 +283,24 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
       <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
         <NumberField label={t('classTypes.duration')} size="small" fullWidth value={draft.durationMin} onChange={(v) => setDraft({ ...draft, durationMin: v })} />
         <NumberField label={t('classTypes.capacity')} size="small" fullWidth value={draft.capacity} onChange={(v) => setDraft({ ...draft, capacity: v })} helperText={t('classTypes.capacityHelp')} />
+      </Box>
+      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+        <TextField select label={t('classTypes.sessionKind')} size="small" fullWidth value={draft.sessionKind} onChange={(e) => setDraft({ ...draft, sessionKind: e.target.value as SessionKind })}>
+          {SESSION_KINDS.map((k) => (
+            <MenuItem key={k} value={k}>
+              {t(`classTypes.sessionKinds.${k}`)}
+            </MenuItem>
+          ))}
+        </TextField>
+        <Autocomplete
+          freeSolo
+          size="small"
+          fullWidth
+          options={roomOptions}
+          value={draft.room}
+          onInputChange={(_, v) => setDraft({ ...draft, room: v })}
+          renderInput={(params) => <TextField {...params} label={t('classTypes.room')} />}
+        />
       </Box>
       <TextField select label={t('classTypes.creditCost')} size="small" fullWidth value={draft.creditCost} onChange={(e) => setDraft({ ...draft, creditCost: e.target.value })}>
         {['0', '1', '2', '3', '4'].map((v) => (

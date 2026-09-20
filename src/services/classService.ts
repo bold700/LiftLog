@@ -9,6 +9,7 @@ import { collection, deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, wh
 import { auth, db, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
 import { apiUrl } from '../utils/apiOrigin';
+import type { SessionKind } from '../types';
 
 const CLASSES = 'classes';
 const BOOKINGS = 'bookings';
@@ -33,6 +34,10 @@ export interface StudioClass {
   schemaId: string | null;
   /** Lessoort waaruit deze les is gemaakt (Beheer → Lessoorten); null bij een losse les. */
   classTypeId: string | null;
+  /** Waar dit plaatsvindt; null = geen vaste ruimte. */
+  room: string | null;
+  /** 1-op-1, Duo PT, Groep of Concept — voor de legenda/kleur op het rooster. */
+  sessionKind: SessionKind;
   cancelledAt: string | null;
   createdAt: string;
 }
@@ -56,6 +61,7 @@ const num = (v: unknown, fallback = 0) => {
   const n = typeof v === 'number' ? v : Number(v);
   return Number.isFinite(n) ? n : fallback;
 };
+const toSessionKind = (v: unknown): SessionKind => (v === '1on1' || v === 'duo' || v === 'concept' ? v : 'group');
 
 function toClass(data: Record<string, unknown>, id: string): StudioClass {
   return {
@@ -72,6 +78,8 @@ function toClass(data: Record<string, unknown>, id: string): StudioClass {
     waitlistCount: num(data.waitlistCount),
     schemaId: data.schemaId ? str(data.schemaId) : null,
     classTypeId: typeof data.classTypeId === 'string' ? data.classTypeId : null,
+    room: data.room ? str(data.room) : null,
+    sessionKind: toSessionKind(data.sessionKind),
     cancelledAt: data.cancelledAt ? str(data.cancelledAt) : null,
     createdAt: str(data.createdAt),
   };
@@ -174,6 +182,8 @@ export async function saveClass(
       creditCost: input.creditCost,
       schemaId: input.schemaId,
       classTypeId: input.classTypeId ?? null,
+      room: input.room ?? null,
+      sessionKind: input.sessionKind,
       createdAt: input.createdAt ?? new Date().toISOString(),
       updatedAt: serverTimestamp(),
     },
@@ -198,6 +208,8 @@ export async function createClass(
     creditCost: input.creditCost,
     schemaId: input.schemaId,
     classTypeId: input.classTypeId ?? null,
+    room: input.room ?? null,
+    sessionKind: input.sessionKind,
     bookedCount: 0,
     waitlistCount: 0,
     createdAt: new Date().toISOString(),

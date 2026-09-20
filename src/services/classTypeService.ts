@@ -5,7 +5,7 @@
 import { collection, deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
-import type { ClassScheduleSlot, ClassType } from '../types';
+import type { ClassScheduleSlot, ClassType, SessionKind } from '../types';
 
 const COLLECTION = 'classTypes';
 
@@ -13,6 +13,7 @@ const num = (v: unknown, fallback: number) => {
   const n = typeof v === 'number' ? v : Number(v);
   return Number.isFinite(n) ? n : fallback;
 };
+const toSessionKind = (v: unknown): SessionKind => (v === '1on1' || v === 'duo' || v === 'concept' ? v : 'group');
 
 function toSchedule(v: unknown): ClassScheduleSlot[] {
   if (!Array.isArray(v)) return [];
@@ -39,6 +40,8 @@ function toClassType(data: Record<string, unknown>, id: string): ClassType {
     defaultTrainerId: typeof data.defaultTrainerId === 'string' ? data.defaultTrainerId : null,
     schemaId: typeof data.schemaId === 'string' ? data.schemaId : null,
     schedule: toSchedule(data.schedule),
+    room: typeof data.room === 'string' ? data.room : null,
+    sessionKind: toSessionKind(data.sessionKind),
     createdAt: typeof data.createdAt === 'string' ? data.createdAt : '',
     updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
   };
@@ -70,6 +73,8 @@ export async function saveClassType(input: Omit<ClassType, 'orgId' | 'createdAt'
       defaultTrainerId: input.defaultTrainerId,
       schemaId: input.schemaId,
       schedule: input.schedule,
+      room: input.room,
+      sessionKind: input.sessionKind,
       createdAt: input.createdAt || new Date().toISOString(),
       updatedAt: serverTimestamp(),
     },

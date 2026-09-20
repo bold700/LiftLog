@@ -441,6 +441,9 @@ export interface ClassScheduleSlot {
   startTime: string;
 }
 
+/** Vorm van een sessie, voor de legenda en kleurcodering op het rooster (Figma "05 · Schedule"). */
+export type SessionKind = '1on1' | 'duo' | 'group' | 'concept';
+
 export interface ClassType {
   id: string;
   orgId: string;
@@ -457,6 +460,10 @@ export interface ClassType {
   schemaId: string | null;
   /** Vaste weekmomenten waarop deze lessoort automatisch op het rooster komt; leeg = alleen handmatig. */
   schedule: ClassScheduleSlot[];
+  /** Waar dit normaal plaatsvindt; null = geen vaste ruimte. Vrije tekst, geen aparte lijst. */
+  room: string | null;
+  /** 1-op-1, Duo PT, Groep of Concept — voor de legenda/kleur op het rooster. */
+  sessionKind: SessionKind;
   createdAt: string;
   updatedAt: string;
 }
