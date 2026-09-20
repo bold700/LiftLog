@@ -133,6 +133,7 @@ const NESTED_CARD_SX = {
   border: `1px solid ${designTokens.cardBorder}`,
   boxShadow: 'none',
   borderRadius: `${designTokens.cardRadius}px`,
+  overflow: 'hidden',
 } as const;
 
 const MEAL_ACCORDION_SX = {
@@ -647,7 +648,14 @@ export function NutritionPage() {
                     onChange={() => toggleMeal(groupKey)}
                     sx={MEAL_ACCORDION_SX}
                   >
-                    <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
+                    <AccordionSummary
+                      expandIcon={<ExpandMoreRoundedIcon />}
+                      sx={{
+                        minWidth: 0,
+                        '& .MuiAccordionSummary-content': { minWidth: 0 },
+                        '& .MuiAccordionSummary-content.Mui-expanded': { minWidth: 0 },
+                      }}
+                    >
                       <Box sx={{ display: 'flex', minWidth: 0, flex: 1, alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
                         <Box sx={{ minWidth: 0 }}>
                           <Typography variant="subtitle2" fontWeight={700}>

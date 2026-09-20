@@ -41,6 +41,20 @@ export function BarcodeScannerDialog({ open, onClose, onDetected }: BarcodeScann
           return;
         }
         controlsRef.current = controls;
+        // WKWebView (iOS) laat het camerabeeld soms zwart zien terwijl er wél gescand wordt: de
+        // <video> krijgt geen eigen compositing-laag. Expliciet afspelen en een duwtje geven zodra
+        // het eerste frame er is, dwingt een herschilderbeurt af.
+        const video = videoRef.current;
+        if (video) {
+          video.play().catch(() => {
+            /* autoplay kan geweigerd worden; de decoder blijft dan gewoon frames lezen */
+          });
+          const nudge = () => {
+            if (cancelled) return;
+            video.style.transform = 'translateZ(0)';
+          };
+          video.addEventListener('loadedmetadata', nudge, { once: true });
+        }
       } catch {
         if (!cancelled) setError('Camera niet beschikbaar. Geef toestemming, of gebruik zoeken/foto.');
       } finally {
@@ -81,6 +95,8 @@ export function BarcodeScannerDialog({ open, onClose, onDetected }: BarcodeScann
                 borderRadius: 8,
                 background: '#000',
                 display: 'block',
+                transform: 'translateZ(0)',
+                backfaceVisibility: 'hidden',
               }}
             />
             {/* Richtkader */}
