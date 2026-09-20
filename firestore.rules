@@ -391,6 +391,15 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // "Elke week inschrijven": een vast weekmoment waarop de cron een sporter automatisch boekt.
+    // Zelfde reden als bookings: alleen de server schrijft, die controleert plek en saldo per
+    // gegenereerde les. De sporter zet 'm aan/uit via de server (actie setStandingBooking).
+    match /standingBookings/{standingBookingId} {
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+      allow write: if false;
+    }
+
     // Creditsaldo per persoon per studio. Lezen: jezelf, of de staf van je studio.
     // Schrijven: alleen de server, zodat saldo en grootboek nooit uit elkaar lopen.
     match /creditAccounts/{accountId} {

@@ -15,10 +15,13 @@ import { useI18n } from '../../context/I18nContext';
 import { useProfile } from '../../context/ProfileContext';
 import { useBranding } from '../../context/BrandingContext';
 import { useNotify } from '../../context/NotifyContext';
-import { getOrg, saveOrg, saveOrgBranding, saveOrgBusiness, toPaymentsStatus } from '../../services/orgService';
+import { getOrg, saveOrg, saveOrgBookingPolicy, saveOrgBranding, saveOrgBusiness, toPaymentsStatus } from '../../services/orgService';
 import { deleteOrgLogo, makePrintLogoFromUrl, uploadOrgLogo } from '../../services/orgLogoService';
 import { isHexColor, parseThemeBuilderExport, resolveScheme, SWATCH_KEYS, type LightScheme } from '../../theme/brandingTheme';
 import type { OrgBranding, OrgBusiness, OrgPaymentsStatus } from '../../types';
+
+/** Standaard bij een studio die het nog niet heeft ingesteld: zelfde aantal uur als de server. */
+const DEFAULT_FREE_CANCEL_HOURS = 12;
 
 const THEME_BUILDER_URL = 'https://material-foundation.github.io/material-theme-builder/';
 
@@ -60,6 +63,7 @@ export function BrandingSettings() {
   const [uploading, setUploading] = useState(false);
   const [business, setBusiness] = useState<OrgBusiness>(() => emptyBusiness(''));
   const [savingBusiness, setSavingBusiness] = useState(false);
+  const [freeCancelHours, setFreeCancelHours] = useState(String(DEFAULT_FREE_CANCEL_HOURS));
   const [payments, setPayments] = useState<OrgPaymentsStatus>(() => toPaymentsStatus(null));
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -86,6 +90,7 @@ export function BrandingSettings() {
       setExportText(org.branding?.lightScheme ? JSON.stringify({ schemes: { light: org.branding.lightScheme } }, null, 2) : '');
       setBusiness(org.business ?? emptyBusiness(org.name));
       setPayments(org.payments);
+      setFreeCancelHours(String(org.bookingPolicy?.freeCancelHours ?? DEFAULT_FREE_CANCEL_HOURS));
       setLoaded(true);
     });
     return () => {
@@ -129,6 +134,9 @@ export function BrandingSettings() {
     setLogoPrintUrl(null);
   };
 
+  const freeCancelHoursNum = Number(freeCancelHours);
+  const freeCancelHoursValid = Number.isInteger(freeCancelHoursNum) && freeCancelHoursNum >= 0;
+
   const handleSave = async () => {
     if (!orgId) return;
     if (exportInvalid) {
@@ -139,6 +147,10 @@ export function BrandingSettings() {
       notify.error('Geef de studio een naam.');
       return;
     }
+    if (!freeCancelHoursValid) {
+      notify.error('Vul een geldig aantal uur in bij het boekingsbeleid.');
+      return;
+    }
     setBusy(true);
     try {
       if (orgName.trim() !== savedOrgName) {
@@ -146,6 +158,7 @@ export function BrandingSettings() {
         setSavedOrgName(orgName.trim());
       }
       await saveOrgBranding(orgId, draft);
+      await saveOrgBookingPolicy(orgId, { freeCancelHours: freeCancelHoursNum });
       await branding?.refresh();
       notify.success('Huisstijl opgeslagen. Leden zien hem bij hun volgende bezoek.');
     } catch (e) {
@@ -313,8 +326,29 @@ export function BrandingSettings() {
           )}
         </Box>
 
+        {/* Boekingsbeleid: tot wanneer afmelden gratis is (ontwerp "Booking policy"). */}
+        <Box sx={{ mt: 2.5 }}>
+          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+            Boekingsbeleid
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            Gratis afmelden tot dit aantal uur voor de les begint. Meldt iemand zich later af, dan kost het nog steeds een
+            credit — maar we moedigen afmelden wel aan, zodat de plek vrijkomt.
+          </Typography>
+          <TextField
+            label="Vrije annuleertermijn (uren)"
+            size="small"
+            value={freeCancelHours}
+            onChange={(e) => setFreeCancelHours(e.target.value)}
+            error={!freeCancelHoursValid}
+            helperText={freeCancelHoursValid ? undefined : 'Vul een geheel getal in, 0 of hoger.'}
+            inputProps={{ inputMode: 'numeric' }}
+            sx={{ maxWidth: 220 }}
+          />
+        </Box>
+
         <Box sx={{ display: 'flex', gap: 1, mt: 2.5, flexWrap: 'wrap' }}>
-          <Button variant="contained" onClick={() => void handleSave()} disabled={busy || uploading || exportInvalid || !seedValid}>
+          <Button variant="contained" onClick={() => void handleSave()} disabled={busy || uploading || exportInvalid || !seedValid || !freeCancelHoursValid}>
             {busy ? 'Bezig…' : 'Opslaan'}
           </Button>
           <Button color="inherit" onClick={() => void handleReset()} disabled={busy}>

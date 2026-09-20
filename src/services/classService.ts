@@ -9,11 +9,12 @@ import { collection, deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, wh
 import { auth, db, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
 import { apiUrl } from '../utils/apiOrigin';
-import type { SessionKind } from '../types';
+import type { SessionKind, StandingBooking, StandingBookingOutcome } from '../types';
 
 const CLASSES = 'classes';
 const BOOKINGS = 'bookings';
 const ACCOUNTS = 'creditAccounts';
+const STANDING_BOOKINGS = 'standingBookings';
 
 /** Vaste kleur per sessiesoort, voor de legenda en kleurstip op het rooster (los van de huisstijl). */
 export const SESSION_KIND_COLORS: Record<SessionKind, string> = {
@@ -111,6 +112,25 @@ function toBooking(data: Record<string, unknown>, id: string): Booking {
   };
 }
 
+const toOutcome = (v: unknown): StandingBookingOutcome | null =>
+  v === 'booked' || v === 'skippedFull' || v === 'skippedNoCredits' ? v : null;
+
+function toStandingBooking(data: Record<string, unknown>, id: string): StandingBooking {
+  return {
+    id,
+    orgId: str(data.orgId),
+    userId: str(data.userId),
+    classTypeId: str(data.classTypeId),
+    weekday: num(data.weekday),
+    startTime: str(data.startTime, '00:00'),
+    active: data.active !== false,
+    lastOutcome: toOutcome(data.lastOutcome),
+    lastOutcomeDate: data.lastOutcomeDate ? str(data.lastOutcomeDate) : null,
+    createdAt: str(data.createdAt),
+    updatedAt: str(data.updatedAt),
+  };
+}
+
 /** Lessen van de actieve studio vanaf een datum, chronologisch. */
 export async function getUpcomingClasses(fromDate: string): Promise<StudioClass[]> {
   if (!isFirebaseConfigured() || !db) return [];
@@ -128,6 +148,14 @@ export async function getMyBookings(userId: string): Promise<Booking[]> {
   const q = query(collection(db, BOOKINGS), where('userId', '==', userId));
   const snap = await getDocs(q);
   return snap.docs.map((d) => toBooking(d.data(), d.id));
+}
+
+/** Eigen "elke week inschrijven"-instellingen, actief en uitgezet (voor het overzicht op Profiel). */
+export async function getMyStandingBookings(userId: string): Promise<StandingBooking[]> {
+  if (!isFirebaseConfigured() || !db) return [];
+  const q = query(collection(db, STANDING_BOOKINGS), where('userId', '==', userId));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => toStandingBooking(d.data(), d.id));
 }
 
 /** Deelnemers van één les (voor de trainer: wie staat er straks in de zaal). */
@@ -261,14 +289,22 @@ export async function callBooking<T>(body: Record<string, unknown>): Promise<T> 
   return data as T;
 }
 
-/** Reserveren. Zit de les vol, dan kom je op de wachtlijst en gaat er (nog) geen credit af. */
-export function bookClass(classId: string): Promise<{ bookingId: string; status: BookingStatus; balance: number }> {
-  return callBooking({ action: 'book', classId });
+/**
+ * Reserveren. Zit de les vol, dan kom je op de wachtlijst en gaat er (nog) geen credit af.
+ * `weekly`: ook dit weekmoment van de lessoort voortaan automatisch meeboeken ("elke week inschrijven").
+ */
+export function bookClass(classId: string, weekly = false): Promise<{ bookingId: string; status: BookingStatus; balance: number }> {
+  return callBooking({ action: 'book', classId, weekly });
 }
 
 /** Afmelden. Binnen de annuleertermijn krijg je de credit terug. */
 export function cancelBooking(bookingId: string): Promise<{ refunded: boolean; promotedUserId: string | null }> {
   return callBooking({ action: 'cancel', bookingId });
+}
+
+/** "Elke week inschrijven" aan- of uitzetten voor een bestaand weekmoment. */
+export function setStandingBookingActive(standingBookingId: string, active: boolean): Promise<{ active: boolean }> {
+  return callBooking({ action: 'setStandingBooking', standingBookingId, active });
 }
 
 /** Credits toekennen of afboeken (alleen trainer of beheerder). */

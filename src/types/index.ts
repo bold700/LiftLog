@@ -317,6 +317,8 @@ export interface Org {
    * zien: welke modus actief is en, per modus, de laatste vier tekens en wanneer gekoppeld.
    */
   payments: OrgPaymentsStatus;
+  /** Wanneer afmelden nog gratis is (Beheer → Huisstijl). Ontbreekt dit, dan geldt het standaard aantal uur van de server. */
+  bookingPolicy?: OrgBookingPolicy | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -467,6 +469,40 @@ export interface ClassType {
   sessionKind: SessionKind;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Uitkomst van de laatste keer dat de cron een wekelijkse inschrijving probeerde te boeken. */
+export type StandingBookingOutcome = 'booked' | 'skippedFull' | 'skippedNoCredits';
+
+/**
+ * Wekelijkse inschrijving van een sporter op een vast weekmoment van een lessoort ("elke week
+ * inschrijven"): de cron die lessen genereert (api/booking.mjs) boekt deze automatisch mee zodra
+ * de les van die week op het rooster komt. Firestore-collectie `standingBookings`; alleen de
+ * server schrijft (zie de rules), de sporter zet 'm zelf aan/uit via de `setStandingBooking`-actie.
+ */
+export interface StandingBooking {
+  id: string;
+  orgId: string;
+  userId: string;
+  classTypeId: string;
+  /** 0 = zondag .. 6 = zaterdag, zoals ClassScheduleSlot. */
+  weekday: number;
+  /** HH:MM, hoort bij een ClassScheduleSlot van de lessoort. */
+  startTime: string;
+  /** Uit: blijft bestaan (voor de geschiedenis), maar de cron slaat 'm over. */
+  active: boolean;
+  /** Wat er gebeurde bij de laatst gegenereerde les van dit weekmoment; null als het nog niet is geprobeerd. */
+  lastOutcome: StandingBookingOutcome | null;
+  /** Datum (YYYY-MM-DD) van die laatste poging. */
+  lastOutcomeDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Boekingsbeleid van de studio (Beheer → Huisstijl): wanneer afmelden nog gratis is. */
+export interface OrgBookingPolicy {
+  /** Aantal uur voor aanvang tot waar afmelden geen credit kost; erna wel. */
+  freeCancelHours: number;
 }
 
 /** Abonnement (Beheer → Abonnementen): wat een lid krijgt en wat het kost. */

@@ -8,7 +8,7 @@ import { doc, getDoc, setDoc, serverTimestamp, type Timestamp } from 'firebase/f
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
 import { callBooking } from './classService';
-import type { Org, OrgBranding, OrgBusiness, OrgPaymentsStatus } from '../types';
+import type { Org, OrgBookingPolicy, OrgBranding, OrgBusiness, OrgPaymentsStatus } from '../types';
 
 const COLLECTION = 'orgs';
 
@@ -25,6 +25,7 @@ function toOrg(data: Record<string, unknown>, id: string): Org {
     branding: toBranding(data.branding),
     business: toBusiness(data.business),
     payments: toPaymentsStatus(data.payments),
+    bookingPolicy: toBookingPolicy(data.bookingPolicy),
     createdAt: ts(data.createdAt),
     updatedAt: ts(data.updatedAt),
   };
@@ -117,6 +118,25 @@ export function toBusiness(raw: unknown): OrgBusiness | null {
   };
   const filled = Object.entries(out).some(([k, v]) => k !== 'nextInvoiceNumber' && v !== '');
   return filled ? out : null;
+}
+
+/** Boekingsbeleid in vaste vorm; null als er nog niets is ingesteld (dan geldt het standaard aantal uur van de server). */
+export function toBookingPolicy(raw: unknown): OrgBookingPolicy | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const hours = Number((raw as Record<string, unknown>).freeCancelHours);
+  return Number.isFinite(hours) && hours >= 0 ? { freeCancelHours: Math.trunc(hours) } : null;
+}
+
+/** Boekingsbeleid opslaan (Beheer → Huisstijl). Alleen een beheerder mag dit (Firestore-regels). */
+export async function saveOrgBookingPolicy(orgId: string, policy: OrgBookingPolicy): Promise<void> {
+  if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
+  const id = orgId.trim();
+  if (!id) throw new Error('Studio-id ontbreekt');
+  await setDoc(
+    doc(db, COLLECTION, id),
+    { bookingPolicy: { freeCancelHours: Math.max(0, Math.trunc(policy.freeCancelHours)) }, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
 }
 
 /** Bedrijfsgegevens opslaan (Beheer → Huisstijl). Alleen een beheerder mag dit (Firestore-regels). */

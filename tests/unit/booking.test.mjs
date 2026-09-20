@@ -6,6 +6,7 @@
  * bij afmelden. Daarom draait deze test de hele transactie af op een nagebootste Firestore.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { classIdForOccurrence, occurrencesForSchedule } from '../../api/_lib/classSchedule.mjs';
 
 /** Bevat na elke test de volledige inhoud van de nagebootste database. */
 let store;
@@ -298,6 +299,79 @@ describe('afmelden', () => {
     const booked = await post({ action: 'book', classId: 'c1' }, 'sporter1');
     const res = await post({ action: 'cancel', bookingId: booked.body.bookingId }, 'trainer1');
     expect(res.statusCode).toBe(200);
+  });
+
+  it('gebruikt de eigen annuleertermijn van de studio in plaats van de standaard 12 uur', async () => {
+    store['orgs/vanas'] = { bookingPolicy: { freeCancelHours: 1 } };
+    // Les over twee uur: buiten de eigen termijn van 1 uur, maar wel binnen de standaard 12 uur.
+    const straks = new Date(Date.now() + 2 * 3_600_000);
+    store['classes/c1'].date = straks.toISOString().slice(0, 10);
+    store['classes/c1'].startTime = straks.toTimeString().slice(0, 5);
+
+    const booked = await post({ action: 'book', classId: 'c1' });
+    const res = await post({ action: 'cancel', bookingId: booked.body.bookingId });
+
+    expect(res.body.refunded).toBe(true);
+  });
+});
+
+describe('elke week inschrijven', () => {
+  beforeEach(() => {
+    store['classes/c1'].classTypeId = 'ct1';
+  });
+
+  it('zet een actieve inschrijving klaar zodra je "elke week" aanvinkt', async () => {
+    const res = await post({ action: 'book', classId: 'c1', weekly: true });
+    expect(res.statusCode).toBe(200);
+
+    const weekday = new Date(`${store['classes/c1'].date}T00:00:00`).getDay();
+    const id = `sb_ct1_sporter1_${weekday}_0900`;
+    expect(store[`standingBookings/${id}`]).toMatchObject({
+      orgId: 'vanas', userId: 'sporter1', classTypeId: 'ct1', weekday, startTime: '09:00',
+      active: true, lastOutcome: 'booked',
+    });
+  });
+
+  it('maakt geen inschrijving aan voor een losse les zonder lessoort', async () => {
+    delete store['classes/c1'].classTypeId;
+    await post({ action: 'book', classId: 'c1', weekly: true });
+    const standing = Object.keys(store).filter((k) => k.startsWith('standingBookings/'));
+    expect(standing).toHaveLength(0);
+  });
+
+  it('maakt geen inschrijving aan als het vinkje niet aanstond', async () => {
+    await post({ action: 'book', classId: 'c1', weekly: false });
+    const standing = Object.keys(store).filter((k) => k.startsWith('standingBookings/'));
+    expect(standing).toHaveLength(0);
+  });
+
+  it('zet een bestaande inschrijving weer aan of uit voor de eigenaar', async () => {
+    await post({ action: 'book', classId: 'c1', weekly: true });
+    const weekday = new Date(`${store['classes/c1'].date}T00:00:00`).getDay();
+    const id = `sb_ct1_sporter1_${weekday}_0900`;
+
+    const off = await post({ action: 'setStandingBooking', standingBookingId: id, active: false });
+    expect(off.statusCode).toBe(200);
+    expect(store[`standingBookings/${id}`].active).toBe(false);
+
+    const on = await post({ action: 'setStandingBooking', standingBookingId: id, active: true });
+    expect(on.statusCode).toBe(200);
+    expect(store[`standingBookings/${id}`].active).toBe(true);
+  });
+
+  it('laat een ander niet aan iemands inschrijving komen', async () => {
+    await post({ action: 'book', classId: 'c1', weekly: true }, 'sporter1');
+    const weekday = new Date(`${store['classes/c1'].date}T00:00:00`).getDay();
+    const id = `sb_ct1_sporter1_${weekday}_0900`;
+
+    const res = await post({ action: 'setStandingBooking', standingBookingId: id, active: false }, 'sporter2');
+    expect(res.statusCode).toBe(403);
+    expect(store[`standingBookings/${id}`].active).toBe(true);
+  });
+
+  it('geeft 404 voor een inschrijving die niet (meer) bestaat', async () => {
+    const res = await post({ action: 'setStandingBooking', standingBookingId: 'sb_onbekend', active: false });
+    expect(res.statusCode).toBe(404);
   });
 });
 
@@ -650,5 +724,92 @@ describe('terugkerende lessen (cron)', () => {
     const res = await getCron('Bearer test-secret');
     expect(res.statusCode).toBe(200);
     expect(store[id].cancelledAt).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  describe('"elke week"-inschrijvingen meeboeken op een nieuw gegenereerde les', () => {
+    const schedule = [{ weekday: new Date().getDay(), startTime: '19:00', endTime: '20:00' }];
+    // Alle acht weekmomenten die de cron binnen zijn horizon zou willen zetten; realistisch is dat
+    // de eerste zeven al bestaan (van vorige cron-runs) en alleen de verste nieuw bijkomt — dat is
+    // wat hier wordt nagebootst, in plaats van alle acht in één keer aan te maken.
+    const occurrences = occurrencesForSchedule(schedule, todayIso(), 8);
+    const newest = occurrences[occurrences.length - 1];
+    const generatedId = `classes/${classIdForOccurrence('ct4', newest.date, newest.startTime)}`;
+
+    beforeEach(() => {
+      store['classTypes/ct4'] = {
+        orgId: 'vanas', name: 'Kicking', capacity: 1, creditCost: 1,
+        defaultTrainerId: 'trainer1', schemaId: null,
+        schedule,
+      };
+      for (const o of occurrences.slice(0, -1)) {
+        store[`classes/${classIdForOccurrence('ct4', o.date, o.startTime)}`] = {
+          orgId: 'vanas', title: 'Kicking', date: o.date, startTime: o.startTime, endTime: o.endTime,
+          trainerId: 'trainer1', capacity: 1, creditCost: 1, classTypeId: 'ct4',
+          bookedCount: 0, waitlistCount: 0, cancelledAt: null,
+        };
+      }
+    });
+
+    it('boekt een sporter met een actieve inschrijving en telt dat mee in de respons', async () => {
+      store['standingBookings/sb1'] = {
+        id: 'sb1', orgId: 'vanas', userId: 'sporter1', classTypeId: 'ct4',
+        weekday: schedule[0].weekday, startTime: '19:00', active: true, lastOutcome: null, lastOutcomeDate: null,
+      };
+      const res = await getCron('Bearer test-secret');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.autoBooked).toBe(1);
+      expect(store[generatedId].bookedCount).toBe(1);
+      expect(store['creditAccounts/vanas__sporter1'].balance).toBe(2);
+      const booking = Object.values(store).find((v) => v.classId === generatedId.slice('classes/'.length) && v.userId === 'sporter1');
+      expect(booking).toMatchObject({ status: 'booked', creditsSpent: 1 });
+      expect(store['standingBookings/sb1']).toMatchObject({ lastOutcome: 'booked', lastOutcomeDate: newest.date });
+    });
+
+    it('slaat de week over als de sporter geen credits meer heeft, zonder te boeken', async () => {
+      store['creditAccounts/vanas__sporter1'].balance = 0;
+      store['standingBookings/sb1'] = {
+        id: 'sb1', orgId: 'vanas', userId: 'sporter1', classTypeId: 'ct4',
+        weekday: schedule[0].weekday, startTime: '19:00', active: true, lastOutcome: null, lastOutcomeDate: null,
+      };
+      const res = await getCron('Bearer test-secret');
+
+      expect(res.body.autoSkippedNoCredits).toBe(1);
+      expect(store[generatedId].bookedCount).toBe(0);
+      expect(store['standingBookings/sb1'].lastOutcome).toBe('skippedNoCredits');
+    });
+
+    it('zet de tweede inschrijving op de wachtlijst zodra de eerste de enige plek pakt', async () => {
+      store['standingBookings/sb1'] = {
+        id: 'sb1', orgId: 'vanas', userId: 'sporter1', classTypeId: 'ct4',
+        weekday: schedule[0].weekday, startTime: '19:00', active: true, lastOutcome: null, lastOutcomeDate: null,
+      };
+      store['standingBookings/sb2'] = {
+        id: 'sb2', orgId: 'vanas', userId: 'sporter2', classTypeId: 'ct4',
+        weekday: schedule[0].weekday, startTime: '19:00', active: true, lastOutcome: null, lastOutcomeDate: null,
+      };
+      const res = await getCron('Bearer test-secret');
+
+      expect(res.body.autoBooked).toBe(1);
+      expect(res.body.autoWaitlisted).toBe(1);
+      expect(store[generatedId].bookedCount).toBe(1);
+      expect(store[generatedId].waitlistCount).toBe(1);
+      expect(store['standingBookings/sb1'].lastOutcome).toBe('booked');
+      expect(store['standingBookings/sb2'].lastOutcome).toBe('skippedFull');
+      // Op de wachtlijst gaat er nog geen credit af.
+      expect(store['creditAccounts/vanas__sporter2'].balance).toBe(3);
+    });
+
+    it('slaat een uitgezette inschrijving over', async () => {
+      store['standingBookings/sb1'] = {
+        id: 'sb1', orgId: 'vanas', userId: 'sporter1', classTypeId: 'ct4',
+        weekday: schedule[0].weekday, startTime: '19:00', active: false, lastOutcome: null, lastOutcomeDate: null,
+      };
+      const res = await getCron('Bearer test-secret');
+
+      expect(res.body.autoBooked).toBe(0);
+      expect(store[generatedId].bookedCount).toBe(0);
+      expect(store['standingBookings/sb1'].lastOutcome).toBeNull();
+    });
   });
 });

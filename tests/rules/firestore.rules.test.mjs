@@ -356,6 +356,17 @@ await t('beheerder zet een saldo buiten de server om → geweigerd', false, setD
 await t('sporter leest zijn eigen grootboek → mag', true, getDoc(doc(as('sporter2'), 'creditLedger/le1')));
 await t('grootboekregel toevoegen buiten de server om → geweigerd', false, setDoc(doc(as('sporter2'), 'creditLedger/leZelf'), { orgId: 'vanas', userId: 'sporter2', delta: 50, reason: 'manual' }));
 
+console.log('"Elke week inschrijven"');
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore();
+  await setDoc(doc(db, 'standingBookings/sb1'), { orgId: 'vanas', userId: 'sporter2', classTypeId: 'ct1', weekday: 4, startTime: '19:00', active: true });
+});
+await t('sporter leest zijn eigen inschrijving → mag', true, getDoc(doc(as('sporter2'), 'standingBookings/sb1')));
+await t('andere sporter leest die inschrijving → geweigerd', false, getDoc(doc(as('sporter3'), 'standingBookings/sb1')));
+await t('trainer leest de inschrijving → mag', true, getDoc(doc(as('trainer1'), 'standingBookings/sb1')));
+await t('inschrijving buiten de server om aanmaken → geweigerd', false, setDoc(doc(as('sporter2'), 'standingBookings/sbZelf'), { orgId: 'vanas', userId: 'sporter2', classTypeId: 'ct1', weekday: 4, startTime: '19:00', active: true }));
+await t('eigen inschrijving uitzetten buiten de server om → geweigerd', false, updateDoc(doc(as('sporter2'), 'standingBookings/sb1'), { active: false }));
+
 await env.cleanup();
 console.log(`\n${passed} geslaagd, ${failed} mislukt`);
 process.exit(failed ? 1 : 0);

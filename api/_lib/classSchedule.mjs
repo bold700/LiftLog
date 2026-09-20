@@ -13,6 +13,15 @@ export function classIdForOccurrence(classTypeId, date, startTime) {
   return `cls_gen_${classTypeId}_${date}_${startTime.replace(':', '')}`;
 }
 
+/**
+ * Deterministieke id voor een "elke week inschrijven"-instelling: één per lessoort, sporter en
+ * weekmoment. Vinkt een sporter dezelfde les nog een keer aan, dan zet dit gewoon dezelfde
+ * instelling weer op actief in plaats van een dubbele aan te maken.
+ */
+export function standingBookingId(classTypeId, userId, weekday, startTime) {
+  return `sb_${classTypeId}_${userId}_${weekday}_${startTime.replace(':', '')}`;
+}
+
 function isoDay(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
