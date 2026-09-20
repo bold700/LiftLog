@@ -45,7 +45,7 @@ import { buildInvoicePdf, invoiceFileName } from './_lib/invoicePdf.mjs';
 import { logoToDataUrl } from './_lib/invoiceLogo.mjs';
 import { buildInvoiceEmail, mailConfigured, sendViaResend } from './_lib/invoiceEmail.mjs';
 import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey } from './_lib/molliePayments.mjs';
-import { addMinutes, classIdForOccurrence, missingOccurrences, occurrencesForSchedule } from './_lib/classSchedule.mjs';
+import { classIdForOccurrence, missingOccurrences, occurrencesForSchedule } from './_lib/classSchedule.mjs';
 
 const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
 
@@ -761,7 +761,7 @@ async function generateClasses(req, res, db) {
         title: ct.name,
         date: o.date,
         startTime: o.startTime,
-        endTime: addMinutes(o.startTime, ct.durationMin ?? 60),
+        endTime: o.endTime,
         trainerId: ct.defaultTrainerId,
         capacity: ct.capacity ?? 999,
         creditCost: ct.creditCost ?? 1,

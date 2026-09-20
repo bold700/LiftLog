@@ -267,7 +267,7 @@ await t('beheerder zet iemand in een studio die niet de zijne is → geweigerd',
   updateDoc(doc(as('admin1'), 'profiles/trainer1'), { orgIds: ['studiob'] }));
 
 console.log('Lessoorten');
-const soort = (extra = {}) => ({ orgId: 'vanas', name: 'Small group strength', durationMin: 60, capacity: 8, creditCost: 1, defaultTrainerId: null, schemaId: null, ...extra });
+const soort = (extra = {}) => ({ orgId: 'vanas', name: 'Small group strength', capacity: 8, creditCost: 1, defaultTrainerId: null, schemaId: null, ...extra });
 await t('trainer maakt een lessoort → mag', true, setDoc(doc(as('trainer1'), 'classTypes/ct1'), soort()));
 await t('beheerder maakt een lessoort → mag', true, setDoc(doc(as('admin1'), 'classTypes/ct2'), soort({ name: 'Open gym', capacity: null, creditCost: 0 })));
 await t('sporter maakt een lessoort → geweigerd', false, setDoc(doc(as('sporter2'), 'classTypes/ct3'), soort()));

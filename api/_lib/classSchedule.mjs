@@ -13,14 +13,6 @@ export function classIdForOccurrence(classTypeId, date, startTime) {
   return `cls_gen_${classTypeId}_${date}_${startTime.replace(':', '')}`;
 }
 
-/** "09:00" + 60 → "10:00"; blijft binnen de dag (loopt niet door naar de volgende). */
-export function addMinutes(hhmm, minutes) {
-  const [h, m] = hhmm.split(':').map(Number);
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return hhmm;
-  const total = Math.min(h * 60 + m + minutes, 23 * 60 + 59);
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-}
-
 function isoDay(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -45,7 +37,7 @@ export function occurrencesForSchedule(schedule, fromDateIso, weeksAhead) {
   for (const day of days) {
     const iso = isoDay(day);
     for (const slot of schedule) {
-      if (slot.weekday === day.getDay()) out.push({ date: iso, startTime: slot.startTime });
+      if (slot.weekday === day.getDay()) out.push({ date: iso, startTime: slot.startTime, endTime: slot.endTime });
     }
   }
   return out;
