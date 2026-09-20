@@ -28,18 +28,15 @@
       "maxDuration": 15
     },
     "api/booking.mjs": {
-      "maxDuration": 20
+      "maxDuration": 30
     },
     "api/bodyscan-photo.mjs": {
       "maxDuration": 60
-    },
-    "api/generate-classes.mjs": {
-      "maxDuration": 30
     }
   },
   "crons": [
     {
-      "path": "/api/generate-classes",
+      "path": "/api/cron/generate-classes",
       "schedule": "0 3 * * *"
     }
   ],
@@ -47,6 +44,10 @@
     {
       "source": "/f/:token",
       "destination": "/api/booking?invoice=:token"
+    },
+    {
+      "source": "/api/cron/generate-classes",
+      "destination": "/api/booking?cron=generateClasses"
     },
     {
       "source": "/api/mcp/:key",
