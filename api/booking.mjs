@@ -137,7 +137,7 @@ export default async function handler(req, res) {
   try {
     switch (body?.action) {
       case 'book':
-        return await book(res, db, uid, myOrgs, String(body.classId ?? '').trim(), body.weekly === true);
+        return await book(res, db, uid, myOrgs, String(body.classId ?? '').trim(), body.weekly === true, isStaff);
       case 'cancel':
         return await cancel(res, db, uid, myOrgs, isStaff, String(body.bookingId ?? '').trim());
       case 'setStandingBooking':
@@ -195,7 +195,7 @@ function refuse(message) {
  * Reserveren. In één transactie: plek controleren, credit afschrijven, reservering vastleggen.
  * Zit de les vol, dan kom je op de wachtlijst — zonder dat er een credit af gaat.
  */
-async function book(res, db, uid, myOrgs, classId, weekly) {
+async function book(res, db, uid, myOrgs, classId, weekly, isStaff) {
   if (!classId) return json(res, 400, { error: 'Geen les opgegeven.', build: BUILD });
 
   // Eerst het eigen abonnement bijwerken (verlenging die nog openstond), dan pas reserveren.
@@ -237,7 +237,7 @@ async function book(res, db, uid, myOrgs, classId, weekly) {
 
     const capacity = Number(cls.capacity) || 0;
     const booked = Number(cls.bookedCount) || 0;
-    const cost = unlimited ? 0 : Number(cls.creditCost ?? 1) || 0;
+    const cost = unlimited || isStaff ? 0 : Number(cls.creditCost ?? 1) || 0;
     const onWaitlist = booked >= capacity;
 
     const accountRef = db.collection('creditAccounts').doc(accountId(orgId, uid));

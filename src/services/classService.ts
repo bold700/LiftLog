@@ -269,6 +269,12 @@ export async function cancelClass(classId: string): Promise<void> {
   await setDoc(doc(db, CLASSES, classId), { cancelledAt: new Date().toISOString(), updatedAt: serverTimestamp() }, { merge: true });
 }
 
+/** Een per ongeluk afgelasten les terugzetten: `cancelledAt` weer wissen. */
+export async function restoreClass(classId: string): Promise<void> {
+  if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
+  await setDoc(doc(db, CLASSES, classId), { cancelledAt: null, updatedAt: serverTimestamp() }, { merge: true });
+}
+
 export function newClassId(): string {
   return `cls_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }

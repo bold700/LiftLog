@@ -49,8 +49,10 @@ import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import { assignPlan, getActiveMembershipsForOrg, getPlans, renewDue, unassignPlan } from '../services/planService';
 import { getCreditBalancesForOrg } from '../services/classService';
 import { AddSporterByEmailCard } from './beheer/AddSporterByEmailCard';
+import { NewClassDialog, GrantCreditsDialog } from './beheer/ClassSchedulingDialogs';
 import { NumberField } from './NumberField';
 import { designTokens } from '../theme/designTokens';
+import ConfirmationNumberRoundedIcon from '@mui/icons-material/ConfirmationNumberRounded';
 
 type Section = 'leden' | 'lessoorten' | 'abonnementen' | 'huisstijl' | 'facturatie';
 /** Beheer gebruikt de hele breedte van het hoofdvlak, zoals in het ontwerp; de andere pagina's blijven op 800. */
@@ -142,6 +144,8 @@ export function BeheerPage() {
   }, []);
   // Kop-knop op Lessoorten: elke klik telt op, het paneel opent dan een lege lessoort.
   const [newTypeSignal, setNewTypeSignal] = useState(0);
+  const [newClassOpen, setNewClassOpen] = useState(false);
+  const [creditsOpen, setCreditsOpen] = useState(false);
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [credits, setCredits] = useState<Record<string, number>>({});
@@ -195,6 +199,7 @@ export function BeheerPage() {
   }, [isTrainer, load]);
 
   const trainers = useMemo(() => profiles.filter((p) => p.role === 'trainer' || p.role === 'admin'), [profiles]);
+  const sporters = useMemo(() => profiles.filter((p) => p.role === 'sporter'), [profiles]);
   const nameOf = useCallback(
     (userId: string | null | undefined) => {
       if (!userId) return null;
@@ -353,9 +358,14 @@ export function BeheerPage() {
           {t('admin.title')}
         </Typography>
         {section === 'lessoorten' ? (
-          <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewTypeSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
-            {t('classTypes.newType')}
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+            <Button variant="outlined" startIcon={<AddRoundedIcon />} onClick={() => setNewClassOpen(true)}>
+              Les toevoegen
+            </Button>
+            <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewTypeSignal((n) => n + 1)}>
+              {t('classTypes.newType')}
+            </Button>
+          </Box>
         ) : section === 'abonnementen' ? (
           <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewPlanSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
             {t('plans.newPlan')}
@@ -365,9 +375,14 @@ export function BeheerPage() {
             {t('billing.export')}
           </Button>
         ) : (
-          <Button variant="contained" disableElevation startIcon={<PersonAddRoundedIcon />} onClick={openCreate} disabled={!auth} sx={{ flexShrink: 0 }}>
-            {t('admin.addAccount')}
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+            <Button variant="outlined" startIcon={<ConfirmationNumberRoundedIcon />} onClick={() => setCreditsOpen(true)}>
+              Credits toekennen
+            </Button>
+            <Button variant="contained" disableElevation startIcon={<PersonAddRoundedIcon />} onClick={openCreate} disabled={!auth}>
+              {t('admin.addAccount')}
+            </Button>
+          </Box>
         )}
       </Box>
       {isAdmin && <SectionTabs value={section} onChange={setSection} />}
@@ -397,6 +412,22 @@ export function BeheerPage() {
             </ContentCard>
           )}
         </PageLayout>
+        <NewClassDialog
+          open={newClassOpen}
+          onClose={() => setNewClassOpen(false)}
+          trainerId={selfId}
+          staff={trainers}
+          onCreated={() => setNewClassOpen(false)}
+        />
+        <GrantCreditsDialog
+          open={creditsOpen}
+          onClose={() => setCreditsOpen(false)}
+          sporters={sporters}
+          onGranted={() => {
+            setCreditsOpen(false);
+            void load();
+          }}
+        />
       </Box>
     );
   }
@@ -680,6 +711,15 @@ export function BeheerPage() {
           </Button>
         </DialogActions>
       </Dialog>
+      <GrantCreditsDialog
+        open={creditsOpen}
+        onClose={() => setCreditsOpen(false)}
+        sporters={sporters}
+        onGranted={() => {
+          setCreditsOpen(false);
+          void load();
+        }}
+      />
     </PageLayout>
     </Box>
   );

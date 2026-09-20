@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Autocomplete,
   Box,
   Typography,
   Button,
@@ -12,22 +11,16 @@ import {
   DialogContent,
   DialogActions,
   FormControlLabel,
-  TextField,
-  MenuItem,
   IconButton,
   ToggleButton,
   ToggleButtonGroup,
 } from '@mui/material';
-import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
-import ConfirmationNumberRoundedIcon from '@mui/icons-material/ConfirmationNumberRounded';
 import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
 import { PageLayout, ContentCard, PageTitle, EmptyState } from './layout';
 import { useProfile } from '../context/ProfileContext';
-import { useI18n } from '../context/I18nContext';
-import { getClassTypes } from '../services/classTypeService';
 import { useNotify } from '../context/NotifyContext';
 import {
   getUpcomingClasses,
@@ -38,20 +31,17 @@ import {
   bookClass,
   cancelBooking,
   cancelClass,
-  createClass,
   deleteClass,
-  grantCredits,
-  newClassId,
+  restoreClass,
   SESSION_KIND_COLORS,
   type StudioClass,
   type Booking,
 } from '../services/classService';
 import { getOrg } from '../services/orgService';
-import { getAllProfiles } from '../services/profileService';
 import { designTokens } from '../theme/designTokens';
 import { segmentedToggleSx } from '../theme/segmentedToggle';
 import { addWeeks } from '../utils/format';
-import type { ClassType, Profile, SessionKind, StandingBooking } from '../types';
+import type { Profile, SessionKind, StandingBooking } from '../types';
 
 /** Zonder eigen instelling geldt dit aantal uur, zoals de server standaard hanteert. */
 const DEFAULT_FREE_CANCEL_HOURS = 12;
@@ -105,12 +95,11 @@ export function LessenPage() {
   const [credits, setCredits] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [newOpen, setNewOpen] = useState(false);
-  const [creditsOpen, setCreditsOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [selectedDate, setSelectedDate] = useState(today());
   const [roomFilter, setRoomFilter] = useState('');
   const [confirmClass, setConfirmClass] = useState<StudioClass | null>(null);
+  const [cancelConfirmClass, setCancelConfirmClass] = useState<StudioClass | null>(null);
   const [participantsClass, setParticipantsClass] = useState<StudioClass | null>(null);
   const [freeCancelHours, setFreeCancelHours] = useState(DEFAULT_FREE_CANCEL_HOURS);
 
@@ -222,6 +211,7 @@ export function LessenPage() {
         notify?.error('Er staan mensen ingeschreven. Meld die eerst af.');
         return;
       }
+      setCancelConfirmClass(null);
       setBusyId(cls.id);
       try {
         // Een les uit een terugkerende lessoort afgelasten in plaats van verwijderen: anders zet de
@@ -231,6 +221,22 @@ export function LessenPage() {
         await load();
       } catch (e) {
         notify?.error(e instanceof Error ? e.message : 'Les verwijderen mislukt');
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [notify, load]
+  );
+
+  const handleRestore = useCallback(
+    async (cls: StudioClass) => {
+      setBusyId(cls.id);
+      try {
+        await restoreClass(cls.id);
+        notify?.success('Les hersteld.');
+        await load();
+      } catch (e) {
+        notify?.error(e instanceof Error ? e.message : 'Les herstellen mislukt');
       } finally {
         setBusyId(null);
       }
@@ -300,9 +306,14 @@ export function LessenPage() {
             </IconButton>
           )}
           {isStaff && !cls.cancelledAt && (
-            <IconButton size="small" onClick={() => void handleDelete(cls)} disabled={busy} aria-label="Les verwijderen">
+            <IconButton size="small" onClick={() => setCancelConfirmClass(cls)} disabled={busy} aria-label="Les verwijderen">
               <DeleteOutlineRoundedIcon fontSize="small" />
             </IconButton>
+          )}
+          {isStaff && cls.cancelledAt && (
+            <Button size="small" disabled={busy} onClick={() => void handleRestore(cls)}>
+              Herstellen
+            </Button>
           )}
         </Box>
       </Box>
@@ -316,17 +327,6 @@ export function LessenPage() {
       <Typography variant="body2" color="text.secondary" sx={{ mt: -2, mb: 2, px: 0.5 }}>
         {isStaff ? 'Zet lessen op het rooster; sporters reserveren met credits.' : 'Reserveer met je credits.'}
       </Typography>
-
-      {isStaff && (
-        <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-          <Button startIcon={<AddRoundedIcon />} onClick={() => setNewOpen(true)}>
-            Les toevoegen
-          </Button>
-          <Button startIcon={<ConfirmationNumberRoundedIcon />} onClick={() => setCreditsOpen(true)}>
-            Credits toekennen
-          </Button>
-        </Box>
-      )}
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5, flexWrap: 'wrap' }}>
         <ToggleButtonGroup size="small" exclusive value={viewMode} onChange={(_, v: ViewMode | null) => v && setViewMode(v)} sx={segmentedToggleSx}>
@@ -444,29 +444,10 @@ export function LessenPage() {
         </Box>
       )}
 
-      <NewClassDialog
-        open={newOpen}
-        onClose={() => setNewOpen(false)}
-        trainerId={me.userId}
-        onCreated={() => {
-          setNewOpen(false);
-          void load();
-        }}
-      />
-
-      <GrantCreditsDialog
-        open={creditsOpen}
-        onClose={() => setCreditsOpen(false)}
-        sporters={profileCtx?.allSporters ?? []}
-        onGranted={() => {
-          setCreditsOpen(false);
-          void load();
-        }}
-      />
-
       <BookConfirmDialog
         cls={confirmClass}
         credits={credits}
+        isStaff={isStaff}
         freeCancelHours={freeCancelHours}
         busy={confirmClass != null && busyId === confirmClass.id}
         alreadyWeekly={
@@ -484,276 +465,56 @@ export function LessenPage() {
         onClose={() => setParticipantsClass(null)}
         onChanged={() => void load()}
       />
+
+      <CancelClassDialog
+        cls={cancelConfirmClass}
+        busy={cancelConfirmClass != null && busyId === cancelConfirmClass.id}
+        onClose={() => setCancelConfirmClass(null)}
+        onConfirm={() => cancelConfirmClass && void handleDelete(cancelConfirmClass)}
+      />
     </PageLayout>
   );
 }
 
-/** Een les op het rooster zetten. Bewust kort: titel, wanneer, hoeveel plekken, wat het kost. */
-function NewClassDialog({
-  open,
-  onClose,
-  trainerId,
-  onCreated,
-}: {
-  open: boolean;
-  onClose: () => void;
-  trainerId: string;
-  onCreated: () => void;
-}) {
-  const notify = useNotify();
-  const { t } = useI18n();
-  const [types, setTypes] = useState<ClassType[]>([]);
-  const [staff, setStaff] = useState<Profile[]>([]);
-  const [typeId, setTypeId] = useState('');
-  const [title, setTitle] = useState('Small Group Training');
-  const [date, setDate] = useState(today());
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('10:00');
-  const [capacity, setCapacity] = useState('8');
-  const [creditCost, setCreditCost] = useState('1');
-  const [assignedTrainerId, setAssignedTrainerId] = useState(trainerId);
-  const [room, setRoom] = useState('');
-  const [sessionKind, setSessionKind] = useState<SessionKind>('group');
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    getClassTypes().then(setTypes).catch(() => setTypes([]));
-    getAllProfiles()
-      .then((all) => setStaff(all.filter((p) => p.role === 'trainer' || p.role === 'admin')))
-      .catch(() => setStaff([]));
-  }, [open]);
-
-  const roomOptions = useMemo(() => Array.from(new Set(types.map((c) => c.room).filter((r): r is string => !!r))).sort(), [types]);
-
-  // Lessoort gekozen: zelfde velden overnemen als in Beheer → Lessoorten (ook trainer en volledige
-  // creditrange), zodat een losse les niet minder kan instellen dan een lessoort. Begin/eindtijd
-  // blijft handmatig — die horen bij het moment, niet bij de lessoort.
-  const pickType = (id: string) => {
-    setTypeId(id);
-    const ct = types.find((c) => c.id === id);
-    if (!ct) return;
-    setTitle(ct.name);
-    setCapacity(ct.capacity == null ? '' : String(ct.capacity));
-    setCreditCost(String(ct.creditCost));
-    setAssignedTrainerId(ct.defaultTrainerId ?? trainerId);
-    setRoom(ct.room ?? '');
-    setSessionKind(ct.sessionKind);
-  };
-
-  const submit = async () => {
-    setBusy(true);
-    try {
-      const chosen = types.find((c) => c.id === typeId) ?? null;
-      // Geen limiet op de lessoort: het rooster vraagt toch een getal (de regels eisen dat).
-      const plekken = capacity.trim() === '' && chosen?.capacity == null ? 999 : Number(capacity);
-      const kosten = Number(creditCost);
-      if (!Number.isInteger(plekken) || plekken < 1) throw new Error('Vul een geldig aantal plekken in.');
-      if (!Number.isInteger(kosten) || kosten < 0) throw new Error('Vul een geldig aantal credits in.');
-
-      await createClass({
-        id: newClassId(),
-        title: title.trim() || 'Les',
-        date,
-        startTime,
-        endTime: endTime || null,
-        trainerId: assignedTrainerId,
-        capacity: plekken,
-        creditCost: kosten,
-        schemaId: chosen?.schemaId ?? null,
-        classTypeId: chosen?.id ?? null,
-        room: room.trim() || null,
-        sessionKind,
-      });
-      notify?.success('Les staat op het rooster.');
-      onCreated();
-    } catch (e) {
-      notify?.error(e instanceof Error ? e.message : 'Les toevoegen mislukt');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>Les toevoegen</DialogTitle>
-      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, '&&': { pt: 1.5 } }}>
-        {types.length > 0 && (
-          <TextField label={t('classTypes.classType')} select value={typeId} onChange={(e) => pickType(e.target.value)} size="small">
-            <MenuItem value="">{t('classTypes.looseClass')}</MenuItem>
-            {types.map((c) => (
-              <MenuItem key={c.id} value={c.id}>
-                {c.name}
-              </MenuItem>
-            ))}
-          </TextField>
-        )}
-        <TextField label="Naam" value={title} onChange={(e) => setTitle(e.target.value)} size="small" />
-        <TextField
-          label="Datum"
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          size="small"
-          InputLabelProps={{ shrink: true }}
-        />
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <TextField
-            label="Van"
-            type="time"
-            value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
-            size="small"
-            fullWidth
-            InputLabelProps={{ shrink: true }}
-          />
-          <TextField
-            label="Tot"
-            type="time"
-            value={endTime}
-            onChange={(e) => setEndTime(e.target.value)}
-            size="small"
-            fullWidth
-            InputLabelProps={{ shrink: true }}
-          />
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <TextField
-            label="Plekken"
-            value={capacity}
-            onChange={(e) => setCapacity(e.target.value)}
-            size="small"
-            fullWidth
-            inputMode="numeric"
-          />
-          <TextField
-            label="Credits"
-            select
-            value={creditCost}
-            onChange={(e) => setCreditCost(e.target.value)}
-            size="small"
-            fullWidth
-          >
-            {['0', '1', '2', '3', '4'].map((v) => (
-              <MenuItem key={v} value={v}>
-                {v === '0' ? 'Gratis' : v}
-              </MenuItem>
-            ))}
-          </TextField>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <TextField label={t('classTypes.sessionKind')} select value={sessionKind} onChange={(e) => setSessionKind(e.target.value as SessionKind)} size="small" fullWidth>
-            {SESSION_KIND_KEYS.map((k) => (
-              <MenuItem key={k} value={k}>
-                {t(`classTypes.sessionKinds.${k}`)}
-              </MenuItem>
-            ))}
-          </TextField>
-          <Autocomplete
-            freeSolo
-            size="small"
-            fullWidth
-            options={roomOptions}
-            value={room}
-            onInputChange={(_, v) => setRoom(v)}
-            renderInput={(params) => <TextField {...params} label={t('classTypes.room')} />}
-          />
-        </Box>
-        {staff.length > 0 && (
-          <TextField label="Trainer" select value={assignedTrainerId} onChange={(e) => setAssignedTrainerId(e.target.value)} size="small" fullWidth>
-            {staff.map((p) => (
-              <MenuItem key={p.userId} value={p.userId}>
-                {p.displayName?.trim() || p.email || p.userId}
-              </MenuItem>
-            ))}
-          </TextField>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={busy}>
-          Annuleren
-        </Button>
-        <Button variant="contained" onClick={() => void submit()} disabled={busy}>
-          Toevoegen
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
 /**
- * Credits toekennen aan een sporter. Een strippenkaart in de app: de trainer boekt het bij,
- * de mutatie komt in het grootboek te staan zodat later te zien is waar een saldo vandaan komt.
+ * "Weet je het zeker?" voor het afgelasten/verwijderen van een les: een klik hierop is bewust
+ * definitief genoeg om even te laten nadenken, met andere tekst voor herstelbaar (lessoort) vs.
+ * permanent (losse les).
  */
-function GrantCreditsDialog({
-  open,
+function CancelClassDialog({
+  cls,
+  busy,
   onClose,
-  sporters,
-  onGranted,
+  onConfirm,
 }: {
-  open: boolean;
+  cls: StudioClass | null;
+  busy: boolean;
   onClose: () => void;
-  sporters: Profile[];
-  onGranted: () => void;
+  onConfirm: () => void;
 }) {
-  const notify = useNotify();
-  const [userId, setUserId] = useState('');
-  const [amount, setAmount] = useState('10');
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const submit = async () => {
-    setBusy(true);
-    try {
-      const aantal = Number(amount);
-      if (!userId) throw new Error('Kies een sporter.');
-      if (!Number.isInteger(aantal) || aantal === 0) throw new Error('Vul een heel aantal credits in.');
-
-      const result = await grantCredits(userId, aantal, note.trim() || undefined);
-      const naam = sporters.find((p) => p.userId === userId)?.displayName ?? 'de sporter';
-      notify?.success(`${naam} heeft nu ${result.balance} credits.`);
-      setNote('');
-      onGranted();
-    } catch (e) {
-      notify?.error(e instanceof Error ? e.message : 'Credits toekennen mislukt');
-    } finally {
-      setBusy(false);
-    }
-  };
+  if (!cls) return null;
+  const recurring = !!cls.classTypeId;
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>Credits toekennen</DialogTitle>
-      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, '&&': { pt: 1.5 } }}>
-        <TextField label="Sporter" select value={userId} onChange={(e) => setUserId(e.target.value)} size="small">
-          {sporters.map((p) => (
-            <MenuItem key={p.userId} value={p.userId}>
-              {p.displayName || p.email || p.userId}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          label="Aantal credits"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          size="small"
-          inputMode="numeric"
-          helperText="Een negatief aantal boekt credits juist af."
-        />
-        <TextField
-          label="Notitie"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          size="small"
-          placeholder="Bijvoorbeeld: 10-rittenkaart betaald"
-        />
+    <Dialog open onClose={onClose} fullWidth maxWidth="xs">
+      <DialogTitle>Les afgelasten?</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary">
+          {dayLabel(cls.date)} · {cls.startTime}
+          {cls.endTime ? `–${cls.endTime}` : ''} · {cls.title}
+        </Typography>
+        <Typography variant="body2" sx={{ mt: 1.5 }}>
+          {recurring
+            ? 'Sporters die al ingeschreven waren zien de les als afgelast. Je kunt dit hierna nog herstellen.'
+            : 'Dit is een losse les; ze wordt definitief verwijderd en kan niet worden hersteld.'}
+        </Typography>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={busy}>
           Annuleren
         </Button>
-        <Button variant="contained" onClick={() => void submit()} disabled={busy}>
-          Toekennen
+        <Button variant="contained" color="error" disabled={busy} onClick={onConfirm}>
+          {recurring ? 'Ja, afgelasten' : 'Ja, verwijderen'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -767,6 +528,7 @@ function GrantCreditsDialog({
 function BookConfirmDialog({
   cls,
   credits,
+  isStaff,
   freeCancelHours,
   busy,
   alreadyWeekly,
@@ -775,6 +537,7 @@ function BookConfirmDialog({
 }: {
   cls: StudioClass | null;
   credits: number;
+  isStaff: boolean;
   freeCancelHours: number;
   busy: boolean;
   alreadyWeekly: boolean;
@@ -789,6 +552,8 @@ function BookConfirmDialog({
 
   if (!cls) return null;
   const full = cls.bookedCount >= cls.capacity;
+  // Staf reserveert altijd gratis (server bypasst de credit-kosten), ongeacht het saldo.
+  const cost = isStaff ? 0 : cls.creditCost;
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="xs">
@@ -805,13 +570,11 @@ function BookConfirmDialog({
         {!full && (
           <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: designTokens.cardBackgroundHigh, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
             <Typography variant="body2" fontWeight={600}>
-              {cls.creditCost === 0 ? 'Gratis' : cls.creditCost === 1 ? 'Kost 1 credit' : `Kost ${cls.creditCost} credits`}
+              {cost === 0 ? (isStaff ? 'Gratis (staf)' : 'Gratis') : cost === 1 ? 'Kost 1 credit' : `Kost ${cost} credits`}
             </Typography>
-            {cls.creditCost > 0 && (
-              <Typography variant="caption" color="text.secondary">
-                {credits - cls.creditCost} over na deze
-              </Typography>
-            )}
+            <Typography variant="caption" color="text.secondary">
+              {cost > 0 ? `Je hebt ${credits} · ${credits - cost} over na deze` : `Je hebt ${credits}`}
+            </Typography>
           </Box>
         )}
 
@@ -831,7 +594,7 @@ function BookConfirmDialog({
           Sluiten
         </Button>
         <Button variant="contained" disabled={busy} onClick={() => onConfirm(weekly)}>
-          {full ? 'Wachtlijst' : cls.creditCost === 0 ? 'Reserveren' : `Reserveren · ${cls.creditCost} credit${cls.creditCost > 1 ? 's' : ''}`}
+          {full ? 'Wachtlijst' : cost === 0 ? 'Reserveren' : `Reserveren · ${cost} credit${cost > 1 ? 's' : ''}`}
         </Button>
       </DialogActions>
     </Dialog>
