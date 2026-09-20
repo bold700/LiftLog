@@ -18,6 +18,7 @@ export const en: Messages = {
     measurements: 'Measurements',
     admin: 'Admin',
     signOut: 'Sign out',
+    shortcuts: 'Quick access',
     mainNavigation: 'Main navigation',
   },
   profile: {

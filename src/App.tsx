@@ -212,7 +212,7 @@ function AppContent() {
         return <LessenPage />;
       case TAB_PROFIEL:
         return (
-          <ProfielPage />
+          <ProfielPage onLogout={handleLogout} />
         );
       case TAB_VOEDING:
         return <NutritionPage />;

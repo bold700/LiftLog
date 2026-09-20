@@ -20,6 +20,7 @@ import {
   Typography,
 } from '@mui/material';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
+import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import MailOutlineRoundedIcon from '@mui/icons-material/MailOutlineRounded';
 import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
@@ -43,7 +44,7 @@ import { todayIso } from '../utils/format';
 import { LimitationsEditor } from './LimitationsEditor';
 import { NumberField } from './NumberField';
 
-export function ProfielPage() {
+export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
   const profile = useProfile();
   const { t, lang, setLang } = useI18n();
   const auth = useAuth();
@@ -406,6 +407,13 @@ export function ProfielPage() {
               </MenuItem>
             ))}
           </TextField>
+
+          {/* Uitloggen hoort bij het account (ontwerp: Account-kaart, knop "Sign out"); op desktop staat hij ook in de zijbalk. */}
+          {onLogout && (
+            <Button size="small" color="inherit" startIcon={<LogoutRoundedIcon />} onClick={onLogout} sx={{ alignSelf: 'flex-start', color: 'text.secondary' }}>
+              {t('nav.signOut')}
+            </Button>
+          )}
 
           <Box component="fieldset" sx={{ mt: 0.5, width: '100%', minWidth: 0, m: 0, p: 0, border: 0 }}>
             <Typography component="legend" variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, p: 0 }}>

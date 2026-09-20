@@ -5,14 +5,14 @@
  *
  * Volgt het Figma-ontwerp (Vorm): vijf bestemmingen, trainers krijgen Beheer erbij, en wat niet
  * in de balk past (Assistent, Metingen, Beheer voor wie het heeft) staat in de zijbalk onder een
- * lijn en op de telefoon in het menu (⋮) van de bovenbalk, naast de avatar. Die bovenbalk is de
- * "Top bar" uit het ontwerp: de titel van het scherm, het menu en de avatar, op elk scherm.
+ * lijn en op de telefoon in een zwevende toolbar (Material 3 "floating toolbar") boven de
+ * navigatiebalk, naast de "+"-knop. De bovenbalk is de "Top bar" uit het ontwerp: de titel van
+ * het scherm en de avatar naar Profiel.
  */
-import { useState, type MouseEvent, type ReactNode } from 'react';
-import { Box, Button, Divider, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Typography, useMediaQuery, useTheme } from '@mui/material';
+import type { ReactNode } from 'react';
+import { Box, Button, Divider, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
-import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
 import { NavigationBar } from './NavigationBar';
 import { UserAvatar } from './UserAvatar';
 import { useI18n } from '../context/I18nContext';
@@ -42,16 +42,13 @@ interface AppShellProps {
 }
 
 /**
- * Bovenbalk op de telefoon (ontwerp "Top bar"): titel van het scherm, menu met de secundaire
- * bestemmingen en uitloggen, en de avatar naar Profiel. Plakt bovenaan, onder de statusbalk.
+ * Bovenbalk op de telefoon (ontwerp "Top bar"): titel van het scherm en de avatar naar Profiel.
+ * Plakt bovenaan, onder de statusbalk.
  */
-function MobileTopBar({ title, secondary, activeTab, onNavigate, onLogout, profileTabIndex }: { title: string; secondary: ShellDestination[]; activeTab: number; onNavigate: (tabIndex: number) => void; onLogout: () => void; profileTabIndex?: number }) {
+function MobileTopBar({ title, onNavigate, profileTabIndex }: { title: string; onNavigate: (tabIndex: number) => void; profileTabIndex?: number }) {
   const { t } = useI18n();
   const profile = useProfile();
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const me = profile?.profile ?? null;
-  const open = (e: MouseEvent<HTMLElement>) => setAnchor(e.currentTarget);
-  const close = () => setAnchor(null);
   return (
     <Box
       component="header"
@@ -71,43 +68,68 @@ function MobileTopBar({ title, secondary, activeTab, onNavigate, onLogout, profi
       <Typography component="h1" variant="h6" sx={{ fontWeight: 600, flex: 1, minWidth: 0 }} noWrap>
         {title}
       </Typography>
-      <IconButton aria-label={t('profile.more')} aria-haspopup="menu" aria-expanded={anchor ? 'true' : undefined} onClick={open} edge="end" sx={{ color: 'text.secondary' }}>
-        <MoreVertRoundedIcon />
-      </IconButton>
       {profileTabIndex != null && (
         <Box component="button" type="button" aria-label={t('nav.profile')} onClick={() => onNavigate(profileTabIndex)} sx={{ p: 0, border: 0, bgcolor: 'transparent', cursor: 'pointer', borderRadius: '50%', display: 'flex' }}>
           <UserAvatar name={me?.displayName} photoURL={me?.photoURL} size={32} />
         </Box>
       )}
-      <Menu anchorEl={anchor} open={!!anchor} onClose={close} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }} slotProps={{ paper: { sx: { minWidth: 220, borderRadius: 1 } } }}>
-        {secondary.map((d) => (
-          <MenuItem
-            key={d.tabIndex}
-            selected={d.tabIndex === activeTab}
-            onClick={() => {
-              close();
-              onNavigate(d.tabIndex);
-            }}
-            sx={{ minHeight: 48 }}
-          >
-            <ListItemIcon>{d.icon}</ListItemIcon>
-            <ListItemText primary={d.label} />
-          </MenuItem>
-        ))}
-        {secondary.length > 0 && <Divider />}
-        <MenuItem
-          onClick={() => {
-            close();
-            onLogout();
-          }}
-          sx={{ minHeight: 48, color: 'text.secondary' }}
-        >
-          <ListItemIcon sx={{ color: 'inherit' }}>
-            <LogoutRoundedIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primary={t('nav.signOut')} />
-        </MenuItem>
-      </Menu>
+    </Box>
+  );
+}
+
+/** Hoogte van de navigatiebalk plus de marge erboven: waar de "+"-knop en de toolbar op rusten (App.tsx: FAB op bottom 92). */
+const TOOLBAR_BOTTOM = 92;
+/** Ruimte rechts voor de "+"-knop (56) met 8 ertussen en 16 vanaf de rand. */
+const TOOLBAR_RIGHT = 16 + 56 + 8;
+
+/**
+ * Zwevende toolbar (Material 3 floating toolbar, standaardkleur): 64 hoog, volledig rond,
+ * 8 binnenmarge, iconknoppen van 48 met 4 ertussen. Draagt de secundaire bestemmingen; de
+ * actieve krijgt de secondary-container-cirkel, zoals in de navigatiebalk.
+ */
+function FloatingToolbar({ items, activeTab, onNavigate }: { items: ShellDestination[]; activeTab: number; onNavigate: (tabIndex: number) => void }) {
+  const { t } = useI18n();
+  if (items.length === 0) return null;
+  return (
+    <Box
+      component="nav"
+      aria-label={t('nav.shortcuts')}
+      sx={{
+        position: 'fixed',
+        bottom: TOOLBAR_BOTTOM,
+        right: TOOLBAR_RIGHT,
+        zIndex: 1001,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0.5,
+        p: 1,
+        height: 64,
+        borderRadius: 32,
+        bgcolor: designTokens.cardBackground,
+        boxShadow: '0 2px 6px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.12)',
+      }}
+    >
+      {items.map((d) => {
+        const active = d.tabIndex === activeTab;
+        return (
+          <Tooltip key={d.tabIndex} title={d.label} enterTouchDelay={400}>
+            <IconButton
+              aria-label={d.label}
+              aria-current={active ? 'page' : undefined}
+              onClick={() => onNavigate(d.tabIndex)}
+              sx={{
+                width: 48,
+                height: 48,
+                bgcolor: active ? designTokens.secondaryContainer : 'transparent',
+                color: active ? designTokens.onSecondaryContainer : 'text.secondary',
+                '&:hover': { bgcolor: active ? designTokens.secondaryContainer : 'rgba(0,0,0,0.06)' },
+              }}
+            >
+              {d.icon}
+            </IconButton>
+          </Tooltip>
+        );
+      })}
     </Box>
   );
 }
@@ -149,8 +171,9 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
             pointerEvents: 'none',
           }}
         />
-        <MobileTopBar title={title} secondary={secondary} activeTab={activeTab} onNavigate={onNavigate} onLogout={onLogout} profileTabIndex={profileTabIndex} />
+        <MobileTopBar title={title} onNavigate={onNavigate} profileTabIndex={profileTabIndex} />
         {children}
+        <FloatingToolbar items={secondary} activeTab={activeTab} onNavigate={onNavigate} />
         <NavigationBar
           value={barIndex}
           onChange={(i) => destinations[i] && onNavigate(destinations[i].tabIndex)}
