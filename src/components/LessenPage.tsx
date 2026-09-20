@@ -47,6 +47,7 @@ import {
   type Booking,
 } from '../services/classService';
 import { getOrg } from '../services/orgService';
+import { getAllProfiles } from '../services/profileService';
 import { designTokens } from '../theme/designTokens';
 import { segmentedToggleSx } from '../theme/segmentedToggle';
 import { addWeeks } from '../utils/format';
@@ -311,17 +312,10 @@ export function LessenPage() {
   return (
     <PageLayout>
       <PageTitle>Lessen</PageTitle>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: -2, mb: 2, px: 0.5, flexWrap: 'wrap' }}>
-        <Chip
-          icon={<ConfirmationNumberRoundedIcon />}
-          label={credits === 1 ? '1 credit' : `${credits} credits`}
-          color={credits > 0 ? 'default' : 'warning'}
-          size="small"
-        />
-        <Typography variant="body2" color="text.secondary">
-          {isStaff ? 'Zet lessen op het rooster; sporters reserveren met credits.' : 'Reserveer met je credits.'}
-        </Typography>
-      </Box>
+      {/* Creditsaldo staat op Profiel (Abonnement); hier alleen de uitleg, geen dubbele weergave. */}
+      <Typography variant="body2" color="text.secondary" sx={{ mt: -2, mb: 2, px: 0.5 }}>
+        {isStaff ? 'Zet lessen op het rooster; sporters reserveren met credits.' : 'Reserveer met je credits.'}
+      </Typography>
 
       {isStaff && (
         <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
@@ -342,7 +336,7 @@ export function LessenPage() {
         </ToggleButtonGroup>
         {roomOptions.length > 0 && (
           <ToggleButtonGroup size="small" exclusive value={roomFilter} onChange={(_, v: string | null) => setRoomFilter(v ?? '')} sx={segmentedToggleSx}>
-            <ToggleButton value="">Alle ruimtes</ToggleButton>
+            <ToggleButton value="">Alle</ToggleButton>
             {roomOptions.map((r) => (
               <ToggleButton key={r} value={r}>
                 {r}
@@ -509,6 +503,7 @@ function NewClassDialog({
   const notify = useNotify();
   const { t } = useI18n();
   const [types, setTypes] = useState<ClassType[]>([]);
+  const [staff, setStaff] = useState<Profile[]>([]);
   const [typeId, setTypeId] = useState('');
   const [title, setTitle] = useState('Small Group Training');
   const [date, setDate] = useState(today());
@@ -516,24 +511,32 @@ function NewClassDialog({
   const [endTime, setEndTime] = useState('10:00');
   const [capacity, setCapacity] = useState('8');
   const [creditCost, setCreditCost] = useState('1');
+  const [assignedTrainerId, setAssignedTrainerId] = useState(trainerId);
   const [room, setRoom] = useState('');
   const [sessionKind, setSessionKind] = useState<SessionKind>('group');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (open) getClassTypes().then(setTypes).catch(() => setTypes([]));
+    if (!open) return;
+    getClassTypes().then(setTypes).catch(() => setTypes([]));
+    getAllProfiles()
+      .then((all) => setStaff(all.filter((p) => p.role === 'trainer' || p.role === 'admin')))
+      .catch(() => setStaff([]));
   }, [open]);
 
   const roomOptions = useMemo(() => Array.from(new Set(types.map((c) => c.room).filter((r): r is string => !!r))).sort(), [types]);
 
-  // Lessoort gekozen: naam, plekken, credits, ruimte en sessiesoort invullen (Beheer → Lessoorten); begin/eindtijd blijft handmatig.
+  // Lessoort gekozen: zelfde velden overnemen als in Beheer → Lessoorten (ook trainer en volledige
+  // creditrange), zodat een losse les niet minder kan instellen dan een lessoort. Begin/eindtijd
+  // blijft handmatig — die horen bij het moment, niet bij de lessoort.
   const pickType = (id: string) => {
     setTypeId(id);
     const ct = types.find((c) => c.id === id);
     if (!ct) return;
     setTitle(ct.name);
     setCapacity(ct.capacity == null ? '' : String(ct.capacity));
-    setCreditCost(String(Math.min(ct.creditCost, 3)));
+    setCreditCost(String(ct.creditCost));
+    setAssignedTrainerId(ct.defaultTrainerId ?? trainerId);
     setRoom(ct.room ?? '');
     setSessionKind(ct.sessionKind);
   };
@@ -554,7 +557,7 @@ function NewClassDialog({
         date,
         startTime,
         endTime: endTime || null,
-        trainerId: chosen?.defaultTrainerId ?? trainerId,
+        trainerId: assignedTrainerId,
         capacity: plekken,
         creditCost: kosten,
         schemaId: chosen?.schemaId ?? null,
@@ -631,7 +634,7 @@ function NewClassDialog({
             size="small"
             fullWidth
           >
-            {['0', '1', '2', '3'].map((v) => (
+            {['0', '1', '2', '3', '4'].map((v) => (
               <MenuItem key={v} value={v}>
                 {v === '0' ? 'Gratis' : v}
               </MenuItem>
@@ -656,6 +659,15 @@ function NewClassDialog({
             renderInput={(params) => <TextField {...params} label={t('classTypes.room')} />}
           />
         </Box>
+        {staff.length > 0 && (
+          <TextField label="Trainer" select value={assignedTrainerId} onChange={(e) => setAssignedTrainerId(e.target.value)} size="small" fullWidth>
+            {staff.map((p) => (
+              <MenuItem key={p.userId} value={p.userId}>
+                {p.displayName?.trim() || p.email || p.userId}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={busy}>

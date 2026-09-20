@@ -5,9 +5,11 @@
  */
 import { useEffect, useState } from 'react';
 import { Box, Chip, Switch, Typography } from '@mui/material';
+import ConfirmationNumberRoundedIcon from '@mui/icons-material/ConfirmationNumberRounded';
 import { useI18n } from '../context/I18nContext';
 import { useNotify } from '../context/NotifyContext';
 import {
+  getCreditBalance,
   getMyBookings,
   getMyStandingBookings,
   getUpcomingClasses,
@@ -32,6 +34,7 @@ export function BookingsCard({ userId }: { userId: string }) {
   const [classes, setClasses] = useState<StudioClass[]>([]);
   const [standing, setStanding] = useState<StandingBooking[]>([]);
   const [types, setTypes] = useState<ClassType[]>([]);
+  const [credits, setCredits] = useState<number | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -41,12 +44,14 @@ export function BookingsCard({ userId }: { userId: string }) {
       getMyStandingBookings(userId),
       getClassTypes().catch(() => []),
       getUpcomingClasses(todayIso()).catch(() => []),
-    ]).then(([b, s, c, cls]) => {
+      getCreditBalance(userId).catch(() => 0),
+    ]).then(([b, s, c, cls, balance]) => {
       if (!alive) return;
       setBookings(b);
       setStanding(s);
       setTypes(c);
       setClasses(cls);
+      setCredits(balance);
     });
     return () => {
       alive = false;
@@ -73,13 +78,21 @@ export function BookingsCard({ userId }: { userId: string }) {
     .sort((a, b) => `${a.cls.date}${a.cls.startTime}`.localeCompare(`${b.cls.date}${b.cls.startTime}`))
     .slice(0, 5);
 
-  if (upcoming.length === 0 && standing.length === 0) return null;
+  if (credits == null) return null;
 
   return (
     <Box sx={{ p: 2, mb: 3, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground }}>
-      <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-        Boekingen
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: upcoming.length > 0 || standing.length > 0 ? 1.5 : 0 }}>
+        <Typography variant="subtitle2" fontWeight={600}>
+          Boekingen
+        </Typography>
+        <Chip
+          size="small"
+          icon={<ConfirmationNumberRoundedIcon />}
+          label={credits === 1 ? '1 credit' : `${credits} credits`}
+          color={credits > 0 ? 'default' : 'warning'}
+        />
+      </Box>
 
       {upcoming.length > 0 && (
         <Box sx={{ mb: standing.length > 0 ? 2.5 : 0 }}>
