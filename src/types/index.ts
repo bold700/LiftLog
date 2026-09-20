@@ -345,6 +345,8 @@ export interface OrgBusiness {
 export interface OrgBranding {
   /** Download-URL van het logo in Storage (orgLogos/{orgId}). */
   logoUrl?: string | null;
+  /** Drukversie van het logo als PNG (orgLogos/print/{orgId}), voor facturen en mail. Ook bij een SVG-logo. */
+  logoPrintUrl?: string | null;
   /** Merkkleur als hex, bijv. "#4E6543". Daaruit wordt het hele schema afgeleid. */
   seedColor?: string | null;
   /** Volledig licht schema uit de Material Theme Builder (schemes.light). Gaat vóór seedColor. */

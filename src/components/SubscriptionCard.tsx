@@ -6,11 +6,13 @@
 import { useEffect, useState } from 'react';
 import { Box, IconButton, Typography } from '@mui/material';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
+import IosShareRoundedIcon from '@mui/icons-material/IosShareRounded';
 import { useI18n } from '../context/I18nContext';
 import { useNotify } from '../context/NotifyContext';
 import { getMyMembership, getPlans } from '../services/planService';
 import { getCreditBalance } from '../services/classService';
-import { downloadInvoicePdf, getMyCharges } from '../services/chargeService';
+import { canShareFiles, downloadInvoicePdf, getMyCharges, shareInvoicePdf } from '../services/chargeService';
+import { useBranding } from '../context/BrandingContext';
 import { designTokens } from '../theme/designTokens';
 import type { Charge, Membership, Plan } from '../types';
 
@@ -19,6 +21,8 @@ const euro = (n: number) => `€ ${new Intl.NumberFormat('nl-NL', { minimumFract
 export function SubscriptionCard({ userId }: { userId: string }) {
   const { t, lang } = useI18n();
   const notify = useNotify();
+  const branding = useBranding();
+  const shareable = canShareFiles();
   const [data, setData] = useState<{
     membership: Membership;
     plan: Plan | null;
@@ -60,10 +64,11 @@ export function SubscriptionCard({ userId }: { userId: string }) {
       month: 'long',
     });
 
-  const download = async (c: Charge) => {
+  const download = async (c: Charge, viaShare = false) => {
     setDownloading(c.id);
     try {
-      const r = await downloadInvoicePdf(c.id);
+      const text = t('billing.shareText', { number: c.invoiceNumber ?? '', studio: branding?.name ?? 'VORM', amount: euro(c.amount) });
+      const r = viaShare ? await shareInvoicePdf(c.id, text) : await downloadInvoicePdf(c.id);
       if (!c.invoiceNumber) setCharges((prev) => prev.map((x) => (x.id === c.id ? { ...x, invoiceNumber: r.invoiceNumber } : x)));
     } catch (e) {
       notify.error(t('billing.failed'), e);
@@ -164,6 +169,11 @@ export function SubscriptionCard({ userId }: { userId: string }) {
           <Typography variant="body2" fontWeight={600} sx={{ flexShrink: 0 }}>
             {euro(c.amount)}
           </Typography>
+          {shareable && (
+            <IconButton size="small" aria-label={t('billing.share')} disabled={downloading === c.id} onClick={() => void download(c, true)}>
+              <IosShareRoundedIcon fontSize="small" />
+            </IconButton>
+          )}
           <IconButton size="small" aria-label={t('billing.downloadPdf')} disabled={downloading === c.id} onClick={() => void download(c)}>
             <DownloadRoundedIcon fontSize="small" />
           </IconButton>

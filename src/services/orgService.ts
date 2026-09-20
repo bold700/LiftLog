@@ -45,6 +45,7 @@ export function toBranding(raw: unknown): OrgBranding | null {
   }
   const out: OrgBranding = {
     logoUrl: str(b.logoUrl),
+    logoPrintUrl: str(b.logoPrintUrl),
     seedColor: seed && HEX.test(seed) ? seed.toUpperCase() : null,
     lightScheme,
   };
@@ -103,6 +104,7 @@ export async function saveOrgBranding(orgId: string, branding: OrgBranding | nul
   const clean = branding
     ? {
         logoUrl: branding.logoUrl ?? null,
+        logoPrintUrl: branding.logoPrintUrl ?? null,
         seedColor: branding.seedColor ?? null,
         lightScheme: branding.lightScheme ?? null,
       }
