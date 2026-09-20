@@ -8,8 +8,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useI18n } from '../../context/I18nContext';
 import { useNotify } from '../../context/NotifyContext';
-import { canShareFiles, chargesToCsv, downloadInvoicePdf, getChargesForOrg, getMailStatus, isOverdue, markChargePaid, reopenCharge, saveChargeNote, sendInvoiceEmail, shareInvoicePdf, vatSplit, writeOffCharge } from '../../services/chargeService';
-import { useBranding } from '../../context/BrandingContext';
+import { chargesToCsv, downloadInvoicePdf, getChargesForOrg, getInvoiceLink, getMailStatus, isOverdue, markChargePaid, reopenCharge, saveChargeNote, sendInvoiceEmail, vatSplit, writeOffCharge } from '../../services/chargeService';
+import { copyText, whatsappUrl } from '../../utils/share';
 import { designTokens } from '../../theme/designTokens';
 import type { Charge, Membership, Plan, Profile } from '../../types';
 
@@ -30,10 +30,8 @@ const euro2 = (n: number) => `€ ${new Intl.NumberFormat('nl-NL', { minimumFrac
 export function BillingPanel({ profiles, memberships, plans, selfId, exportSignal }: BillingPanelProps) {
   const { t, lang } = useI18n();
   const notify = useNotify();
-  const branding = useBranding();
   const theme = useTheme();
   const wide = useMediaQuery(theme.breakpoints.up('md'));
-  const shareable = useMemo(() => canShareFiles(), []);
 
   const [charges, setCharges] = useState<Charge[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +42,7 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
   const [downloading, setDownloading] = useState(false);
   const [sending, setSending] = useState(false);
   const [mailReady, setMailReady] = useState(false);
+  const [link, setLink] = useState<{ chargeId: string; url: string; text: string } | null>(null);
 
   useEffect(() => {
     void getMailStatus()
@@ -111,6 +110,22 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
   useEffect(() => {
     setNote(selected?.note ?? '');
   }, [selected]);
+
+  // Openbare link alvast ophalen zodra een post open staat, zodat de WhatsApp-knop een gewone link is
+  // (Safari blokkeert een venster dat pas na een wachttijd opengaat).
+  useEffect(() => {
+    if (!selectedId) return;
+    let alive = true;
+    setLink(null);
+    void getInvoiceLink(selectedId)
+      .then((r) => {
+        if (alive) setLink({ chargeId: selectedId, url: r.url, text: r.text });
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [selectedId]);
 
   const act = async (fn: () => Promise<void>, done: string) => {
     if (!selected) return;
@@ -243,21 +258,6 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
     }
   };
 
-  const share = async () => {
-    if (!selected) return;
-    setDownloading(true);
-    try {
-      const text = t('billing.shareText', { number: selected.invoiceNumber ?? '', studio: branding?.name ?? 'VORM', amount: euro2(selected.amount) });
-      const r = await shareInvoicePdf(selected.id, text);
-      notify.success(r.shared ? t('billing.shared', { number: r.invoiceNumber }) : t('billing.downloaded', { number: r.invoiceNumber }));
-      if (!selected.invoiceNumber) await load();
-    } catch (e) {
-      notify.error(t('billing.failed'), e);
-    } finally {
-      setDownloading(false);
-    }
-  };
-
   const send = async () => {
     if (!selected) return;
     const to = profiles.find((p) => p.userId === selected.userId)?.email?.trim();
@@ -275,6 +275,12 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
     } finally {
       setSending(false);
     }
+  };
+
+  const copyLink = async () => {
+    if (!link) return;
+    if (await copyText(link.url)) notify.success(t('billing.linkCopied'));
+    else notify.error(t('billing.linkFailed'));
   };
 
   const vat = selected ? vatSplit(selected.amount, selected.vatRate) : null;
@@ -297,16 +303,20 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
           <Button variant="outlined" disabled={downloading} onClick={() => void download()}>
             {downloading ? t('common.saving') : t('billing.downloadPdf')}
           </Button>
-          {shareable && (
-            <Button variant="outlined" disabled={downloading} onClick={() => void share()}>
-              {t('billing.share')}
-            </Button>
-          )}
+          <Button variant="outlined" component="a" href={link ? whatsappUrl(link.text) : undefined} target="_blank" rel="noopener noreferrer" disabled={!link || link.chargeId !== selected.id}>
+            {t('billing.share')}
+          </Button>
+          <Button variant="outlined" disabled={!link || link.chargeId !== selected.id} onClick={() => void copyLink()}>
+            {t('billing.copyLink')}
+          </Button>
           <Button variant="contained" disableElevation disabled={!mailReady || sending || downloading} title={mailReady ? undefined : t('billing.emailSoon')} onClick={() => void send()}>
             {sending ? t('common.saving') : selected.invoiceSentAt ? t('billing.resend') : t('billing.sendEmail')}
           </Button>
         </Box>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75, wordBreak: 'break-all' }}>
+          {link && link.chargeId === selected.id ? t('billing.linkLine', { url: link.url.replace(/^https?:\/\//, '') }) : ''}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
           {!mailReady ? t('billing.emailSoon') : selected.invoiceSentAt ? t('billing.sent', { date: fmt(selected.invoiceSentAt), email: selected.invoiceSentTo ?? '' }) : t('billing.notSent')}
         </Typography>
       </Box>
