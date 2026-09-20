@@ -116,7 +116,23 @@ export function BeheerPage() {
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const { t } = useI18n();
   // Beheer heeft tabs naar het ontwerp; Lessoorten en Abonnementen komen er in latere stappen bij.
-  const [section, setSection] = useState<Section>('leden');
+  const [section, setSectionState] = useState<Section>(() => {
+    try {
+      const v = localStorage.getItem(SECTION_STORAGE_KEY);
+      return v && (SECTIONS as string[]).includes(v) ? (v as Section) : 'leden';
+    } catch {
+      return 'leden';
+    }
+  });
+  // Het tabblad onthouden, zodat een refresh je op Lessoorten of Huisstijl laat staan.
+  const setSection = useCallback((next: Section) => {
+    setSectionState(next);
+    try {
+      localStorage.setItem(SECTION_STORAGE_KEY, next);
+    } catch {
+      /* privémodus */
+    }
+  }, []);
   // Kop-knop op Lessoorten: elke klik telt op, het paneel opent dan een lege lessoort.
   const [newTypeSignal, setNewTypeSignal] = useState(0);
 
@@ -612,6 +628,7 @@ export function BeheerPage() {
 }
 
 const SECTIONS: Section[] = ['leden', 'lessoorten', 'abonnementen', 'huisstijl', 'facturatie'];
+const SECTION_STORAGE_KEY = 'vorm.beheer.section';
 const SECTION_KEY: Record<Section, 'members' | 'classTypes' | 'subscriptions' | 'branding' | 'billing'> = {
   leden: 'members',
   lessoorten: 'classTypes',

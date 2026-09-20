@@ -49,8 +49,67 @@ const TAB_METINGEN = 6;
 const TAB_ASSISTENT = 7;
 const TAB_LESSEN = 9;
 
+/**
+ * De actieve tab staat in de URL (#beheer, #lessen, …) en in de browser. Zo brengt een refresh je
+ * terug waar je was, en werkt de terug-knop tussen tabs. Zonder hash: de laatst gebruikte tab.
+ */
+const TAB_SLUGS: Record<number, string> = {
+  [TAB_INZICHTEN]: 'inzichten',
+  [TAB_SCHEMAS]: 'workouts',
+  [TAB_PROFIEL]: 'profiel',
+  [TAB_BEHEER]: 'beheer',
+  [TAB_VOEDING]: 'voeding',
+  [TAB_METINGEN]: 'metingen',
+  [TAB_ASSISTENT]: 'assistent',
+  [TAB_LESSEN]: 'lessen',
+};
+const TAB_STORAGE_KEY = 'vorm.tab';
+
+function tabFromSlug(slug: string | null | undefined): number | null {
+  if (!slug) return null;
+  const found = Object.entries(TAB_SLUGS).find(([, v]) => v === slug);
+  return found ? Number(found[0]) : null;
+}
+
+function initialTab(): number {
+  if (typeof window === 'undefined') return TAB_INZICHTEN;
+  const fromHash = tabFromSlug(window.location.hash.replace(/^#/, ''));
+  if (fromHash != null) return fromHash;
+  try {
+    const remembered = tabFromSlug(localStorage.getItem(TAB_STORAGE_KEY));
+    if (remembered != null) return remembered;
+  } catch {
+    /* privémodus */
+  }
+  return TAB_INZICHTEN;
+}
+
 function AppContent() {
-  const [activeTab, setActiveTab] = useState(TAB_INZICHTEN);
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  // Tab → URL en browser; en de terug-knop (hashchange) → tab.
+  useEffect(() => {
+    const slug = TAB_SLUGS[activeTab];
+    if (!slug) return;
+    if (window.location.hash !== `#${slug}`) {
+      // Eerste keer zonder hash: vervangen, anders staat er een lege stap in de geschiedenis.
+      const method = window.location.hash ? 'pushState' : 'replaceState';
+      window.history[method](null, '', `#${slug}`);
+    }
+    try {
+      localStorage.setItem(TAB_STORAGE_KEY, slug);
+    } catch {
+      /* privémodus */
+    }
+  }, [activeTab]);
+  useEffect(() => {
+    const onHash = () => {
+      const tab = tabFromSlug(window.location.hash.replace(/^#/, ''));
+      if (tab != null) setActiveTab(tab);
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
   const [addOpen, setAddOpen] = useState(false);
   const [requestedInsightsSubTab, setRequestedInsightsSubTab] = useState<number | null>(null);
   const [requestedOpenSessionLogDialog, setRequestedOpenSessionLogDialog] = useState(false);
