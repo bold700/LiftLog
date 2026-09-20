@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addMonths, newMembership, planRenewals, renewalDelta } from '../../api/_lib/subscriptions.mjs';
+import { addMonths, newCharge, newMembership, periodOf, planRenewals, renewalDelta } from '../../api/_lib/subscriptions.mjs';
 
 const month = (extra = {}) => ({ id: 'p1', name: 'Maand 8', period: 'month', credits: 8, rollover: 'expire', ...extra });
 
@@ -37,6 +37,19 @@ describe('abonnementen', () => {
     expect(r.steps).toEqual([{ kind: 'expiry', delta: -3 }]);
     expect(r.balance).toBe(0);
     expect(r.membership.status).toBe('expired');
+  });
+
+  it('een post voor een maandplan draagt de maand, een kaart niet', () => {
+    const now = '2026-09-20T12:00:00.000Z';
+    const m = newCharge({ id: 'ch1', orgId: 'vanas', userId: 'u1', plan: { ...month(), price: 139 }, membershipId: 'm1', periodStartIso: '2026-10-01T00:00:00.000Z', nowIso: now });
+    expect(m.period).toBe('2026-10');
+    expect(m.description).toBe('Maand 8 · 2026-10');
+    expect(m.amount).toBe(139);
+    expect(m.status).toBe('open');
+    const k = newCharge({ id: 'ch2', orgId: 'vanas', userId: 'u1', plan: { id: 'p2', name: 'Kaart', period: 'once', price: 120 }, membershipId: 'm2', periodStartIso: now, nowIso: now });
+    expect(k.period).toBeNull();
+    expect(k.description).toBe('Kaart');
+    expect(periodOf('2026-02-28T10:00:00.000Z')).toBe('2026-02');
   });
 
   it('een nieuw lidmaatschap weet zijn volgende verlenging of einddatum', () => {

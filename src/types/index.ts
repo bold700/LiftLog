@@ -436,6 +436,25 @@ export interface Membership {
   lastRenewedAt: string | null;
 }
 
+/** Post (Beheer → Facturatie): wat een lid verschuldigd is voor een periode van zijn abonnement. */
+export interface Charge {
+  id: string;
+  orgId: string;
+  userId: string;
+  membershipId: string;
+  planId: string;
+  planName: string;
+  description: string;
+  amount: number;
+  /** "2026-09" bij een maandplan; null bij een eenmalige kaart. */
+  period: string | null;
+  issuedAt: string;
+  dueAt: string;
+  status: 'open' | 'paid' | 'void';
+  paidAt: string | null;
+  note: string;
+}
+
 export type SchemaAudience = 'single' | 'multiple' | 'open' | 'group';
 
 export interface Schema {
