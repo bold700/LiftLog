@@ -29,7 +29,7 @@ import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
 import { NumberField } from '../NumberField';
 import { designTokens } from '../../theme/designTokens';
 import { portionsFor, type Portion } from '../../utils/portions';
-import { MEAL_LABELS, MEAL_ORDER, macrosForGrams, type FoodProduct, type MealMoment } from '../../services/nutritionService';
+import { MEAL_LABELS, MEAL_ORDER, MACRO_COLORS, macrosForGrams, type FoodProduct, type MealMoment } from '../../services/nutritionService';
 
 const CUSTOM = 'custom';
 
@@ -132,7 +132,10 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
     >
       {product && (
         <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: fullScreen ? '100%' : undefined }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', px: 1, pt: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pl: 2.5, pr: 1, pt: 1.5 }}>
+            <Typography variant="h6" fontWeight={700}>
+              {isEditing ? 'Voeding bewerken' : 'Voeding toevoegen'}
+            </Typography>
             <IconButton onClick={onClose} aria-label="Sluiten">
               <CloseRoundedIcon />
             </IconButton>
@@ -183,9 +186,9 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
             {macros && (
               <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, mb: 2 }}>
                 <MacroTile label="kcal" value={macros.kcal.toLocaleString('nl-NL')} dot={designTokens.primary} />
-                <MacroTile label="koolh." value={`${fmt1(macros.carbs)} g`} dot="#D96C6C" />
-                <MacroTile label="eiwit" value={`${fmt1(macros.protein)} g`} dot="#4E8AC7" />
-                <MacroTile label="vet" value={`${fmt1(macros.fat)} g`} dot="#E39A3B" />
+                <MacroTile label="koolh." value={`${fmt1(macros.carbs)} g`} dot={MACRO_COLORS.carbs} />
+                <MacroTile label="eiwit" value={`${fmt1(macros.protein)} g`} dot={MACRO_COLORS.protein} />
+                <MacroTile label="vet" value={`${fmt1(macros.fat)} g`} dot={MACRO_COLORS.fat} />
               </Box>
             )}
 
