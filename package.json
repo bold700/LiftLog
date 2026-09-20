@@ -53,6 +53,7 @@
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@mui/icons-material": "^6.1.1",
     "@mui/material": "^6.1.1",
+    "@resvg/resvg-js": "^2.6.2",
     "@zxing/browser": "^0.2.0",
     "@zxing/library": "^0.22.0",
     "firebase": "^12.10.0",

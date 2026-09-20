@@ -26,6 +26,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { activeMembership, newCharge, newMembership, settleMembership } from './_lib/subscriptions.mjs';
 import { businessOf, reserveInvoiceNumber, vatRateOf } from './_lib/invoice.mjs';
 import { buildInvoicePdf, invoiceFileName } from './_lib/invoicePdf.mjs';
+import { logoToDataUrl } from './_lib/invoiceLogo.mjs';
 
 const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
 
@@ -489,17 +490,15 @@ async function renewDue(res, db, myOrgs, body) {
 
 // --- Facturen ---------------------------------------------------------------------
 
-/** Logo van de studio als data-URL voor in de PDF; alleen PNG en JPEG, anders null. */
+/** Logo van de studio als data-URL voor in de PDF: PNG en JPEG direct, SVG eerst gerasterd; anders null. */
 async function fetchLogo(url) {
   if (!url) return null;
   try {
     const r = await fetch(url);
     if (!r.ok) return null;
-    const type = String(r.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
-    if (type !== 'image/png' && type !== 'image/jpeg') return null;
     const buf = Buffer.from(await r.arrayBuffer());
     if (buf.length > 2 * 1024 * 1024) return null;
-    return `data:${type};base64,${buf.toString('base64')}`;
+    return await logoToDataUrl(buf, r.headers.get('content-type'));
   } catch {
     return null;
   }
