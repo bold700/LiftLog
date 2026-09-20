@@ -133,6 +133,8 @@ await t('trainer studio B leest eigen workout → mag', true, getDoc(doc(as('tra
 await t('sporter studio B leest ranglijst eigen studio → mag', true, getDoc(doc(as('sporterB'), 'leaderboardPublic/sporterB')));
 await t('beheerder studio B leest eigen studio → mag', true, getDoc(doc(as('adminB'), 'orgs/studiob')));
 await t('beheerder studio B leest andere studio → geweigerd', false, getDoc(doc(as('adminB'), 'orgs/vanas')));
+await t('beheerder slaat bedrijfsgegevens van eigen studio op → mag', true, updateDoc(doc(as('admin1'), 'orgs/vanas'), { business: { legalName: 'Van As PT', kvk: '12345678', nextInvoiceNumber: 1 } }));
+await t('trainer slaat bedrijfsgegevens op → geweigerd', false, updateDoc(doc(as('trainer1'), 'orgs/vanas'), { business: { legalName: 'X' } }));
 await t('trainer studio B maakt workout in eigen studio → mag', true, setDoc(doc(as('trainerB'), 'workouts/wB2'), { orgId: 'studiob', trainerId: 'trainerB', name: 'ok' }));
 
 // De ledenlijst zoals de app hem opvraagt (profileService.getAllProfiles): een filter op lidmaatschap
@@ -273,6 +275,10 @@ await t('trainer maakt een abonnement → mag', true, setDoc(doc(as('trainer1'),
 await t('sporter maakt een abonnement → geweigerd', false, setDoc(doc(as('sporter2'), 'plans/pl3'), plan()));
 await t('abonnement met negatieve prijs → geweigerd', false, setDoc(doc(as('admin1'), 'plans/pl4'), plan({ price: -1 })));
 await t('abonnement met onbekende periode → geweigerd', false, setDoc(doc(as('admin1'), 'plans/pl5'), plan({ period: 'week' })));
+await t('abonnement met btw 9 → mag', true, setDoc(doc(as('admin1'), 'plans/pl6'), plan({ vatRate: 9 })));
+await t('abonnement met btw 5 → geweigerd', false, setDoc(doc(as('admin1'), 'plans/pl7'), plan({ vatRate: 5 })));
+await t('beheerder zet btw op 21 → mag', true, updateDoc(doc(as('admin1'), 'plans/pl1'), { vatRate: 21 }));
+await t('beheerder zet btw op 12 → geweigerd', false, updateDoc(doc(as('admin1'), 'plans/pl1'), { vatRate: 12 }));
 await t('sporter leest de abonnementen van zijn studio → mag', true, getDocs(query(collection(as('sporter2'), 'plans'), where('orgId', '==', 'vanas'))));
 await t('studio B leest een abonnement van studio A → geweigerd', false, getDoc(doc(as('adminB'), 'plans/pl1')));
 await t('sporter werkt een abonnement bij → geweigerd', false, updateDoc(doc(as('sporter2'), 'plans/pl1'), { price: 1 }));

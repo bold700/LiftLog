@@ -5,7 +5,9 @@
 import { collection, doc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
-import type { Charge } from '../types';
+import { callBooking } from './classService';
+import { toVatRate } from './planService';
+import type { Charge, VatRate } from '../types';
 
 const COLLECTION = 'charges';
 const str = (v: unknown) => (typeof v === 'string' ? v : null);
@@ -27,6 +29,9 @@ function toCharge(data: Record<string, unknown>, id: string): Charge {
     status: data.status === 'paid' || data.status === 'void' ? data.status : 'open',
     paidAt: str(data.paidAt),
     note: str(data.note) ?? '',
+    vatRate: toVatRate(data.vatRate),
+    invoiceNumber: str(data.invoiceNumber),
+    invoiceIssuedAt: str(data.invoiceIssuedAt),
   };
 }
 
@@ -35,6 +40,36 @@ export async function getChargesForOrg(): Promise<Charge[]> {
   if (!isFirebaseConfigured() || !db) return [];
   const snap = await getDocs(query(collection(db, COLLECTION), where('orgId', '==', requireOrgId())));
   return snap.docs.map((d) => toCharge(d.data(), d.id)).sort((a, b) => b.dueAt.localeCompare(a.dueAt));
+}
+
+/** Eigen posten van een lid in de actieve studio, nieuwste eerst (Profiel → Facturen). */
+export async function getMyCharges(userId: string): Promise<Charge[]> {
+  if (!isFirebaseConfigured() || !db) return [];
+  const snap = await getDocs(query(collection(db, COLLECTION), where('orgId', '==', requireOrgId()), where('userId', '==', userId)));
+  return snap.docs.map((d) => toCharge(d.data(), d.id)).sort((a, b) => b.dueAt.localeCompare(a.dueAt));
+}
+
+/**
+ * Factuur-PDF ophalen bij de server en als download aanbieden. De server kent zo nodig eerst een
+ * factuurnummer toe; dat nummer komt terug zodat de lijst het meteen kan tonen.
+ */
+export async function downloadInvoicePdf(chargeId: string): Promise<{ invoiceNumber: string; fileName: string }> {
+  const r = await callBooking<{ invoiceNumber: string; fileName: string; pdfBase64: string }>({ action: 'invoice', chargeId });
+  const bytes = Uint8Array.from(atob(r.pdfBase64), (c) => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = r.fileName;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return { invoiceNumber: r.invoiceNumber, fileName: r.fileName };
+}
+
+/** Inclusief bedrag splitsen in exclusief en btw, afgerond op centen (dezelfde rekensom als de server). */
+export function vatSplit(amountIncl: number, rate: VatRate): { incl: number; excl: number; vat: number; rate: VatRate } {
+  const incl = Math.round((Number(amountIncl) || 0) * 100) / 100;
+  const excl = Math.round((incl / (1 + rate / 100)) * 100) / 100;
+  return { incl, excl, vat: Math.round((incl - excl) * 100) / 100, rate };
 }
 
 export async function markChargePaid(id: string, byUserId: string, note?: string): Promise<void> {
@@ -67,7 +102,10 @@ export function isOverdue(c: Charge, now = Date.now()): boolean {
 /** CSV van de posten, voor de boekhouding. */
 export function chargesToCsv(charges: Charge[], nameOf: (userId: string) => string): string {
   const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const rows = [['Lid', 'Omschrijving', 'Periode', 'Vervaldatum', 'Bedrag', 'Status', 'Betaald op', 'Notitie']];
-  for (const c of charges) rows.push([nameOf(c.userId), c.description, c.period ?? '', c.dueAt.slice(0, 10), c.amount.toFixed(2), c.status, c.paidAt ? c.paidAt.slice(0, 10) : '', c.note]);
+  const rows = [['Factuurnummer', 'Lid', 'Omschrijving', 'Periode', 'Vervaldatum', 'Bedrag', 'Excl. btw', 'Btw', 'Btw %', 'Status', 'Betaald op', 'Notitie']];
+  for (const c of charges) {
+    const v = vatSplit(c.amount, c.vatRate);
+    rows.push([c.invoiceNumber ?? '', nameOf(c.userId), c.description, c.period ?? '', c.dueAt.slice(0, 10), c.amount.toFixed(2), v.excl.toFixed(2), v.vat.toFixed(2), String(v.rate), c.status, c.paidAt ? c.paidAt.slice(0, 10) : '', c.note]);
+  }
   return rows.map((r) => r.map(esc).join(';')).join('\n');
 }

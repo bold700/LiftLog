@@ -309,6 +309,8 @@ export interface Org {
   allowSelfSignup: boolean;
   /** Eigen uiterlijk van de studio. Ontbreekt dit, dan ziet de studio er uit als VORM zelf. */
   branding?: OrgBranding | null;
+  /** Bedrijfsgegevens voor op de factuur (Beheer → Huisstijl). Ontbreekt dit, dan staat alleen de naam op de factuur. */
+  business?: OrgBusiness | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -319,6 +321,27 @@ export interface Org {
  * Material 3-schema wordt daaruit afgeleid, zoals de Material Theme Builder doet) of uit een
  * geplakte Theme Builder-export voor wie precies wil sturen.
  */
+/**
+ * Bedrijfsgegevens van de studio, zoals ze op elke factuur en in de factuurmail staan. Een Nederlandse
+ * factuur moet naam, adres, KvK- en btw-nummer dragen; de rest is service voor het lid. De nummering
+ * loopt per studio door zonder gaten: de server kent bij elke nieuwe post het volgende nummer toe.
+ */
+export interface OrgBusiness {
+  legalName: string;
+  street: string;
+  postcode: string;
+  city: string;
+  kvk: string;
+  vatNumber: string;
+  iban: string;
+  invoiceEmail: string;
+  phone: string;
+  /** Voorvoegsel van het factuurnummer, bijv. "VAS-2026-". */
+  invoicePrefix: string;
+  /** Eerstvolgende volgnummer (1 = "0001"). */
+  nextInvoiceNumber: number;
+}
+
 export interface OrgBranding {
   /** Download-URL van het logo in Storage (orgLogos/{orgId}). */
   logoUrl?: string | null;
@@ -418,9 +441,16 @@ export interface Plan {
   rollover: 'expire' | 'carry';
   availableTo: 'all' | 'invite';
   status: 'active' | 'paused';
+  /** Btw-percentage dat in de prijs zit (0, 9 of 21). Sport en fitness vallen doorgaans onder 9. */
+  vatRate: VatRate;
   createdAt: string;
   updatedAt: string;
 }
+
+export type VatRate = 0 | 9 | 21;
+export const VAT_RATES: readonly VatRate[] = [0, 9, 21];
+/** Standaardtarief voor een nieuw plan: gelegenheid geven tot sportbeoefening valt onder het lage tarief. */
+export const DEFAULT_VAT_RATE: VatRate = 9;
 
 /** Lidmaatschap: dit lid heeft dit abonnement. Alleen de server schrijft ze. */
 export interface Membership {
@@ -453,6 +483,12 @@ export interface Charge {
   status: 'open' | 'paid' | 'void';
   paidAt: string | null;
   note: string;
+  /** Btw-percentage dat in het bedrag zit, overgenomen van het plan op het moment van aanmaken. */
+  vatRate: VatRate;
+  /** Factuurnummer, bijv. "VAS-2026-0142". Krijgt elke betaalde post bij het aanmaken; oudere posten bij de eerste download. */
+  invoiceNumber: string | null;
+  /** Wanneer het factuurnummer is toegekend: de factuurdatum. */
+  invoiceIssuedAt: string | null;
 }
 
 export type SchemaAudience = 'single' | 'multiple' | 'open' | 'group';

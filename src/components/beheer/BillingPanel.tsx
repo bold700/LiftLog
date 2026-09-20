@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useI18n } from '../../context/I18nContext';
 import { useNotify } from '../../context/NotifyContext';
-import { chargesToCsv, getChargesForOrg, isOverdue, markChargePaid, reopenCharge, saveChargeNote, writeOffCharge } from '../../services/chargeService';
+import { chargesToCsv, downloadInvoicePdf, getChargesForOrg, isOverdue, markChargePaid, reopenCharge, saveChargeNote, vatSplit, writeOffCharge } from '../../services/chargeService';
 import { designTokens } from '../../theme/designTokens';
 import type { Charge, Membership, Plan, Profile } from '../../types';
 
@@ -24,6 +24,7 @@ interface BillingPanelProps {
 type Filter = 'open' | 'paid' | 'all';
 
 const euro = (n: number) => `€ ${new Intl.NumberFormat('nl-NL', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n)}`;
+const euro2 = (n: number) => `€ ${new Intl.NumberFormat('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)}`;
 
 export function BillingPanel({ profiles, memberships, plans, selfId, exportSignal }: BillingPanelProps) {
   const { t, lang } = useI18n();
@@ -37,6 +38,7 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -216,14 +218,49 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
     <TextField key={label} label={label} size="small" fullWidth value={value} InputProps={{ readOnly: true }} />
   );
 
-  const detail = selected && (
+  const download = async () => {
+    if (!selected) return;
+    setDownloading(true);
+    try {
+      const r = await downloadInvoicePdf(selected.id);
+      notify.success(t('billing.downloaded', { number: r.invoiceNumber }));
+      if (!selected.invoiceNumber) await load();
+    } catch (e) {
+      notify.error(t('billing.failed'), e);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const vat = selected ? vatSplit(selected.amount, selected.vatRate) : null;
+
+  const detail = selected && vat && (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {field(t('billing.member'), nameOf(selected.userId))}
       {field(t('billing.description'), selected.description)}
-      {field(t('billing.amount'), euro(selected.amount))}
+      {field(t('billing.amount'), `${euro(selected.amount)} · ${t('billing.vatLine', { rate: vat.rate, vat: euro2(vat.vat) })}`)}
       {field(t('billing.due'), fmt(selected.dueAt, true))}
       {field(t('billing.status'), selected.status === 'paid' && selected.paidAt ? `${t('billing.paid')} · ${fmt(selected.paidAt, true)}` : statusLabel(selected))}
       <TextField label={t('billing.note')} size="small" fullWidth multiline minRows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+
+      {/* Factuur: nummer, PDF, later ook versturen per mail (ontwerp "Invoice"). */}
+      <Box>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+          {selected.invoiceNumber ? t('billing.invoiceNumber', { number: selected.invoiceNumber }) : t('billing.noInvoiceNumber')}
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+          <Button variant="outlined" disabled={downloading} onClick={() => void download()}>
+            {downloading ? t('common.saving') : t('billing.downloadPdf')}
+          </Button>
+          <Button variant="contained" disableElevation disabled title={t('billing.emailSoon')}>
+            {t('billing.sendEmail')}
+          </Button>
+        </Box>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+          {t('billing.emailSoon')}
+        </Typography>
+      </Box>
+
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, pt: 0.5 }}>
         {selected.status === 'open' ? (
           <>
