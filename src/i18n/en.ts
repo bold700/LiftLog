@@ -119,6 +119,7 @@ export const en: Messages = {
       start: 'From',
       end: 'Until',
       timeInvalid: 'End time must be after the start time.',
+      generateFailed: 'Class type saved, but the schedule could not be filled in right away. That happens automatically at the next daily update.',
       weekdayLabels: {
         sun: 'Sunday',
         mon: 'Monday',

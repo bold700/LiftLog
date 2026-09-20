@@ -14,6 +14,8 @@ import { applyCors } from './_lib/cors.mjs';
  *   { action: 'cancel',  bookingId }                   afmelden; credit terug binnen de annuleertermijn
  *                                                        (instelbaar per studio, zie bookingPolicy hieronder)
  *   { action: 'setStandingBooking', standingBookingId, active }  "elke week inschrijven" aan/uit zetten
+ *   { action: 'generateClassOccurrences', classTypeId }  rooster meteen vullen voor deze lessoort (staf),
+ *                                                        in plaats van tot de volgende cron te wachten
  *   { action: 'grant',   userId, amount, note }        credits toekennen (alleen trainer/beheerder)
  *   { action: 'assign' | 'unassign' | 'renewDue' }     abonnementen (zie onder)
  *   { action: 'invoice', chargeId }                    factuur-PDF van een post (staf, of het lid zelf)
@@ -140,6 +142,8 @@ export default async function handler(req, res) {
         return await cancel(res, db, uid, myOrgs, isStaff, String(body.bookingId ?? '').trim());
       case 'setStandingBooking':
         return await setStandingBooking(res, db, uid, myOrgs, String(body.standingBookingId ?? '').trim(), body.active === true);
+      case 'generateClassOccurrences':
+        return await generateClassOccurrencesNow(res, db, myOrgs, isStaff, String(body.classTypeId ?? '').trim());
       case 'grant':
         if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan credits toekennen.', build: BUILD });
         return await grant(res, db, uid, myOrgs, body);
@@ -782,72 +786,106 @@ async function generateClasses(req, res, db) {
   const authHeader = req.headers.authorization || req.headers.Authorization || '';
   if (authHeader !== `Bearer ${secret}`) return json(res, 401, { error: 'Niet geautoriseerd.', build: BUILD });
 
-  const from = todayIso();
   const typesSnap = await db.collection('classTypes').get();
-  let created = 0;
-  let autoBooked = 0;
-  let autoWaitlisted = 0;
-  let autoSkippedNoCredits = 0;
+  const totals = { created: 0, autoBooked: 0, autoWaitlisted: 0, autoSkippedNoCredits: 0 };
   const skippedNoTrainer = [];
 
   for (const typeDoc of typesSnap.docs) {
     const ct = typeDoc.data();
-    const schedule = Array.isArray(ct.schedule) ? ct.schedule : [];
-    if (schedule.length === 0) continue;
+    if (!Array.isArray(ct.schedule) || ct.schedule.length === 0) continue;
     if (!ct.defaultTrainerId) {
       skippedNoTrainer.push(typeDoc.id);
       continue;
     }
-
-    const all = occurrencesForSchedule(schedule, from, WEEKS_AHEAD);
-    if (all.length === 0) continue;
-    const allRefs = all.map((o) => db.collection('classes').doc(classIdForOccurrence(typeDoc.id, o.date, o.startTime)));
-    const existingDocs = await db.getAll(...allRefs);
-    const existingKeys = new Set(existingDocs.filter((d) => d.exists).map((d) => d.id));
-
-    const missing = missingOccurrences(typeDoc.id, schedule, from, WEEKS_AHEAD, existingKeys);
-    if (missing.length === 0) continue;
-    const batch = db.batch();
-    for (const o of missing) {
-      const ref = db.collection('classes').doc(classIdForOccurrence(typeDoc.id, o.date, o.startTime));
-      batch.set(ref, {
-        id: ref.id,
-        orgId: ct.orgId,
-        title: ct.name,
-        date: o.date,
-        startTime: o.startTime,
-        endTime: o.endTime,
-        trainerId: ct.defaultTrainerId,
-        capacity: ct.capacity ?? 999,
-        creditCost: ct.creditCost ?? 1,
-        schemaId: ct.schemaId ?? null,
-        classTypeId: typeDoc.id,
-        room: ct.room ?? null,
-        sessionKind: ct.sessionKind ?? 'group',
-        bookedCount: 0,
-        waitlistCount: 0,
-        cancelledAt: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-      created++;
-    }
-    await batch.commit();
-
-    // Nieuw gemaakte lessen: iedereen met een actieve "elke week"-inschrijving op dit weekmoment
-    // meteen meeboeken. Alleen voor deze net aangemaakte lessen — die zijn per definitie nog niet
-    // eerder geprobeerd, dus dit gebeurt precies één keer per les.
-    for (const o of missing) {
-      const weekday = new Date(`${o.date}T00:00:00`).getDay();
-      const classId = classIdForOccurrence(typeDoc.id, o.date, o.startTime);
-      const outcome = await autoBookStandingBookings(db, ct.orgId, classId, typeDoc.id, weekday, o.startTime);
-      autoBooked += outcome.booked;
-      autoWaitlisted += outcome.skippedFull;
-      autoSkippedNoCredits += outcome.skippedNoCredits;
-    }
+    const result = await generateForClassType(db, typeDoc.id, ct);
+    totals.created += result.created;
+    totals.autoBooked += result.autoBooked;
+    totals.autoWaitlisted += result.autoWaitlisted;
+    totals.autoSkippedNoCredits += result.autoSkippedNoCredits;
   }
 
-  return json(res, 200, { created, skippedNoTrainer, autoBooked, autoWaitlisted, autoSkippedNoCredits, build: BUILD });
+  return json(res, 200, { ...totals, skippedNoTrainer, build: BUILD });
+}
+
+/**
+ * Rekenkant van het rooster vullen voor één lessoort: de ontbrekende weekmomenten (tot
+ * `WEEKS_AHEAD` weken vooruit) op het rooster zetten en daarna "elke week"-inschrijvingen op de
+ * nieuwe lessen meeboeken. Gedeeld door de dagelijkse cron en het direct genereren na het opslaan
+ * van een lessoort (zodat een trainer niet tot de volgende cron-run hoeft te wachten).
+ */
+async function generateForClassType(db, classTypeId, ct) {
+  const from = todayIso();
+  const schedule = ct.schedule;
+  const all = occurrencesForSchedule(schedule, from, WEEKS_AHEAD);
+  const result = { created: 0, autoBooked: 0, autoWaitlisted: 0, autoSkippedNoCredits: 0 };
+  if (all.length === 0) return result;
+
+  const allRefs = all.map((o) => db.collection('classes').doc(classIdForOccurrence(classTypeId, o.date, o.startTime)));
+  const existingDocs = await db.getAll(...allRefs);
+  const existingKeys = new Set(existingDocs.filter((d) => d.exists).map((d) => d.id));
+
+  const missing = missingOccurrences(classTypeId, schedule, from, WEEKS_AHEAD, existingKeys);
+  if (missing.length === 0) return result;
+
+  const batch = db.batch();
+  for (const o of missing) {
+    const ref = db.collection('classes').doc(classIdForOccurrence(classTypeId, o.date, o.startTime));
+    batch.set(ref, {
+      id: ref.id,
+      orgId: ct.orgId,
+      title: ct.name,
+      date: o.date,
+      startTime: o.startTime,
+      endTime: o.endTime,
+      trainerId: ct.defaultTrainerId,
+      capacity: ct.capacity ?? 999,
+      creditCost: ct.creditCost ?? 1,
+      schemaId: ct.schemaId ?? null,
+      classTypeId,
+      room: ct.room ?? null,
+      sessionKind: ct.sessionKind ?? 'group',
+      bookedCount: 0,
+      waitlistCount: 0,
+      cancelledAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    result.created++;
+  }
+  await batch.commit();
+
+  // Nieuw gemaakte lessen: iedereen met een actieve "elke week"-inschrijving op dit weekmoment
+  // meteen meeboeken. Alleen voor deze net aangemaakte lessen — die zijn per definitie nog niet
+  // eerder geprobeerd, dus dit gebeurt precies één keer per les.
+  for (const o of missing) {
+    const weekday = new Date(`${o.date}T00:00:00`).getDay();
+    const classId = classIdForOccurrence(classTypeId, o.date, o.startTime);
+    const outcome = await autoBookStandingBookings(db, ct.orgId, classId, classTypeId, weekday, o.startTime);
+    result.autoBooked += outcome.booked;
+    result.autoWaitlisted += outcome.skippedFull;
+    result.autoSkippedNoCredits += outcome.skippedNoCredits;
+  }
+  return result;
+}
+
+/**
+ * Meteen het rooster vullen voor één lessoort, in plaats van tot de volgende dagelijkse cron te
+ * wachten — voor als een trainer net een terugkerend weekmoment heeft opgeslagen en de les
+ * verwacht te zien. Alleen staf van de eigen studio, en alleen als de lessoort een schema en een
+ * vaste trainer heeft (anders is er niets te genereren).
+ */
+async function generateClassOccurrencesNow(res, db, myOrgs, isStaff, classTypeId) {
+  if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan het rooster vullen.', build: BUILD });
+  if (!classTypeId) return json(res, 400, { error: 'Geen lessoort opgegeven.', build: BUILD });
+  const snap = await db.collection('classTypes').doc(classTypeId).get();
+  if (!snap.exists) return json(res, 404, { error: 'Deze lessoort bestaat niet (meer).', build: BUILD });
+  const ct = snap.data();
+  if (!myOrgs.includes(orgIdOf(ct.orgId))) return json(res, 403, { error: 'Deze lessoort hoort niet bij jouw studio.', build: BUILD });
+  if (!Array.isArray(ct.schedule) || ct.schedule.length === 0 || !ct.defaultTrainerId) {
+    return json(res, 200, { created: 0, autoBooked: 0, autoWaitlisted: 0, autoSkippedNoCredits: 0, build: BUILD });
+  }
+  const result = await generateForClassType(db, classTypeId, ct);
+  return json(res, 200, { ...result, build: BUILD });
 }
 
 /**

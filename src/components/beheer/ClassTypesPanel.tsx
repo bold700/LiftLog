@@ -26,7 +26,7 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useI18n } from '../../context/I18nContext';
 import { useNotify } from '../../context/NotifyContext';
 import { useProfile } from '../../context/ProfileContext';
-import { deleteClassType, getClassTypes, newClassTypeId, saveClassType } from '../../services/classTypeService';
+import { deleteClassType, generateClassOccurrencesNow, getClassTypes, newClassTypeId, saveClassType } from '../../services/classTypeService';
 import { getWorkoutsForUser } from '../../services/workoutFirestore';
 import { NumberField } from '../NumberField';
 import { designTokens } from '../../theme/designTokens';
@@ -181,6 +181,12 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         sessionKind: draft.sessionKind,
         createdAt: draft.createdAt,
       });
+      // Meteen het rooster vullen in plaats van tot de volgende dagelijkse cron te wachten —
+      // anders lijkt een net opgeslagen weekmoment (tijdelijk) nergens te staan. Mislukt dit,
+      // dan is de lessoort zelf al wel opgeslagen; de cron haalt het de volgende dag alsnog in.
+      if (draft.schedule.length > 0) {
+        await generateClassOccurrencesNow(draft.id).catch((e) => notify.error(t('classTypes.schedule.generateFailed'), e));
+      }
       notify.success(t('classTypes.saved'));
       await load();
       if (!wide) setDraft(null);
