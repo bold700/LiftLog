@@ -433,6 +433,14 @@ export interface Profile {
  * Lessoort: de vaste vorm van een les (Small group strength, Personal training, …). Een les op het
  * rooster kiest een lessoort en neemt duur, plekken, credits en trainer over. Beheer → Lessoorten.
  */
+/** Eén vast weekmoment waarop een lessoort terugkeert, bijv. "elke donderdag 19:00". */
+export interface ClassScheduleSlot {
+  /** 0 = zondag .. 6 = zaterdag (zoals JS Date#getDay()). */
+  weekday: number;
+  /** HH:MM */
+  startTime: string;
+}
+
 export interface ClassType {
   id: string;
   orgId: string;
@@ -442,10 +450,13 @@ export interface ClassType {
   capacity: number | null;
   /** Wat een les van deze soort kost; 0 = gratis. */
   creditCost: number;
-  /** Vaste trainer; null = elke trainer. */
+  /** Vaste trainer; null = elke trainer. Verplicht zodra er een `schedule` is: de achtergrondtaak
+   *  die lessen aanmaakt heeft geen mens die op dat moment een trainer kiest. */
   defaultTrainerId: string | null;
   /** Gekoppeld schema (workout) dat bij deze lessoort hoort. */
   schemaId: string | null;
+  /** Vaste weekmomenten waarop deze lessoort automatisch op het rooster komt; leeg = alleen handmatig. */
+  schedule: ClassScheduleSlot[];
   createdAt: string;
   updatedAt: string;
 }

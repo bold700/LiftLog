@@ -32,8 +32,17 @@
     },
     "api/bodyscan-photo.mjs": {
       "maxDuration": 60
+    },
+    "api/generate-classes.mjs": {
+      "maxDuration": 30
     }
   },
+  "crons": [
+    {
+      "path": "/api/generate-classes",
+      "schedule": "0 3 * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/f/:token",

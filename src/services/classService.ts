@@ -210,6 +210,17 @@ export async function deleteClass(classId: string): Promise<void> {
   await deleteDoc(doc(db, CLASSES, classId));
 }
 
+/**
+ * Een les afgelasten in plaats van verwijderen. Voor een les uit een terugkerende lessoort: de
+ * dagelijkse cron (api/generate-classes.mjs) zet ontbrekende lessen terug op het rooster op basis
+ * van hun (deterministische) id — een verwijderde les zou dus de volgende dag gewoon terugkomen.
+ * Een afgelasten les blijft bestaan (met `cancelledAt`), dus telt hij mee als "bestaat al".
+ */
+export async function cancelClass(classId: string): Promise<void> {
+  if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
+  await setDoc(doc(db, CLASSES, classId), { cancelledAt: new Date().toISOString(), updatedAt: serverTimestamp() }, { merge: true });
+}
+
 export function newClassId(): string {
   return `cls_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
