@@ -18,18 +18,17 @@ import type { Charge, Membership, Plan } from '../types';
 
 const euro = (n: number) => `€ ${new Intl.NumberFormat('nl-NL', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n)}`;
 
-export function SubscriptionCard({ userId }: { userId: string }) {
+/**
+ * Alleen de creditsaldo-kaart (naam, balk, verlengdatum), zonder de facturenlijst — voor gebruik
+ * op Profiel én bovenaan Lessen (Figma toont 'm daar ook, boven het rooster).
+ */
+export function CreditBalanceCard({ userId }: { userId: string }) {
   const { t, lang } = useI18n();
-  const notify = useNotify();
-  const branding = useBranding();
-  const shareable = canShareFiles();
   const [data, setData] = useState<{
     membership: Membership;
     plan: Plan | null;
     balance: number;
   } | null>(null);
-  const [charges, setCharges] = useState<Charge[]>([]);
-  const [downloading, setDownloading] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -48,6 +47,87 @@ export function SubscriptionCard({ userId }: { userId: string }) {
         /* geen abonnement of geen rechten: kaart blijft weg */
       }
     })();
+    return () => {
+      alive = false;
+    };
+  }, [userId]);
+
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleDateString(lang === 'en' ? 'en-GB' : 'nl-NL', {
+      day: 'numeric',
+      month: 'long',
+    });
+
+  if (!data) return null;
+  const { membership, plan, balance } = data;
+  const total = plan?.credits ?? null;
+  const fraction = total ? Math.max(0, Math.min(1, balance / total)) : 1;
+  const periodLabel = plan?.period === 'week' ? t('plans.perWeek') : plan?.period === 'fourWeeks' ? t('plans.per4Weeks') : t('plans.perMonth');
+  const footer = membership.nextRenewalAt
+    ? t('plans.renews', { date: fmt(membership.nextRenewalAt), period: periodLabel })
+    : membership.expiresAt
+      ? t('plans.validUntil', { date: fmt(membership.expiresAt) })
+      : '';
+  return (
+    <Box
+      sx={{
+        p: 2,
+        mb: 3,
+        borderRadius: `${designTokens.cardRadius}px`,
+        bgcolor: designTokens.cardBackground,
+      }}
+    >
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: 2,
+        }}
+      >
+        <Typography variant="subtitle2" fontWeight={600}>
+          {membership.planName}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {total == null ? t('plans.unlimitedLeft') : t('plans.leftOf', { left: balance, total })}
+        </Typography>
+      </Box>
+      <Box
+        sx={{
+          mt: 1.25,
+          height: 7,
+          borderRadius: 4,
+          bgcolor: designTokens.cardBackgroundHigh,
+          overflow: 'hidden',
+        }}
+      >
+        <Box
+          sx={{
+            width: `${fraction * 100}%`,
+            height: '100%',
+            bgcolor: designTokens.primary,
+          }}
+        />
+      </Box>
+      {footer && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+          {footer}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+export function SubscriptionCard({ userId }: { userId: string }) {
+  const { t, lang } = useI18n();
+  const notify = useNotify();
+  const branding = useBranding();
+  const shareable = canShareFiles();
+  const [charges, setCharges] = useState<Charge[]>([]);
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
     void getMyCharges(userId)
       .then((list) => {
         if (alive) setCharges(list.filter((c) => c.status !== 'void'));
@@ -76,69 +156,6 @@ export function SubscriptionCard({ userId }: { userId: string }) {
       setDownloading(null);
     }
   };
-
-  const subscription =
-    data &&
-    (() => {
-      const { membership, plan, balance } = data;
-      const total = plan?.credits ?? null;
-      const fraction = total ? Math.max(0, Math.min(1, balance / total)) : 1;
-      const periodLabel =
-        plan?.period === 'week' ? t('plans.perWeek') : plan?.period === 'fourWeeks' ? t('plans.per4Weeks') : t('plans.perMonth');
-      const footer = membership.nextRenewalAt
-        ? t('plans.renews', { date: fmt(membership.nextRenewalAt), period: periodLabel })
-        : membership.expiresAt
-          ? t('plans.validUntil', { date: fmt(membership.expiresAt) })
-          : '';
-      return (
-        <Box
-          sx={{
-            p: 2,
-            mb: 3,
-            borderRadius: `${designTokens.cardRadius}px`,
-            bgcolor: designTokens.cardBackground,
-          }}
-        >
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'baseline',
-              justifyContent: 'space-between',
-              gap: 2,
-            }}
-          >
-            <Typography variant="subtitle2" fontWeight={600}>
-              {membership.planName}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {total == null ? t('plans.unlimitedLeft') : t('plans.leftOf', { left: balance, total })}
-            </Typography>
-          </Box>
-          <Box
-            sx={{
-              mt: 1.25,
-              height: 7,
-              borderRadius: 4,
-              bgcolor: designTokens.cardBackgroundHigh,
-              overflow: 'hidden',
-            }}
-          >
-            <Box
-              sx={{
-                width: `${fraction * 100}%`,
-                height: '100%',
-                bgcolor: designTokens.primary,
-              }}
-            />
-          </Box>
-          {footer && (
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-              {footer}
-            </Typography>
-          )}
-        </Box>
-      );
-    })();
 
   const invoices = charges.length > 0 && (
     <Box
@@ -188,10 +205,9 @@ export function SubscriptionCard({ userId }: { userId: string }) {
     </Box>
   );
 
-  if (!subscription && !invoices) return null;
   return (
     <>
-      {subscription}
+      <CreditBalanceCard userId={userId} />
       {invoices}
     </>
   );
