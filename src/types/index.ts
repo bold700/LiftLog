@@ -327,6 +327,12 @@ export interface Org {
    * de beheerder, geen per-overdracht uitzondering.
    */
   staffFullClientAccess: boolean;
+  /**
+   * Beheerde lijst van ruimtenamen (Beheer → Lessoorten), zodat een lessoort of losse les een
+   * ruimte kiest in plaats van vrij te typen. Voorkomt dat "Boven" en "boven" als twee losse
+   * ruimtes eindigen door een typfout. Leeg = nog niets aangemaakt.
+   */
+  rooms: string[];
   createdAt: string;
   updatedAt: string;
 }

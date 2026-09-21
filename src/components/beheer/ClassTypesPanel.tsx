@@ -6,7 +6,6 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Autocomplete,
   Box,
   Button,
   Chip,
@@ -28,6 +27,7 @@ import { useNotify } from '../../context/NotifyContext';
 import { useProfile } from '../../context/ProfileContext';
 import { deleteClassType, generateClassOccurrencesNow, getClassTypes, newClassTypeId, saveClassType } from '../../services/classTypeService';
 import { getWorkoutsForUser } from '../../services/workoutFirestore';
+import { getOrg, saveOrgRooms } from '../../services/orgService';
 import { NumberField } from '../NumberField';
 import { designTokens } from '../../theme/designTokens';
 import type { ClassScheduleSlot, ClassType, Profile, Schema, SessionKind } from '../../types';
@@ -104,6 +104,11 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const isAdmin = profile?.profile?.role === 'admin';
+  const orgId = profile?.activeOrgId ?? null;
+  const [rooms, setRooms] = useState<string[]>([]);
+  const [newRoom, setNewRoom] = useState('');
+  const [savingRoom, setSavingRoom] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -123,6 +128,45 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!orgId) return;
+    void getOrg(orgId).then((org) => setRooms(org?.rooms ?? []));
+  }, [orgId]);
+
+  const addRoom = async () => {
+    const name = newRoom.trim();
+    if (!name || !orgId) return;
+    if (rooms.some((r) => r.toLowerCase() === name.toLowerCase())) {
+      notify.error(t('classTypes.rooms.duplicate'));
+      return;
+    }
+    setSavingRoom(true);
+    try {
+      const updated = [...rooms, name].sort((a, b) => a.localeCompare(b));
+      await saveOrgRooms(orgId, updated);
+      setRooms(updated);
+      setNewRoom('');
+    } catch (e) {
+      notify.error(t('classTypes.saveFailed'), e);
+    } finally {
+      setSavingRoom(false);
+    }
+  };
+
+  const removeRoom = async (name: string) => {
+    if (!orgId) return;
+    setSavingRoom(true);
+    try {
+      const updated = rooms.filter((r) => r !== name);
+      await saveOrgRooms(orgId, updated);
+      setRooms(updated);
+    } catch (e) {
+      notify.error(t('classTypes.saveFailed'), e);
+    } finally {
+      setSavingRoom(false);
+    }
+  };
 
   // Kop-knop "Nieuwe lessoort": een lege lessoort openen.
   useEffect(() => {
@@ -154,9 +198,6 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
   );
 
   const isNew = useMemo(() => !!draft && !types.some((c) => c.id === draft.id), [draft, types]);
-
-  /** Al gebruikte ruimtenamen, als suggesties — geen aparte lijst om te beheren, gewoon vrije tekst. */
-  const roomOptions = useMemo(() => Array.from(new Set(types.map((c) => c.room).filter((r): r is string => !!r))).sort(), [types]);
 
   const save = async () => {
     if (!draft) return;
@@ -212,6 +253,57 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
       setSaving(false);
     }
   };
+
+  /**
+   * Ruimtelijst: beheerd i.p.v. vrije tekst, zodat een lessoort/losse les uit deze lijst kiest
+   * (zie de select hieronder bij `classTypes.room`) en typfouten geen twee "ruimtes" meer maken.
+   * Alleen een beheerder kan wijzigen (Firestore-regels staan alleen admin toe op `orgs`).
+   */
+  const roomsManager = (
+    <Box sx={{ p: 2, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground, mb: 2 }}>
+      <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5 }}>
+        {t('classTypes.rooms.title')}
+      </Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+        {isAdmin ? t('classTypes.rooms.help') : t('classTypes.rooms.adminOnly')}
+      </Typography>
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: isAdmin ? 1.5 : 0 }}>
+        {rooms.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            {t('classTypes.rooms.empty')}
+          </Typography>
+        ) : (
+          rooms.map((r) => (
+            <Chip
+              key={r}
+              label={r}
+              size="small"
+              onDelete={isAdmin ? () => void removeRoom(r) : undefined}
+              disabled={savingRoom}
+              aria-label={isAdmin ? t('classTypes.rooms.remove') : undefined}
+            />
+          ))
+        )}
+      </Box>
+      {isAdmin && (
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <TextField
+            size="small"
+            placeholder={t('classTypes.rooms.placeholder')}
+            value={newRoom}
+            onChange={(e) => setNewRoom(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void addRoom();
+            }}
+            disabled={savingRoom}
+          />
+          <Button size="small" variant="outlined" onClick={() => void addRoom()} disabled={savingRoom || !newRoom.trim()}>
+            {t('classTypes.rooms.add')}
+          </Button>
+        </Box>
+      )}
+    </Box>
+  );
 
   const list = (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1, minWidth: 0 }}>
@@ -288,15 +380,14 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
             </MenuItem>
           ))}
         </TextField>
-        <Autocomplete
-          freeSolo
-          size="small"
-          fullWidth
-          options={roomOptions}
-          value={draft.room}
-          onInputChange={(_, v) => setDraft({ ...draft, room: v })}
-          renderInput={(params) => <TextField {...params} label={t('classTypes.room')} />}
-        />
+        <TextField select label={t('classTypes.room')} size="small" fullWidth value={draft.room} onChange={(e) => setDraft({ ...draft, room: e.target.value })}>
+          <MenuItem value="">{t('classTypes.noRoom')}</MenuItem>
+          {rooms.map((r) => (
+            <MenuItem key={r} value={r}>
+              {r}
+            </MenuItem>
+          ))}
+        </TextField>
       </Box>
       <TextField select label={t('classTypes.creditCost')} size="small" fullWidth value={draft.creditCost} onChange={(e) => setDraft({ ...draft, creditCost: e.target.value })}>
         {['0', '1', '2', '3', '4'].map((v) => (
@@ -432,6 +523,7 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
   if (!wide) {
     return (
       <>
+        {roomsManager}
         {list}
         <Dialog open={!!draft} onClose={() => setDraft(null)} fullScreen>
           <DialogTitle>{isNew ? t('classTypes.newType') : draft?.name}</DialogTitle>
@@ -450,21 +542,24 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
   }
 
   return (
-    <Box sx={{ display: 'flex', gap: 2.5, alignItems: 'flex-start' }}>
-      {list}
-      <Box sx={{ width: 400, flexShrink: 0, p: 3, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground, position: 'sticky', top: 24 }}>
-        {draft ? (
-          <>
-            <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-              {isNew ? t('classTypes.newType') : draft.name || t('classTypes.classType')}
-            </Typography>
-            {editor}
-          </>
-        ) : (
-          <Typography color="text.secondary">{t('classTypes.pickToEdit')}</Typography>
-        )}
+    <>
+      {roomsManager}
+      <Box sx={{ display: 'flex', gap: 2.5, alignItems: 'flex-start' }}>
+        {list}
+        <Box sx={{ width: 400, flexShrink: 0, p: 3, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground, position: 'sticky', top: 24 }}>
+          {draft ? (
+            <>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                {isNew ? t('classTypes.newType') : draft.name || t('classTypes.classType')}
+              </Typography>
+              {editor}
+            </>
+          ) : (
+            <Typography color="text.secondary">{t('classTypes.pickToEdit')}</Typography>
+          )}
+        </Box>
+        {confirm}
       </Box>
-      {confirm}
-    </Box>
+    </>
   );
 }
