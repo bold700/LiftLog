@@ -512,8 +512,8 @@ export interface Plan {
   name: string;
   /** Prijs in euro's. */
   price: number;
-  /** Per maand, of eenmalig (strippenkaart, proefles). */
-  period: 'month' | 'once';
+  /** Per week, per 4 weken, per maand, of eenmalig (strippenkaart, proefles). */
+  period: 'week' | 'fourWeeks' | 'month' | 'once';
   /** Credits per periode; null = onbeperkt. */
   credits: number | null;
   /** Alleen bij eenmalig: hoeveel maanden de kaart geldig is; null = onbeperkt geldig. */

@@ -286,7 +286,9 @@ await t('beheerder maakt een abonnement → mag', true, setDoc(doc(as('admin1'),
 await t('trainer maakt een abonnement → mag', true, setDoc(doc(as('trainer1'), 'plans/pl2'), plan({ name: '10-rittenkaart', period: 'once', credits: 10, validityMonths: 6, price: 120 })));
 await t('sporter maakt een abonnement → geweigerd', false, setDoc(doc(as('sporter2'), 'plans/pl3'), plan()));
 await t('abonnement met negatieve prijs → geweigerd', false, setDoc(doc(as('admin1'), 'plans/pl4'), plan({ price: -1 })));
-await t('abonnement met onbekende periode → geweigerd', false, setDoc(doc(as('admin1'), 'plans/pl5'), plan({ period: 'week' })));
+await t('abonnement met onbekende periode → geweigerd', false, setDoc(doc(as('admin1'), 'plans/pl5'), plan({ period: 'year' })));
+await t('abonnement per week → mag', true, setDoc(doc(as('admin1'), 'plans/pl8'), plan({ name: 'Week 2', period: 'week', credits: 2 })));
+await t('abonnement per 4 weken → mag', true, setDoc(doc(as('admin1'), 'plans/pl9'), plan({ name: '4 weken', period: 'fourWeeks', credits: 8 })));
 await t('abonnement met btw 9 → mag', true, setDoc(doc(as('admin1'), 'plans/pl6'), plan({ vatRate: 9 })));
 await t('abonnement met btw 5 → geweigerd', false, setDoc(doc(as('admin1'), 'plans/pl7'), plan({ vatRate: 5 })));
 await t('beheerder zet btw op 21 → mag', true, updateDoc(doc(as('admin1'), 'plans/pl1'), { vatRate: 21 }));

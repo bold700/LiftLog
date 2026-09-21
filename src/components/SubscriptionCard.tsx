@@ -83,7 +83,13 @@ export function SubscriptionCard({ userId }: { userId: string }) {
       const { membership, plan, balance } = data;
       const total = plan?.credits ?? null;
       const fraction = total ? Math.max(0, Math.min(1, balance / total)) : 1;
-      const footer = membership.nextRenewalAt ? t('plans.renews', { date: fmt(membership.nextRenewalAt) }) : membership.expiresAt ? t('plans.validUntil', { date: fmt(membership.expiresAt) }) : '';
+      const periodLabel =
+        plan?.period === 'week' ? t('plans.perWeek') : plan?.period === 'fourWeeks' ? t('plans.per4Weeks') : t('plans.perMonth');
+      const footer = membership.nextRenewalAt
+        ? t('plans.renews', { date: fmt(membership.nextRenewalAt), period: periodLabel })
+        : membership.expiresAt
+          ? t('plans.validUntil', { date: fmt(membership.expiresAt) })
+          : '';
       return (
         <Box
           sx={{

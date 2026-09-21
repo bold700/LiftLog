@@ -32,7 +32,7 @@ function toPlan(data: Record<string, unknown>, id: string): Plan {
     orgId: str(data.orgId) ?? '',
     name: str(data.name) ?? '',
     price: num(data.price, 0),
-    period: data.period === 'once' ? 'once' : 'month',
+    period: data.period === 'once' || data.period === 'week' || data.period === 'fourWeeks' ? data.period : 'month',
     credits: data.credits == null ? null : num(data.credits, 0),
     validityMonths: data.validityMonths == null ? null : num(data.validityMonths, 0) || null,
     rollover: data.rollover === 'carry' ? 'carry' : 'expire',

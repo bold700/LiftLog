@@ -124,6 +124,8 @@ export function SubscriptionsPanel({ memberships, credits, createSignal, onChang
 
   const allowanceLine = (p: Plan) => {
     if (p.credits == null) return t('plans.noLimit');
+    if (p.period === 'week') return t('plans.creditsPerWeek', { count: p.credits });
+    if (p.period === 'fourWeeks') return t('plans.creditsPer4Weeks', { count: p.credits });
     if (p.period === 'month') return t('plans.creditsPerMonth', { count: p.credits });
     const base = t('plans.creditsOnce', { count: p.credits });
     return p.validityMonths ? `${base} · ${t('plans.validFor', { count: p.validityMonths })}` : `${base} · ${t('plans.oneOff')}`;
@@ -253,7 +255,15 @@ export function SubscriptionsPanel({ memberships, credits, createSignal, onChang
                 {euro(p.price)}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                {p.period === 'month' ? t('plans.perMonth') : p.credits == null ? t('plans.oneOff') : t('plans.perCard')}
+                {p.period === 'week'
+                  ? t('plans.perWeek')
+                  : p.period === 'fourWeeks'
+                    ? t('plans.per4Weeks')
+                    : p.period === 'month'
+                      ? t('plans.perMonth')
+                      : p.credits == null
+                        ? t('plans.oneOff')
+                        : t('plans.perCard')}
               </Typography>
             </Box>
           </Box>
@@ -273,6 +283,8 @@ export function SubscriptionsPanel({ memberships, credits, createSignal, onChang
       <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
         <NumberField label={t('plans.price')} decimal size="small" fullWidth value={draft.price} onChange={(v) => setDraft({ ...draft, price: v })} />
         <TextField select label={t('plans.period')} size="small" fullWidth value={draft.period} onChange={(e) => setDraft({ ...draft, period: e.target.value as Plan['period'] })}>
+          <MenuItem value="week">{t('plans.weekly')}</MenuItem>
+          <MenuItem value="fourWeeks">{t('plans.fourWeekly')}</MenuItem>
           <MenuItem value="month">{t('plans.monthly')}</MenuItem>
           <MenuItem value="once">{t('plans.once')}</MenuItem>
         </TextField>
@@ -294,7 +306,7 @@ export function SubscriptionsPanel({ memberships, credits, createSignal, onChang
       {draft.period === 'once' && (
         <NumberField label={t('plans.validity')} size="small" fullWidth value={draft.validityMonths} onChange={(v) => setDraft({ ...draft, validityMonths: v })} helperText={t('plans.validityHelp')} />
       )}
-      {draft.period === 'month' && !draft.unlimited && (
+      {draft.period !== 'once' && !draft.unlimited && (
         <TextField select label={t('plans.rollover')} size="small" fullWidth value={draft.rollover} onChange={(e) => setDraft({ ...draft, rollover: e.target.value as Plan['rollover'] })}>
           <MenuItem value="expire">{t('plans.expire')}</MenuItem>
           <MenuItem value="carry">{t('plans.carry')}</MenuItem>
