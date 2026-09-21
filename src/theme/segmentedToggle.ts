@@ -30,3 +30,27 @@ export const segmentedToggleSx = {
   gap: '3px',
   '& .MuiToggleButtonGroup-grouped': segmentedToggleItemSx,
 };
+
+/**
+ * Losse omlijnde filterpil met tussenruimte (bijv. de room-filter op Schedule: "All rooms ·
+ * Room 1 · Room 2"), niet te verwarren met de keuzebalk hierboven — die twee zien er in het
+ * ontwerp verschillend uit, ook al filteren ze allebei maar één ding tegelijk. Als losse MUI
+ * `Chip`'s in plaats van een `ToggleButtonGroup`: die laatste verbindt buren met een gedeelde
+ * rand en is niet gemaakt voor pillen mét tussenruimte.
+ */
+export function filterPillSx(selected: boolean) {
+  return selected
+    ? {
+        bgcolor: designTokens.secondaryContainer,
+        color: designTokens.onSecondaryContainer,
+        fontWeight: 600,
+        border: `1px solid ${designTokens.secondaryContainer}`,
+        '&:hover': { bgcolor: designTokens.secondaryContainer },
+      }
+    : {
+        bgcolor: 'transparent',
+        color: 'text.secondary',
+        fontWeight: 500,
+        border: `1px solid ${designTokens.outline}`,
+      };
+}

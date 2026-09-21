@@ -43,7 +43,7 @@ import {
 import { getOrg } from '../services/orgService';
 import { getColleagues } from '../services/profileService';
 import { designTokens } from '../theme/designTokens';
-import { segmentedToggleSx } from '../theme/segmentedToggle';
+import { segmentedToggleSx, filterPillSx } from '../theme/segmentedToggle';
 import { addWeeks } from '../utils/format';
 import type { Profile, SessionKind, StandingBooking } from '../types';
 
@@ -407,14 +407,12 @@ export function LessenPage() {
           <ToggleButton value="makeups">Inhaallessen</ToggleButton>
         </ToggleButtonGroup>
         {roomOptions.length > 0 && (
-          <ToggleButtonGroup size="small" exclusive value={roomFilter} onChange={(_, v: string | null) => setRoomFilter(v ?? '')} sx={segmentedToggleSx}>
-            <ToggleButton value="">Alle</ToggleButton>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Chip label="Alle" size="small" onClick={() => setRoomFilter('')} sx={filterPillSx(roomFilter === '')} />
             {roomOptions.map((r) => (
-              <ToggleButton key={r} value={r}>
-                {r}
-              </ToggleButton>
+              <Chip key={r} label={r} size="small" onClick={() => setRoomFilter(r)} sx={filterPillSx(roomFilter === r)} />
             ))}
-          </ToggleButtonGroup>
+          </Box>
         )}
       </Box>
 
