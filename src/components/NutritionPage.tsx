@@ -524,37 +524,58 @@ export function NutritionPage() {
                 e.target.value = '';
               }}
             />
-            {/* Drie gelijke ingangen om voeding toe te voegen, zoals in het Figma-ontwerp */}
-            <Box sx={{ display: 'flex', bgcolor: designTokens.cardBackgroundHigh, borderRadius: `${designTokens.buttonRadius}px`, p: 0.5, gap: 0.5, mb: 1.5 }}>
-              <ButtonBase
-                onClick={() => searchInputRef.current?.focus()}
-                sx={{ flex: 1, flexDirection: 'column', gap: 0.25, py: 1, borderRadius: `${Math.max(0, designTokens.buttonRadius - 4)}px` }}
-              >
-                <SearchRoundedIcon fontSize="small" />
-                <Typography variant="caption" fontWeight={600}>
-                  Zoeken
-                </Typography>
-              </ButtonBase>
-              <ButtonBase
-                disabled={recognizing}
-                onClick={() => fileInputRef.current?.click()}
-                sx={{ flex: 1, flexDirection: 'column', gap: 0.25, py: 1, borderRadius: `${Math.max(0, designTokens.buttonRadius - 4)}px` }}
-              >
-                {recognizing ? <CircularProgress size={20} sx={{ color: designTokens.primary }} /> : <PhotoCameraRoundedIcon fontSize="small" />}
-                <Typography variant="caption" fontWeight={600}>
-                  Foto
-                </Typography>
-              </ButtonBase>
-              <ButtonBase
-                disabled={lookingUp}
-                onClick={() => setScannerOpen(true)}
-                sx={{ flex: 1, flexDirection: 'column', gap: 0.25, py: 1, borderRadius: `${Math.max(0, designTokens.buttonRadius - 4)}px` }}
-              >
-                {lookingUp ? <CircularProgress size={20} sx={{ color: designTokens.primary }} /> : <QrCodeScannerRoundedIcon fontSize="small" />}
-                <Typography variant="caption" fontWeight={600}>
-                  Barcode
-                </Typography>
-              </ButtonBase>
+            {/*
+              Drie losse omlijnde pillen met een klein gevuld Primary-vierkantje per icoon, zoals in
+              het Figma-ontwerp — geen gedeelde grijze balk (dat was de vorige, onjuiste vertaling).
+            */}
+            <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
+              {[
+                {
+                  key: 'search',
+                  label: 'Zoeken',
+                  icon: <SearchRoundedIcon sx={{ fontSize: 16, color: designTokens.onPrimary }} />,
+                  onClick: () => searchInputRef.current?.focus(),
+                  disabled: false,
+                  busy: false,
+                },
+                {
+                  key: 'photo',
+                  label: 'Foto',
+                  icon: <PhotoCameraRoundedIcon sx={{ fontSize: 16, color: designTokens.onPrimary }} />,
+                  onClick: () => fileInputRef.current?.click(),
+                  disabled: recognizing,
+                  busy: recognizing,
+                },
+                {
+                  key: 'barcode',
+                  label: 'Barcode',
+                  icon: <QrCodeScannerRoundedIcon sx={{ fontSize: 16, color: designTokens.onPrimary }} />,
+                  onClick: () => setScannerOpen(true),
+                  disabled: lookingUp,
+                  busy: lookingUp,
+                },
+              ].map((btn) => (
+                <ButtonBase
+                  key={btn.key}
+                  disabled={btn.disabled}
+                  onClick={btn.onClick}
+                  sx={{
+                    flex: 1,
+                    gap: 0.75,
+                    py: 1,
+                    px: 1,
+                    border: `1px solid ${designTokens.outline}`,
+                    borderRadius: `${designTokens.buttonRadius}px`,
+                  }}
+                >
+                  <Box sx={{ width: 24, height: 24, borderRadius: '8px', bgcolor: designTokens.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {btn.busy ? <CircularProgress size={14} sx={{ color: designTokens.onPrimary }} /> : btn.icon}
+                  </Box>
+                  <Typography variant="body2" fontWeight={600}>
+                    {btn.label}
+                  </Typography>
+                </ButtonBase>
+              ))}
             </Box>
             {/*
               Duidelijk zichtbare "bezig"-melding na het maken van een foto: een kleine tekstwijziging
