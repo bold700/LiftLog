@@ -111,6 +111,8 @@ export function LessenPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [selectedDate, setSelectedDate] = useState(today());
   const [roomFilter, setRoomFilter] = useState('');
+  /** Staf-only: "Mijn dag" toont alleen de eigen sessies (Figma "Trainer day"). */
+  const [myDayOnly, setMyDayOnly] = useState(false);
   const [confirmClass, setConfirmClass] = useState<StudioClass | null>(null);
   const [cancelConfirmClass, setCancelConfirmClass] = useState<StudioClass | null>(null);
   const [participantsClass, setParticipantsClass] = useState<StudioClass | null>(null);
@@ -157,9 +159,17 @@ export function LessenPage() {
     return map;
   }, [bookings]);
 
+  /** "Mijn dag": alleen de lessen waar ík als trainer op sta. */
+  const scopedClasses = useMemo(
+    () => (myDayOnly && me ? classes.filter((c) => c.trainerId === me.userId) : classes),
+    [classes, myDayOnly, me]
+  );
   /** Ruimtes die daadwerkelijk in gebruik zijn, voor het filter. */
-  const roomOptions = useMemo(() => Array.from(new Set(classes.map((c) => c.room).filter((r): r is string => !!r))).sort(), [classes]);
-  const visibleClasses = useMemo(() => (roomFilter ? classes.filter((c) => c.room === roomFilter) : classes), [classes, roomFilter]);
+  const roomOptions = useMemo(() => Array.from(new Set(scopedClasses.map((c) => c.room).filter((r): r is string => !!r))).sort(), [scopedClasses]);
+  const visibleClasses = useMemo(
+    () => (roomFilter ? scopedClasses.filter((c) => c.room === roomFilter) : scopedClasses),
+    [scopedClasses, roomFilter]
+  );
   const weekStrip = useMemo(() => weekOf(selectedDate), [selectedDate]);
   /** Voor de weeklijst: alleen de geselecteerde week, gegroepeerd per dag, chronologisch. */
   const classesByDay = useMemo(() => {
@@ -352,10 +362,29 @@ export function LessenPage() {
 
   return (
     <PageLayout>
-      <PageTitle>Lessen</PageTitle>
+      <PageTitle>{isStaff && myDayOnly ? 'Mijn dag' : 'Lessen'}</PageTitle>
       <Typography variant="body2" color="text.secondary" sx={{ mt: -2, mb: 2, px: 0.5 }}>
-        {isStaff ? 'Zet lessen op het rooster; sporters reserveren met credits.' : 'Reserveer met je credits.'}
+        {isStaff
+          ? myDayOnly
+            ? 'Alleen je eigen sessies vandaag.'
+            : 'Zet lessen op het rooster; sporters reserveren met credits.'
+          : 'Reserveer met je credits.'}
       </Typography>
+
+      {isStaff && (
+        <Box sx={{ mb: 1.5 }}>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={myDayOnly ? 'mine' : 'all'}
+            onChange={(_, v: 'all' | 'mine' | null) => v && setMyDayOnly(v === 'mine')}
+            sx={segmentedToggleSx}
+          >
+            <ToggleButton value="all">Rooster</ToggleButton>
+            <ToggleButton value="mine">Mijn dag</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+      )}
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5, flexWrap: 'wrap' }}>
         <ToggleButtonGroup size="small" exclusive value={viewMode} onChange={(_, v: ViewMode | null) => v && setViewMode(v)} sx={segmentedToggleSx}>
@@ -443,9 +472,16 @@ export function LessenPage() {
               <ChevronRightRoundedIcon fontSize="small" />
             </IconButton>
           </Box>
+          {isStaff && myDayOnly && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+              {dayClasses.length === 1 ? '1 sessie' : `${dayClasses.length} sessies`}
+            </Typography>
+          )}
           {dayClasses.length === 0 ? (
             <ContentCard>
-              <EmptyState>Nog niets gepland op {relativeDayLabel(selectedDate).toLowerCase()}.</EmptyState>
+              <EmptyState>
+                {myDayOnly ? `Geen eigen sessies op ${relativeDayLabel(selectedDate).toLowerCase()}.` : `Nog niets gepland op ${relativeDayLabel(selectedDate).toLowerCase()}.`}
+              </EmptyState>
             </ContentCard>
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>{dayClasses.map(renderClassRow)}</Box>
@@ -464,12 +500,22 @@ export function LessenPage() {
               <ChevronRightRoundedIcon fontSize="small" />
             </IconButton>
           </Box>
-          {classes.length === 0 ? (
+          {isStaff && myDayOnly && classesByDay.length > 0 && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+              {(() => {
+                const n = classesByDay.reduce((sum, [, list]) => sum + list.length, 0);
+                return n === 1 ? '1 sessie deze week' : `${n} sessies deze week`;
+              })()}
+            </Typography>
+          )}
+          {scopedClasses.length === 0 ? (
             <ContentCard>
               <EmptyState>
-                {isStaff
-                  ? 'Nog geen lessen op het rooster. Voeg de eerste toe.'
-                  : 'Er staan nog geen lessen gepland. Je trainer zet ze hier neer.'}
+                {myDayOnly
+                  ? 'Geen eigen sessies deze week.'
+                  : isStaff
+                    ? 'Nog geen lessen op het rooster. Voeg de eerste toe.'
+                    : 'Er staan nog geen lessen gepland. Je trainer zet ze hier neer.'}
               </EmptyState>
             </ContentCard>
           ) : classesByDay.length === 0 ? (
