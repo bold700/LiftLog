@@ -177,10 +177,23 @@ export function LessenPage() {
     () => (myDayOnly && me ? classes.filter((c) => c.trainerId === me.userId) : classes),
     [classes, myDayOnly, me]
   );
-  /** Ruimtes die daadwerkelijk in gebruik zijn, voor het filter. */
-  const roomOptions = useMemo(() => Array.from(new Set(scopedClasses.map((c) => c.room).filter((r): r is string => !!r))).sort(), [scopedClasses]);
+  /**
+   * Ruimtes die daadwerkelijk in gebruik zijn, voor het filter. `room` is vrije tekst (geen
+   * vaste lijst), dus genormaliseerd op hoofdletters/spaties: anders levert "Boven" naast "boven"
+   * — een typfout, geen twee ruimtes — twee aparte filterpillen op.
+   */
+  const roomKey = (room: string) => room.trim().toLowerCase();
+  const roomOptions = useMemo(() => {
+    const byKey = new Map<string, string>();
+    for (const c of scopedClasses) {
+      if (!c.room) continue;
+      const key = roomKey(c.room);
+      if (key && !byKey.has(key)) byKey.set(key, c.room.trim());
+    }
+    return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b));
+  }, [scopedClasses]);
   const visibleClasses = useMemo(
-    () => (roomFilter ? scopedClasses.filter((c) => c.room === roomFilter) : scopedClasses),
+    () => (roomFilter ? scopedClasses.filter((c) => c.room && roomKey(c.room) === roomKey(roomFilter)) : scopedClasses),
     [scopedClasses, roomFilter]
   );
   const weekStrip = useMemo(() => weekOf(selectedDate), [selectedDate]);
