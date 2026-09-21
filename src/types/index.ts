@@ -481,6 +481,8 @@ export interface ClassType {
   room: string | null;
   /** 1-op-1, Duo PT, Groep of Concept — voor de legenda/kleur op het rooster. */
   sessionKind: SessionKind;
+  /** Korte omschrijving voor de sporter, getoond in de boekingsdialoog; null = geen omschrijving. */
+  description: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -688,6 +688,8 @@ function BookConfirmDialog({
           {[trainerName, cls.room, `${cls.bookedCount} van ${cls.capacity} plekken bezet`].filter(Boolean).join(' · ')}
         </Typography>
 
+        {cls.description && <Typography variant="body2">{cls.description}</Typography>}
+
         {!full && (
           <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: designTokens.cardBackgroundHigh, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
             <Typography variant="body2" fontWeight={600}>

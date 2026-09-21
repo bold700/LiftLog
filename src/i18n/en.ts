@@ -111,6 +111,8 @@ export const en: Messages = {
     },
     room: 'Room',
     noRoom: 'No fixed room',
+    description: 'Description',
+    descriptionHelp: 'Short, shown to the member in the booking dialog. Empty = no description.',
     rooms: {
       title: 'Rooms',
       help: 'Manage the studio\'s rooms here; a class type or one-off class then picks one — no more free typing, which caused typos like "Boven" next to "boven".',

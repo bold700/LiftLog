@@ -47,6 +47,8 @@ export interface StudioClass {
   room: string | null;
   /** 1-op-1, Duo PT, Groep of Concept — voor de legenda/kleur op het rooster. */
   sessionKind: SessionKind;
+  /** Korte omschrijving voor de sporter, getoond in de boekingsdialoog; null = geen omschrijving. */
+  description: string | null;
   cancelledAt: string | null;
   createdAt: string;
 }
@@ -89,6 +91,7 @@ function toClass(data: Record<string, unknown>, id: string): StudioClass {
     classTypeId: typeof data.classTypeId === 'string' ? data.classTypeId : null,
     room: data.room ? str(data.room) : null,
     sessionKind: toSessionKind(data.sessionKind),
+    description: data.description ? str(data.description) : null,
     cancelledAt: data.cancelledAt ? str(data.cancelledAt) : null,
     createdAt: str(data.createdAt),
   };
@@ -220,6 +223,7 @@ export async function saveClass(
       classTypeId: input.classTypeId ?? null,
       room: input.room ?? null,
       sessionKind: input.sessionKind,
+      description: input.description ?? null,
       createdAt: input.createdAt ?? new Date().toISOString(),
       updatedAt: serverTimestamp(),
     },
@@ -246,6 +250,7 @@ export async function createClass(
     classTypeId: input.classTypeId ?? null,
     room: input.room ?? null,
     sessionKind: input.sessionKind,
+    description: input.description ?? null,
     bookedCount: 0,
     waitlistCount: 0,
     createdAt: new Date().toISOString(),
