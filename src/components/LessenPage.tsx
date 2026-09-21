@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Autocomplete,
   Box,
   Typography,
   Button,
@@ -12,6 +13,7 @@ import {
   DialogActions,
   FormControlLabel,
   IconButton,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
 } from '@mui/material';
@@ -256,6 +258,16 @@ export function LessenPage() {
     [notify, load]
   );
 
+  /** Op de rij zelf klikken doet het voor de hand liggende: sporter gaat inschrijven, staf ziet wie er is ingeschreven. */
+  const handleRowClick = useCallback(
+    (cls: StudioClass, mine: Booking | undefined) => {
+      if (cls.cancelledAt) return;
+      if (isStaff) setParticipantsClass(cls);
+      else if (!mine) setConfirmClass(cls);
+    },
+    [isStaff]
+  );
+
   if (!me) return null;
 
   const renderClassRow = (cls: StudioClass) => {
@@ -265,6 +277,9 @@ export function LessenPage() {
     return (
       <Box
         key={cls.id}
+        role="button"
+        tabIndex={cls.cancelledAt ? -1 : 0}
+        onClick={() => handleRowClick(cls, mine)}
         sx={{
           border: `1px solid ${designTokens.cardBorder}`,
           borderLeft: mine ? `4px solid ${mine.status === 'booked' ? designTokens.onTertiaryContainer : designTokens.outline}` : `1px solid ${designTokens.cardBorder}`,
@@ -275,6 +290,7 @@ export function LessenPage() {
           gap: 2,
           alignItems: 'flex-start',
           opacity: cls.cancelledAt ? 0.6 : 1,
+          cursor: cls.cancelledAt ? 'default' : 'pointer',
         }}
       >
         <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: SESSION_KIND_COLORS[cls.sessionKind], mt: 0.75, flexShrink: 0 }} />
@@ -302,7 +318,7 @@ export function LessenPage() {
           </Box>
         </Box>
 
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0, alignItems: 'flex-end' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0, alignItems: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
           {!cls.cancelledAt &&
             (mine ? (
               <Button size="small" variant="outlined" disabled={busy} onClick={() => void handleCancel(mine)}>
@@ -648,8 +664,10 @@ function ParticipantsDialog({
   const [rows, setRows] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [addTarget, setAddTarget] = useState<Profile | null>(null);
+  const [adding, setAdding] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!cls) return;
     setLoading(true);
     getBookingsForClass(cls.id)
@@ -657,6 +675,11 @@ function ParticipantsDialog({
       .catch(() => setRows([]))
       .finally(() => setLoading(false));
   }, [cls]);
+
+  useEffect(() => {
+    load();
+    setAddTarget(null);
+  }, [load]);
 
   const nameFor = (userId: string) => {
     const p = sporters.find((s) => s.userId === userId);
@@ -676,7 +699,28 @@ function ParticipantsDialog({
     }
   };
 
+  const add = async () => {
+    if (!cls || !addTarget) return;
+    setAdding(true);
+    try {
+      const result = await bookClass(cls.id, false, addTarget.userId);
+      notify?.success(
+        result.status === 'waitlist' ? `${nameFor(addTarget.userId)} staat op de wachtlijst.` : `${nameFor(addTarget.userId)} is ingeschreven.`
+      );
+      setAddTarget(null);
+      load();
+      onChanged();
+    } catch (e) {
+      notify?.error(e instanceof Error ? e.message : 'Toevoegen mislukt');
+    } finally {
+      setAdding(false);
+    }
+  };
+
   if (!cls) return null;
+
+  const bookedUserIds = new Set(rows.map((b) => b.userId));
+  const addableSporters = sporters.filter((s) => !bookedUserIds.has(s.userId));
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="xs">
@@ -686,6 +730,25 @@ function ParticipantsDialog({
           {dayLabel(cls.date)} · {cls.startTime}
           {cls.endTime ? `–${cls.endTime}` : ''}
         </Typography>
+
+        {!cls.cancelledAt && (
+          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+            <Autocomplete
+              size="small"
+              fullWidth
+              options={addableSporters}
+              value={addTarget}
+              onChange={(_, v) => setAddTarget(v)}
+              getOptionLabel={(p) => p.displayName?.trim() || p.email || p.userId}
+              isOptionEqualToValue={(a, b) => a.userId === b.userId}
+              renderInput={(params) => <TextField {...params} label="Sporter toevoegen" />}
+            />
+            <Button variant="contained" disabled={!addTarget || adding} onClick={() => void add()}>
+              Toevoegen
+            </Button>
+          </Box>
+        )}
+
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
             <CircularProgress size={20} />
