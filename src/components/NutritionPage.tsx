@@ -61,13 +61,13 @@ import {
   defaultMealForNow,
   MEAL_LABELS,
   MEAL_ORDER,
-  MACRO_COLORS,
   type MealMoment,
 } from '../services/nutritionService';
 import { todayIso } from '../utils/format';
 import { fileToDataUrl } from '../utils/imageDataUrl';
 import { NumberField } from './NumberField';
 import { ProductSheet, type PortionChoice } from './nutrition/ProductSheet';
+import { segmentedToggleSx } from '../theme/segmentedToggle';
 
 type Period = 'day' | 'week' | 'month';
 
@@ -118,10 +118,12 @@ function sumLogs(logs: NutritionLog[]) {
 }
 
 /** Rijen onder de kcal-balk: label, sleutel in de totalen en macro-kleur. */
+// Alle drie de macrobalken delen één kleur (Tertiary) — het ontwerp kleurt ze niet individueel,
+// alleen de kcal-balk erboven krijgt Primary.
 const MACRO_ROWS = [
-  { key: 'protein' as const, label: 'Eiwit', color: MACRO_COLORS.protein },
-  { key: 'carbs' as const, label: 'Koolhydraten', color: MACRO_COLORS.carbs },
-  { key: 'fat' as const, label: 'Vet', color: MACRO_COLORS.fat },
+  { key: 'protein' as const, label: 'Eiwit' },
+  { key: 'carbs' as const, label: 'Koolhydraten' },
+  { key: 'fat' as const, label: 'Vet' },
 ];
 
 /**
@@ -395,8 +397,9 @@ export function NutritionPage() {
   return (
     <PageLayout>
       <ContentCard>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
-          <Typography variant="h5" fontWeight={600}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 1 }}>
+          {/* Op de telefoon staat de titel al in de bovenbalk van de schil (zie PageTitle); hier alleen op desktop, en met flexGrow zodat "Doel aanpassen" ernaast rechts blijft staan. */}
+          <Typography variant="h5" fontWeight={600} sx={{ display: { xs: 'none', md: 'block' }, flexGrow: 1 }}>
             Voeding
           </Typography>
           <Button size="small" variant="text" onClick={() => setGoalOpen(true)}>
@@ -410,6 +413,7 @@ export function NutritionPage() {
             exclusive
             value={period}
             onChange={(_, v) => v && setPeriod(v)}
+            sx={segmentedToggleSx}
           >
             <ToggleButton value="day">Dag</ToggleButton>
             <ToggleButton value="week">Week</ToggleButton>
@@ -465,7 +469,7 @@ export function NutritionPage() {
                   <LinearProgress
                     variant="determinate"
                     value={Math.min(100, (shown[m.key] / goal[m.key]) * 100)}
-                    sx={{ mt: 0.5, height: 5, borderRadius: 1, bgcolor: designTokens.cardBorder, '& .MuiLinearProgress-bar': { bgcolor: m.color } }}
+                    sx={{ mt: 0.5, height: 5, borderRadius: 1, bgcolor: designTokens.cardBorder, '& .MuiLinearProgress-bar': { bgcolor: designTokens.tertiary } }}
                   />
                 )}
               </Box>
