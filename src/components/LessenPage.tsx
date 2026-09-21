@@ -80,6 +80,16 @@ function weekOf(date: string): string[] {
 /** 0 = zondag .. 6 = zaterdag, zoals ClassScheduleSlot/StandingBooking. */
 const weekdayOf = (date: string) => new Date(`${date}T12:00:00`).getDay();
 
+/** Label voor de weeknavigatie: "22–28 sep" (of met losse maanden als de week overloopt). */
+function weekRangeLabel(weekStrip: string[]): string {
+  const start = new Date(`${weekStrip[0]}T12:00:00`);
+  const end = new Date(`${weekStrip[weekStrip.length - 1]}T12:00:00`);
+  const startDay = start.toLocaleDateString('nl-NL', { day: 'numeric' });
+  const endLabel = end.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+  const sameMonth = start.getMonth() === end.getMonth();
+  return sameMonth ? `${startDay}–${endLabel}` : `${start.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}–${endLabel}`;
+}
+
 /** Sleutel om een les te koppelen aan een "elke week"-instelling: zelfde lessoort en weekmoment. */
 const standingKey = (classTypeId: string, weekday: number, startTime: string) => `${classTypeId}_${weekday}_${startTime}`;
 
@@ -147,18 +157,20 @@ export function LessenPage() {
   /** Ruimtes die daadwerkelijk in gebruik zijn, voor het filter. */
   const roomOptions = useMemo(() => Array.from(new Set(classes.map((c) => c.room).filter((r): r is string => !!r))).sort(), [classes]);
   const visibleClasses = useMemo(() => (roomFilter ? classes.filter((c) => c.room === roomFilter) : classes), [classes, roomFilter]);
-  /** Voor de weeklijst: gegroepeerd per dag, chronologisch. */
+  const weekStrip = useMemo(() => weekOf(selectedDate), [selectedDate]);
+  /** Voor de weeklijst: alleen de geselecteerde week, gegroepeerd per dag, chronologisch. */
   const classesByDay = useMemo(() => {
+    const weekDates = new Set(weekStrip);
     const map = new Map<string, StudioClass[]>();
     for (const c of visibleClasses) {
+      if (!weekDates.has(c.date)) continue;
       const list = map.get(c.date) ?? [];
       list.push(c);
       map.set(c.date, list);
     }
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [visibleClasses]);
+  }, [visibleClasses, weekStrip]);
   const dayClasses = useMemo(() => visibleClasses.filter((c) => c.date === selectedDate), [visibleClasses, selectedDate]);
-  const weekStrip = useMemo(() => weekOf(selectedDate), [selectedDate]);
 
   /** Weekmomenten waar al "elke week" voor aanstaat, zodat het vinkje bij een les die daarbij hoort meteen goed staat. */
   const activeStandingKeys = useMemo(
@@ -255,8 +267,9 @@ export function LessenPage() {
         key={cls.id}
         sx={{
           border: `1px solid ${designTokens.cardBorder}`,
+          borderLeft: mine ? `4px solid ${mine.status === 'booked' ? designTokens.onTertiaryContainer : designTokens.outline}` : `1px solid ${designTokens.cardBorder}`,
           borderRadius: `${designTokens.cardRadius}px`,
-          bgcolor: designTokens.cardBackground,
+          bgcolor: mine?.status === 'booked' ? designTokens.tertiaryContainer : mine?.status === 'waitlist' ? designTokens.cardBackgroundHigh : designTokens.cardBackground,
           p: 2,
           display: 'flex',
           gap: 2,
@@ -419,29 +432,44 @@ export function LessenPage() {
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>{dayClasses.map(renderClassRow)}</Box>
           )}
         </>
-      ) : classes.length === 0 ? (
-        <ContentCard>
-          <EmptyState>
-            {isStaff
-              ? 'Nog geen lessen op het rooster. Voeg de eerste toe.'
-              : 'Er staan nog geen lessen gepland. Je trainer zet ze hier neer.'}
-          </EmptyState>
-        </ContentCard>
-      ) : classesByDay.length === 0 ? (
-        <ContentCard>
-          <EmptyState>Geen lessen in {roomFilter}.</EmptyState>
-        </ContentCard>
       ) : (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-          {classesByDay.map(([date, dayList]) => (
-            <Box key={date}>
-              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, textTransform: 'capitalize' }}>
-                {relativeDayLabel(date)}
-              </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>{dayList.map(renderClassRow)}</Box>
+        <>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 2 }}>
+            <IconButton size="small" onClick={() => setSelectedDate((d) => addWeeks(d, -1))} aria-label="Vorige week">
+              <ChevronLeftRoundedIcon fontSize="small" />
+            </IconButton>
+            <Typography variant="body2" fontWeight={600} sx={{ flex: 1, textAlign: 'center' }}>
+              {weekStrip[0] <= today() && today() <= weekStrip[6] ? 'Deze week' : weekRangeLabel(weekStrip)}
+            </Typography>
+            <IconButton size="small" onClick={() => setSelectedDate((d) => addWeeks(d, 1))} aria-label="Volgende week">
+              <ChevronRightRoundedIcon fontSize="small" />
+            </IconButton>
+          </Box>
+          {classes.length === 0 ? (
+            <ContentCard>
+              <EmptyState>
+                {isStaff
+                  ? 'Nog geen lessen op het rooster. Voeg de eerste toe.'
+                  : 'Er staan nog geen lessen gepland. Je trainer zet ze hier neer.'}
+              </EmptyState>
+            </ContentCard>
+          ) : classesByDay.length === 0 ? (
+            <ContentCard>
+              <EmptyState>{roomFilter ? `Geen lessen in ${roomFilter} deze week.` : 'Geen lessen deze week.'}</EmptyState>
+            </ContentCard>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+              {classesByDay.map(([date, dayList]) => (
+                <Box key={date}>
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, textTransform: 'capitalize' }}>
+                    {relativeDayLabel(date)}
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>{dayList.map(renderClassRow)}</Box>
+                </Box>
+              ))}
             </Box>
-          ))}
-        </Box>
+          )}
+        </>
       )}
 
       <BookConfirmDialog
