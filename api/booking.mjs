@@ -9,8 +9,10 @@ import { applyCors } from './_lib/cors.mjs';
  * kunnen reserveren zonder saldo. Een Firestore-transactie lost dat wel op.
  *
  * POST, JSON:
- *   { action: 'book',    classId, weekly? }             sporter reserveert (of komt op de wachtlijst);
- *                                                        weekly: true zet dit weekmoment ook op "elke week"
+ *   { action: 'book',    classId, weekly?, userId? }     sporter reserveert (of komt op de wachtlijst);
+ *                                                        weekly: true zet dit weekmoment ook op "elke week";
+ *                                                        userId: staf schrijft een andere sporter in (diens
+ *                                                        credit gaat eraf, niet die van de staf)
  *   { action: 'cancel',  bookingId }                   afmelden; credit terug binnen de annuleertermijn
  *                                                        (instelbaar per studio, zie bookingPolicy hieronder)
  *   { action: 'setStandingBooking', standingBookingId, active }  "elke week inschrijven" aan/uit zetten
@@ -138,7 +140,13 @@ export default async function handler(req, res) {
   try {
     switch (body?.action) {
       case 'book':
-        return await book(res, db, uid, myOrgs, String(body.classId ?? '').trim(), body.weekly === true, isStaff);
+        return await book(
+          res, db, uid, myOrgs,
+          String(body.classId ?? '').trim(),
+          body.weekly === true,
+          isStaff,
+          body.userId ? String(body.userId).trim() : null
+        );
       case 'cancel':
         return await cancel(res, db, uid, myOrgs, isStaff, String(body.bookingId ?? '').trim());
       case 'setStandingBooking':
@@ -196,8 +204,23 @@ function refuse(message) {
  * Reserveren. In één transactie: plek controleren, credit afschrijven, reservering vastleggen.
  * Zit de les vol, dan kom je op de wachtlijst — zonder dat er een credit af gaat.
  */
-async function book(res, db, uid, myOrgs, classId, weekly, isStaff) {
+async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId) {
   if (!classId) return json(res, 400, { error: 'Geen les opgegeven.', build: BUILD });
+
+  // Staf kan iemand anders inschrijven (bijv. een sporter die via WhatsApp afmeldde er weer bij
+  // zetten); de credit gaat dan gewoon van diegene af, niet van de staf zelf.
+  let beneficiaryUid = uid;
+  let beneficiaryIsStaff = isStaff;
+  if (targetUserId && targetUserId !== uid) {
+    if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan iemand anders inschrijven.', build: BUILD });
+    const targetSnap = await db.collection('profiles').doc(targetUserId).get();
+    if (!targetSnap.exists) return json(res, 404, { error: 'Sporter niet gevonden.', build: BUILD });
+    const target = targetSnap.data() ?? {};
+    const targetOrgs = Array.isArray(target.orgIds) && target.orgIds.length ? target.orgIds.map(String) : [orgIdOf(target.orgId)];
+    if (!myOrgs.some((o) => targetOrgs.includes(o))) return json(res, 403, { error: 'Deze sporter zit niet in jouw studio.', build: BUILD });
+    beneficiaryUid = targetUserId;
+    beneficiaryIsStaff = target.role === 'trainer' || target.role === 'admin';
+  }
 
   // Eerst het eigen abonnement bijwerken (verlenging die nog openstond), dan pas reserveren.
   // Onbeperkt plan: de les kost niets.
@@ -205,10 +228,10 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff) {
   const preOrg = preSnap.exists ? orgIdOf(preSnap.data().orgId) : null;
   let unlimited = false;
   if (preOrg && myOrgs.includes(preOrg)) {
-    const m = await activeMembership(db, preOrg, uid);
+    const m = await activeMembership(db, preOrg, beneficiaryUid);
     if (m) {
       await settleMembership(db, newId, db.collection('memberships').doc(m.id), new Date().toISOString());
-      const still = await activeMembership(db, preOrg, uid);
+      const still = await activeMembership(db, preOrg, beneficiaryUid);
       if (still) {
         const pSnap = await db.collection('plans').doc(String(still.planId)).get();
         unlimited = pSnap.exists && pSnap.data().credits == null;
@@ -231,26 +254,27 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff) {
 
     // Al gereserveerd? Dan niets doen in plaats van een tweede plek innemen.
     const mine = await tx.get(
-      db.collection('bookings').where('classId', '==', classId).where('userId', '==', uid)
+      db.collection('bookings').where('classId', '==', classId).where('userId', '==', beneficiaryUid)
     );
     const active = mine.docs.filter((d) => ['booked', 'waitlist'].includes(String(d.data().status)));
-    if (active.length > 0) throw refuse('Je staat al ingeschreven voor deze les.');
+    if (active.length > 0) throw refuse(beneficiaryUid === uid ? 'Je staat al ingeschreven voor deze les.' : 'Deze sporter staat al ingeschreven voor deze les.');
 
     const capacity = Number(cls.capacity) || 0;
     const booked = Number(cls.bookedCount) || 0;
-    const cost = unlimited || isStaff ? 0 : Number(cls.creditCost ?? 1) || 0;
+    const cost = unlimited || beneficiaryIsStaff ? 0 : Number(cls.creditCost ?? 1) || 0;
     const onWaitlist = booked >= capacity;
 
-    const accountRef = db.collection('creditAccounts').doc(accountId(orgId, uid));
+    const accountRef = db.collection('creditAccounts').doc(accountId(orgId, beneficiaryUid));
     const accountSnap = await tx.get(accountRef);
     const balance = Number(accountSnap.exists ? accountSnap.data().balance : 0) || 0;
 
     // Op de wachtlijst kost het niets; de credit gaat er pas af als je doorschuift.
     if (!onWaitlist && balance < cost) {
+      const wie = beneficiaryUid === uid ? 'Je hebt' : 'Deze sporter heeft';
       throw refuse(
         cost === 1
-          ? 'Je hebt geen credits meer. Vraag je trainer om nieuwe.'
-          : `Deze les kost ${cost} credits; je hebt er ${balance}.`
+          ? `${wie} geen credits meer.`
+          : `Deze les kost ${cost} credits; ${beneficiaryUid === uid ? 'je hebt' : 'deze sporter heeft'} er ${balance}.`
       );
     }
 
@@ -260,7 +284,7 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff) {
       id: bookingId,
       orgId,
       classId,
-      userId: uid,
+      userId: beneficiaryUid,
       status: onWaitlist ? 'waitlist' : 'booked',
       creditsSpent: onWaitlist ? 0 : cost,
       createdAt: now,
@@ -272,10 +296,10 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff) {
     } else {
       tx.set(classRef, { bookedCount: FieldValue.increment(1) }, { merge: true });
       if (cost > 0) {
-        tx.set(accountRef, { orgId, userId: uid, balance: balance - cost, updatedAt: now }, { merge: true });
+        tx.set(accountRef, { orgId, userId: beneficiaryUid, balance: balance - cost, updatedAt: now }, { merge: true });
         tx.set(db.collection('creditLedger').doc(newId('cl')), {
           orgId,
-          userId: uid,
+          userId: beneficiaryUid,
           delta: -cost,
           reason: 'booking',
           classId,
@@ -292,13 +316,13 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff) {
       const weekday = new Date(`${cls.date}T00:00:00`).getDay();
       const sbRef = db
         .collection('standingBookings')
-        .doc(standingBookingId(cls.classTypeId, uid, weekday, cls.startTime));
+        .doc(standingBookingId(cls.classTypeId, beneficiaryUid, weekday, cls.startTime));
       tx.set(
         sbRef,
         {
           id: sbRef.id,
           orgId,
-          userId: uid,
+          userId: beneficiaryUid,
           classTypeId: cls.classTypeId,
           weekday,
           startTime: cls.startTime,

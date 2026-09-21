@@ -299,8 +299,13 @@ export async function callBooking<T>(body: Record<string, unknown>): Promise<T> 
  * Reserveren. Zit de les vol, dan kom je op de wachtlijst en gaat er (nog) geen credit af.
  * `weekly`: ook dit weekmoment van de lessoort voortaan automatisch meeboeken ("elke week inschrijven").
  */
-export function bookClass(classId: string, weekly = false): Promise<{ bookingId: string; status: BookingStatus; balance: number }> {
-  return callBooking({ action: 'book', classId, weekly });
+/** userId: alleen voor staf, om een andere sporter in te schrijven (diens credit gaat eraf). */
+export function bookClass(
+  classId: string,
+  weekly = false,
+  userId?: string
+): Promise<{ bookingId: string; status: BookingStatus; balance: number }> {
+  return callBooking({ action: 'book', classId, weekly, userId });
 }
 
 /** Afmelden. Binnen de annuleertermijn krijg je de credit terug. */

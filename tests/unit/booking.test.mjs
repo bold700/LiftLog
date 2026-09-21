@@ -253,6 +253,33 @@ describe('reserveren', () => {
     expect(store['classes/c1'].bookedCount).toBe(1);
     expect(store['classes/c1'].waitlistCount).toBe(1);
   });
+
+  it('laat staf een andere sporter inschrijven; de credit gaat van die sporter af', async () => {
+    const res = await post({ action: 'book', classId: 'c1', userId: 'sporter1' }, 'trainer1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.status).toBe('booked');
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(2);
+    const ledger = Object.values(store).filter((v) => v.reason === 'booking');
+    expect(ledger[0]).toMatchObject({ userId: 'sporter1', byUserId: 'trainer1', delta: -1 });
+  });
+
+  it('weigert een sporter die een andere sporter probeert in te schrijven', async () => {
+    const res = await post({ action: 'book', classId: 'c1', userId: 'sporter2' }, 'sporter1');
+    expect(res.statusCode).toBe(403);
+    expect(store['classes/c1'].bookedCount).toBe(0);
+  });
+
+  it('weigert een sporter uit een andere studio toe te voegen', async () => {
+    const res = await post({ action: 'book', classId: 'c1', userId: 'sporterB' }, 'trainer1');
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('weigert zonder saldo, ook als staf de sporter toevoegt', async () => {
+    store['creditAccounts/vanas__sporter1'].balance = 0;
+    const res = await post({ action: 'book', classId: 'c1', userId: 'sporter1' }, 'trainer1');
+    expect(res.statusCode).toBe(409);
+    expect(res.body.error).toMatch(/geen credits/i);
+  });
 });
 
 describe('afmelden', () => {
