@@ -3,11 +3,24 @@
  * een losse les op het rooster zetten, en credits bijboeken voor een sporter.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Autocomplete, Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, TextField } from '@mui/material';
+import {
+  Autocomplete,
+  Box,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  MenuItem,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+} from '@mui/material';
 import { useI18n } from '../../context/I18nContext';
 import { useNotify } from '../../context/NotifyContext';
 import { createClass, grantCredits, newClassId } from '../../services/classService';
 import { getClassTypes } from '../../services/classTypeService';
+import { segmentedToggleSx } from '../../theme/segmentedToggle';
 import type { ClassType, Profile, SessionKind } from '../../types';
 
 const SESSION_KIND_KEYS: SessionKind[] = ['1on1', 'duo', 'group', 'concept'];
@@ -222,6 +235,7 @@ export function GrantCreditsDialog({
 }) {
   const notify = useNotify();
   const [userId, setUserId] = useState('');
+  const [direction, setDirection] = useState<'toekennen' | 'aftrekken'>('toekennen');
   const [amount, setAmount] = useState('10');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -231,15 +245,16 @@ export function GrantCreditsDialog({
     try {
       const aantal = Number(amount);
       if (!userId) throw new Error('Kies een sporter.');
-      if (!Number.isInteger(aantal) || aantal === 0) throw new Error('Vul een heel aantal credits in.');
+      if (!Number.isInteger(aantal) || aantal <= 0) throw new Error('Vul een heel, positief aantal credits in.');
+      const delta = direction === 'aftrekken' ? -aantal : aantal;
 
-      const result = await grantCredits(userId, aantal, note.trim() || undefined);
+      const result = await grantCredits(userId, delta, note.trim() || undefined);
       const naam = sporters.find((p) => p.userId === userId)?.displayName ?? 'de sporter';
       notify?.success(`${naam} heeft nu ${result.balance} credits.`);
       setNote('');
       onGranted();
     } catch (e) {
-      notify?.error(e instanceof Error ? e.message : 'Credits toekennen mislukt');
+      notify?.error(e instanceof Error ? e.message : 'Credits aanpassen mislukt');
     } finally {
       setBusy(false);
     }
@@ -247,7 +262,7 @@ export function GrantCreditsDialog({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>Credits toekennen</DialogTitle>
+      <DialogTitle>Credits aanpassen</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, '&&': { pt: 1.5 } }}>
         <TextField label="Sporter" select value={userId} onChange={(e) => setUserId(e.target.value)} size="small">
           {sporters.map((p) => (
@@ -256,13 +271,27 @@ export function GrantCreditsDialog({
             </MenuItem>
           ))}
         </TextField>
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={direction}
+          onChange={(_, v: 'toekennen' | 'aftrekken' | null) => v && setDirection(v)}
+          sx={segmentedToggleSx}
+        >
+          <ToggleButton value="toekennen">Toekennen</ToggleButton>
+          <ToggleButton value="aftrekken">Aftrekken</ToggleButton>
+        </ToggleButtonGroup>
         <TextField
           label="Aantal credits"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           size="small"
           inputMode="numeric"
-          helperText="Een negatief aantal boekt credits juist af."
+          helperText={
+            direction === 'aftrekken'
+              ? 'Dit aantal wordt van het saldo afgehaald, bijvoorbeeld om een foutje recht te zetten.'
+              : 'Dit aantal wordt bij het saldo opgeteld.'
+          }
         />
         <TextField
           label="Notitie"
@@ -276,8 +305,8 @@ export function GrantCreditsDialog({
         <Button onClick={onClose} disabled={busy}>
           Annuleren
         </Button>
-        <Button variant="contained" onClick={() => void submit()} disabled={busy}>
-          Toekennen
+        <Button variant="contained" color={direction === 'aftrekken' ? 'error' : 'primary'} onClick={() => void submit()} disabled={busy}>
+          {direction === 'aftrekken' ? 'Aftrekken' : 'Toekennen'}
         </Button>
       </DialogActions>
     </Dialog>
