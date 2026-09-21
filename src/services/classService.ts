@@ -312,8 +312,3 @@ export function cancelBooking(bookingId: string): Promise<{ refunded: boolean; p
 export function setStandingBookingActive(standingBookingId: string, active: boolean): Promise<{ active: boolean }> {
   return callBooking({ action: 'setStandingBooking', standingBookingId, active });
 }
-
-/** Credits toekennen of afboeken (alleen trainer of beheerder). */
-export function grantCredits(userId: string, amount: number, note?: string): Promise<{ balance: number }> {
-  return callBooking({ action: 'grant', userId, amount, note });
-}

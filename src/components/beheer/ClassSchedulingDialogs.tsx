@@ -1,26 +1,12 @@
 /**
- * Lessen inplannen en credits toekennen gebeurt vanuit Beheer (niet meer vanuit Lessen zelf):
- * een losse les op het rooster zetten, en credits bijboeken voor een sporter.
+ * Een losse les op het rooster zetten vanuit Beheer (niet meer vanuit Lessen zelf).
  */
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Autocomplete,
-  Box,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  MenuItem,
-  TextField,
-  ToggleButton,
-  ToggleButtonGroup,
-} from '@mui/material';
+import { Autocomplete, Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, TextField } from '@mui/material';
 import { useI18n } from '../../context/I18nContext';
 import { useNotify } from '../../context/NotifyContext';
-import { createClass, grantCredits, newClassId } from '../../services/classService';
+import { createClass, newClassId } from '../../services/classService';
 import { getClassTypes } from '../../services/classTypeService';
-import { segmentedToggleSx } from '../../theme/segmentedToggle';
 import type { ClassType, Profile, SessionKind } from '../../types';
 
 const SESSION_KIND_KEYS: SessionKind[] = ['1on1', 'duo', 'group', 'concept'];
@@ -212,101 +198,6 @@ export function NewClassDialog({
         </Button>
         <Button variant="contained" onClick={() => void submit()} disabled={busy}>
           Toevoegen
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
-/**
- * Credits toekennen aan een sporter. Een strippenkaart in de app: de trainer boekt het bij,
- * de mutatie komt in het grootboek te staan zodat later te zien is waar een saldo vandaan komt.
- */
-export function GrantCreditsDialog({
-  open,
-  onClose,
-  sporters,
-  onGranted,
-}: {
-  open: boolean;
-  onClose: () => void;
-  sporters: Profile[];
-  onGranted: () => void;
-}) {
-  const notify = useNotify();
-  const [userId, setUserId] = useState('');
-  const [direction, setDirection] = useState<'toekennen' | 'aftrekken'>('toekennen');
-  const [amount, setAmount] = useState('10');
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const submit = async () => {
-    setBusy(true);
-    try {
-      const aantal = Number(amount);
-      if (!userId) throw new Error('Kies een sporter.');
-      if (!Number.isInteger(aantal) || aantal <= 0) throw new Error('Vul een heel, positief aantal credits in.');
-      const delta = direction === 'aftrekken' ? -aantal : aantal;
-
-      const result = await grantCredits(userId, delta, note.trim() || undefined);
-      const naam = sporters.find((p) => p.userId === userId)?.displayName ?? 'de sporter';
-      notify?.success(`${naam} heeft nu ${result.balance} credits.`);
-      setNote('');
-      onGranted();
-    } catch (e) {
-      notify?.error(e instanceof Error ? e.message : 'Credits aanpassen mislukt');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>Credits aanpassen</DialogTitle>
-      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, '&&': { pt: 1.5 } }}>
-        <TextField label="Sporter" select value={userId} onChange={(e) => setUserId(e.target.value)} size="small">
-          {sporters.map((p) => (
-            <MenuItem key={p.userId} value={p.userId}>
-              {p.displayName || p.email || p.userId}
-            </MenuItem>
-          ))}
-        </TextField>
-        <ToggleButtonGroup
-          size="small"
-          exclusive
-          value={direction}
-          onChange={(_, v: 'toekennen' | 'aftrekken' | null) => v && setDirection(v)}
-          sx={segmentedToggleSx}
-        >
-          <ToggleButton value="toekennen">Toekennen</ToggleButton>
-          <ToggleButton value="aftrekken">Aftrekken</ToggleButton>
-        </ToggleButtonGroup>
-        <TextField
-          label="Aantal credits"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          size="small"
-          inputMode="numeric"
-          helperText={
-            direction === 'aftrekken'
-              ? 'Dit aantal wordt van het saldo afgehaald, bijvoorbeeld om een foutje recht te zetten.'
-              : 'Dit aantal wordt bij het saldo opgeteld.'
-          }
-        />
-        <TextField
-          label="Notitie"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          size="small"
-          placeholder="Bijvoorbeeld: 10-rittenkaart betaald"
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={busy}>
-          Annuleren
-        </Button>
-        <Button variant="contained" color={direction === 'aftrekken' ? 'error' : 'primary'} onClick={() => void submit()} disabled={busy}>
-          {direction === 'aftrekken' ? 'Aftrekken' : 'Toekennen'}
         </Button>
       </DialogActions>
     </Dialog>

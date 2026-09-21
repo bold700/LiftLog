@@ -394,41 +394,6 @@ describe('elke week inschrijven', () => {
   });
 });
 
-describe('credits toekennen', () => {
-  it('een trainer kent credits toe en dat komt in het grootboek', async () => {
-    const res = await post({ action: 'grant', userId: 'sporter1', amount: 10, note: 'strippenkaart' }, 'trainer1');
-
-    expect(res.body.balance).toBe(13);
-    const ledger = Object.values(store).filter((v) => v.reason === 'manual');
-    expect(ledger[0]).toMatchObject({ userId: 'sporter1', delta: 10, byUserId: 'trainer1' });
-  });
-
-  it('een sporter kan zichzelf geen credits geven', async () => {
-    const res = await post({ action: 'grant', userId: 'sporter1', amount: 10 }, 'sporter1');
-    expect(res.statusCode).toBe(403);
-    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(3);
-  });
-
-  it('kent geen credits toe aan iemand uit een andere studio', async () => {
-    const res = await post({ action: 'grant', userId: 'sporterB', amount: 10 }, 'trainer1');
-    expect(res.statusCode).toBe(403);
-  });
-
-  it('laat het saldo niet onder nul zakken', async () => {
-    const res = await post({ action: 'grant', userId: 'sporter1', amount: -10 }, 'trainer1');
-    expect(res.statusCode).toBe(409);
-    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(3);
-  });
-
-  it('weigert onzinnige aantallen', async () => {
-    for (const amount of [0, 2.5, 5000, -5000]) {
-      const res = await post({ action: 'grant', userId: 'sporter1', amount }, 'trainer1');
-      expect(res.statusCode).toBe(400);
-    }
-    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(3);
-  });
-});
-
 describe('facturen', () => {
   const seedPlan = () => {
     store['plans/pl1'] = { orgId: 'vanas', name: 'Maand 8', period: 'month', price: 139, credits: 8, rollover: 'expire', vatRate: 9 };
