@@ -23,6 +23,9 @@ function toOrg(data: Record<string, unknown>, id: string): Org {
     ownerId: typeof data.ownerId === 'string' ? data.ownerId : null,
     allowSelfSignup: data.allowSelfSignup === true,
     staffFullClientAccess: data.staffFullClientAccess === true,
+    rooms: Array.isArray(data.rooms)
+      ? Array.from(new Set(data.rooms.filter((r): r is string => typeof r === 'string' && r.trim() !== '').map((r) => r.trim())))
+      : [],
     branding: toBranding(data.branding),
     business: toBusiness(data.business),
     payments: toPaymentsStatus(data.payments),
@@ -138,6 +141,19 @@ export async function saveOrgBookingPolicy(orgId: string, policy: OrgBookingPoli
     { bookingPolicy: { freeCancelHours: Math.max(0, Math.trunc(policy.freeCancelHours)) }, updatedAt: serverTimestamp() },
     { merge: true }
   );
+}
+
+/**
+ * Ruimtelijst opslaan (Beheer → Lessoorten). Alleen een beheerder mag dit (Firestore-regels: alleen
+ * `orgs`-update is admin-only), dus deze functie faalt stil-onterecht voor een trainer — de UI
+ * toont de beheerder daarom als enige de bewerkknoppen.
+ */
+export async function saveOrgRooms(orgId: string, rooms: string[]): Promise<void> {
+  if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
+  const id = orgId.trim();
+  if (!id) throw new Error('Studio-id ontbreekt');
+  const clean = Array.from(new Set(rooms.map((r) => r.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  await setDoc(doc(db, COLLECTION, id), { rooms: clean, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 /** Bedrijfsgegevens opslaan (Beheer → Huisstijl). Alleen een beheerder mag dit (Firestore-regels). */

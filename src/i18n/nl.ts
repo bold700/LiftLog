@@ -112,6 +112,17 @@ export const nl = {
       concept: 'Concept',
     },
     room: 'Ruimte',
+    noRoom: 'Geen vaste ruimte',
+    rooms: {
+      title: 'Ruimtes',
+      help: 'Beheer hier de ruimtes van de studio; een lessoort of losse les kiest er dan een uit — geen vrij te typen tekst meer, dat gaf typfouten als "Boven" naast "boven".',
+      placeholder: 'Naam van de ruimte',
+      add: 'Toevoegen',
+      empty: 'Nog geen ruimtes toegevoegd.',
+      remove: 'Ruimte verwijderen',
+      adminOnly: 'Alleen een beheerder kan ruimtes toevoegen of verwijderen.',
+      duplicate: 'Die ruimte bestaat al.',
+    },
     schedule: {
       title: 'Terugkerend',
       help: 'Kies vaste weekmomenten; die komen dan zelf op het rooster, tot 8 weken vooruit.',

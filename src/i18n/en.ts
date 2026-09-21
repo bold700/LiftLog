@@ -110,6 +110,17 @@ export const en: Messages = {
       concept: 'Concept',
     },
     room: 'Room',
+    noRoom: 'No fixed room',
+    rooms: {
+      title: 'Rooms',
+      help: 'Manage the studio\'s rooms here; a class type or one-off class then picks one — no more free typing, which caused typos like "Boven" next to "boven".',
+      placeholder: 'Room name',
+      add: 'Add',
+      empty: 'No rooms added yet.',
+      remove: 'Delete room',
+      adminOnly: 'Only an admin can add or remove rooms.',
+      duplicate: 'That room already exists.',
+    },
     schedule: {
       title: 'Recurring',
       help: 'Pick fixed weekly slots; these get added to the schedule automatically, up to 8 weeks ahead.',

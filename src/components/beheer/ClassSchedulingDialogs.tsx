@@ -1,12 +1,14 @@
 /**
  * Een losse les op het rooster zetten vanuit Beheer (niet meer vanuit Lessen zelf).
  */
-import { useEffect, useMemo, useState } from 'react';
-import { Autocomplete, Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, TextField } from '@mui/material';
+import { useEffect, useState } from 'react';
+import { Box, Button, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, TextField } from '@mui/material';
 import { useI18n } from '../../context/I18nContext';
 import { useNotify } from '../../context/NotifyContext';
+import { useProfile } from '../../context/ProfileContext';
 import { createClass, newClassId } from '../../services/classService';
 import { getClassTypes } from '../../services/classTypeService';
+import { getOrg } from '../../services/orgService';
 import type { ClassType, Profile, SessionKind } from '../../types';
 
 const SESSION_KIND_KEYS: SessionKind[] = ['1on1', 'duo', 'group', 'concept'];
@@ -29,7 +31,9 @@ export function NewClassDialog({
 }) {
   const notify = useNotify();
   const { t } = useI18n();
+  const profile = useProfile();
   const [types, setTypes] = useState<ClassType[]>([]);
+  const [rooms, setRooms] = useState<string[]>([]);
   const [typeId, setTypeId] = useState('');
   const [title, setTitle] = useState('Small Group Training');
   const [date, setDate] = useState(today());
@@ -45,9 +49,9 @@ export function NewClassDialog({
   useEffect(() => {
     if (!open) return;
     getClassTypes().then(setTypes).catch(() => setTypes([]));
-  }, [open]);
-
-  const roomOptions = useMemo(() => Array.from(new Set(types.map((c) => c.room).filter((r): r is string => !!r))).sort(), [types]);
+    const orgId = profile?.activeOrgId;
+    if (orgId) getOrg(orgId).then((org) => setRooms(org?.rooms ?? [])).catch(() => setRooms([]));
+  }, [open, profile?.activeOrgId]);
 
   // Lessoort gekozen: zelfde velden overnemen als in Beheer → Lessoorten (ook trainer en volledige
   // creditrange), zodat een losse les niet minder kan instellen dan een lessoort. Begin/eindtijd
@@ -172,15 +176,14 @@ export function NewClassDialog({
               </MenuItem>
             ))}
           </TextField>
-          <Autocomplete
-            freeSolo
-            size="small"
-            fullWidth
-            options={roomOptions}
-            value={room}
-            onInputChange={(_, v) => setRoom(v)}
-            renderInput={(params) => <TextField {...params} label={t('classTypes.room')} />}
-          />
+          <TextField label={t('classTypes.room')} select value={room} onChange={(e) => setRoom(e.target.value)} size="small" fullWidth>
+            <MenuItem value="">{t('classTypes.noRoom')}</MenuItem>
+            {rooms.map((r) => (
+              <MenuItem key={r} value={r}>
+                {r}
+              </MenuItem>
+            ))}
+          </TextField>
         </Box>
         {staff.length > 0 && (
           <TextField label="Trainer" select value={assignedTrainerId} onChange={(e) => setAssignedTrainerId(e.target.value)} size="small" fullWidth>
