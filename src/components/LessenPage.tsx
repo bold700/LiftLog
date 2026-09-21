@@ -41,6 +41,7 @@ import {
   type Booking,
 } from '../services/classService';
 import { getOrg } from '../services/orgService';
+import { getColleagues } from '../services/profileService';
 import { designTokens } from '../theme/designTokens';
 import { segmentedToggleSx } from '../theme/segmentedToggle';
 import { addWeeks } from '../utils/format';
@@ -117,6 +118,12 @@ export function LessenPage() {
   const [cancelConfirmClass, setCancelConfirmClass] = useState<StudioClass | null>(null);
   const [participantsClass, setParticipantsClass] = useState<StudioClass | null>(null);
   const [freeCancelHours, setFreeCancelHours] = useState(DEFAULT_FREE_CANCEL_HOURS);
+  /**
+   * Naam per trainerId, voor de trainernaam op de rij en in de reserveer-dialoog (Figma toont
+   * "Kenny" onder de lestitel). Alleen voor staf: een sporter mag niet elk trainerprofiel lezen
+   * (firestore.rules), dus voor sporters blijft dit leeg en tonen we simpelweg geen naam.
+   */
+  const [trainerNames, setTrainerNames] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     if (!me) return;
@@ -132,6 +139,12 @@ export function LessenPage() {
       setBookings(mine);
       setCredits(balance);
       setStandingBookings(standing);
+      if (me.role === 'trainer' || me.role === 'admin') {
+        const colleagues = await getColleagues(me.userId).catch(() => []);
+        const names: Record<string, string> = { [me.userId]: me.displayName?.trim() || me.email || me.userId };
+        for (const c of colleagues) names[c.userId] = c.displayName?.trim() || c.email || c.userId;
+        setTrainerNames(names);
+      }
     } catch (e) {
       notify?.error(e instanceof Error ? e.message : 'Rooster laden mislukt');
     } finally {
@@ -310,6 +323,7 @@ export function LessenPage() {
             {cls.title}
           </Typography>
           <Typography variant="body2" color="text.secondary">
+            {trainerNames[cls.trainerId] ? `${trainerNames[cls.trainerId]} · ` : ''}
             {dayLabel(cls.date)} · {cls.startTime}
             {cls.endTime ? `–${cls.endTime}` : ''}
             {cls.room ? ` · ${cls.room}` : ''}
@@ -539,6 +553,7 @@ export function LessenPage() {
 
       <BookConfirmDialog
         cls={confirmClass}
+        trainerName={confirmClass ? trainerNames[confirmClass.trainerId] : undefined}
         credits={credits}
         isStaff={isStaff}
         freeCancelHours={freeCancelHours}
@@ -620,6 +635,7 @@ function CancelClassDialog({
  */
 function BookConfirmDialog({
   cls,
+  trainerName,
   credits,
   isStaff,
   freeCancelHours,
@@ -629,6 +645,7 @@ function BookConfirmDialog({
   onConfirm,
 }: {
   cls: StudioClass | null;
+  trainerName?: string;
   credits: number;
   isStaff: boolean;
   freeCancelHours: number;
@@ -657,7 +674,7 @@ function BookConfirmDialog({
           {cls.endTime ? `–${cls.endTime}` : ''}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          {[cls.room, `${cls.bookedCount} van ${cls.capacity} plekken bezet`].filter(Boolean).join(' · ')}
+          {[trainerName, cls.room, `${cls.bookedCount} van ${cls.capacity} plekken bezet`].filter(Boolean).join(' · ')}
         </Typography>
 
         {!full && (
