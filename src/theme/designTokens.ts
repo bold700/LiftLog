@@ -65,6 +65,10 @@ export const designTokens = {
   get onTertiaryContainer() {
     return getActiveScheme().onTertiaryContainer;
   },
+  /** Verzadigd blauwgroen: secundaire voortgangsbalken (bijv. macro's op Voeding) */
+  get tertiary() {
+    return getActiveScheme().tertiary;
+  },
   get outline() {
     return getActiveScheme().outline;
   },

@@ -44,9 +44,6 @@ export type MealMoment = 'ontbijt' | 'lunch' | 'diner' | 'tussendoor';
 export const MEAL_ORDER: MealMoment[] = ['ontbijt', 'lunch', 'diner', 'tussendoor'];
 export const MEAL_LABELS: Record<MealMoment, string> = { ontbijt: 'Ontbijt', lunch: 'Lunch', diner: 'Diner', tussendoor: 'Tussendoor' };
 
-/** Vaste kleur per macro, overal in de voeding-schermen (los van de studiohuisstijl). */
-export const MACRO_COLORS = { protein: '#4E8AC7', carbs: '#D96C6C', fat: '#E39A3B' } as const;
-
 /** Het eetmoment dat bij dit uur van de dag hoort — een goede eerste gok, geen wet. */
 export function defaultMealForNow(now: Date = new Date()): MealMoment {
   const h = now.getHours() + now.getMinutes() / 60;

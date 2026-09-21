@@ -29,7 +29,7 @@ import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
 import { NumberField } from '../NumberField';
 import { designTokens } from '../../theme/designTokens';
 import { portionsFor, type Portion } from '../../utils/portions';
-import { MEAL_LABELS, MEAL_ORDER, MACRO_COLORS, macrosForGrams, type FoodProduct, type MealMoment } from '../../services/nutritionService';
+import { MEAL_LABELS, MEAL_ORDER, macrosForGrams, type FoodProduct, type MealMoment } from '../../services/nutritionService';
 
 const CUSTOM = 'custom';
 
@@ -182,13 +182,13 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
               )}
             </Box>
 
-            {/* Macro's voor wat je gaat eten */}
+            {/* Macro's voor wat je gaat eten — vlakke tegels zonder kleurcodering, zoals het ontwerp */}
             {macros && (
               <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, mb: 2 }}>
-                <MacroTile label="kcal" value={macros.kcal.toLocaleString('nl-NL')} dot={designTokens.primary} />
-                <MacroTile label="koolh." value={`${fmt1(macros.carbs)} g`} dot={MACRO_COLORS.carbs} />
-                <MacroTile label="eiwit" value={`${fmt1(macros.protein)} g`} dot={MACRO_COLORS.protein} />
-                <MacroTile label="vet" value={`${fmt1(macros.fat)} g`} dot={MACRO_COLORS.fat} />
+                <MacroTile label="kcal" value={macros.kcal.toLocaleString('nl-NL')} />
+                <MacroTile label="koolh." value={`${fmt1(macros.carbs)} g`} />
+                <MacroTile label="eiwit" value={`${fmt1(macros.protein)} g`} />
+                <MacroTile label="vet" value={`${fmt1(macros.fat)} g`} />
               </Box>
             )}
 
@@ -279,10 +279,9 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
   );
 }
 
-function MacroTile({ label, value, dot }: { label: string; value: string; dot: string }) {
+function MacroTile({ label, value }: { label: string; value: string }) {
   return (
     <Box sx={{ bgcolor: designTokens.cardBackground, borderRadius: 3, py: 1.25, px: 0.5, textAlign: 'center' }}>
-      <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: dot, mx: 'auto', mb: 0.5 }} />
       <Typography fontWeight={800} sx={{ fontSize: 17, lineHeight: 1.1 }}>
         {value}
       </Typography>
