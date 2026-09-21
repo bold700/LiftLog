@@ -113,6 +113,8 @@ export const nl = {
     },
     room: 'Ruimte',
     noRoom: 'Geen vaste ruimte',
+    description: 'Omschrijving',
+    descriptionHelp: 'Kort, voor de sporter in de boekingsdialoog. Leeg = geen omschrijving.',
     rooms: {
       title: 'Ruimtes',
       help: 'Beheer hier de ruimtes van de studio; een lessoort of losse les kiest er dan een uit — geen vrij te typen tekst meer, dat gaf typfouten als "Boven" naast "boven".',

@@ -63,6 +63,7 @@ interface Draft {
   schedule: ClassScheduleSlot[];
   room: string;
   sessionKind: SessionKind;
+  description: string;
   createdAt?: string;
 }
 
@@ -76,6 +77,7 @@ const emptyDraft = (): Draft => ({
   schedule: [],
   room: '',
   sessionKind: 'group',
+  description: '',
 });
 const toDraft = (c: ClassType): Draft => ({
   id: c.id,
@@ -87,6 +89,7 @@ const toDraft = (c: ClassType): Draft => ({
   schedule: c.schedule,
   room: c.room ?? '',
   sessionKind: c.sessionKind,
+  description: c.description ?? '',
   createdAt: c.createdAt || undefined,
 });
 
@@ -220,6 +223,7 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         schedule: draft.schedule,
         room: draft.room.trim() || null,
         sessionKind: draft.sessionKind,
+        description: draft.description.trim() || null,
         createdAt: draft.createdAt,
       });
       // Meteen het rooster vullen in plaats van tot de volgende dagelijkse cron te wachten —
@@ -389,6 +393,17 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
           ))}
         </TextField>
       </Box>
+      <TextField
+        label={t('classTypes.description')}
+        size="small"
+        fullWidth
+        multiline
+        minRows={2}
+        maxRows={4}
+        value={draft.description}
+        onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+        helperText={t('classTypes.descriptionHelp')}
+      />
       <TextField select label={t('classTypes.creditCost')} size="small" fullWidth value={draft.creditCost} onChange={(e) => setDraft({ ...draft, creditCost: e.target.value })}>
         {['0', '1', '2', '3', '4'].map((v) => (
           <MenuItem key={v} value={v}>

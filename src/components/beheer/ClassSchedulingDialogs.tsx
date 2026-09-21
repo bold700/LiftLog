@@ -44,6 +44,7 @@ export function NewClassDialog({
   const [assignedTrainerId, setAssignedTrainerId] = useState(trainerId);
   const [room, setRoom] = useState('');
   const [sessionKind, setSessionKind] = useState<SessionKind>('group');
+  const [description, setDescription] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -66,6 +67,7 @@ export function NewClassDialog({
     setAssignedTrainerId(ct.defaultTrainerId ?? trainerId);
     setRoom(ct.room ?? '');
     setSessionKind(ct.sessionKind);
+    setDescription(ct.description ?? '');
   };
 
   const submit = async () => {
@@ -91,6 +93,7 @@ export function NewClassDialog({
         classTypeId: chosen?.id ?? null,
         room: room.trim() || null,
         sessionKind,
+        description: description.trim() || null,
       });
       notify?.success('Les staat op het rooster.');
       onCreated();
@@ -194,6 +197,16 @@ export function NewClassDialog({
             ))}
           </TextField>
         )}
+        <TextField
+          label={t('classTypes.description')}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          size="small"
+          fullWidth
+          multiline
+          minRows={2}
+          maxRows={4}
+        />
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={busy}>

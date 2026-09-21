@@ -869,6 +869,7 @@ async function generateForClassType(db, classTypeId, ct) {
       classTypeId,
       room: ct.room ?? null,
       sessionKind: ct.sessionKind ?? 'group',
+      description: ct.description ?? null,
       bookedCount: 0,
       waitlistCount: 0,
       cancelledAt: null,

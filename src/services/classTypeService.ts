@@ -44,6 +44,7 @@ function toClassType(data: Record<string, unknown>, id: string): ClassType {
     schedule: toSchedule(data.schedule),
     room: typeof data.room === 'string' ? data.room : null,
     sessionKind: toSessionKind(data.sessionKind),
+    description: typeof data.description === 'string' ? data.description : null,
     createdAt: typeof data.createdAt === 'string' ? data.createdAt : '',
     updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
   };
@@ -76,6 +77,7 @@ export async function saveClassType(input: Omit<ClassType, 'orgId' | 'createdAt'
       schedule: input.schedule,
       room: input.room,
       sessionKind: input.sessionKind,
+      description: input.description,
       createdAt: input.createdAt || new Date().toISOString(),
       updatedAt: serverTimestamp(),
     },
