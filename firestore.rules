@@ -73,6 +73,15 @@ service cloud.firestore {
     function isStaffInSameOrg() {
       return isTrainerOrAdmin() && sameOrg();
     }
+    /**
+     * Heeft de studio van het bestaande document expliciet aangezet dat elke trainer/beheerder
+     * elkaars cliëntdata mag zien (Beheer → Huisstijl)? Standaard uit: dan blijft een trainer
+     * beperkt tot de eigen cliënten, ook als hij verder gewoon trainer/beheerder is.
+     */
+    function orgAllowsStaffFullClientAccess() {
+      return exists(/databases/$(database)/documents/orgs/$(orgOf(resource.data)))
+        && get(/databases/$(database)/documents/orgs/$(orgOf(resource.data))).data.get('staffFullClientAccess', false) == true;
+    }
     // Btw-tarief van een plan: de drie Nederlandse tarieven, of niet meegegeven (dan geldt het standaardtarief).
     function validVatRate() {
       return !('vatRate' in request.resource.data) || request.resource.data.vatRate in [0, 9, 21];
@@ -173,7 +182,9 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
 
-    // Workouts: alleen binnen de eigen studio, en daarbinnen alleen eigen of toegewezen schema's.
+    // Workouts: alleen binnen de eigen studio, en daarbinnen alleen eigen of toegewezen schema's —
+    // tenzij de studio `staffFullClientAccess` aan heeft staan (Beheer → Huisstijl), dan mag elke
+    // trainer/beheerder in de studio meekijken (bijv. voor een dienst-overdracht).
     // Let op `audience == 'open'`: dat is open binnen de studio, nooit daarbuiten.
     match /workouts/{workoutId} {
       allow read: if isSignedIn()
@@ -181,7 +192,8 @@ service cloud.firestore {
         && (resource.data.trainerId == request.auth.uid
             || resource.data.clientId == request.auth.uid
             || request.auth.uid in resource.data.get('participantIds', [])
-            || resource.data.get('audience', 'single') == 'open');
+            || resource.data.get('audience', 'single') == 'open'
+            || (isTrainerOrAdmin() && orgAllowsStaffFullClientAccess()));
       allow create: if isSignedIn()
         && writesMyOrg()
         && request.resource.data.trainerId == request.auth.uid;

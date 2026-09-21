@@ -22,6 +22,7 @@ function toOrg(data: Record<string, unknown>, id: string): Org {
     name: typeof data.name === 'string' && data.name.trim() ? data.name.trim() : id,
     ownerId: typeof data.ownerId === 'string' ? data.ownerId : null,
     allowSelfSignup: data.allowSelfSignup === true,
+    staffFullClientAccess: data.staffFullClientAccess === true,
     branding: toBranding(data.branding),
     business: toBusiness(data.business),
     payments: toPaymentsStatus(data.payments),
@@ -188,7 +189,7 @@ export async function getOrg(orgId: string): Promise<Org | null> {
  */
 export async function saveOrg(
   orgId: string,
-  data: { name: string; ownerId?: string | null; allowSelfSignup?: boolean }
+  data: { name: string; ownerId?: string | null; allowSelfSignup?: boolean; staffFullClientAccess?: boolean }
 ): Promise<void> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
   const id = orgId.trim();
@@ -199,6 +200,7 @@ export async function saveOrg(
       name: data.name.trim(),
       ownerId: data.ownerId ?? null,
       allowSelfSignup: data.allowSelfSignup === true,
+      staffFullClientAccess: data.staffFullClientAccess === true,
       updatedAt: serverTimestamp(),
       createdAt: serverTimestamp(),
     },
