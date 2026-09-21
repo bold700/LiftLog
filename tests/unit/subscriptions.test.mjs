@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { addMonths, newCharge, newMembership, periodOf, planRenewals, renewalDelta } from '../../api/_lib/subscriptions.mjs';
+import { addMonths, addPeriod, newCharge, newMembership, periodOf, planRenewals, renewalDelta } from '../../api/_lib/subscriptions.mjs';
 
 const month = (extra = {}) => ({ id: 'p1', name: 'Maand 8', period: 'month', credits: 8, rollover: 'expire', ...extra });
+const week = (extra = {}) => ({ id: 'p3', name: 'Week 2', period: 'week', credits: 2, rollover: 'expire', ...extra });
 
 describe('abonnementen', () => {
   it('telt maanden op zonder over het maandeinde te schieten', () => {
@@ -60,5 +61,31 @@ describe('abonnementen', () => {
     const kaart = newMembership({ id: 'm2', orgId: 'vanas', userId: 'u1', plan: { id: 'p2', name: 'Kaart', period: 'once', credits: 10, validityMonths: 6 }, nowIso: now, byUserId: 'admin' });
     expect(kaart.nextRenewalAt).toBeNull();
     expect(kaart.expiresAt).toBe('2027-03-20T12:00:00.000Z');
+  });
+
+  it('telt een week of vier weken op zonder de maand erbij te halen', () => {
+    expect(addPeriod('2026-09-20T12:00:00.000Z', 'week')).toBe('2026-09-27T12:00:00.000Z');
+    expect(addPeriod('2026-09-20T12:00:00.000Z', 'fourWeeks')).toBe('2026-10-18T12:00:00.000Z');
+    expect(addPeriod('2026-01-31T10:00:00.000Z', 'month')).toBe(addMonths('2026-01-31T10:00:00.000Z', 1));
+  });
+
+  it('verlengt een weekplan per verstreken week, niet per maand', () => {
+    const m = { status: 'active', nextRenewalAt: '2026-09-06T00:00:00.000Z' };
+    const r = planRenewals(m, week({ rollover: 'carry' }), 0, '2026-09-20T12:00:00.000Z');
+    // 06, 13, 20 sep: drie verstreken weekmomenten.
+    expect(r.steps.map((s) => s.delta)).toEqual([2, 2, 2]);
+    expect(r.membership.nextRenewalAt).toBe('2026-09-27T00:00:00.000Z');
+  });
+
+  it('een nieuw weeklidmaatschap verlengt over precies 7 dagen', () => {
+    const now = '2026-09-20T12:00:00.000Z';
+    const lid = newMembership({ id: 'm3', orgId: 'vanas', userId: 'u1', plan: week(), nowIso: now, byUserId: 'admin' });
+    expect(lid.nextRenewalAt).toBe('2026-09-27T12:00:00.000Z');
+  });
+
+  it('een post voor een weekplan draagt de startdatum in de omschrijving, geen maandlabel', () => {
+    const c = newCharge({ id: 'ch3', orgId: 'vanas', userId: 'u1', plan: { ...week(), price: 30 }, membershipId: 'm3', periodStartIso: '2026-09-27T12:00:00.000Z', nowIso: '2026-09-20T12:00:00.000Z' });
+    expect(c.period).toBeNull();
+    expect(c.description).toBe('Week 2 · 2026-09-27');
   });
 });

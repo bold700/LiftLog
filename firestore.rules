@@ -415,7 +415,7 @@ service cloud.firestore {
       allow create: if isStaffInSameOrgForNew()
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
-        && request.resource.data.period in ['month', 'once']
+        && request.resource.data.period in ['week', 'fourWeeks', 'month', 'once']
         && request.resource.data.price is number
         && request.resource.data.price >= 0
         && validVatRate();

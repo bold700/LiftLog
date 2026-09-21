@@ -21,6 +21,13 @@ export function addMonths(iso, months) {
   return d.toISOString();
 }
 
+/** Eén verlengingsperiode verder, wat die periode ook is ("once" hoort hier niet bij). */
+export function addPeriod(iso, period) {
+  if (period === 'week') return new Date(new Date(iso).getTime() + 7 * 86_400_000).toISOString();
+  if (period === 'fourWeeks') return new Date(new Date(iso).getTime() + 28 * 86_400_000).toISOString();
+  return addMonths(iso, 1);
+}
+
 /**
  * Wat er bij een verlenging bij het saldo moet. Onbeperkt: niets. "Vervalt": het saldo wordt
  * precies het maandtegoed. "Meenemen": het tegoed komt erbij.
@@ -54,12 +61,14 @@ export function planRenewals(membership, plan, balance, nowIso) {
     return { steps, balance: saldo, membership: next };
   }
 
+  // Ruim genoeg om nooit vast te lopen, ook bij een weekplan dat een tijd niet is bijgewerkt
+  // (2+ jaar aan weken) — de dagelijkse cron/renewDue houdt dit normaal al bij.
   let guard = 0;
-  while (next.nextRenewalAt && new Date(next.nextRenewalAt).getTime() <= now && guard < 24) {
+  while (next.nextRenewalAt && new Date(next.nextRenewalAt).getTime() <= now && guard < 120) {
     const delta = renewalDelta(plan, saldo);
     steps.push({ kind: 'renewal', delta, periodStart: next.nextRenewalAt });
     saldo += delta;
-    next = { ...next, nextRenewalAt: addMonths(next.nextRenewalAt, 1), lastRenewedAt: nowIso };
+    next = { ...next, nextRenewalAt: addPeriod(next.nextRenewalAt, plan.period), lastRenewedAt: nowIso };
     guard += 1;
   }
   return { steps, balance: saldo, membership: next };
@@ -77,7 +86,7 @@ export function newMembership({ id, orgId, userId, plan, nowIso, byUserId }) {
     planName: plan.name,
     status: 'active',
     startedAt: nowIso,
-    nextRenewalAt: once ? null : addMonths(nowIso, 1),
+    nextRenewalAt: once ? null : addPeriod(nowIso, plan.period),
     expiresAt: once && months > 0 ? addMonths(nowIso, months) : null,
     lastRenewedAt: nowIso,
     byUserId,
@@ -100,6 +109,9 @@ export function periodOf(iso) {
 export function newCharge({ id, orgId, userId, plan, membershipId, periodStartIso, nowIso, invoiceNumber = null }) {
   const monthly = plan.period === 'month';
   const period = monthly ? periodOf(periodStartIso) : null;
+  // Per week/4 weken herhaalt dezelfde omschrijving zich anders elke keer; de startdatum van de
+  // periode maakt losse posten op Facturatie uit elkaar te houden, zoals de maandlabel dat doet.
+  const recurringDate = plan.period === 'week' || plan.period === 'fourWeeks' ? String(periodStartIso).slice(0, 10) : null;
   return {
     id,
     orgId,
@@ -107,7 +119,7 @@ export function newCharge({ id, orgId, userId, plan, membershipId, periodStartIs
     membershipId,
     planId: plan.id,
     planName: plan.name,
-    description: monthly ? `${plan.name} · ${period}` : plan.name,
+    description: monthly ? `${plan.name} · ${period}` : recurringDate ? `${plan.name} · ${recurringDate}` : plan.name,
     amount: Number(plan.price) || 0,
     period,
     issuedAt: nowIso,
