@@ -312,3 +312,8 @@ export function cancelBooking(bookingId: string): Promise<{ refunded: boolean; p
 export function setStandingBookingActive(standingBookingId: string, active: boolean): Promise<{ active: boolean }> {
   return callBooking({ action: 'setStandingBooking', standingBookingId, active });
 }
+
+/** Credits handmatig aanpassen (toekennen of afboeken), bijvoorbeeld om een verkeerde toekenning recht te zetten. */
+export function grantCredits(userId: string, amount: number, note?: string): Promise<{ balance: number }> {
+  return callBooking({ action: 'grant', userId, amount, note });
+}
