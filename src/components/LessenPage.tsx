@@ -22,6 +22,7 @@ import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
 import { PageLayout, ContentCard, PageTitle, EmptyState } from './layout';
+import { CreditBalanceCard } from './SubscriptionCard';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
 import {
@@ -352,7 +353,6 @@ export function LessenPage() {
   return (
     <PageLayout>
       <PageTitle>Lessen</PageTitle>
-      {/* Creditsaldo staat op Profiel (Abonnement); hier alleen de uitleg, geen dubbele weergave. */}
       <Typography variant="body2" color="text.secondary" sx={{ mt: -2, mb: 2, px: 0.5 }}>
         {isStaff ? 'Zet lessen op het rooster; sporters reserveren met credits.' : 'Reserveer met je credits.'}
       </Typography>
@@ -387,6 +387,9 @@ export function LessenPage() {
           ))}
         </Box>
       )}
+
+      {/* Creditsaldo prominent bovenaan het rooster, zoals in het Figma-ontwerp ("8 credits left"). */}
+      <CreditBalanceCard userId={me.userId} />
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
