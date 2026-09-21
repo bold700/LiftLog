@@ -319,6 +319,14 @@ export interface Org {
   payments: OrgPaymentsStatus;
   /** Wanneer afmelden nog gratis is (Beheer → Huisstijl). Ontbreekt dit, dan geldt het standaard aantal uur van de server. */
   bookingPolicy?: OrgBookingPolicy | null;
+  /**
+   * Mag een trainer binnen deze studio de workouts/schema's van andermans cliënten zien, niet
+   * alleen de eigen? Standaard uit: elke trainer ziet dan alleen zijn eigen cliënten. Nodig voor
+   * bijv. een dienst-overdracht (shift handover), waarbij een overnemende trainer tijdelijk het
+   * schema van een collega's cliënt moet kunnen inzien — een bewuste, organisatiebrede keuze van
+   * de beheerder, geen per-overdracht uitzondering.
+   */
+  staffFullClientAccess: boolean;
   createdAt: string;
   updatedAt: string;
 }

@@ -25,6 +25,11 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   // van vóór de migratie, die als de standaardstudio moet worden gelezen.
   await setDoc(doc(db, 'orgs/vanas'), { name: 'Van As Personal Training', allowSelfSignup: true });
   await setDoc(doc(db, 'orgs/studiob'), { name: 'Studio B', allowSelfSignup: false });
+  // Studio C heeft "trainers mogen elkaars cliënten zien" aan staan (Beheer → Huisstijl).
+  await setDoc(doc(db, 'orgs/studioc'), { name: 'Studio C', allowSelfSignup: false, staffFullClientAccess: true });
+  await setDoc(doc(db, 'profiles/trainerC1'), { userId: 'trainerC1', orgId: 'studioc', orgIds: ['studioc'], role: 'trainer', trainerId: null });
+  await setDoc(doc(db, 'profiles/trainerC2'), { userId: 'trainerC2', orgId: 'studioc', orgIds: ['studioc'], role: 'trainer', trainerId: null });
+  await setDoc(doc(db, 'workouts/wC1'), { orgId: 'studioc', trainerId: 'trainerC1', clientId: 'sporterC1', name: 'C-schema' });
 
   // Tweede studio, volledig eigen bezetting.
   await setDoc(doc(db, 'profiles/adminB'), { userId: 'adminB', orgId: 'studiob', orgIds: ['studiob'], role: 'admin', trainerId: null });
@@ -98,6 +103,8 @@ await t('sporter maakt workout op naam van trainer → geweigerd', false, setDoc
 await t('trainer maakt workout → mag', true, setDoc(doc(as('trainer1'), 'workouts/w2'), { trainerId: 'trainer1', clientId: 'sporter1', name: 'x' }));
 await t('toegewezen sporter leest workout → mag', true, getDoc(doc(as('sporter1'), 'workouts/w2')));
 await t('andere sporter leest workout → geweigerd', false, getDoc(doc(as('sporter2'), 'workouts/w2')));
+await t('trainer leest workout van collega mét staffFullClientAccess aan → mag', true, getDoc(doc(as('trainerC2'), 'workouts/wC1')));
+await t('sporter (geen staf) leest workout van ander ondanks staffFullClientAccess → geweigerd', false, getDoc(doc(as('sporter1'), 'workouts/wC1')));
 
 console.log('Studio-isolatie (multi-tenant)');
 // Lezen over de studiogrens heen mag nooit, ook niet als trainer of beheerder.

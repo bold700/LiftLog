@@ -6,7 +6,7 @@
  * De precieze: een export van Google's Material Theme Builder plakken; die gaat dan voor.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, Button, Chip, CircularProgress, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, FormControlLabel, Switch, TextField, Typography } from '@mui/material';
 import UploadRoundedIcon from '@mui/icons-material/UploadRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { ContentCard } from '../layout';
@@ -55,6 +55,7 @@ export function BrandingSettings() {
   const [savedOrgName, setSavedOrgName] = useState('');
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [allowSelfSignup, setAllowSelfSignup] = useState(false);
+  const [staffFullClientAccess, setStaffFullClientAccess] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [logoPrintUrl, setLogoPrintUrl] = useState<string | null>(null);
   const [seed, setSeed] = useState('#426833');
@@ -76,6 +77,7 @@ export function BrandingSettings() {
       setSavedOrgName(org.name);
       setOwnerId(org.ownerId);
       setAllowSelfSignup(org.allowSelfSignup);
+      setStaffFullClientAccess(org.staffFullClientAccess);
       setLogoUrl(org.branding?.logoUrl ?? null);
       setLogoPrintUrl(org.branding?.logoPrintUrl ?? null);
       setSeed(org.branding?.seedColor ?? '#426833');
@@ -154,7 +156,7 @@ export function BrandingSettings() {
     setBusy(true);
     try {
       if (orgName.trim() !== savedOrgName) {
-        await saveOrg(orgId, { name: orgName.trim(), ownerId, allowSelfSignup });
+        await saveOrg(orgId, { name: orgName.trim(), ownerId, allowSelfSignup, staffFullClientAccess });
         setSavedOrgName(orgName.trim());
       }
       await saveOrgBranding(orgId, draft);
@@ -344,6 +346,22 @@ export function BrandingSettings() {
             helperText={freeCancelHoursValid ? undefined : 'Vul een geheel getal in, 0 of hoger.'}
             inputProps={{ inputMode: 'numeric' }}
             sx={{ maxWidth: 220 }}
+          />
+        </Box>
+
+        {/* Toegang tussen trainers: standaard uit, per organisatie te kiezen (bijv. voor een dienst-overdracht). */}
+        <Box sx={{ mt: 2.5 }}>
+          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+            Toegang tussen trainers
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            Staat dit uit, dan ziet een trainer alleen de schema's van de eigen cliënten. Staat dit aan, dan mag elke
+            trainer of beheerder in de studio het schema van iedere cliënt inzien — bijvoorbeeld handig bij het
+            overnemen van een dienst, maar het geldt dan voor iedereen, altijd.
+          </Typography>
+          <FormControlLabel
+            control={<Switch checked={staffFullClientAccess} onChange={(e) => setStaffFullClientAccess(e.target.checked)} />}
+            label="Trainers mogen elkaars cliënten zien"
           />
         </Box>
 
