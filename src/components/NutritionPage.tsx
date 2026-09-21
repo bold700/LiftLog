@@ -45,6 +45,7 @@ const BarcodeScannerDialog = lazy(() =>
 import { PageLayout, ContentCard } from './layout';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
+import { useI18n } from '../context/I18nContext';
 import { updateProfile } from '../services/profileService';
 import type { NutritionGoal } from '../types';
 import {
@@ -59,7 +60,6 @@ import {
   type NutritionLog,
   type RecognizedFood,
   defaultMealForNow,
-  MEAL_LABELS,
   MEAL_ORDER,
   type MealMoment,
 } from '../services/nutritionService';
@@ -100,11 +100,6 @@ function per100gFromLog(l: NutritionLog): FoodProduct['per100g'] {
 
 const EMPTY_TOTALS = { kcal: 0, protein: 0, carbs: 0, fat: 0 };
 
-/** Volgorde van de dag, met achteraan wat vóór de eetmomenten is gelogd en dus geen moment heeft. */
-const MEAL_GROUPS: { key: MealMoment | null; label: string }[] = [
-  ...MEAL_ORDER.map((m) => ({ key: m as MealMoment | null, label: MEAL_LABELS[m] })),
-  { key: null, label: 'Zonder moment' },
-];
 function sumLogs(logs: NutritionLog[]) {
   return logs.reduce(
     (a, l) => ({
@@ -117,14 +112,10 @@ function sumLogs(logs: NutritionLog[]) {
   );
 }
 
-/** Rijen onder de kcal-balk: label, sleutel in de totalen en macro-kleur. */
-// Alle drie de macrobalken delen één kleur (Tertiary) — het ontwerp kleurt ze niet individueel,
-// alleen de kcal-balk erboven krijgt Primary.
-const MACRO_ROWS = [
-  { key: 'protein' as const, label: 'Eiwit' },
-  { key: 'carbs' as const, label: 'Koolhydraten' },
-  { key: 'fat' as const, label: 'Vet' },
-];
+/** Rijen onder de kcal-balk: sleutel in de totalen; het label komt uit i18n (`nutrition.macros`).
+ * Alle drie de macrobalken delen één kleur (Tertiary) — het ontwerp kleurt ze niet individueel,
+ * alleen de kcal-balk erboven krijgt Primary. */
+const MACRO_ROW_KEYS = ['protein', 'carbs', 'fat'] as const;
 
 /**
  * Zelfde geneste-kaart-stijl als de ACCORDION_SX in LogsPage/MetingenPage: een tint dieper dan de
@@ -148,6 +139,7 @@ const MEAL_ACCORDION_SX = {
 export function NutritionPage() {
   const profileCtx = useProfile();
   const notify = useNotify();
+  const { t } = useI18n();
   const isTrainer = profileCtx?.isTrainer ?? false;
   const sporters = profileCtx?.allSporters ?? [];
   const selfUid = profileCtx?.profile?.userId ?? '';
@@ -197,14 +189,14 @@ export function NutritionPage() {
         setSelected(p);
         setGrams(p.servingGrams != null ? String(p.servingGrams) : '100');
       } else {
-        setPhotoError(`Geen product gevonden voor barcode ${code}.`);
+        setPhotoError(t('nutrition.photoErrors.barcodeNotFound', { code }));
       }
     } catch {
-      setPhotoError('Opzoeken van de barcode mislukte.');
+      setPhotoError(t('nutrition.photoErrors.barcodeFailed'));
     } finally {
       setLookingUp(false);
     }
-  }, []);
+  }, [t]);
 
   const handlePhoto = async (file: File | null) => {
     if (!file) return;
@@ -214,17 +206,17 @@ export function NutritionPage() {
       const dataUrl = await fileToDataUrl(file);
       const items = await recognizeFoodPhoto(dataUrl);
       if (items.length === 0) {
-        setPhotoError('Geen voeding herkend. Probeer een duidelijkere foto.');
+        setPhotoError(t('nutrition.photoErrors.none'));
       } else if (items.length === 1) {
         // Direct naar het toevoeg-venster als er maar één item is
         const s = items[0];
-        setSelected({ code: `ai:${s.name}`, name: s.name, brand: 'AI-schatting', imageUrl: null, per100g: s.per100g, servingGrams: s.grams });
+        setSelected({ code: `ai:${s.name}`, name: s.name, brand: t('nutrition.aiEstimateBrand'), imageUrl: null, per100g: s.per100g, servingGrams: s.grams });
         setGrams(String(s.grams));
       } else {
         setSuggestions(items);
       }
     } catch (e) {
-      setPhotoError(e instanceof Error ? e.message : 'Herkenning mislukt.');
+      setPhotoError(e instanceof Error ? e.message : t('nutrition.photoErrors.recognitionFailed'));
     } finally {
       setRecognizing(false);
     }
@@ -235,7 +227,7 @@ export function NutritionPage() {
     setSelected({
       code: `ai:${s.name}`,
       name: s.name,
-      brand: 'AI-schatting',
+      brand: t('nutrition.aiEstimateBrand'),
       imageUrl: null,
       per100g: s.per100g,
       servingGrams: s.grams,
@@ -256,11 +248,11 @@ export function NutritionPage() {
       setAllLogs(await getNutritionLogsForUser(effectiveUserId));
     } catch (err) {
       setAllLogs([]);
-      notify.error('Voedingslogs laden mislukt. Controleer je verbinding.', err);
+      notify.error(t('nutrition.loadFailed'), err);
     } finally {
       setLoading(false);
     }
-  }, [effectiveUserId, notify]);
+  }, [effectiveUserId, notify, t]);
 
   useEffect(() => {
     void loadLogs();
@@ -275,33 +267,35 @@ export function NutritionPage() {
     }
     let cancelled = false;
     setSearching(true);
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       searchFoods(q)
         .then(({ products, remoteFailed }) => {
           if (cancelled) return;
           setResults(products);
           if (remoteFailed) {
-            setSearchNote(
-              products.length
-                ? 'De productendatabase is even niet bereikbaar; je ziet alleen de basisproducten.'
-                : 'De productendatabase is even niet bereikbaar. Probeer het zo nog eens, of voeg het product handmatig toe.'
-            );
+            setSearchNote(products.length ? t('nutrition.searchNotes.unreachableWithResults') : t('nutrition.searchNotes.unreachableNoResults'));
           } else {
-            setSearchNote(products.length ? null : `Geen product gevonden voor "${q}".`);
+            setSearchNote(products.length ? null : t('nutrition.searchNotes.noneFound', { query: q }));
           }
         })
         .catch(() => {
           if (cancelled) return;
           setResults([]);
-          setSearchNote('Zoeken lukte niet. Probeer het zo nog eens.');
+          setSearchNote(t('nutrition.searchNotes.failed'));
         })
         .finally(() => !cancelled && setSearching(false));
     }, 400);
     return () => {
       cancelled = true;
-      clearTimeout(t);
+      clearTimeout(timer);
     };
-  }, [term]);
+  }, [term, t]);
+
+  /** Volgorde van de dag, met achteraan wat vóór de eetmomenten is gelogd en dus geen moment heeft. */
+  const mealGroups = useMemo<{ key: MealMoment | null; label: string }[]>(
+    () => [...MEAL_ORDER.map((m) => ({ key: m as MealMoment | null, label: t(`nutrition.meals.${m}`) })), { key: null, label: t('nutrition.noMoment') }],
+    [t]
+  );
 
   const days = period === 'day' ? [date] : rangeDays(date, period === 'week' ? 7 : 30);
   const daySet = useMemo(() => new Set(days), [days.join(',')]);
@@ -387,12 +381,12 @@ export function NutritionPage() {
     try {
       await deleteNutritionLog(id);
     } catch (err) {
-      notify.error('Voedingslog verwijderen mislukt. Probeer het opnieuw.', err);
+      notify.error(t('nutrition.deleteFailed'), err);
     }
     await loadLogs();
   };
 
-  const periodLabel = period === 'day' ? 'Deze dag' : period === 'week' ? 'Gemiddeld per dag (7 dagen)' : 'Gemiddeld per dag (30 dagen)';
+  const periodLabel = period === 'day' ? t('nutrition.summary.day') : period === 'week' ? t('nutrition.summary.weekAvg') : t('nutrition.summary.monthAvg');
 
   return (
     <PageLayout>
@@ -400,10 +394,10 @@ export function NutritionPage() {
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 1 }}>
           {/* Op de telefoon staat de titel al in de bovenbalk van de schil (zie PageTitle); hier alleen op desktop, en met flexGrow zodat "Doel aanpassen" ernaast rechts blijft staan. */}
           <Typography variant="h5" fontWeight={600} sx={{ display: { xs: 'none', md: 'block' }, flexGrow: 1 }}>
-            Voeding
+            {t('nutrition.title')}
           </Typography>
           <Button size="small" variant="text" onClick={() => setGoalOpen(true)}>
-            {goal ? 'Doel aanpassen' : 'Doel instellen'}
+            {goal ? t('nutrition.editGoal') : t('nutrition.setGoal')}
           </Button>
         </Box>
 
@@ -415,13 +409,13 @@ export function NutritionPage() {
             onChange={(_, v) => v && setPeriod(v)}
             sx={segmentedToggleSx}
           >
-            <ToggleButton value="day">Dag</ToggleButton>
-            <ToggleButton value="week">Week</ToggleButton>
-            <ToggleButton value="month">Maand</ToggleButton>
+            <ToggleButton value="day">{t('nutrition.periods.day')}</ToggleButton>
+            <ToggleButton value="week">{t('nutrition.periods.week')}</ToggleButton>
+            <ToggleButton value="month">{t('nutrition.periods.month')}</ToggleButton>
           </ToggleButtonGroup>
           {isTrainer && sporters.length > 0 && (
-            <TextField select size="small" label="Voor wie?" value={targetId} onChange={(e) => setTargetId(e.target.value)} sx={{ minWidth: 150 }} SelectProps={{ displayEmpty: true }} InputLabelProps={{ shrink: true }}>
-              <MenuItem value="">Mijzelf</MenuItem>
+            <TextField select size="small" label={t('nutrition.forWhom')} value={targetId} onChange={(e) => setTargetId(e.target.value)} sx={{ minWidth: 150 }} SelectProps={{ displayEmpty: true }} InputLabelProps={{ shrink: true }}>
+              <MenuItem value="">{t('nutrition.myself')}</MenuItem>
               {sporters.map((s) => (
                 <MenuItem key={s.userId} value={s.userId}>
                   {s.displayName?.trim() || s.email || s.userId}
@@ -429,7 +423,7 @@ export function NutritionPage() {
               ))}
             </TextField>
           )}
-          <TextField type="date" size="small" label={period === 'day' ? 'Datum' : 'Tot en met'} value={date} onChange={(e) => setDate(e.target.value)} InputLabelProps={{ shrink: true }} />
+          <TextField type="date" size="small" label={period === 'day' ? t('nutrition.date') : t('nutrition.until')} value={date} onChange={(e) => setDate(e.target.value)} InputLabelProps={{ shrink: true }} />
         </Box>
 
         {/* Samenvatting: kcal groot bovenaan, macro's als rijen met eigen kleur (zoals het Figma-ontwerp) */}
@@ -443,7 +437,7 @@ export function NutritionPage() {
                 {shown.kcal}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {goal?.kcal ? `van ${goal.kcal} kcal` : 'kcal'}
+                {goal?.kcal ? t('nutrition.summary.ofKcal', { kcal: goal.kcal }) : t('nutrition.summary.kcal')}
               </Typography>
             </Box>
             {goal?.kcal ? (
@@ -455,20 +449,20 @@ export function NutritionPage() {
             ) : (
               <Box sx={{ mb: 2 }} />
             )}
-            {MACRO_ROWS.map((m) => (
-              <Box key={m.key} sx={{ mb: 1.5, '&:last-child': { mb: 0 } }}>
+            {MACRO_ROW_KEYS.map((key) => (
+              <Box key={key} sx={{ mb: 1.5, '&:last-child': { mb: 0 } }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
                   <Typography variant="body2" fontWeight={600}>
-                    {m.label}
+                    {t(`nutrition.macros.${key}`)}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    {shown[m.key]} g{goal && goal[m.key] ? ` van ${goal[m.key]} g` : ''}
+                    {shown[key]} g{goal && goal[key] ? ` ${t('nutrition.summary.ofGrams', { grams: goal[key] })}` : ''}
                   </Typography>
                 </Box>
-                {goal && goal[m.key] > 0 && (
+                {goal && goal[key] > 0 && (
                   <LinearProgress
                     variant="determinate"
-                    value={Math.min(100, (shown[m.key] / goal[m.key]) * 100)}
+                    value={Math.min(100, (shown[key] / goal[key]) * 100)}
                     sx={{ mt: 0.5, height: 5, borderRadius: 1, bgcolor: designTokens.cardBorder, '& .MuiLinearProgress-bar': { bgcolor: designTokens.tertiary } }}
                   />
                 )}
@@ -482,7 +476,7 @@ export function NutritionPage() {
           <Card sx={{ ...NESTED_CARD_SX, mb: 2 }}>
             <CardContent sx={{ '&:last-child': { pb: 2 } }}>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                kcal per dag
+                {t('nutrition.kcalPerDay')}
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'stretch', gap: period === 'week' ? 1 : 0.4, height: 120 }}>
                 {perDay.map((p) => (
@@ -532,7 +526,7 @@ export function NutritionPage() {
               {[
                 {
                   key: 'search',
-                  label: 'Zoeken',
+                  label: t('nutrition.addFood.search'),
                   icon: <SearchRoundedIcon sx={{ fontSize: 16, color: designTokens.onPrimary }} />,
                   onClick: () => searchInputRef.current?.focus(),
                   disabled: false,
@@ -540,7 +534,7 @@ export function NutritionPage() {
                 },
                 {
                   key: 'photo',
-                  label: 'Foto',
+                  label: t('nutrition.addFood.photo'),
                   icon: <PhotoCameraRoundedIcon sx={{ fontSize: 16, color: designTokens.onPrimary }} />,
                   onClick: () => fileInputRef.current?.click(),
                   disabled: recognizing,
@@ -548,7 +542,7 @@ export function NutritionPage() {
                 },
                 {
                   key: 'barcode',
-                  label: 'Barcode',
+                  label: t('nutrition.addFood.barcode'),
                   icon: <QrCodeScannerRoundedIcon sx={{ fontSize: 16, color: designTokens.onPrimary }} />,
                   onClick: () => setScannerOpen(true),
                   disabled: lookingUp,
@@ -600,7 +594,7 @@ export function NutritionPage() {
               >
                 <CircularProgress size={26} sx={{ color: 'inherit' }} />
                 <Typography variant="body2" fontWeight={600}>
-                  {recognizing ? 'Foto wordt herkend…' : 'Barcode wordt opgezocht…'}
+                  {recognizing ? t('nutrition.recognizingPhoto') : t('nutrition.lookingUpBarcode')}
                 </Typography>
               </Box>
             )}
@@ -613,7 +607,7 @@ export function NutritionPage() {
               fullWidth
               size="small"
               inputRef={searchInputRef}
-              placeholder="Zoek een product, bijv. 'magere kwark'"
+              placeholder={t('nutrition.searchPlaceholder')}
               value={term}
               onChange={(e) => setTerm(e.target.value)}
               InputProps={{ startAdornment: <SearchRoundedIcon sx={{ mr: 1, color: 'action.active' }} fontSize="small" /> }}
@@ -640,7 +634,7 @@ export function NutritionPage() {
                     </ListItemAvatar>
                     <ListItemText
                       primary={p.name}
-                      secondary={`${p.brand ? p.brand + ' · ' : ''}${p.per100g.kcal} kcal / 100g · E ${p.per100g.protein} · K ${p.per100g.carbs} · V ${p.per100g.fat}`}
+                      secondary={`${p.brand ? p.brand + ' · ' : ''}${p.per100g.kcal} kcal / 100g · ${t('nutrition.macroAbbr.protein')} ${p.per100g.protein} · ${t('nutrition.macroAbbr.carbs')} ${p.per100g.carbs} · ${t('nutrition.macroAbbr.fat')} ${p.per100g.fat}`}
                     />
                   </ListItemButton>
                 ))}
@@ -648,7 +642,7 @@ export function NutritionPage() {
             )}
 
             <Typography variant="subtitle1" fontWeight={600} sx={{ mt: 1, mb: 1 }}>
-              Gelogd
+              {t('nutrition.logged')}
             </Typography>
             {loading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
@@ -656,10 +650,10 @@ export function NutritionPage() {
               </Box>
             ) : dayLogs.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
-                Nog niets gelogd op deze dag.
+                {t('nutrition.noneLoggedToday')}
               </Typography>
             ) : (
-              MEAL_GROUPS.map((group) => {
+              mealGroups.map((group) => {
                 const items = dayLogs.filter((l) => (l.meal ?? null) === group.key);
                 if (items.length === 0) return null;
                 const kcal = items.reduce((a, l) => a + l.kcal, 0);
@@ -702,10 +696,10 @@ export function NutritionPage() {
                             key={l.id}
                             secondaryAction={
                               <Box>
-                                <IconButton edge="end" size="small" onClick={() => openEdit(l)} aria-label="Bewerken" sx={{ mr: 0.5 }}>
+                                <IconButton edge="end" size="small" onClick={() => openEdit(l)} aria-label={t('nutrition.edit')} sx={{ mr: 0.5 }}>
                                   <EditRoundedIcon fontSize="small" />
                                 </IconButton>
-                                <IconButton edge="end" size="small" onClick={() => handleDelete(l.id)} aria-label="Verwijderen">
+                                <IconButton edge="end" size="small" onClick={() => handleDelete(l.id)} aria-label={t('nutrition.delete')}>
                                   <DeleteOutlineRoundedIcon fontSize="small" />
                                 </IconButton>
                               </Box>
@@ -713,7 +707,7 @@ export function NutritionPage() {
                           >
                             <ListItemText
                               primary={l.productName}
-                              secondary={`${l.quantity && l.portionLabel ? `${l.quantity}× ${l.portionLabel} · ` : ''}${l.grams} g · ${l.kcal} kcal · E ${l.protein} · K ${l.carbs} · V ${l.fat}`}
+                              secondary={`${l.quantity && l.portionLabel ? `${l.quantity}× ${l.portionLabel} · ` : ''}${l.grams} g · ${l.kcal} kcal · ${t('nutrition.macroAbbr.protein')} ${l.protein} · ${t('nutrition.macroAbbr.carbs')} ${l.carbs} · ${t('nutrition.macroAbbr.fat')} ${l.fat}`}
                             />
                           </ListItem>
                         ))}
@@ -728,10 +722,10 @@ export function NutritionPage() {
       </ContentCard>
 
       <Dialog open={suggestions != null} onClose={() => setSuggestions(null)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ pb: 0.5 }}>Herkend op de foto</DialogTitle>
+        <DialogTitle sx={{ pb: 0.5 }}>{t('nutrition.recognized.title')}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Tik op een item om toe te voegen. De waarden zijn een AI-schatting, pas de gram gerust aan.
+            {t('nutrition.recognized.help')}
           </Typography>
           <List dense>
             {(suggestions ?? []).map((s, i) => (
@@ -743,7 +737,7 @@ export function NutritionPage() {
                 </ListItemAvatar>
                 <ListItemText
                   primary={`${s.name} · ~${s.grams} g`}
-                  secondary={`${s.per100g.kcal} kcal / 100g · E ${s.per100g.protein} · K ${s.per100g.carbs} · V ${s.per100g.fat}`}
+                  secondary={`${s.per100g.kcal} kcal / 100g · ${t('nutrition.macroAbbr.protein')} ${s.per100g.protein} · ${t('nutrition.macroAbbr.carbs')} ${s.per100g.carbs} · ${t('nutrition.macroAbbr.fat')} ${s.per100g.fat}`}
                 />
                 <AddCircleRoundedIcon sx={{ color: 'text.primary', ml: 1 }} />
               </ListItemButton>
@@ -751,7 +745,7 @@ export function NutritionPage() {
           </List>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setSuggestions(null)}>Sluiten</Button>
+          <Button onClick={() => setSuggestions(null)}>{t('nutrition.recognized.close')}</Button>
         </DialogActions>
       </Dialog>
 
@@ -783,7 +777,7 @@ export function NutritionPage() {
           try {
             await updateProfile(effectiveUserId, { nutritionGoal: g });
           } catch (err) {
-            notify.error('Voedingsdoel opslaan mislukt. Probeer het opnieuw.', err);
+            notify.error(t('nutrition.goal.saveFailed'), err);
             return;
           }
           await profileCtx?.refreshProfile();
@@ -807,6 +801,7 @@ function GoalDialog({
   onClose: () => void;
   onSave: (g: NutritionGoal | null) => void;
 }) {
+  const { t } = useI18n();
   const [kcal, setKcal] = useState('');
   const [protein, setProtein] = useState('');
   const [carbs, setCarbs] = useState('');
@@ -823,20 +818,20 @@ function GoalDialog({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ pb: 0.5 }}>Dagdoel</DialogTitle>
+      <DialogTitle sx={{ pb: 0.5 }}>{t('nutrition.goal.title')}</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Laat leeg (0) om zonder doel te loggen.
+          {t('nutrition.goal.help')}
         </Typography>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <NumberField label="Calorieën (kcal)" size="small" value={kcal} onChange={setKcal} />
-          <NumberField label="Eiwit (g)" decimal size="small" value={protein} onChange={setProtein} />
-          <NumberField label="Koolhydraten (g)" decimal size="small" value={carbs} onChange={setCarbs} />
-          <NumberField label="Vet (g)" decimal size="small" value={fat} onChange={setFat} />
+          <NumberField label={t('nutrition.goal.kcal')} size="small" value={kcal} onChange={setKcal} />
+          <NumberField label={t('nutrition.goal.protein')} decimal size="small" value={protein} onChange={setProtein} />
+          <NumberField label={t('nutrition.goal.carbs')} decimal size="small" value={carbs} onChange={setCarbs} />
+          <NumberField label={t('nutrition.goal.fat')} decimal size="small" value={fat} onChange={setFat} />
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Annuleren</Button>
+        <Button onClick={onClose}>{t('common.cancel')}</Button>
         <Button
           variant="contained"
           disabled={!canEdit}
@@ -846,7 +841,7 @@ function GoalDialog({
           }}
           sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } }}
         >
-          Opslaan
+          {t('common.save')}
         </Button>
       </DialogActions>
     </Dialog>
