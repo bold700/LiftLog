@@ -19,8 +19,6 @@ import {
   InputAdornment,
   Tabs,
   Tab,
-  ToggleButton,
-  ToggleButtonGroup,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -54,7 +52,6 @@ import { AddSporterByEmailCard } from './beheer/AddSporterByEmailCard';
 import { NewClassDialog } from './beheer/ClassSchedulingDialogs';
 import { NumberField } from './NumberField';
 import { designTokens } from '../theme/designTokens';
-import { segmentedToggleSx } from '../theme/segmentedToggle';
 
 type Section = 'leden' | 'lessoorten' | 'abonnementen' | 'huisstijl' | 'facturatie';
 /** Beheer gebruikt de hele breedte van het hoofdvlak, zoals in het ontwerp; de andere pagina's blijven op 800. */
@@ -162,8 +159,7 @@ export function BeheerPage() {
   const [edit, setEdit] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const [creditDirection, setCreditDirection] = useState<'toekennen' | 'aftrekken'>('toekennen');
-  const [creditAmount, setCreditAmount] = useState('10');
+  const [creditValue, setCreditValue] = useState('0');
   const [creditBusy, setCreditBusy] = useState(false);
   const [creditError, setCreditError] = useState<string | null>(null);
 
@@ -268,8 +264,7 @@ export function BeheerPage() {
     setTarget(p);
     setEdit(toEditState(p, memberships[p.userId]?.planId ?? ''));
     setMessage(null);
-    setCreditDirection('toekennen');
-    setCreditAmount('10');
+    setCreditValue(String(credits[p.userId] ?? 0));
     setCreditError(null);
   };
 
@@ -283,12 +278,13 @@ export function BeheerPage() {
     setCreditBusy(true);
     setCreditError(null);
     try {
-      const aantal = Number(creditAmount);
-      if (!Number.isInteger(aantal) || aantal <= 0) throw new Error('Vul een heel, positief aantal credits in.');
-      const delta = creditDirection === 'aftrekken' ? -aantal : aantal;
+      const nieuw = Number(creditValue);
+      if (!Number.isInteger(nieuw) || nieuw < 0) throw new Error('Vul een geldig aantal credits in.');
+      const delta = nieuw - (credits[target.userId] ?? 0);
+      if (delta === 0) return;
       const result = await grantCredits(target.userId, delta);
       setCredits((prev) => ({ ...prev, [target.userId]: result.balance }));
-      setCreditAmount('10');
+      setCreditValue(String(result.balance));
     } catch (e) {
       setCreditError(e instanceof Error ? e.message : 'Credits aanpassen mislukt.');
     } finally {
@@ -561,28 +557,9 @@ export function BeheerPage() {
                     gap: 1.5,
                   }}
                 >
-                  <Typography variant="body2" sx={{ flexShrink: 0 }}>
-                    Credits: <strong>{credits[target.userId] ?? 0}</strong>
-                  </Typography>
-                  <ToggleButtonGroup
-                    size="small"
-                    exclusive
-                    value={creditDirection}
-                    onChange={(_, v: 'toekennen' | 'aftrekken' | null) => v && setCreditDirection(v)}
-                    sx={segmentedToggleSx}
-                  >
-                    <ToggleButton value="toekennen">Toekennen</ToggleButton>
-                    <ToggleButton value="aftrekken">Aftrekken</ToggleButton>
-                  </ToggleButtonGroup>
-                  <NumberField label="Aantal" size="small" value={creditAmount} onChange={setCreditAmount} sx={{ width: 100 }} />
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color={creditDirection === 'aftrekken' ? 'error' : 'primary'}
-                    disabled={creditBusy}
-                    onClick={() => void handleCreditAdjust()}
-                  >
-                    Toepassen
+                  <NumberField label="Credits" size="small" value={creditValue} onChange={setCreditValue} sx={{ width: 100 }} />
+                  <Button size="small" variant="outlined" disabled={creditBusy || Number(creditValue) === (credits[target.userId] ?? 0)} onClick={() => void handleCreditAdjust()}>
+                    Opslaan
                   </Button>
                   {creditError && (
                     <Typography variant="caption" color="error.main" sx={{ width: '100%' }}>
