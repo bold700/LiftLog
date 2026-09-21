@@ -377,7 +377,7 @@ export function BeheerPage() {
         ) : (
           <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
             <Button variant="outlined" startIcon={<ConfirmationNumberRoundedIcon />} onClick={() => setCreditsOpen(true)}>
-              Credits toekennen
+              Credits aanpassen
             </Button>
             <Button variant="contained" disableElevation startIcon={<PersonAddRoundedIcon />} onClick={openCreate} disabled={!auth}>
               {t('admin.addAccount')}
