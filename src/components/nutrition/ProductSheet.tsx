@@ -27,9 +27,10 @@ import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
 import { NumberField } from '../NumberField';
+import { useI18n } from '../../context/I18nContext';
 import { designTokens } from '../../theme/designTokens';
 import { portionsFor, type Portion } from '../../utils/portions';
-import { MEAL_LABELS, MEAL_ORDER, macrosForGrams, type FoodProduct, type MealMoment } from '../../services/nutritionService';
+import { MEAL_ORDER, macrosForGrams, type FoodProduct, type MealMoment } from '../../services/nutritionService';
 
 const CUSTOM = 'custom';
 
@@ -64,6 +65,7 @@ const NUTRISCORE_COLOR: Record<NonNullable<FoodProduct['nutriscore']>, string> =
 const fmt1 = (v: number) => (Math.round(v * 10) / 10).toLocaleString('nl-NL');
 
 export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortion, saving, isEditing, onClose, onSave }: ProductSheetProps) {
+  const { t } = useI18n();
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -114,12 +116,15 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
   const factor = totalGrams / 100;
   const detailRows: { label: string; per100: number }[] = details
     ? [
-        { label: 'Suikers', per100: details.sugars },
-        { label: 'Vezels', per100: details.fiber },
-        { label: 'Verzadigd vet', per100: details.saturatedFat },
-        { label: 'Zout', per100: details.salt },
+        { label: t('nutrition.sheet.sugars'), per100: details.sugars },
+        { label: t('nutrition.sheet.fiber'), per100: details.fiber },
+        { label: t('nutrition.sheet.saturatedFat'), per100: details.saturatedFat },
+        { label: t('nutrition.sheet.salt'), per100: details.salt },
       ].filter((r): r is { label: string; per100: number } => r.per100 != null)
     : [];
+  // Voorproefje in de kop, dicht bij het ontwerp ("Nutrition info · sugars, fibre, salt") —
+  // zonder open te klappen al zien wat erin staat.
+  const detailPreview = detailRows.map((r) => r.label.toLowerCase()).join(', ');
 
   return (
     <Dialog
@@ -134,9 +139,9 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
         <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: fullScreen ? '100%' : undefined }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pl: 2.5, pr: 1, pt: 1.5 }}>
             <Typography variant="h6" fontWeight={700}>
-              {isEditing ? 'Voeding bewerken' : 'Voeding toevoegen'}
+              {isEditing ? t('nutrition.sheet.editTitle') : t('nutrition.sheet.addTitle')}
             </Typography>
-            <IconButton onClick={onClose} aria-label="Sluiten">
+            <IconButton onClick={onClose} aria-label={t('nutrition.sheet.close')}>
               <CloseRoundedIcon />
             </IconButton>
           </Box>
@@ -185,23 +190,23 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
             {/* Macro's voor wat je gaat eten — vlakke tegels zonder kleurcodering, zoals het ontwerp */}
             {macros && (
               <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, mb: 2 }}>
-                <MacroTile label="kcal" value={macros.kcal.toLocaleString('nl-NL')} />
-                <MacroTile label="koolh." value={`${fmt1(macros.carbs)} g`} />
-                <MacroTile label="eiwit" value={`${fmt1(macros.protein)} g`} />
-                <MacroTile label="vet" value={`${fmt1(macros.fat)} g`} />
+                <MacroTile label={t('nutrition.sheet.kcal')} value={macros.kcal.toLocaleString('nl-NL')} />
+                <MacroTile label={t('nutrition.sheet.carbs')} value={`${fmt1(macros.carbs)} g`} />
+                <MacroTile label={t('nutrition.sheet.protein')} value={`${fmt1(macros.protein)} g`} />
+                <MacroTile label={t('nutrition.sheet.fat')} value={`${fmt1(macros.fat)} g`} />
               </Box>
             )}
 
             {/* Aantal × portie */}
             <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: designTokens.cardBackground, borderRadius: 3, px: 0.5 }}>
-                <IconButton size="small" aria-label="Minder" disabled={portionKey === CUSTOM || quantity <= 0.5} onClick={() => choose(portionKey, Math.max(0.5, quantity - (quantity <= 1 ? 0.5 : 1)))}>
+                <IconButton size="small" aria-label={t('nutrition.sheet.less')} disabled={portionKey === CUSTOM || quantity <= 0.5} onClick={() => choose(portionKey, Math.max(0.5, quantity - (quantity <= 1 ? 0.5 : 1)))}>
                   <RemoveRoundedIcon fontSize="small" />
                 </IconButton>
                 <Typography fontWeight={700} sx={{ minWidth: 34, textAlign: 'center' }}>
                   {portionKey === CUSTOM ? '–' : `${quantity.toLocaleString('nl-NL')}×`}
                 </Typography>
-                <IconButton size="small" aria-label="Meer" disabled={portionKey === CUSTOM} onClick={() => choose(portionKey, quantity < 1 ? 1 : quantity + 1)}>
+                <IconButton size="small" aria-label={t('nutrition.sheet.more')} disabled={portionKey === CUSTOM} onClick={() => choose(portionKey, quantity < 1 ? 1 : quantity + 1)}>
                   <AddRoundedIcon fontSize="small" />
                 </IconButton>
               </Box>
@@ -218,11 +223,11 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
                     {p.label} ({p.grams} gram)
                   </MenuItem>
                 ))}
-                <MenuItem value={CUSTOM}>Zelf grammen invullen</MenuItem>
+                <MenuItem value={CUSTOM}>{t('nutrition.sheet.customAmount')}</MenuItem>
               </TextField>
             </Box>
             {portionKey === CUSTOM && (
-              <NumberField label="Hoeveelheid (gram)" size="small" fullWidth value={grams} onChange={setGrams} sx={{ mb: 1.5 }} autoFocus />
+              <NumberField label={t('nutrition.sheet.amountGrams')} size="small" fullWidth value={grams} onChange={setGrams} sx={{ mb: 1.5 }} autoFocus />
             )}
 
             {/* Eetmoment */}
@@ -230,14 +235,14 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
               select
               size="small"
               fullWidth
-              label="Gegeten bij"
+              label={t('nutrition.sheet.eatenFor')}
               value={meal}
               onChange={(e) => setMeal(e.target.value as MealMoment)}
               sx={{ mb: 2, '& .MuiOutlinedInput-root': { bgcolor: designTokens.cardBackground, borderRadius: 3 } }}
             >
               {MEAL_ORDER.map((m) => (
                 <MenuItem key={m} value={m}>
-                  {MEAL_LABELS[m]}
+                  {t(`nutrition.meals.${m}`)}
                 </MenuItem>
               ))}
             </TextField>
@@ -245,18 +250,31 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
             {/* Wat het etiket verder zegt */}
             <Accordion disableGutters elevation={0} sx={{ bgcolor: designTokens.cardBackground, mb: 1 }}>
               <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
-                <Typography fontWeight={600}>Voedingswaarden</Typography>
+                <Typography fontWeight={600}>
+                  {t('nutrition.sheet.nutritionValues')}
+                  {detailPreview && (
+                    <Typography component="span" color="text.secondary" fontWeight={400}>
+                      {' · '}
+                      {detailPreview}
+                    </Typography>
+                  )}
+                </Typography>
               </AccordionSummary>
               <AccordionDetails sx={{ pt: 0 }}>
                 <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', rowGap: 0.5, columnGap: 2 }}>
-                  <DetailRow label="Energie" value={`${Math.round((macros?.kcal ?? 0) * 4.184).toLocaleString('nl-NL')} kJ`} />
+                  <DetailRow label={t('nutrition.sheet.energy')} value={`${Math.round((macros?.kcal ?? 0) * 4.184).toLocaleString('nl-NL')} kJ`} />
                   {detailRows.map((r) => (
                     <DetailRow key={r.label} label={r.label} value={`${fmt1(r.per100 * factor)} g`} />
                   ))}
                 </Box>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                  Per 100 g: {product.per100g.kcal} kcal · E {fmt1(product.per100g.protein)} · K {fmt1(product.per100g.carbs)} · V {fmt1(product.per100g.fat)}
-                  {detailRows.length === 0 ? ' · het etiket noemt geen suikers, vezels of zout.' : ''}
+                  {t('nutrition.sheet.per100Note', {
+                    kcal: product.per100g.kcal,
+                    protein: fmt1(product.per100g.protein),
+                    carbs: fmt1(product.per100g.carbs),
+                    fat: fmt1(product.per100g.fat),
+                  })}
+                  {detailRows.length === 0 ? t('nutrition.sheet.noDetailsNote') : ''}
                 </Typography>
               </AccordionDetails>
             </Accordion>
@@ -270,7 +288,7 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
               disabled={saving || totalGrams <= 0}
               sx={{ py: 1.5, borderRadius: '28px', textTransform: 'none', fontSize: 16, fontWeight: 700, bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } }}
             >
-              {saving ? 'Bezig…' : isEditing ? 'Opslaan' : 'Toevoegen aan dagboek'}
+              {saving ? t('common.saving') : isEditing ? t('common.save') : t('nutrition.sheet.addToDiary')}
             </Button>
           </Box>
         </Box>
