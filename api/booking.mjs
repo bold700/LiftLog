@@ -16,8 +16,9 @@ import { applyCors } from './_lib/cors.mjs';
  *   { action: 'setStandingBooking', standingBookingId, active }  "elke week inschrijven" aan/uit zetten
  *   { action: 'generateClassOccurrences', classTypeId }  rooster meteen vullen voor deze lessoort (staf),
  *                                                        in plaats van tot de volgende cron te wachten
- *   { action: 'assign' | 'unassign' | 'renewDue' }     abonnementen (zie onder); credits lopen alleen via een
- *                                                        gekoppeld abonnement, niet los toe te kennen
+ *   { action: 'grant',   userId, amount, note }        credits handmatig aanpassen (alleen trainer/beheerder,
+ *                                                        bijvoorbeeld om een verkeerde toekenning recht te zetten)
+ *   { action: 'assign' | 'unassign' | 'renewDue' }     abonnementen (zie onder)
  *   { action: 'invoice', chargeId }                    factuur-PDF van een post (staf, of het lid zelf)
  *   { action: 'sendInvoice', chargeId }                factuur per mail naar het lid, PDF als bijlage (staf)
  *   { action: 'invoiceLink', chargeId }                openbare link naar de factuur + WhatsApp-tekst (staf, of het lid zelf)
@@ -58,6 +59,9 @@ const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
 
 /** Tot hoeveel uur voor aanvang je kosteloos kunt afmelden. Daarna is de credit op. */
 const FREE_CANCEL_HOURS = 12;
+
+/** Bovengrens op één keer credits aanpassen; beschermt tegen een typefout met een nul te veel. */
+const MAX_GRANT = 500;
 
 function json(res, status, body) {
   const payload = JSON.stringify(body);
@@ -141,6 +145,9 @@ export default async function handler(req, res) {
         return await setStandingBooking(res, db, uid, myOrgs, String(body.standingBookingId ?? '').trim(), body.active === true);
       case 'generateClassOccurrences':
         return await generateClassOccurrencesNow(res, db, myOrgs, isStaff, String(body.classTypeId ?? '').trim());
+      case 'grant':
+        if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan credits aanpassen.', build: BUILD });
+        return await grant(res, db, uid, myOrgs, body);
       case 'assign':
         if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan een abonnement koppelen.', build: BUILD });
         return await assign(res, db, uid, myOrgs, body);
@@ -432,6 +439,50 @@ async function setStandingBooking(res, db, uid, myOrgs, standingId, active) {
   if (data.userId !== uid) return json(res, 403, { error: 'Dit is niet jouw inschrijving.', build: BUILD });
   await ref.set({ active, updatedAt: new Date().toISOString() }, { merge: true });
   return json(res, 200, { active, build: BUILD });
+}
+
+/** Credits handmatig aanpassen (toekennen of afboeken). Elke mutatie komt ook in het grootboek te staan. */
+async function grant(res, db, uid, myOrgs, body) {
+  const targetUserId = String(body?.userId ?? '').trim();
+  const amount = Number(body?.amount);
+  const note = typeof body?.note === 'string' ? body.note.slice(0, 200) : '';
+
+  if (!targetUserId) return json(res, 400, { error: 'Geen sporter opgegeven.', build: BUILD });
+  if (!Number.isInteger(amount) || amount === 0 || Math.abs(amount) > MAX_GRANT) {
+    return json(res, 400, { error: `Vul een heel aantal credits in tussen -${MAX_GRANT} en ${MAX_GRANT}.`, build: BUILD });
+  }
+
+  const targetSnap = await db.collection('profiles').doc(targetUserId).get();
+  if (!targetSnap.exists) return json(res, 404, { error: 'Sporter niet gevonden.', build: BUILD });
+  const target = targetSnap.data() ?? {};
+  const targetOrgs = Array.isArray(target.orgIds) && target.orgIds.length ? target.orgIds.map(String) : [orgIdOf(target.orgId)];
+
+  // De studio waar jullie elkaar treffen; credits horen bij één studio.
+  const orgId = myOrgs.find((o) => targetOrgs.includes(o));
+  if (!orgId) return json(res, 403, { error: 'Deze sporter zit niet in jouw studio.', build: BUILD });
+
+  const result = await db.runTransaction(async (tx) => {
+    const accountRef = db.collection('creditAccounts').doc(accountId(orgId, targetUserId));
+    const snap = await tx.get(accountRef);
+    const balance = Number(snap.exists ? snap.data().balance : 0) || 0;
+    const next = balance + amount;
+    if (next < 0) throw refuse(`Dat zou het saldo op ${next} zetten; er staan er ${balance}.`);
+
+    const now = new Date().toISOString();
+    tx.set(accountRef, { orgId, userId: targetUserId, balance: next, updatedAt: now }, { merge: true });
+    tx.set(db.collection('creditLedger').doc(newId('cl')), {
+      orgId,
+      userId: targetUserId,
+      delta: amount,
+      reason: 'manual',
+      note,
+      byUserId: uid,
+      createdAt: now,
+    });
+    return { balance: next };
+  });
+
+  return json(res, 200, { ...result, build: BUILD });
 }
 
 // --- Abonnementen -----------------------------------------------------------------

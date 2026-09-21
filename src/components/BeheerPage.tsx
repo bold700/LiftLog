@@ -19,6 +19,8 @@ import {
   InputAdornment,
   Tabs,
   Tab,
+  ToggleButton,
+  ToggleButtonGroup,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -47,11 +49,12 @@ import { SubscriptionsPanel } from './beheer/SubscriptionsPanel';
 import { BillingPanel } from './beheer/BillingPanel';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import { assignPlan, getActiveMembershipsForOrg, getPlans, renewDue, unassignPlan } from '../services/planService';
-import { getCreditBalancesForOrg } from '../services/classService';
+import { getCreditBalancesForOrg, grantCredits } from '../services/classService';
 import { AddSporterByEmailCard } from './beheer/AddSporterByEmailCard';
 import { NewClassDialog } from './beheer/ClassSchedulingDialogs';
 import { NumberField } from './NumberField';
 import { designTokens } from '../theme/designTokens';
+import { segmentedToggleSx } from '../theme/segmentedToggle';
 
 type Section = 'leden' | 'lessoorten' | 'abonnementen' | 'huisstijl' | 'facturatie';
 /** Beheer gebruikt de hele breedte van het hoofdvlak, zoals in het ontwerp; de andere pagina's blijven op 800. */
@@ -159,6 +162,11 @@ export function BeheerPage() {
   const [edit, setEdit] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const [creditDirection, setCreditDirection] = useState<'toekennen' | 'aftrekken'>('toekennen');
+  const [creditAmount, setCreditAmount] = useState('10');
+  const [creditBusy, setCreditBusy] = useState(false);
+  const [creditError, setCreditError] = useState<string | null>(null);
+
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -260,11 +268,32 @@ export function BeheerPage() {
     setTarget(p);
     setEdit(toEditState(p, memberships[p.userId]?.planId ?? ''));
     setMessage(null);
+    setCreditDirection('toekennen');
+    setCreditAmount('10');
+    setCreditError(null);
   };
 
   const closeEditor = () => {
     setTarget(null);
     setEdit(null);
+  };
+
+  const handleCreditAdjust = async () => {
+    if (!target) return;
+    setCreditBusy(true);
+    setCreditError(null);
+    try {
+      const aantal = Number(creditAmount);
+      if (!Number.isInteger(aantal) || aantal <= 0) throw new Error('Vul een heel, positief aantal credits in.');
+      const delta = creditDirection === 'aftrekken' ? -aantal : aantal;
+      const result = await grantCredits(target.userId, delta);
+      setCredits((prev) => ({ ...prev, [target.userId]: result.balance }));
+      setCreditAmount('10');
+    } catch (e) {
+      setCreditError(e instanceof Error ? e.message : 'Credits aanpassen mislukt.');
+    } finally {
+      setCreditBusy(false);
+    }
   };
 
   const handleSave = async () => {
@@ -519,6 +548,49 @@ export function BeheerPage() {
                     </MenuItem>
                   ))}
               </TextField>
+              {edit.role === 'sporter' && (
+                <Box
+                  sx={{
+                    gridColumn: { sm: '1 / -1' },
+                    p: 1.5,
+                    borderRadius: `${designTokens.cardRadius}px`,
+                    bgcolor: designTokens.cardBackgroundHigh,
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: 1.5,
+                  }}
+                >
+                  <Typography variant="body2" sx={{ flexShrink: 0 }}>
+                    Credits: <strong>{credits[target.userId] ?? 0}</strong>
+                  </Typography>
+                  <ToggleButtonGroup
+                    size="small"
+                    exclusive
+                    value={creditDirection}
+                    onChange={(_, v: 'toekennen' | 'aftrekken' | null) => v && setCreditDirection(v)}
+                    sx={segmentedToggleSx}
+                  >
+                    <ToggleButton value="toekennen">Toekennen</ToggleButton>
+                    <ToggleButton value="aftrekken">Aftrekken</ToggleButton>
+                  </ToggleButtonGroup>
+                  <NumberField label="Aantal" size="small" value={creditAmount} onChange={setCreditAmount} sx={{ width: 100 }} />
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color={creditDirection === 'aftrekken' ? 'error' : 'primary'}
+                    disabled={creditBusy}
+                    onClick={() => void handleCreditAdjust()}
+                  >
+                    Toepassen
+                  </Button>
+                  {creditError && (
+                    <Typography variant="caption" color="error.main" sx={{ width: '100%' }}>
+                      {creditError}
+                    </Typography>
+                  )}
+                </Box>
+              )}
               <TextField label="Geboortedatum" type="date" size="small" fullWidth value={edit.birthDate} onChange={(e) => setEdit({ ...edit, birthDate: e.target.value })} InputLabelProps={{ shrink: true }} />
               <TextField select label="Geslacht" size="small" fullWidth value={edit.gender || 'none'} onChange={(e) => setEdit({ ...edit, gender: e.target.value === 'none' ? '' : (e.target.value as EditState['gender']) })}>
                 <MenuItem value="none">Niet opgegeven</MenuItem>
