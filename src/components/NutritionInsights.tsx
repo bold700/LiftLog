@@ -105,7 +105,7 @@ export function NutritionInsights() {
 
   if (loading) {
     return (
-      <PageLayout>
+      <PageLayout maxWidth="none">
         <ContentCard>
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress size={28} />
@@ -117,7 +117,7 @@ export function NutritionInsights() {
 
   if (stats.nLogged === 0) {
     return (
-      <PageLayout>
+      <PageLayout maxWidth="none">
         <ContentCard>
           <Typography variant="h6" fontWeight={600} sx={{ mb: 1 }}>
             Voedingspatroon
@@ -137,7 +137,7 @@ export function NutritionInsights() {
   ];
 
   return (
-    <PageLayout>
+    <PageLayout maxWidth="none">
       <ContentCard>
         <Typography variant="h6" fontWeight={600} sx={{ mb: 0.5 }}>
           Voedingspatroon

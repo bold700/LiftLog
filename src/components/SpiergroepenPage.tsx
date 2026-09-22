@@ -5,7 +5,7 @@ import { getAllExercises } from '../utils/storage';
 import { findExerciseMetadata } from '../data/exerciseMetadata';
 import { normalizeMuscleName, getDisplayName } from '../utils/muscleNames';
 import { MuscleFrequencyBody, GREEN_TINTS } from './MuscleFrequencyBody';
-import { PageLayout, ContentCard, OutlineCard, PageTitle } from './layout';
+import { PageLayout, ContentCard, OutlineCard } from './layout';
 
 export const SpiergroepenPage = () => {
   const insights = useMemo(() => {
@@ -73,10 +73,10 @@ export const SpiergroepenPage = () => {
   const COLORS_MOVEMENT = [GREEN_TINTS[4], GREEN_TINTS[3], GREEN_TINTS[2], GREEN_TINTS[1]]; // Level 5, 4, 3, 2
 
   return (
-    <PageLayout>
+    <PageLayout maxWidth="none">
       <ContentCard>
-        <PageTitle>Inzichten</PageTitle>
-
+        {/* Bovenbalk toont al "Inzichten"; de Spieren/Oefeningen/…-tabs eronder maken duidelijk
+            in welke subtab je zit, dus geen aparte titel hier nodig. */}
         <OutlineCard sx={{ '& .MuiCardContent-root': { pt: 2, px: 2 } }}>
           <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
             Meest Getrainde Spiergroepen

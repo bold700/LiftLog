@@ -330,7 +330,7 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
   );
 
   return (
-    <PageLayout>
+    <PageLayout maxWidth="none">
       <ContentCard>
         <PageTitle>Log</PageTitle>
 

@@ -121,7 +121,7 @@ export function LeaderboardPage() {
   const uid = auth?.user?.uid;
 
   return (
-    <PageLayout>
+    <PageLayout maxWidth="none">
       <ContentCard>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 2 }}>
           <EmojiEventsRoundedIcon color="primary" />

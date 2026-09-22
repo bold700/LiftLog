@@ -350,7 +350,7 @@ export const OefeningenPage = () => {
   }, [allExercises.length, selectedExercise]);
 
   return (
-    <PageLayout>
+    <PageLayout maxWidth="none">
       <ContentCard>
         <Autocomplete
             options={exerciseNames}
