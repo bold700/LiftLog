@@ -136,23 +136,26 @@ export interface RecentLog {
   id: string;
   name: string;
   details: string;
-  when: string;
+  day: string;
+  /** Alleen bij logs van de afgelopen week met een tijdstip. */
+  time: string | null;
 }
 
 const WEEKDAYS = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
 const MONTHS = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 
-/** "Vandaag 07:12", "Gisteren 18:04", "Ma 18:04" (deze week), anders "12 sep" (met jaar als dat anders is). */
-export function formatRecentWhen(at: Date, hasTime: boolean, now: Date): string {
-  const time = hasTime
-    ? ` ${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
-    : '';
+/** Dag: "Vandaag", "Gisteren", "Ma" (deze week), anders "12 sep" (met jaar als dat anders is). Tijd alleen binnen de week. */
+export function formatRecentWhen(at: Date, hasTime: boolean, now: Date): { day: string; time: string | null } {
   const daysAgo = Math.round((startOfDay(now).getTime() - startOfDay(at).getTime()) / DAY_MS);
-  if (daysAgo === 0) return `Vandaag${time}`;
-  if (daysAgo === 1) return `Gisteren${time}`;
-  if (daysAgo > 1 && daysAgo < 7) return `${WEEKDAYS[at.getDay()]}${time}`;
+  const time =
+    hasTime && daysAgo >= 0 && daysAgo < 7
+      ? `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
+      : null;
+  if (daysAgo === 0) return { day: 'Vandaag', time };
+  if (daysAgo === 1) return { day: 'Gisteren', time };
+  if (daysAgo > 1 && daysAgo < 7) return { day: WEEKDAYS[at.getDay()], time };
   const year = at.getFullYear() === now.getFullYear() ? '' : ` ${at.getFullYear()}`;
-  return `${at.getDate()} ${MONTHS[at.getMonth()]}${year}`;
+  return { day: `${at.getDate()} ${MONTHS[at.getMonth()]}${year}`, time: null };
 }
 
 /** "80 kg · 4 × 8"; delen die ontbreken vallen weg. */
@@ -175,7 +178,7 @@ export function getRecentLogs(exercises: Exercise[], limit: number, now: Date): 
       id: l.ex.id,
       name: l.ex.name!.trim(),
       details: formatLogDetails(l.ex),
-      when: formatRecentWhen(l.at, l.hasTime, now),
+      ...formatRecentWhen(l.at, l.hasTime, now),
     }));
 }
 

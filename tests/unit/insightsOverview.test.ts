@@ -117,13 +117,13 @@ describe('opmaak', () => {
     expect(formatLogDetails({})).toBe('');
   });
 
-  it('wanneer: vandaag, gisteren, weekdag, daarna datum', () => {
-    expect(formatRecentWhen(new Date(2026, 8, 23, 7, 12), true, NOW)).toBe('Vandaag 07:12');
-    expect(formatRecentWhen(new Date(2026, 8, 22, 18, 4), true, NOW)).toBe('Gisteren 18:04');
-    expect(formatRecentWhen(new Date(2026, 8, 21, 18, 4), true, NOW)).toBe('Ma 18:04');
-    expect(formatRecentWhen(new Date(2026, 8, 19), false, NOW)).toBe('Za');
-    expect(formatRecentWhen(new Date(2026, 8, 12), false, NOW)).toBe('12 sep');
-    expect(formatRecentWhen(new Date(2025, 11, 30), false, NOW)).toBe('30 dec 2025');
+  it('wanneer: vandaag, gisteren, weekdag, daarna datum; tijd alleen binnen de week', () => {
+    expect(formatRecentWhen(new Date(2026, 8, 23, 7, 12), true, NOW)).toEqual({ day: 'Vandaag', time: '07:12' });
+    expect(formatRecentWhen(new Date(2026, 8, 22, 18, 4), true, NOW)).toEqual({ day: 'Gisteren', time: '18:04' });
+    expect(formatRecentWhen(new Date(2026, 8, 21, 18, 4), true, NOW)).toEqual({ day: 'Ma', time: '18:04' });
+    expect(formatRecentWhen(new Date(2026, 8, 19), false, NOW)).toEqual({ day: 'Za', time: null });
+    expect(formatRecentWhen(new Date(2026, 8, 12, 9, 0), true, NOW)).toEqual({ day: '12 sep', time: null });
+    expect(formatRecentWhen(new Date(2025, 11, 30), false, NOW)).toEqual({ day: '30 dec 2025', time: null });
   });
 
   it('recente logs: nieuwste eerst, maximaal N', () => {
@@ -134,6 +134,6 @@ describe('opmaak', () => {
     ];
     const recent = getRecentLogs(logs, 2, NOW);
     expect(recent.map((r) => r.name)).toEqual(['Nieuw', 'Gisteren']);
-    expect(recent[0]).toMatchObject({ details: '80 kg · 4 × 8', when: 'Vandaag 07:12' });
+    expect(recent[0]).toMatchObject({ details: '80 kg · 4 × 8', day: 'Vandaag', time: '07:12' });
   });
 });
