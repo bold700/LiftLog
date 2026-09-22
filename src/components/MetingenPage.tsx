@@ -420,206 +420,214 @@ export function MetingenPage() {
           </TextField>
         )}
 
-        {/* Huidige waarden, voortgang naar doel + tempo, gewicht- en huidplooi-trend */}
-        <MeasurementOverview items={items} goalWeight={goalWeight} heightCm={targetProfile?.heightCm} />
+        {/* Twee kolommen op desktop (Figma "Body"): links het huidige beeld en de trend, rechts
+            de invoer en de historie die daaruit volgt. Op mobiel staat alles onder elkaar. */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3, alignItems: 'start' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+            {/* Huidige waarden, voortgang naar doel + tempo, gewicht- en huidplooi-trend */}
+            <MeasurementOverview items={items} goalWeight={goalWeight} heightCm={targetProfile?.heightCm} />
 
-        {/* Laatste bodyscan als leesbaar rapport (InBody-stijl) */}
-        <BodyScanPanel items={items} />
+            {/* Laatste bodyscan als leesbaar rapport (InBody-stijl) */}
+            <BodyScanPanel items={items} />
 
-        {/* Foto-voortgang: eerste foto naast de laatste, per aanzicht */}
-        <PhotoProgressPanel items={items} />
+            {/* Foto-voortgang: eerste foto naast de laatste, per aanzicht */}
+            <PhotoProgressPanel items={items} />
+          </Box>
 
-        {/* Invoer */}
-        <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-          {editingId ? 'Meting bewerken' : 'Nieuwe meting'}
-        </Typography>
-        <Box sx={{ ...FIELD_GRID_SX, mb: 1.5 }}>
-          <TextField
-            label="Datum"
-            type="date"
-            size="small"
-            fullWidth
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            InputLabelProps={{ shrink: true }}
-          />
-          <NumberField
-            label="Gewicht (kg)"
-            decimal
-            size="small"
-            fullWidth
-            value={weight}
-            onChange={setWeight}
-            helperText={formBmi != null ? `BMI ${formBmi}` : weightNum != null && !targetProfile?.heightCm ? 'Vul lengte in bij Profiel voor BMI' : ' '}
-          />
-        </Box>
-
-        {/* Profiel van de sporter aanvullen (alleen trainer, alleen als het ontbreekt) */}
-        {canFixProfile && <SporterProfileFix targetId={targetId} targetProfile={targetProfile} />}
-
-        {/* Bodyscan, omtrekken, huidplooien en foto's ingeklapt: optioneel. Zelfde secties als de routekaart. */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 1.5 }}>
-          <Accordion disableGutters expanded={openSections.includes('scan')} onChange={() => toggleSection('scan')} sx={ACCORDION_SX}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', minWidth: 0, flex: 1, alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
-                <Typography variant="subtitle1" fontWeight={600}>
-                  Bodyscan (weegschaal)
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {scanFilled ? 'ingevuld' : 'foto → waarden'}
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
-              <BodyScanSection
-                draft={scanDraft}
-                onDraftChange={setScanDraft}
-                onRecognized={handleScanRecognized}
-                onClear={handleScanClear}
-                profileAge={age}
-                profileHeightCm={targetProfile?.heightCm}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+            {/* Invoer */}
+            <Typography variant="subtitle1" fontWeight={600} sx={{ mb: -0.5 }}>
+              {editingId ? 'Meting bewerken' : 'Nieuwe meting'}
+            </Typography>
+            <Box sx={FIELD_GRID_SX}>
+              <TextField
+                label="Datum"
+                type="date"
+                size="small"
+                fullWidth
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
               />
-            </AccordionDetails>
-          </Accordion>
+              <NumberField
+                label="Gewicht (kg)"
+                decimal
+                size="small"
+                fullWidth
+                value={weight}
+                onChange={setWeight}
+                helperText={formBmi != null ? `BMI ${formBmi}` : weightNum != null && !targetProfile?.heightCm ? 'Vul lengte in bij Profiel voor BMI' : ' '}
+              />
+            </Box>
 
-          <Accordion disableGutters expanded={openSections.includes('circ')} onChange={() => toggleSection('circ')} sx={ACCORDION_SX}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', minWidth: 0, flex: 1, alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
-                <Typography variant="subtitle1" fontWeight={600}>
-                  Omtrekken (cm)
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {circFilled > 0 ? `${circFilled} ingevuld` : 'optioneel'}
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
-              <Box sx={FIELD_GRID_SX}>
-                {CIRCUMFERENCE_FIELDS.map((f) => (
-                  <NumberField
-                    key={f.key}
-                    label={f.label}
-                    decimal
-                    size="small"
-                    fullWidth
-                    value={circ[f.key]}
-                    onChange={(v) => setCirc((c) => ({ ...c, [f.key]: v }))}
-                  />
-                ))}
-              </Box>
-            </AccordionDetails>
-          </Accordion>
+            {/* Profiel van de sporter aanvullen (alleen trainer, alleen als het ontbreekt) */}
+            {canFixProfile && <SporterProfileFix targetId={targetId} targetProfile={targetProfile} />}
 
-          <Accordion disableGutters expanded={openSections.includes('skin')} onChange={() => toggleSection('skin')} sx={ACCORDION_SX}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', minWidth: 0, flex: 1, alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
-                <Typography variant="subtitle1" fontWeight={600}>
-                  Huidplooien (mm)
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {currentSkinSum != null ? `som ${currentSkinSum} mm${computedFat ? ` · ${computedFat.pct}%` : ''}` : 'optioneel'}
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                Meet rechts, met dezelfde caliper en op hetzelfde moment van de dag. Biceps, triceps, rug en heup samen geven het vetpercentage (Durnin &amp; Womersley); buik telt alleen mee in de som.
-              </Typography>
-              <Box sx={FIELD_GRID_SX}>
-                {SKINFOLD_FIELDS.map((f) => (
-                  <NumberField
-                    key={f.key}
-                    label={f.label}
-                    decimal
-                    size="small"
-                    fullWidth
-                    value={skin[f.key]}
-                    onChange={(v) => setSkin((s) => ({ ...s, [f.key]: v }))}
-                    helperText={f.hint}
+            {/* Bodyscan, omtrekken, huidplooien en foto's ingeklapt: optioneel. Zelfde secties als de routekaart. */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              <Accordion disableGutters expanded={openSections.includes('scan')} onChange={() => toggleSection('scan')} sx={ACCORDION_SX}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: 'flex', minWidth: 0, flex: 1, alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
+                    <Typography variant="subtitle1" fontWeight={600}>
+                      Bodyscan (weegschaal)
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {scanFilled ? 'ingevuld' : 'foto → waarden'}
+                    </Typography>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
+                  <BodyScanSection
+                    draft={scanDraft}
+                    onDraftChange={setScanDraft}
+                    onRecognized={handleScanRecognized}
+                    onClear={handleScanClear}
+                    profileAge={age}
+                    profileHeightCm={targetProfile?.heightCm}
                   />
-                ))}
-              </Box>
-              <Box sx={{ mt: 1, p: 1.5, borderRadius: 2, bgcolor: 'rgba(0,0,0,0.04)', fontSize: 14 }} aria-live="polite">
-                {computedFat ? (
-                  <>
-                    <Box component="span" sx={{ fontWeight: 500 }}>
-                      Vetpercentage: {computedFat.pct}%
-                    </Box>
-                    <Box component="span" sx={{ color: 'text.secondary' }}>
-                      {' '}
-                      · som {computedFat.sumMm} mm · berekend
-                    </Box>
-                    {formFfm != null ? (
-                      <Box sx={{ mt: 0.5 }}>
+                </AccordionDetails>
+              </Accordion>
+
+              <Accordion disableGutters expanded={openSections.includes('circ')} onChange={() => toggleSection('circ')} sx={ACCORDION_SX}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: 'flex', minWidth: 0, flex: 1, alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
+                    <Typography variant="subtitle1" fontWeight={600}>
+                      Omtrekken (cm)
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {circFilled > 0 ? `${circFilled} ingevuld` : 'optioneel'}
+                    </Typography>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
+                  <Box sx={FIELD_GRID_SX}>
+                    {CIRCUMFERENCE_FIELDS.map((f) => (
+                      <NumberField
+                        key={f.key}
+                        label={f.label}
+                        decimal
+                        size="small"
+                        fullWidth
+                        value={circ[f.key]}
+                        onChange={(v) => setCirc((c) => ({ ...c, [f.key]: v }))}
+                      />
+                    ))}
+                  </Box>
+                </AccordionDetails>
+              </Accordion>
+
+              <Accordion disableGutters expanded={openSections.includes('skin')} onChange={() => toggleSection('skin')} sx={ACCORDION_SX}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: 'flex', minWidth: 0, flex: 1, alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
+                    <Typography variant="subtitle1" fontWeight={600}>
+                      Huidplooien (mm)
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {currentSkinSum != null ? `som ${currentSkinSum} mm${computedFat ? ` · ${computedFat.pct}%` : ''}` : 'optioneel'}
+                    </Typography>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                    Meet rechts, met dezelfde caliper en op hetzelfde moment van de dag. Biceps, triceps, rug en heup samen geven het vetpercentage (Durnin &amp; Womersley); buik telt alleen mee in de som.
+                  </Typography>
+                  <Box sx={FIELD_GRID_SX}>
+                    {SKINFOLD_FIELDS.map((f) => (
+                      <NumberField
+                        key={f.key}
+                        label={f.label}
+                        decimal
+                        size="small"
+                        fullWidth
+                        value={skin[f.key]}
+                        onChange={(v) => setSkin((s) => ({ ...s, [f.key]: v }))}
+                        helperText={f.hint}
+                      />
+                    ))}
+                  </Box>
+                  <Box sx={{ mt: 1, p: 1.5, borderRadius: 2, bgcolor: 'rgba(0,0,0,0.04)', fontSize: 14 }} aria-live="polite">
+                    {computedFat ? (
+                      <>
                         <Box component="span" sx={{ fontWeight: 500 }}>
-                          Vetvrije massa: {formFfm} kg
+                          Vetpercentage: {computedFat.pct}%
                         </Box>
                         <Box component="span" sx={{ color: 'text.secondary' }}>
                           {' '}
-                          · gewicht min vet
+                          · som {computedFat.sumMm} mm · berekend
                         </Box>
+                        {formFfm != null ? (
+                          <Box sx={{ mt: 0.5 }}>
+                            <Box component="span" sx={{ fontWeight: 500 }}>
+                              Vetvrije massa: {formFfm} kg
+                            </Box>
+                            <Box component="span" sx={{ color: 'text.secondary' }}>
+                              {' '}
+                              · gewicht min vet
+                            </Box>
+                          </Box>
+                        ) : (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                            Vul gewicht in voor de vetvrije massa.
+                          </Typography>
+                        )}
+                      </>
+                    ) : formulaHint ? (
+                      <Box component="span" sx={{ color: 'text.secondary' }}>
+                        {formulaHint}
                       </Box>
                     ) : (
+                      <Box component="span" sx={{ color: 'text.secondary' }}>
+                        {skinFilled > 0 ? `Som ${currentSkinSum} mm. ` : ''}Vul biceps, triceps, rug en heup in voor het vetpercentage.
+                      </Box>
+                    )}
+                    {!computedFat && bodyFat && (
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                        Vul gewicht in voor de vetvrije massa.
+                        Opgeslagen vetpercentage van deze meting: {bodyFat}% (blijft bewaard).
                       </Typography>
                     )}
-                  </>
-                ) : formulaHint ? (
-                  <Box component="span" sx={{ color: 'text.secondary' }}>
-                    {formulaHint}
                   </Box>
-                ) : (
-                  <Box component="span" sx={{ color: 'text.secondary' }}>
-                    {skinFilled > 0 ? `Som ${currentSkinSum} mm. ` : ''}Vul biceps, triceps, rug en heup in voor het vetpercentage.
+                </AccordionDetails>
+              </Accordion>
+
+              <Accordion disableGutters expanded={openSections.includes('photos')} onChange={() => toggleSection('photos')} sx={ACCORDION_SX}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: 'flex', minWidth: 0, flex: 1, alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
+                    <Typography variant="subtitle1" fontWeight={600}>
+                      Foto's
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {(() => {
+                        const n = PHOTO_VIEWS.filter((v) => photos[v.view].file || (photos[v.view].existingUrl && !photos[v.view].remove)).length;
+                        return n > 0 ? `${n} van 3` : 'optioneel';
+                      })()}
+                    </Typography>
                   </Box>
-                )}
-                {!computedFat && bodyFat && (
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                    Opgeslagen vetpercentage van deze meting: {bodyFat}% (blijft bewaard).
+                </AccordionSummary>
+                <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                    Voor, zij en achter. Zelfde plek, zelfde licht, zelfde houding: dan zie je het verschil echt.
                   </Typography>
-                )}
-              </Box>
-            </AccordionDetails>
-          </Accordion>
+                  <ProgressPhotoSlots photos={photos} inputsRef={photoInputs} onPick={pickPhoto} onClear={clearPhoto} />
+                </AccordionDetails>
+              </Accordion>
+            </Box>
 
-          <Accordion disableGutters expanded={openSections.includes('photos')} onChange={() => toggleSection('photos')} sx={ACCORDION_SX}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', minWidth: 0, flex: 1, alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
-                <Typography variant="subtitle1" fontWeight={600}>
-                  Foto's
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {(() => {
-                    const n = PHOTO_VIEWS.filter((v) => photos[v.view].file || (photos[v.view].existingUrl && !photos[v.view].remove)).length;
-                    return n > 0 ? `${n} van 3` : 'optioneel';
-                  })()}
-                </Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0.5 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                Voor, zij en achter. Zelfde plek, zelfde licht, zelfde houding: dan zie je het verschil echt.
-              </Typography>
-              <ProgressPhotoSlots photos={photos} inputsRef={photoInputs} onPick={pickPhoto} onClear={clearPhoto} />
-            </AccordionDetails>
-          </Accordion>
+            <TextField label="Notitie (optioneel)" size="small" fullWidth value={note} onChange={(e) => setNote(e.target.value)} />
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button variant="contained" onClick={handleSave} disabled={saving} sx={PRIMARY_BUTTON_SX}>
+                {saving ? 'Bezig…' : editingId ? 'Opslaan' : 'Toevoegen'}
+              </Button>
+              {editingId && (
+                <Button variant="text" onClick={resetForm} sx={{ textTransform: 'none' }}>
+                  Annuleren
+                </Button>
+              )}
+            </Box>
+
+            {/* Historie */}
+            <MeasurementHistory loading={loading} items={items} onEdit={handleEdit} onDelete={handleDelete} onViewScan={setViewScan} />
+          </Box>
         </Box>
-
-        <TextField label="Notitie (optioneel)" size="small" fullWidth value={note} onChange={(e) => setNote(e.target.value)} sx={{ mb: 2 }} />
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button variant="contained" onClick={handleSave} disabled={saving} sx={PRIMARY_BUTTON_SX}>
-            {saving ? 'Bezig…' : editingId ? 'Opslaan' : 'Toevoegen'}
-          </Button>
-          {editingId && (
-            <Button variant="text" onClick={resetForm} sx={{ textTransform: 'none' }}>
-              Annuleren
-            </Button>
-          )}
-        </Box>
-
-        {/* Historie */}
-        <MeasurementHistory loading={loading} items={items} onEdit={handleEdit} onDelete={handleDelete} onViewScan={setViewScan} />
       </ContentCard>
 
       <WeightGoalDialog open={goalOpen} value={goalInput} onChange={setGoalInput} onClose={() => setGoalOpen(false)} onSave={handleSaveGoal} />
