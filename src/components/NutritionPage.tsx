@@ -25,6 +25,8 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
@@ -34,6 +36,8 @@ import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
 import QrCodeScannerRoundedIcon from '@mui/icons-material/QrCodeScannerRounded';
 import AddCircleRoundedIcon from '@mui/icons-material/AddCircleRounded';
+import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
+import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import { lazy, Suspense } from 'react';
 import { designTokens } from '../theme/designTokens';
 
@@ -41,7 +45,7 @@ import { designTokens } from '../theme/designTokens';
 const BarcodeScannerDialog = lazy(() =>
   import('./BarcodeScannerDialog').then((m) => ({ default: m.BarcodeScannerDialog }))
 );
-import { PageLayout, ContentCard } from './layout';
+import { PageLayout, HeaderActions } from './layout';
 import { useProfile } from '../context/ProfileContext';
 import { useViewAs } from '../context/ViewAsContext';
 import { useNotify } from '../context/NotifyContext';
@@ -121,20 +125,27 @@ const MACRO_ROW_KEYS = ['protein', 'carbs', 'fat'] as const;
  * Zelfde geneste-kaart-stijl als de ACCORDION_SX in LogsPage/MetingenPage: een tint dieper dan de
  * omringende ContentCard, anders vallen de kaarten er tegenaan weg.
  */
-const NESTED_CARD_SX = {
-  backgroundColor: designTokens.cardBackgroundHigh,
-  border: `1px solid ${designTokens.cardBorder}`,
-  boxShadow: 'none',
-  borderRadius: `${designTokens.cardRadius}px`,
-  overflow: 'hidden',
-} as const;
+/**
+ * Kaarten op de pagina (Figma: Surface Container Low, geen rand). Functies en geen constanten:
+ * designTokens volgt het actieve thema en moet bij elke render opnieuw gelezen worden.
+ */
+const cardSx = () =>
+  ({
+    backgroundColor: designTokens.cardBackground,
+    border: 'none',
+    boxShadow: 'none',
+    borderRadius: `${designTokens.cardRadius}px`,
+    overflow: 'hidden',
+  }) as const;
 
-const MEAL_ACCORDION_SX = {
-  ...NESTED_CARD_SX,
-  margin: 0,
-  mb: 1,
-  '&:before': { display: 'none' },
-} as const;
+const mealAccordionSx = () =>
+  ({
+    ...cardSx(),
+    margin: 0,
+    mb: 1,
+    '&:before': { display: 'none' },
+    '&.Mui-expanded': { margin: 0, mb: 1 },
+  }) as const;
 
 export function NutritionPage() {
   const profileCtx = useProfile();
@@ -388,18 +399,89 @@ export function NutritionPage() {
   };
 
   const periodLabel = period === 'day' ? t('nutrition.summary.day') : period === 'week' ? t('nutrition.summary.weekAvg') : t('nutrition.summary.monthAvg');
+  const theme = useTheme();
+  /** Desktop: maaltijden altijd open met kolommen voor gram en kcal (Figma); telefoon: inklapbaar. */
+  const wide = useMediaQuery(theme.breakpoints.up('md'));
+  const { lang } = useI18n();
+  /** "Dinsdag 16 september" voor een dag; "9 sep – 15 sep" voor week (7 dagen) en maand (30 dagen) t/m de datum. */
+  const dateLabel = (() => {
+    const locale = lang === 'en' ? 'en-GB' : 'nl-NL';
+    const end = new Date(`${date}T12:00:00`);
+    if (period === 'day') {
+      const label = end.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' });
+      return label.charAt(0).toUpperCase() + label.slice(1);
+    }
+    const start = new Date(end);
+    start.setDate(end.getDate() - (period === 'week' ? 6 : 29));
+    const short = (d: Date) => d.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+    return `${short(start)} – ${short(end)}`;
+  })();
+  /** Een dag, week of maand terug of vooruit, afhankelijk van de gekozen periode. Niet voorbij vandaag. */
+  const shiftDate = (dir: -1 | 1) => {
+    const d = new Date(`${date}T12:00:00`);
+    // Zelfde lengte als het bereik dat getoond wordt (7 of 30 dagen), zodat perioden netjes aansluiten.
+    d.setDate(d.getDate() + dir * (period === 'day' ? 1 : period === 'week' ? 7 : 30));
+    const next = d.toISOString().slice(0, 10);
+    setDate(next > todayIso() ? todayIso() : next);
+  };
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const periodToggle = (
+    <ToggleButtonGroup size="small" exclusive value={period} onChange={(_, v) => v && setPeriod(v)} sx={segmentedToggleSx}>
+      <ToggleButton value="day">{t('nutrition.periods.day')}</ToggleButton>
+      <ToggleButton value="week">{t('nutrition.periods.week')}</ToggleButton>
+      <ToggleButton value="month">{t('nutrition.periods.month')}</ToggleButton>
+    </ToggleButtonGroup>
+  );
 
   /* Samenvatting: kcal groot bovenaan, macro's als rijen met eigen kleur (zoals het Figma-ontwerp).
      Op desktop in dagweergave staat dit in de linkerkolom naast het zoeken/loggen; bij week/maand
      staat het gewoon boven de dagbalken, want daar is geen tweede kolom mee te vullen. */
   const summaryCard = (
-    <Card sx={{ ...NESTED_CARD_SX, mb: 2 }}>
+    <Card sx={{ ...cardSx(), mb: period === 'day' ? 0 : 2 }}>
       <CardContent sx={{ '&:last-child': { pb: 2 } }}>
-        <Typography variant="caption" color="text.secondary">
-          {periodLabel}
-        </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
-          <Typography variant="h4" fontWeight={800}>
+        {/* Datum bovenaan (Figma "Tuesday 16 August"), met pijltjes om een dag/week/maand te wisselen. */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mx: -0.5 }}>
+          <IconButton size="small" onClick={() => shiftDate(-1)} aria-label={t('nutrition.previous')}>
+            <ChevronLeftRoundedIcon fontSize="small" />
+          </IconButton>
+          <Box sx={{ flex: 1, minWidth: 0, textAlign: 'center', position: 'relative' }}>
+            {/* Klik op de datum opent de datumkiezer van het toestel, om verder terug te springen. */}
+            <Box
+              component="button"
+              type="button"
+              onClick={() => {
+                const el = dateInputRef.current;
+                if (!el) return;
+                if (typeof el.showPicker === 'function') el.showPicker();
+                else el.click();
+              }}
+              sx={{ all: 'unset', cursor: 'pointer', fontSize: 12, fontWeight: 500, lineHeight: '16px', '&:hover': { textDecoration: 'underline' } }}
+            >
+              {dateLabel}
+            </Box>
+            <Box
+              component="input"
+              ref={dateInputRef}
+              type="date"
+              value={date}
+              max={todayIso()}
+              tabIndex={-1}
+              aria-hidden
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => e.target.value && setDate(e.target.value)}
+              sx={{ position: 'absolute', left: '50%', bottom: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none', border: 0, p: 0 }}
+            />
+            {period !== 'day' && (
+              <Typography sx={{ fontSize: 11, lineHeight: '14px', color: 'text.secondary' }} noWrap>
+                {periodLabel}
+              </Typography>
+            )}
+          </Box>
+          <IconButton size="small" onClick={() => shiftDate(1)} disabled={date >= todayIso()} aria-label={t('nutrition.next')}>
+            <ChevronRightRoundedIcon fontSize="small" />
+          </IconButton>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 1 }}>
+          <Typography sx={{ fontSize: { xs: 32, md: 40 }, fontWeight: 500, lineHeight: 1.1 }}>
             {shown.kcal}
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -418,10 +500,10 @@ export function NutritionPage() {
         {MACRO_ROW_KEYS.map((key) => (
           <Box key={key} sx={{ mb: 1.5, '&:last-child': { mb: 0 } }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
-              <Typography variant="body2" fontWeight={600}>
+              <Typography sx={{ fontSize: 13, fontWeight: 500 }}>
                 {t(`nutrition.macros.${key}`)}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
                 {shown[key]} g{goal && goal[key] ? ` ${t('nutrition.summary.ofGrams', { grams: goal[key] })}` : ''}
               </Typography>
             </Box>
@@ -434,40 +516,42 @@ export function NutritionPage() {
             )}
           </Box>
         ))}
+        <Button size="small" onClick={() => setGoalOpen(true)} sx={{ mt: 1.5, ml: -1, textTransform: 'none' }}>
+          {goal ? t('nutrition.editGoal') : t('nutrition.setGoal')}
+        </Button>
       </CardContent>
     </Card>
   );
 
   return (
     <PageLayout maxWidth="none">
-      <ContentCard>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 1 }}>
-          <Button size="small" variant="text" onClick={() => setGoalOpen(true)}>
-            {goal ? t('nutrition.editGoal') : t('nutrition.setGoal')}
-          </Button>
-        </Box>
-
-        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', my: 2, alignItems: 'center' }}>
-          <ToggleButtonGroup
-            size="small"
-            exclusive
-            value={period}
-            onChange={(_, v) => v && setPeriod(v)}
-            sx={segmentedToggleSx}
-          >
-            <ToggleButton value="day">{t('nutrition.periods.day')}</ToggleButton>
-            <ToggleButton value="week">{t('nutrition.periods.week')}</ToggleButton>
-            <ToggleButton value="month">{t('nutrition.periods.month')}</ToggleButton>
-          </ToggleButtonGroup>
-          <TextField type="date" size="small" label={period === 'day' ? t('nutrition.date') : t('nutrition.until')} value={date} onChange={(e) => setDate(e.target.value)} InputLabelProps={{ shrink: true }} />
-        </Box>
+      <Box>
+        {/* Desktop: periode en "Voedsel toevoegen" rechts in de paginakop (Figma). */}
+        <HeaderActions>
+          <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 2 }}>
+            {periodToggle}
+            <Button
+              variant="contained"
+              disableElevation
+              onClick={() => {
+                setPeriod('day');
+                setTimeout(() => searchInputRef.current?.focus(), 0);
+              }}
+              sx={{ borderRadius: '20px', textTransform: 'none', fontWeight: 500, height: 40, px: 2.5 }}
+            >
+              {t('nutrition.addFoodButton')}
+            </Button>
+          </Box>
+        </HeaderActions>
+        {/* Telefoon: de keuzebalk over de volle breedte, zoals Figma. */}
+        <Box sx={{ display: { xs: 'block', md: 'none' }, mb: 2, '& .MuiToggleButtonGroup-root': { width: '100%' } }}>{periodToggle}</Box>
 
         {/* Buiten dagweergave (week/maand) is er geen tweede kolom om mee te vullen: samenvatting
             en dagbalken staan dan gewoon onder elkaar, over de volle breedte. */}
         {period !== 'day' && (
           <>
             {summaryCard}
-            <Card sx={{ ...NESTED_CARD_SX, mb: 2 }}>
+            <Card sx={{ ...cardSx(), mb: 2 }}>
               <CardContent sx={{ '&:last-child': { pb: 2 } }}>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                   {t('nutrition.kcalPerDay')}
@@ -502,7 +586,7 @@ export function NutritionPage() {
         {/* Dagweergave (Figma "Nutrition"): links de samenvatting, rechts zoeken/loggen en het
             dag-overzicht per maaltijd — op mobiel gewoon onder elkaar. */}
         {period === 'day' && (
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3, alignItems: 'start' }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(280px, 380px) minmax(0, 1fr)' }, gap: { xs: 2, md: 3 }, alignItems: 'start' }}>
             <Box sx={{ minWidth: 0 }}>{summaryCard}</Box>
             <Box sx={{ minWidth: 0 }}>
             <input
@@ -639,9 +723,7 @@ export function NutritionPage() {
               </List>
             )}
 
-            <Typography variant="subtitle1" fontWeight={600} sx={{ mt: 1, mb: 1 }}>
-              {t('nutrition.logged')}
-            </Typography>
+            <Box sx={{ mt: 1 }} />
             {loading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
                 <CircularProgress size={22} />
@@ -661,13 +743,14 @@ export function NutritionPage() {
                   <Accordion
                     key={groupKey}
                     disableGutters
-                    expanded={openMeals.includes(groupKey)}
-                    onChange={() => toggleMeal(groupKey)}
-                    sx={MEAL_ACCORDION_SX}
+                    expanded={wide || openMeals.includes(groupKey)}
+                    onChange={() => !wide && toggleMeal(groupKey)}
+                    sx={mealAccordionSx()}
                   >
                     <AccordionSummary
-                      expandIcon={<ExpandMoreRoundedIcon />}
+                      expandIcon={wide ? null : <ExpandMoreRoundedIcon />}
                       sx={{
+                        cursor: wide ? 'default !important' : undefined,
                         minWidth: 0,
                         '& .MuiAccordionSummary-content': { minWidth: 0 },
                         '& .MuiAccordionSummary-content.Mui-expanded': { minWidth: 0 },
@@ -678,16 +761,50 @@ export function NutritionPage() {
                           <Typography variant="subtitle2" fontWeight={700}>
                             {group.label}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-                            {summary}
-                          </Typography>
+                          {!wide && (
+                            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                              {summary}
+                            </Typography>
+                          )}
                         </Box>
-                        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                        <Typography variant="body2" sx={{ whiteSpace: 'nowrap', fontWeight: 500 }}>
                           {kcal} kcal
                         </Typography>
                       </Box>
                     </AccordionSummary>
                     <AccordionDetails sx={{ px: 0, pt: 0, pb: 0.5 }}>
+                      {wide ? (
+                        /* Desktop (Figma): naam, gram en kcal in kolommen; bewerken/verwijderen bij aanwijzen. */
+                        <Box sx={{ px: 2.5, pb: 1 }}>
+                          {items.map((l) => (
+                            <Box
+                              key={l.id}
+                              sx={{
+                                display: 'grid',
+                                gridTemplateColumns: 'minmax(0, 1fr) 60px 70px 64px',
+                                alignItems: 'center',
+                                minHeight: 28,
+                                '& .row-actions': { opacity: 0, transition: 'opacity 0.15s ease' },
+                                '&:hover .row-actions, &:focus-within .row-actions': { opacity: 1 },
+                              }}
+                            >
+                              <Typography sx={{ fontSize: 13, lineHeight: '18px' }} noWrap title={l.productName}>
+                                {l.quantity && l.portionLabel ? `${l.productName} · ${l.quantity}× ${l.portionLabel}` : l.productName}
+                              </Typography>
+                              <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{l.grams} g</Typography>
+                              <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{l.kcal} kcal</Typography>
+                              <Box className="row-actions" sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                <IconButton size="small" onClick={() => openEdit(l)} aria-label={t('nutrition.edit')}>
+                                  <EditRoundedIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                                <IconButton size="small" onClick={() => handleDelete(l.id)} aria-label={t('nutrition.delete')}>
+                                  <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </Box>
+                            </Box>
+                          ))}
+                        </Box>
+                      ) : (
                       <List dense disablePadding>
                         {items.map((l) => (
                           <ListItem
@@ -710,6 +827,7 @@ export function NutritionPage() {
                           </ListItem>
                         ))}
                       </List>
+                      )}
                     </AccordionDetails>
                   </Accordion>
                 );
@@ -718,7 +836,7 @@ export function NutritionPage() {
             </Box>
           </Box>
         )}
-      </ContentCard>
+      </Box>
 
       <Dialog open={suggestions != null} onClose={() => setSuggestions(null)} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ pb: 0.5 }}>{t('nutrition.recognized.title')}</DialogTitle>
