@@ -24,6 +24,7 @@ import { useI18n } from '../context/I18nContext';
 import { useProfile } from '../context/ProfileContext';
 import { useViewAs } from '../context/ViewAsContext';
 import { TopBarBackProvider, useTopBarBackVisible } from '../context/TopBarBackContext';
+import { PageTitleProvider, usePageTitleOverride } from '../context/PageTitleContext';
 import { designTokens } from '../theme/designTokens';
 import { PAGE_HEADER_ACTIONS_ID } from './layout/HeaderActions';
 
@@ -176,6 +177,11 @@ function ProfileMenuButton({
   );
 }
 
+/** Titel in de kop: wat het scherm zelf zette (usePageTitle), anders de naam van het tabblad. */
+function ShellTitle({ fallback }: { fallback: string }) {
+  return <>{usePageTitleOverride() ?? fallback}</>;
+}
+
 /**
  * Bovenbalk op de telefoon (ontwerp "Top bar"): titel van het scherm en de avatar naar Profiel.
  * Plakt bovenaan, onder de statusbalk.
@@ -205,7 +211,7 @@ function MobileTopBar({ title, onNavigate, profileTabIndex }: { title: string; o
         </IconButton>
       )}
       <Typography component="h1" variant="h6" sx={{ fontWeight: 600, flex: 1, minWidth: 0 }} noWrap>
-        {title}
+        <ShellTitle fallback={title} />
       </Typography>
       {profileTabIndex != null && <ProfileMenuButton onNavigate={onNavigate} profileTabIndex={profileTabIndex} />}
     </Box>
@@ -289,6 +295,7 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
   if (!wide) {
     const barIndex = Math.max(0, destinations.findIndex((d) => d.tabIndex === activeTab));
     return (
+      <PageTitleProvider>
       <TopBarBackProvider>
         {/* Op een telefoon scrolt de inhoud onder de statusbalk door; deze strook houdt dat vlak dicht,
             zodat een paginatitel niet half achter de klok of de notch verdwijnt. */}
@@ -314,10 +321,12 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
           tabs={destinations.map((d) => ({ label: d.label, icon: d.icon }))}
         />
       </TopBarBackProvider>
+      </PageTitleProvider>
     );
   }
 
   return (
+    <PageTitleProvider>
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       <Box
         component="nav"
@@ -392,7 +401,7 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
         {/* Paginakop zoals in Figma (Header, 92 hoog): de titel van het scherm. */}
         <Box component="header" sx={{ display: 'flex', alignItems: 'center', minHeight: 92 }}>
           <Typography component="h1" sx={{ fontSize: 28, lineHeight: '36px', fontWeight: 400 }} noWrap>
-            {title}
+            <ShellTitle fallback={title} />
           </Typography>
           {/* Knoppen van het scherm zelf (HeaderActions), rechts in de kop zoals "New workout" in Figma. */}
           <Box id={PAGE_HEADER_ACTIONS_ID} sx={{ ml: 'auto', pl: 2, display: 'flex', alignItems: 'center', gap: 1 }} />
@@ -400,5 +409,6 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
         {children}
       </Box>
     </Box>
+    </PageTitleProvider>
   );
 }
