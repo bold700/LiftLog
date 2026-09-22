@@ -20,6 +20,7 @@ export const en: Messages = {
     signOut: 'Sign out',
     shortcuts: 'Quick access',
     mainNavigation: 'Main navigation',
+    back: 'Back',
   },
   viewAs: {
     menuLabel: 'View as',

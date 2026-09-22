@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Typography,
   Box,
@@ -13,7 +13,6 @@ import {
   Snackbar,
   CircularProgress,
 } from '@mui/material';
-import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { useWorkouts } from '../hooks/useWorkouts';
 import {
@@ -44,6 +43,7 @@ import { createGroupSession } from '../services/groupSessionService';
 import { getMyPendingRequest } from '../services/workoutRequestService';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { useProfile } from '../context/ProfileContext';
+import { useShowBackButton } from '../context/TopBarBackContext';
 import { PageLayout, ContentCard, EmptyState } from './layout';
 import { SchemaDeleteDialog } from './schemas/SchemaDeleteDialog';
 import { GroupSessionSetupDialog } from './schemas/GroupSessionSetupDialog';
@@ -61,6 +61,9 @@ import '@material/web/button/text-button.js';
 import '@material/web/icon/icon.js';
 
 type View = 'list' | 'detail' | 'edit' | 'session' | 'groupSession';
+
+/** Hoe diep elk scherm zit, voor de history-gebaseerde terugnavigatie (zie handleNextDay hieronder). */
+const VIEW_DEPTH: Record<View, number> = { list: 0, detail: 1, edit: 2, session: 2, groupSession: 2 };
 
 
 export const SchemasPage = () => {
@@ -241,7 +244,9 @@ export const SchemasPage = () => {
     async (updated: Schema) => {
       await saveSchema(updated);
       loadSchemas();
-      setView('detail');
+      // Via history.back() (i.p.v. direct setView) zodat de teruggeduwde history-entry van het
+      // bewerkscherm meteen mee verdwijnt — zie de history-navigatie hieronder.
+      window.history.back();
     },
     [saveSchema, loadSchemas]
   );
@@ -275,9 +280,9 @@ export const SchemasPage = () => {
     if (selectedSchemaId) {
       await deleteSchema(selectedSchemaId);
       setOpenDeleteDialog(false);
-      setSelectedSchemaId(null);
-      setView('list');
       loadSchemas();
+      // handleBack (via popstate) ruimt selectedSchemaId op en zet de view terug naar 'list'.
+      window.history.back();
     }
   }, [selectedSchemaId, deleteSchema, loadSchemas]);
 
@@ -370,12 +375,72 @@ export const SchemasPage = () => {
     setJustLoggedExerciseId(null);
   }, [selectedSchema, sessionDayIndex]);
 
+  /**
+   * Terugpijl in de bovenbalk i.p.v. boven de (scrollbare) inhoud van elk dieper scherm, en de
+   * systeem-swipe-terug/hardware-terugknop laten werken alsof het gewoon een pagina terug is.
+   *
+   * De trucs: (1) elke stap dieper (list → detail → session/edit/groupSession) duwt evenveel
+   * history-entries; (2) alle "terug"-acties (de pijl, Annuleren, verwijderen, opslaan) roepen
+   * voortaan `window.history.back()` aan i.p.v. zelf `setView(...)`, zodat er altijd exact één
+   * entry verdwijnt; (3) de popstate-listener bepaalt aan de hand van het huidige scherm welke
+   * bestaande "terug"-functie dat moment betekent. Zonder die tweede stap zou de teller uit de
+   * pas lopen en de swipe na een paar keer verkeerd springen.
+   */
+  const pushedDepthRef = useRef(0);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const suppressPopCountRef = useRef(0);
+
+  useShowBackButton(view !== 'list');
+
+  useEffect(() => {
+    const onPopState = () => {
+      if (suppressPopCountRef.current > 0) {
+        suppressPopCountRef.current -= 1;
+        return;
+      }
+      pushedDepthRef.current = Math.max(0, pushedDepthRef.current - 1);
+      switch (viewRef.current) {
+        case 'session':
+          handleBackFromSession();
+          break;
+        case 'groupSession':
+          handleBackFromGroupSession();
+          break;
+        case 'edit':
+          handleCancelEdit();
+          break;
+        case 'detail':
+          handleBack();
+          break;
+        default:
+          break;
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const target = VIEW_DEPTH[view];
+    const diff = target - pushedDepthRef.current;
+    if (diff > 0) {
+      for (let i = 0; i < diff; i++) window.history.pushState({ liftlogSchemasDepth: pushedDepthRef.current + i + 1 }, '');
+      pushedDepthRef.current = target;
+    } else if (diff < 0) {
+      suppressPopCountRef.current += -diff;
+      window.history.go(diff);
+      pushedDepthRef.current = target;
+    }
+  }, [view]);
+
   if (view === 'edit' && selectedSchema) {
     return (
       <SchemaEditView
         schema={selectedSchema}
         onSave={handleSaveSchema}
-        onCancel={handleCancelEdit}
+        onCancel={() => window.history.back()}
         sporters={sportersForAssignment}
         categories={categories}
       />
@@ -387,7 +452,6 @@ export const SchemasPage = () => {
       <TrainingSessionView
         schema={selectedSchema}
         dayIndex={sessionDayIndex}
-        onBack={handleBackFromSession}
         onNextDay={handleNextDay}
         justLoggedExerciseId={justLoggedExerciseId}
         onClearJustLogged={() => setJustLoggedExerciseId(null)}
@@ -407,7 +471,6 @@ export const SchemasPage = () => {
           session={activeGroupSession}
           participants={participants}
           currentUserId={profile?.profile?.userId ?? ''}
-          onBack={handleBackFromGroupSession}
         />
       );
     }
@@ -424,9 +487,6 @@ export const SchemasPage = () => {
             {/* Eén regel: de titel kort af met … zodat het menu rechts blijft staan. */}
             <Box className="workout-detail-screen" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'nowrap', gap: 1 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: '1 1 auto', minWidth: 0 }}>
-                <IconButton size="small" onClick={handleBack} sx={{ p: 0.5, flexShrink: 0 }} aria-label="Terug">
-                  <ArrowBackIosNewIcon fontSize="small" />
-                </IconButton>
                 <Typography
                   variant="h6"
                   sx={{

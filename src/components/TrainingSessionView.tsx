@@ -4,11 +4,9 @@ import {
   CardContent,
   Typography,
   Box,
-  IconButton,
   Snackbar,
   Button,
 } from '@mui/material';
-import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
@@ -64,7 +62,6 @@ import '@material/web/icon/icon.js';
 interface TrainingSessionViewProps {
   schema: Schema;
   dayIndex: number;
-  onBack: () => void;
   onNextDay: () => void;
   justLoggedExerciseId: string | null;
   onClearJustLogged: () => void;
@@ -83,7 +80,6 @@ function findLogIdForExercise(
 export const TrainingSessionView = ({
   schema,
   dayIndex,
-  onBack,
   onNextDay,
   justLoggedExerciseId,
   onClearJustLogged,
@@ -346,9 +342,6 @@ export const TrainingSessionView = ({
           />
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 3, flexWrap: 'wrap' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
-              <IconButton size="small" onClick={onBack} sx={{ p: 0.5 }} aria-label="Terug">
-                <ArrowBackIosNewIcon fontSize="small" />
-              </IconButton>
               <Typography variant="h5" sx={{ fontWeight: 600 }}>
                 {schema.name} – {day.dayLabel}
               </Typography>
