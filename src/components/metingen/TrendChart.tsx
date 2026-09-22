@@ -9,7 +9,7 @@ export interface TrendPoint {
 }
 
 /** Lijngrafiek (viewBox = echte pixelbreedte, geen vervorming). Optionele stippellijn voor een doel. */
-export function TrendChart({ points, unit, goal }: { points: TrendPoint[]; unit: string; goal?: number | null }) {
+export function TrendChart({ points, unit, goal, dots = true }: { points: TrendPoint[]; unit: string; goal?: number | null; dots?: boolean }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(320);
   useEffect(() => {
@@ -36,9 +36,10 @@ export function TrendChart({ points, unit, goal }: { points: TrendPoint[]; unit:
     <Box ref={ref} sx={{ width: '100%', color: 'primary.main' }}>
       <svg viewBox={`0 0 ${width} ${CH}`} style={{ display: 'block', height: CH, width: '100%' }}>
         {goal != null && <line x1={0} y1={cy(goal)} x2={width} y2={cy(goal)} stroke="#9e9e9e" strokeWidth={1} strokeDasharray="4 4" />}
-        <polyline points={line} fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        <polyline points={line} fill="none" stroke="currentColor" strokeWidth={dots ? 2 : 2.5} strokeLinejoin="round" strokeLinecap="round" />
         {pts.map((p, i) => (
-          <circle key={p.id} cx={cx(i)} cy={cy(p.value)} r={3} fill="currentColor">
+          // Zonder stippen (Figma "Body") blijft een onzichtbaar trefvlak over voor de tooltip.
+          <circle key={p.id} cx={cx(i)} cy={cy(p.value)} r={dots ? 3 : 6} fill={dots ? 'currentColor' : 'transparent'}>
             <title>{`${p.date}: ${p.value} ${unit}`}</title>
           </circle>
         ))}
