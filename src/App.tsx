@@ -241,7 +241,7 @@ function AppContent() {
           onNavigate={setActiveTab}
           destinations={destinations}
           secondary={secondary}
-          onLog={openAdd}
+          onLog={handleFabClick}
           onLogout={handleLogout}
           brand={{ name: branding?.name ?? 'VORM', logoUrl: branding?.logoUrl ?? null }}
           profileTabIndex={TAB_PROFIEL}
