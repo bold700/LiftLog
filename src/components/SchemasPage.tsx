@@ -478,7 +478,7 @@ export const SchemasPage = () => {
 
   if (view === 'detail' && selectedSchema) {
     return (
-      <PageLayout>
+      <PageLayout maxWidth="none">
         <ContentCard>
             {/* Print-vriendelijke variant: eenvoudige header + tabel per dag */}
             <SchemaPrintView schema={selectedSchema} />
@@ -686,7 +686,7 @@ export const SchemasPage = () => {
     {/* Gewone Box als paneel (zoals bij Inzichten): als direct kind van de flex-kolom zou
         PageLayout met zijn automatische marges tot de inhoud krimpen i.p.v. 800px breed worden. */}
     <Box sx={{ flex: 1, minHeight: 0 }}>
-    <PageLayout>
+    <PageLayout maxWidth="none">
       <ContentCard>
         <Box
           sx={{

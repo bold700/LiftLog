@@ -381,7 +381,7 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
     schema.isFormule7Template && Boolean(formule7) && !showFormule7AiWizard;
 
   return (
-    <PageLayout>
+    <PageLayout maxWidth="none">
       <ContentCard>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
             <Typography variant="h5" sx={{ fontWeight: 600 }}>
