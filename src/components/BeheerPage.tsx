@@ -32,7 +32,7 @@ import { useAuth } from '../context/AuthContext';
 import { getAllProfiles, updateProfile } from '../services/profileService';
 import { deleteAccountAsAdmin } from '../services/adminAccountService';
 import type { LeaderboardVisibility, Membership, Plan, Profile, ProfileRole, Limitation } from '../types';
-import { PageLayout, ContentCard } from './layout';
+import { PageLayout, ContentCard, HeaderActions } from './layout';
 import { BrandingSettings } from './beheer/BrandingSettings';
 import { UserAvatar } from './UserAvatar';
 import { ageOnDate } from '../utils/bodyFat';
@@ -375,8 +375,10 @@ export function BeheerPage() {
   // Kop naar het ontwerp: "Account toevoegen" rechts, daaronder de tabs.
   const header = (
     <>
-      {/* De titel staat in de kop van de schil; knoppen rechts op desktop, zoals voorheen links op mobiel. */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'flex-start', md: 'flex-end' }, gap: 2, mb: 1.5 }}>
+      {/* De titel staat in de kop van de schil. Knoppen: op desktop rechts in die kop (Figma), op een
+          telefoon boven de tabs. */}
+      <HeaderActions>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 2, mb: { xs: 1.5, md: 0 } }}>
         {section === 'lessoorten' ? (
           <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
             <Button variant="outlined" startIcon={<AddRoundedIcon />} onClick={() => setNewClassOpen(true)}>
@@ -400,6 +402,7 @@ export function BeheerPage() {
           </Button>
         )}
       </Box>
+      </HeaderActions>
       {isAdmin && <SectionTabs value={section} onChange={setSection} />}
     </>
   );
