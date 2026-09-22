@@ -9,14 +9,19 @@
  * navigatiebalk, naast de "+"-knop. De bovenbalk is de "Top bar" uit het ontwerp: de titel van
  * het scherm en de avatar naar Profiel.
  */
-import type { ReactNode } from 'react';
-import { Box, Button, Divider, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { useState, type ReactNode } from 'react';
+import { Box, Button, Divider, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
+import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
+import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
+import SupervisorAccountRoundedIcon from '@mui/icons-material/SupervisorAccountRounded';
 import { NavigationBar } from './NavigationBar';
 import { UserAvatar } from './UserAvatar';
+import { ViewAsSheet } from './ViewAsSheet';
 import { useI18n } from '../context/I18nContext';
 import { useProfile } from '../context/ProfileContext';
+import { useViewAs } from '../context/ViewAsContext';
 import { designTokens } from '../theme/designTokens';
 
 export interface ShellDestination {
@@ -49,6 +54,10 @@ function MobileTopBar({ title, onNavigate, profileTabIndex }: { title: string; o
   const { t } = useI18n();
   const profile = useProfile();
   const me = profile?.profile ?? null;
+  const { viewed, mayViewOthers, setViewing } = useViewAs();
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
   return (
     <Box
       component="header"
@@ -69,9 +78,73 @@ function MobileTopBar({ title, onNavigate, profileTabIndex }: { title: string; o
         {title}
       </Typography>
       {profileTabIndex != null && (
-        <Box component="button" type="button" aria-label={t('nav.profile')} onClick={() => onNavigate(profileTabIndex)} sx={{ p: 0, border: 0, bgcolor: 'transparent', cursor: 'pointer', borderRadius: '50%', display: 'flex' }}>
-          <UserAvatar name={me?.displayName} photoURL={me?.photoURL} size={32} />
-        </Box>
+        <>
+          <Box
+            component="button"
+            type="button"
+            aria-label={viewed.isOther ? `${t('nav.profile')} · ${t('viewAs.viewingAs', { name: viewed.name })}` : t('nav.profile')}
+            onClick={(e) => setMenuAnchor(e.currentTarget)}
+            sx={{ position: 'relative', p: 0, border: 0, bgcolor: 'transparent', cursor: 'pointer', borderRadius: '50%', display: 'flex' }}
+          >
+            <UserAvatar name={viewed.isOther ? viewed.name : me?.displayName} photoURL={viewed.isOther ? viewed.photoURL : me?.photoURL} size={32} />
+            {viewed.isOther && (
+              <SupervisorAccountRoundedIcon
+                sx={{
+                  position: 'absolute',
+                  bottom: -3,
+                  right: -3,
+                  fontSize: 16,
+                  color: designTokens.onPrimary,
+                  bgcolor: designTokens.primary,
+                  borderRadius: '50%',
+                  border: '1.5px solid',
+                  borderColor: 'background.default',
+                  p: 0.1,
+                }}
+              />
+            )}
+          </Box>
+          <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
+            <MenuItem
+              onClick={() => {
+                setMenuAnchor(null);
+                onNavigate(profileTabIndex);
+              }}
+            >
+              <ListItemIcon>
+                <PersonRoundedIcon fontSize="small" />
+              </ListItemIcon>
+              {t('nav.profile')}
+            </MenuItem>
+            {mayViewOthers && (
+              <MenuItem
+                onClick={() => {
+                  setMenuAnchor(null);
+                  setPickerOpen(true);
+                }}
+              >
+                <ListItemIcon>
+                  <VisibilityRoundedIcon fontSize="small" />
+                </ListItemIcon>
+                {viewed.isOther ? t('viewAs.viewingAs', { name: viewed.name }) : t('viewAs.menuLabel')}
+              </MenuItem>
+            )}
+          </Menu>
+          {mayViewOthers && (
+            <ViewAsSheet
+              open={pickerOpen}
+              onClose={() => setPickerOpen(false)}
+              sporters={profile?.allSporters ?? []}
+              viewedUserId={viewed.isOther ? viewed.userId : ''}
+              ownName={me?.displayName || me?.email || 'Mijzelf'}
+              ownPhotoURL={me?.photoURL}
+              onPick={(sporter) => {
+                setViewing(sporter ? { userId: sporter.userId, name: sporter.displayName?.trim() || sporter.email || 'Sporter', photoURL: sporter.photoURL } : null);
+                setPickerOpen(false);
+              }}
+            />
+          )}
+        </>
       )}
     </Box>
   );

@@ -26,17 +26,18 @@ export function ViewAsProvider({ children }: { children: ReactNode }) {
 
   const ownUserId = profile?.profile?.userId ?? null;
   const ownName = profile?.profile?.displayName || profile?.profile?.email || 'Mijzelf';
+  const ownPhotoURL = profile?.profile?.photoURL;
   const mayViewOthers = profile?.isTrainer === true;
 
   const setViewing = useCallback((next: ViewAsSelection | null) => setSelection(next), []);
 
   const value = useMemo<ViewAsState>(
     () => ({
-      viewed: resolveViewedUser(ownUserId, ownName, mayViewOthers, selection),
+      viewed: resolveViewedUser(ownUserId, ownName, ownPhotoURL, mayViewOthers, selection),
       mayViewOthers,
       setViewing,
     }),
-    [ownUserId, ownName, mayViewOthers, selection, setViewing]
+    [ownUserId, ownName, ownPhotoURL, mayViewOthers, selection, setViewing]
   );
 
   return <ViewAsContext.Provider value={value}>{children}</ViewAsContext.Provider>;
@@ -52,11 +53,11 @@ export function useViewAs(): ViewAsState {
   const fallbackName = profile?.profile?.displayName || profile?.profile?.email || 'Mijzelf';
   const fallback = useMemo<ViewAsState>(
     () => ({
-      viewed: { userId: profile?.profile?.userId ?? '', name: fallbackName, isOther: false },
+      viewed: { userId: profile?.profile?.userId ?? '', name: fallbackName, photoURL: profile?.profile?.photoURL, isOther: false },
       mayViewOthers: false,
       setViewing: () => {},
     }),
-    [profile?.profile?.userId, fallbackName]
+    [profile?.profile?.userId, fallbackName, profile?.profile?.photoURL]
   );
   return ctx ?? fallback;
 }

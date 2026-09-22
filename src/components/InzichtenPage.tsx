@@ -8,7 +8,6 @@ const OefeningenPage = lazy(() => import('./OefeningenPage').then((m) => ({ defa
 import { LogsPage } from './LogsPage';
 import { LeaderboardPage } from './LeaderboardPage';
 import { NutritionInsights } from './NutritionInsights';
-import { SporterSelect } from './inzichten/SporterSelect';
 
 export const INZICHTEN_SUB = {
   INZICHTEN: 0,
@@ -46,8 +45,6 @@ export const InzichtenPage = ({
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
-      {/* Staat boven de tabbladen, niet erin: de keuze geldt voor alle inzichten tegelijk. */}
-      <SporterSelect />
       <Tabs
         value={subTab}
         onChange={(_, v: number) => setSubTab(v)}
