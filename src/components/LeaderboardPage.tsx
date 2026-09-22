@@ -1,21 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Box,
-  Typography,
-  ToggleButton,
-  ToggleButtonGroup,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar,
-  Alert,
-  Chip,
-  IconButton,
-  Popover,
-} from '@mui/material';
-import EmojiEventsRoundedIcon from '@mui/icons-material/EmojiEventsRounded';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import { PageLayout, ContentCard } from './layout';
+import { Box, Typography, ToggleButton, ToggleButtonGroup, Alert } from '@mui/material';
+import { PageLayout, ContentCard, EmptyState } from './layout';
 import { UserAvatar } from './UserAvatar';
 import {
   fetchPublicLeaderboard,
@@ -24,14 +9,22 @@ import {
 } from '../services/leaderboardPublicService';
 import { isFirebaseConfigured } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import { designTokens } from '../theme/designTokens';
+import { segmentedToggleSx } from '../theme/segmentedToggle';
 
 type Period = '7d' | '30d';
 
-function medalForRank(i: number): string | null {
-  if (i === 0) return '🥇';
-  if (i === 1) return '🥈';
-  if (i === 2) return '🥉';
-  return null;
+const POINT_RULES: [string, string][] = [
+  ['Frequentie', '10 punten per trainingsdag'],
+  ['Volume', '1 punt per gelogde set'],
+  ['Progressie', '5 punten per kilo boven je eerste log'],
+];
+
+/** Zwaarste lift in de periode als onderregel, zoals Figma: "Barbell Deadlift 180 kg". */
+function bestLiftFor(r: PublicLeaderboardEntry, period: Period): string | null {
+  const name = (period === '7d' ? r.exerciseName7d : r.exerciseName30d)?.trim();
+  const kg = period === '7d' ? r.weightKg7d : r.weightKg30d;
+  return name && kg > 0 ? `${name} ${kg.toLocaleString('nl-NL')} kg` : null;
 }
 
 function ptsForPeriod(r: PublicLeaderboardEntry, period: Period) {
@@ -44,8 +37,6 @@ export function LeaderboardPage() {
   const [rows, setRows] = useState<PublicLeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [infoAnchor, setInfoAnchor] = useState<HTMLElement | null>(null);
-  const infoOpen = Boolean(infoAnchor);
 
   const load = useCallback(async (quiet = false) => {
     if (!isFirebaseConfigured()) {
@@ -122,132 +113,116 @@ export function LeaderboardPage() {
 
   return (
     <PageLayout maxWidth="none">
-      <ContentCard>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 2 }}>
-          <EmojiEventsRoundedIcon color="primary" />
-          <Typography variant="h5" component="h2" sx={{ fontWeight: 600, flex: 1 }}>
-            Ranglijst
-          </Typography>
-          <IconButton
-            size="small"
-            aria-label="Uitleg ranglijst"
-            aria-describedby={infoOpen ? 'leaderboard-info-popover' : undefined}
-            aria-expanded={infoOpen}
-            onClick={(e) => setInfoAnchor(infoOpen ? null : e.currentTarget)}
-            sx={{ color: 'text.secondary' }}
-          >
-            <InfoOutlinedIcon fontSize="small" />
-          </IconButton>
-          <Popover
-            id="leaderboard-info-popover"
-            open={infoOpen}
-            anchorEl={infoAnchor}
-            onClose={() => setInfoAnchor(null)}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-            slotProps={{
-              paper: {
-                sx: { maxWidth: 320, p: 2 },
-              },
-            }}
-          >
-            <Typography variant="body2" color="text.secondary" component="div">
-              Je <strong>score</strong> combineert drie dingen in de gekozen periode:
-              <br />• <strong>Frequentie</strong> — 10 punten per trainingsdag
-              <br />• <strong>Volume</strong> — 1 punt per gelogde set
-              <br />• <strong>Progressie</strong> — 5 punten per kg dat je zwaarder tilt dan je eerste log
-              <br />
-              Zo tellen consistentie en vooruitgang mee, niet alleen brute kracht. Naam of Anoniem: aanpassen onder{' '}
-              <strong>Profiel</strong>.
-            </Typography>
-          </Popover>
-        </Box>
+      {!firebaseOk && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Firebase is niet geconfigureerd — de ranglijst is dan niet beschikbaar.
+        </Alert>
+      )}
 
-        {!firebaseOk && (
-          <Alert severity="info" sx={{ mb: 2 }}>
-            Firebase is niet geconfigureerd — de ranglijst is dan niet beschikbaar.
-          </Alert>
-        )}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-            {error}
-          </Alert>
-        )}
+      <ToggleButtonGroup
+        size="small"
+        exclusive
+        value={period}
+        onChange={(_, v: Period | null) => v && setPeriod(v)}
+        sx={{ ...segmentedToggleSx, mb: 2 }}
+        aria-label="Periode"
+      >
+        <ToggleButton value="7d">7 dagen</ToggleButton>
+        <ToggleButton value="30d">30 dagen</ToggleButton>
+      </ToggleButtonGroup>
 
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-            Periode
-          </Typography>
-          <ToggleButtonGroup
-            size="small"
-            exclusive
-            value={period}
-            onChange={(_, v: Period | null) => v && setPeriod(v)}
-          >
-            <ToggleButton value="7d">7 dagen</ToggleButton>
-            <ToggleButton value="30d">30 dagen</ToggleButton>
-          </ToggleButtonGroup>
-        </Box>
-
-        {loading ? (
-          <Typography color="text.secondary">Laden…</Typography>
-        ) : sorted.length === 0 ? (
-          <Typography color="text.secondary">
-            Nog geen deelnemers met data in deze periode, of iedereen heeft zich onder <strong>Profiel</strong> uitgezet.
-            Log oefeningen met naam en gewicht om te verschijnen.
-          </Typography>
-        ) : (
-          <List disablePadding>
-            {sorted.map((r, i) => {
-              const pts = ptsForPeriod(r, period);
-              const medal = medalForRank(i);
-              const isYou = uid != null && r.userId === uid;
-              const secondary =
-                pts.points > 0
-                  ? `${pts.frequency} ${pts.frequency === 1 ? 'training' : 'trainingen'} · ${pts.volume} sets${pts.progressionKg > 0 ? ` · +${pts.progressionKg.toLocaleString('nl-NL')} kg progressie` : ''}`
-                  : 'Nog niet getraind in deze periode';
-              return (
-                <ListItem
-                  key={r.userId}
-                  sx={{
-                    borderRadius: 1,
-                    mb: 0.5,
-                    alignItems: 'flex-start',
-                    bgcolor: isYou ? 'action.selected' : 'transparent',
-                  }}
-                >
-                  <ListItemAvatar sx={{ minWidth: 52 }}>
+      {/* Lijst links, uitleg rechts (Figma "Leaderboard"); op een telefoon staat de uitleg eronder. */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '9fr 5fr' }, gap: 2.5, alignItems: 'start' }}>
+        <Box sx={{ minWidth: 0 }}>
+          {loading ? (
+            <Typography color="text.secondary">Laden…</Typography>
+          ) : sorted.length === 0 ? (
+            <ContentCard>
+              <EmptyState>
+                Nog geen deelnemers met data in deze periode, of iedereen heeft zich onder Profiel uitgezet. Log oefeningen
+                met naam en gewicht om te verschijnen.
+              </EmptyState>
+            </ContentCard>
+          ) : (
+            <Box component="ol" sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {sorted.map((r, i) => {
+                const pts = ptsForPeriod(r, period);
+                const isYou = uid != null && r.userId === uid;
+                const lift = bestLiftFor(r, period);
+                const secondary = lift
+                  ? lift
+                  : pts.points > 0
+                    ? `${pts.frequency} ${pts.frequency === 1 ? 'training' : 'trainingen'} · ${pts.volume} sets`
+                    : 'Nog niet getraind in deze periode';
+                return (
+                  <Box
+                    component="li"
+                    key={r.userId}
+                    aria-current={isYou ? 'true' : undefined}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: { xs: 1.5, md: 2 },
+                      minHeight: 60,
+                      px: { xs: 2, md: 2.5 },
+                      py: 1,
+                      borderRadius: 3,
+                      bgcolor: isYou ? designTokens.secondaryContainer : designTokens.cardBackground,
+                      color: isYou ? designTokens.onSecondaryContainer : 'text.primary',
+                    }}
+                  >
+                    <Typography sx={{ width: 20, fontSize: 14, lineHeight: '20px', color: isYou ? 'inherit' : 'text.secondary', flexShrink: 0 }}>
+                      {i + 1}
+                    </Typography>
                     <UserAvatar
                       name={r.visibility === 'named' ? r.displayLabel : 'Anoniem'}
                       photoURL={r.visibility === 'named' ? r.photoURL : null}
-                      size={40}
+                      size={34}
                     />
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'nowrap' }}>
-                        <Typography component="span" variant="body1" fontWeight={600} sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {medal ? `${medal} ` : `${i + 1}. `}
-                          {r.displayLabel}
-                        </Typography>
-                        {isYou && <Chip size="small" label="Jij" color="primary" variant="outlined" />}
-                        <Box sx={{ ml: 'auto', flexShrink: 0 }}>
-                          <Typography component="span" variant="body1" fontWeight={700}>
-                            {pts.points} pt
-                          </Typography>
-                        </Box>
-                      </Box>
-                    }
-                    secondary={secondary}
-                    secondaryTypographyProps={{ component: 'div' }}
-                  />
-                </ListItem>
-              );
-            })}
-          </List>
-        )}
-      </ContentCard>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography sx={{ fontSize: 14, fontWeight: 500, lineHeight: '20px' }} noWrap>
+                        {r.displayLabel}
+                        {isYou && (
+                          <Box component="span" sx={{ fontWeight: 400, opacity: 0.7 }}>
+                            {' '}
+                            · jij
+                          </Box>
+                        )}
+                      </Typography>
+                      <Typography sx={{ fontSize: 11, lineHeight: '16px', opacity: 0.75 }} noWrap>
+                        {secondary}
+                      </Typography>
+                    </Box>
+                    <Typography sx={{ fontSize: 14, fontWeight: 600, lineHeight: '20px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {pts.points.toLocaleString('nl-NL')} pt
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
+        </Box>
+
+        <Box sx={{ bgcolor: designTokens.cardBackground, borderRadius: `${designTokens.cardRadius}px`, p: { xs: 2, md: 3 } }}>
+          <Typography sx={{ fontSize: 14, fontWeight: 500, lineHeight: '20px', mb: 1.5 }}>Hoe punten werken</Typography>
+          {POINT_RULES.map(([label, rule]) => (
+            <Box key={label} sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, py: 0.75 }}>
+              <Typography sx={{ fontSize: 12, fontWeight: 500, lineHeight: '16px' }}>{label}</Typography>
+              <Typography sx={{ fontSize: 12, lineHeight: '16px', color: 'text.secondary', textAlign: 'right' }}>{rule}</Typography>
+            </Box>
+          ))}
+          <Typography sx={{ fontSize: 11, lineHeight: '14px', color: 'text.secondary', mt: 1.5 }}>
+            Alleen totalen worden gedeeld. Je logs blijven privé; onder Profiel kies je of je met naam, anoniem of helemaal
+            niet meedoet.
+          </Typography>
+        </Box>
+      </Box>
     </PageLayout>
   );
 }
