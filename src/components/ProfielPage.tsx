@@ -220,9 +220,7 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
       {uid && p?.role === 'sporter' && <SubscriptionCard userId={uid} />}
       {uid && p?.role === 'sporter' && <BookingsCard userId={uid} />}
       <ContentCard>
-        <Typography variant="h5" component="h1" sx={{ fontWeight: 600, mb: 1 }}>
-          Mijn profiel
-        </Typography>
+        {/* Bovenbalk toont al "Profiel"; geen tweede titel nodig. */}
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
           Beheer je gegevens. Je naam wordt gebruikt in de app en in beheeroverzichten.
         </Typography>
