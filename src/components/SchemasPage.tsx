@@ -688,10 +688,24 @@ export const SchemasPage = () => {
     <Box sx={{ flex: 1, minHeight: 0 }}>
     <PageLayout>
       <ContentCard>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-          <Typography variant="h5" sx={{ fontWeight: 600 }}>
-            {activeCategory || 'Workouts'}
-          </Typography>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: activeCategory ? 'space-between' : 'flex-end',
+            gap: 2,
+            mb: 2,
+            flexWrap: 'wrap',
+          }}
+        >
+          {/* Boven de kaart staat al "Workouts" in de bovenbalk; die titel hoeft hier niet nog
+              eens te staan. Bij een gekozen categorie (bijv. "Groepslessen") is de naam wel
+              nieuwe informatie, dus die tonen we hier nog wel. */}
+          {activeCategory && (
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              {activeCategory}
+            </Typography>
+          )}
           {canCreateWorkouts && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
               {isTrainer && (
