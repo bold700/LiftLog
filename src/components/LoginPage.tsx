@@ -3,17 +3,12 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   Divider,
   IconButton,
   InputAdornment,
   TextField,
   Typography,
 } from '@mui/material';
-import MailOutlineRoundedIcon from '@mui/icons-material/MailOutlineRounded';
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import PersonOutlineRoundedIcon from '@mui/icons-material/PersonOutlineRounded';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
 import { useAuth } from '../context/AuthContext';
@@ -112,38 +107,60 @@ export function LoginPage() {
 
   if (!auth) return null;
 
+  // Geen sterretje achter het label (Figma); de velden blijven wel verplicht via `required`.
+  const fieldSx = { '& .MuiOutlinedInput-root': { borderRadius: '4px', minHeight: 56 }, '& .MuiFormLabel-asterisk': { display: 'none' } } as const;
+  const bigButtonSx = { height: 56, borderRadius: '28px', textTransform: 'none', fontWeight: 500, fontSize: 15 } as const;
+
   return (
-    <Box
-      sx={{
-        minHeight: '100dvh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        px: 2,
-        py: 3,
-        bgcolor: 'background.default',
-      }}
-    >
-      <Card
-        elevation={0}
+    <Box sx={{ minHeight: '100dvh', display: 'flex', bgcolor: 'background.default' }}>
+      {/* Desktop (Figma "Sign in"): links een merkpaneel in Primary met logo en slogan. */}
+      <Box
         sx={{
-          width: '100%',
-          maxWidth: 400,
-          borderRadius: 6,
-          bgcolor: 'background.paper',
-          border: '1px solid',
-          borderColor: 'divider',
+          display: { xs: 'none', md: 'flex' },
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          width: { md: 440, lg: 580 },
+          flexShrink: 0,
+          bgcolor: 'primary.main',
+          color: 'primary.contrastText',
+          px: { md: 6, lg: 9 },
+          py: 9,
         }}
       >
-        <CardContent sx={{ p: { xs: 3, sm: 4 }, '&:last-child': { pb: { xs: 3, sm: 4 } } }}>
-          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-            <VaLogo />
-          </Box>
-          <Typography variant="h5" component="h1" align="center" sx={{ fontWeight: 600 }}>
-            {isRegister ? 'Account aanmaken' : 'Inloggen'}
+        <Box sx={{ color: 'primary.contrastText', '& svg': { color: 'inherit' } }}>
+          <VaLogo height={40} />
+        </Box>
+        <Box>
+          <Typography component="p" sx={{ fontSize: { md: 36, lg: 44 }, fontWeight: 500, lineHeight: 1.18, letterSpacing: '-0.01em' }}>
+            Je training, voeding en voortgang op één plek.
           </Typography>
-          <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 0.5, mb: 3 }}>
-            Van As Personal Training Logs
+          <Typography sx={{ mt: 2.5, fontSize: 14, lineHeight: '22px', opacity: 0.85, maxWidth: 440 }}>
+            Schema&apos;s, lessen, voeding en lichaamssamenstelling, samen met je trainer.
+          </Typography>
+        </Box>
+      </Box>
+
+      <Box
+        sx={{
+          flex: 1,
+          display: 'flex',
+          alignItems: { xs: 'flex-start', md: 'center' },
+          justifyContent: 'center',
+          px: 3,
+          pt: { xs: 'calc(56px + env(safe-area-inset-top, 0px))', md: 4 },
+          pb: 4,
+        }}
+      >
+        <Box sx={{ width: '100%', maxWidth: 400 }}>
+          {/* Telefoon: logo bovenaan, zoals Figma. */}
+          <Box sx={{ display: { xs: 'block', md: 'none' }, mb: 5 }}>
+            <VaLogo height={36} />
+          </Box>
+          <Typography component="h1" sx={{ fontSize: { xs: 32, md: 36 }, fontWeight: 500, lineHeight: 1.2 }}>
+            {isRegister ? 'Account aanmaken' : 'Welkom terug'}
+          </Typography>
+          <Typography sx={{ fontSize: 14, color: 'text.secondary', mt: 1, mb: { xs: 5, md: 5.5 } }}>
+            {isRegister ? 'Maak een account aan om je training te loggen.' : 'Log in om je training te loggen en je voortgang te volgen.'}
           </Typography>
 
           {(auth.error || localError) && (
@@ -167,13 +184,7 @@ export function LoginPage() {
                 autoComplete="name"
                 placeholder="Voor je profiel"
                 fullWidth
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <PersonOutlineRoundedIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
+                sx={fieldSx}
               />
             )}
             <TextField
@@ -186,13 +197,7 @@ export function LoginPage() {
               autoComplete="email"
               placeholder="jij@voorbeeld.nl"
               fullWidth
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <MailOutlineRoundedIcon fontSize="small" />
-                  </InputAdornment>
-                ),
-              }}
+              sx={fieldSx}
             />
             <TextField
               id="login-password"
@@ -203,12 +208,8 @@ export function LoginPage() {
               required
               autoComplete={isRegister ? 'new-password' : 'current-password'}
               fullWidth
+              sx={fieldSx}
               InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <LockOutlinedIcon fontSize="small" />
-                  </InputAdornment>
-                ),
                 endAdornment: (
                   <InputAdornment position="end">
                     <IconButton
@@ -223,40 +224,25 @@ export function LoginPage() {
                 ),
               }}
             />
-            <Button
-              type="submit"
-              variant="contained"
-              size="large"
-              disabled={submitting}
-              fullWidth
-              sx={{ mt: 0.5, borderRadius: '24px', textTransform: 'none', fontWeight: 600, py: 1.25 }}
-            >
-              {submitting ? 'Even geduld…' : isRegister ? 'Account aanmaken' : 'Inloggen'}
-            </Button>
             {!isRegister && (
               <Button
                 type="button"
                 variant="text"
                 size="small"
                 onClick={handleForgotPassword}
-                sx={{ alignSelf: 'center', textTransform: 'none' }}
+                sx={{ alignSelf: 'flex-end', textTransform: 'none', fontWeight: 500, mt: -0.5 }}
               >
                 Wachtwoord vergeten?
               </Button>
             )}
+            <Button type="submit" variant="contained" disableElevation disabled={submitting} fullWidth sx={{ ...bigButtonSx, mt: isRegister ? 1 : 1.5 }}>
+              {submitting ? 'Even geduld…' : isRegister ? 'Account aanmaken' : 'Inloggen'}
+            </Button>
           </Box>
 
-          <Divider sx={{ my: 2.5 }} />
+          <Divider sx={{ my: 3, fontSize: 12, color: 'text.secondary' }}>of</Divider>
 
-          <Button
-            type="button"
-            variant="outlined"
-            size="large"
-            disabled={submitting}
-            onClick={handleGoogle}
-            fullWidth
-            sx={{ borderRadius: '24px', textTransform: 'none', fontWeight: 600, py: 1.25 }}
-          >
+          <Button type="button" variant="outlined" disabled={submitting} onClick={handleGoogle} fullWidth sx={{ ...bigButtonSx, borderColor: 'divider' }}>
             Doorgaan met Google
           </Button>
 
@@ -265,7 +251,7 @@ export function LoginPage() {
             variant="text"
             size="small"
             fullWidth
-            sx={{ mt: 1.5, textTransform: 'none' }}
+            sx={{ mt: 2, textTransform: 'none' }}
             onClick={() => {
               auth.clearError();
               setIsRegister((v) => !v);
@@ -273,8 +259,8 @@ export function LoginPage() {
           >
             {isRegister ? 'Al een account? Inloggen' : 'Geen account? Account aanmaken'}
           </Button>
-        </CardContent>
-      </Card>
+        </Box>
+      </Box>
     </Box>
   );
 }
