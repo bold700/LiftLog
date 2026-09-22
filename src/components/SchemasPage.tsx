@@ -2,10 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Typography,
   Box,
-  IconButton,
   Button,
-  Menu,
-  MenuItem,
   Tabs,
   Tab,
   useMediaQuery,
@@ -13,7 +10,6 @@ import {
   Snackbar,
   CircularProgress,
 } from '@mui/material';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { useWorkouts } from '../hooks/useWorkouts';
 import {
   getSortedDayIndices,
@@ -44,15 +40,15 @@ import { getMyPendingRequest } from '../services/workoutRequestService';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { useProfile } from '../context/ProfileContext';
 import { useShowBackButton } from '../context/TopBarBackContext';
-import { PageLayout, ContentCard, EmptyState, HeaderActions } from './layout';
+import { PageLayout, EmptyState, HeaderActions } from './layout';
 import { SchemaDeleteDialog } from './schemas/SchemaDeleteDialog';
 import { GroupSessionSetupDialog } from './schemas/GroupSessionSetupDialog';
 import { WorkoutRequestDialog } from './schemas/WorkoutRequestDialog';
 import { NewSchemaDialog } from './schemas/NewSchemaDialog';
 import { LesroosterImportDialog } from './schemas/LesroosterImportDialog';
 import { SchemaPrintView } from './schemas/SchemaPrintView';
-import { SchemaPeriodSummary } from './schemas/SchemaPeriodSummary';
-import { SchemaDayCard } from './schemas/SchemaDayCard';
+import { SchemaDetailView } from './schemas/SchemaDetailView';
+import { usePageTitle } from '../context/PageTitleContext';
 import { SchemaListFilters } from './schemas/SchemaListFilters';
 import type { AssigneeOption } from './schemas/SchemaListFilters';
 import { SchemaListCard } from './schemas/SchemaListCard';
@@ -80,7 +76,7 @@ export const SchemasPage = () => {
     isTrainer,
   } = useWorkouts();
   const profile = useProfile();
-  const sportersForAssignment = isTrainer ? (profile?.allSporters ?? []) : [];
+  const sportersForAssignment = useMemo(() => (isTrainer ? (profile?.allSporters ?? []) : []), [isTrainer, profile?.allSporters]);
   const [view, setView] = useState<View>('list');
   const [selectedSchemaId, setSelectedSchemaId] = useState<string | null>(null);
   const theme = useTheme();
@@ -158,7 +154,6 @@ export const SchemasPage = () => {
   const [justLoggedExerciseId, setJustLoggedExerciseId] = useState<string | null>(null);
   const [openNewSchemaDialog, setOpenNewSchemaDialog] = useState(false);
   const [openLesroosterImport, setOpenLesroosterImport] = useState(false);
-  const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
   /** Statusmelding tijdens het maken van de PDF (plaatjes ophalen kan even duren). */
   const [pdfStatus, setPdfStatus] = useState<string | null>(null);
   const [pdfFailed, setPdfFailed] = useState(false);
@@ -193,6 +188,8 @@ export const SchemasPage = () => {
   }, [view, loadSchemas]);
 
   const selectedSchema = selectedSchemaId ? getSchemaById(selectedSchemaId) : null;
+  // Op de detailweergave staat de naam van de workout in de paginakop (Figma), niet "Workouts".
+  usePageTitle(view === 'detail' && selectedSchema ? selectedSchema.name : null);
 
   const handleBack = useCallback(() => {
     setView('list');
@@ -202,14 +199,6 @@ export const SchemasPage = () => {
   const handleSchemaClick = useCallback((schema: Schema) => {
     setSelectedSchemaId(schema.id);
     setView('detail');
-  }, []);
-
-  const handleOpenActions = useCallback((event: React.MouseEvent<HTMLElement>) => {
-    setActionsAnchorEl(event.currentTarget);
-  }, []);
-
-  const handleCloseActions = useCallback(() => {
-    setActionsAnchorEl(null);
   }, []);
 
   const handleNewSchemaClick = useCallback(() => {
@@ -270,6 +259,26 @@ export const SchemasPage = () => {
       setView('edit');
     },
     [createEmptySchema, saveSchema, loadSchemas]
+  );
+
+  /** PDF van de workout; jsPDF (~400 kB) laadt pas als er echt een PDF gemaakt wordt. */
+  const handleDownloadPdf = useCallback(
+    async (schema: Schema) => {
+      const clientProfile = sportersForAssignment.find((s) => s.userId === schema.clientId);
+      const clientName = clientProfile?.displayName || clientProfile?.email || null;
+      const trainerName = profile?.profile?.displayName || profile?.profile?.email || null;
+      const participantNames = (schema.participantIds ?? []).filter((uid) => rosterById.has(uid)).map((uid) => nameOf(uid));
+      setPdfStatus('PDF maken…');
+      try {
+        const { exportSchemaToPdf } = await import('../utils/pdfExport');
+        await exportSchemaToPdf(schema, { clientName, trainerName, participantNames, onProgress: setPdfStatus });
+      } catch (err) {
+        console.error('PDF maken mislukt', err);
+        setPdfFailed(true);
+      }
+      setPdfStatus(null);
+    },
+    [sportersForAssignment, profile?.profile?.displayName, profile?.profile?.email, rosterById, nameOf]
   );
 
   const handleCancelEdit = useCallback(() => {
@@ -479,144 +488,39 @@ export const SchemasPage = () => {
   if (view === 'detail' && selectedSchema) {
     return (
       <PageLayout maxWidth="none">
-        <ContentCard>
+        <Box>
             {/* Print-vriendelijke variant: eenvoudige header + tabel per dag */}
             <SchemaPrintView schema={selectedSchema} />
 
-            {/* Normale scherm-layout */}
-            {/* Eén regel: de titel kort af met … zodat het menu rechts blijft staan. */}
-            <Box className="workout-detail-screen" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'nowrap', gap: 1 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: '1 1 auto', minWidth: 0 }}>
-                <Typography
-                  variant="h6"
-                  sx={{
-                    fontWeight: 600,
-                    // minWidth 0 is nodig: een flex-item krimpt anders niet onder zijn tekstbreedte.
-                    minWidth: 0,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                  title={selectedSchema.name}
-                >
-                  {selectedSchema.name}
-                </Typography>
-              </Box>
-              {isTrainer && selectedSchema && (
-                <>
-                  <IconButton
-                    size="small"
-                    aria-label="Meer acties"
-                    onClick={handleOpenActions}
-                    sx={{ flexShrink: 0 }}
-                  >
-                    <MoreVertIcon fontSize="small" />
-                  </IconButton>
-                  <Menu
-                    anchorEl={actionsAnchorEl}
-                    open={Boolean(actionsAnchorEl)}
-                    onClose={handleCloseActions}
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                    transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                  >
-                    <MenuItem
-                      onClick={() => {
-                        handleCloseActions();
-                        setView('edit');
-                      }}
-                    >
-                      Bewerken
-                    </MenuItem>
-                    <MenuItem
-                      onClick={() => {
-                        handleCloseActions();
-                        handleDuplicateSchema(selectedSchema);
-                      }}
-                    >
-                      Dupliceren
-                    </MenuItem>
-                    <MenuItem
-                      disabled={pdfStatus !== null}
-                      onClick={async () => {
-                        handleCloseActions();
-                        const clientProfile = sportersForAssignment.find(
-                          (s) => s.userId === selectedSchema.clientId
-                        );
-                        const clientName =
-                          clientProfile?.displayName || clientProfile?.email || null;
-                        const trainerName =
-                          profile?.profile?.displayName || profile?.profile?.email || null;
-                        const participantNames = (selectedSchema.participantIds ?? [])
-                          .filter((uid) => rosterById.has(uid))
-                          .map((uid) => nameOf(uid));
-                        setPdfStatus('PDF maken…');
-                        try {
-                          // jsPDF (~400 kB) pas laden als er echt een PDF gemaakt wordt.
-                          const { exportSchemaToPdf } = await import('../utils/pdfExport');
-                          await exportSchemaToPdf(selectedSchema, {
-                            clientName,
-                            trainerName,
-                            participantNames,
-                            onProgress: setPdfStatus,
-                          });
-                        } catch (err) {
-                          console.error('PDF maken mislukt', err);
-                          setPdfFailed(true);
-                          setPdfStatus(null);
-                          return;
-                        }
-                        setPdfStatus(null);
-                      }}
-                    >
-                      Download PDF
-                    </MenuItem>
-                    <MenuItem
-                      onClick={() => {
-                        handleCloseActions();
-                        setOpenDeleteDialog(true);
-                      }}
-                    >
-                      Verwijderen
-                    </MenuItem>
-                  </Menu>
-                </>
-              )}
-            </Box>
-
-            {selectedSchema.startDate && selectedSchema.endDate && (
-              <SchemaPeriodSummary
+            <Box className="workout-detail-screen">
+              <SchemaDetailView
+                key={selectedSchema.id}
                 schema={selectedSchema}
-                startDate={selectedSchema.startDate}
-                endDate={selectedSchema.endDate}
+                allSchemas={schemas}
+                assigneeOf={assigneeSummary}
+                isStaff={isTrainer}
+                dayOrder={getSortedDayIndices(selectedSchema)}
+                initialDayIndex={
+                  isWeeklyGroupSchema(selectedSchema)
+                    ? getCurrentWeekDayIndex(selectedSchema) ?? getSortedDayIndices(selectedSchema)[0] ?? 0
+                    : getSortedDayIndices(selectedSchema)[0] ?? 0
+                }
+                isCurrentWeekDay={(dayIndex) =>
+                  isThisWeek(selectedSchema) ||
+                  (isWeeklyGroupSchema(selectedSchema) && getCurrentWeekDayIndex(selectedSchema) === dayIndex)
+                }
+                pdfBusy={pdfStatus !== null}
+                onSelectSchema={(s) => setSelectedSchemaId(s.id)}
+                onStart={(dayIndex) =>
+                  isTrainer && selectedSchema.audience === 'group' ? handleOpenGroupSetup(dayIndex) : handleStartTraining(dayIndex)
+                }
+                onPdf={() => void handleDownloadPdf(selectedSchema)}
+                onEdit={() => setView('edit')}
+                onDuplicate={() => void handleDuplicateSchema(selectedSchema)}
+                onDelete={() => setOpenDeleteDialog(true)}
+                onBack={() => window.history.back()}
               />
-            )}
-
-            {selectedSchema.days.length === 0 ? (
-              <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-                Nog geen dagen. Klik op Bewerken om dagen en oefeningen toe te voegen.
-              </Typography>
-            ) : (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {getSortedDayIndices(selectedSchema).map((dayIndex) => {
-                  const isCurrentWeek =
-                    isThisWeek(selectedSchema) ||
-                    (isWeeklyGroupSchema(selectedSchema) && getCurrentWeekDayIndex(selectedSchema) === dayIndex);
-                  return (
-                    <SchemaDayCard
-                      key={dayIndex}
-                      schema={selectedSchema}
-                      dayIndex={dayIndex}
-                      isCurrentWeek={isCurrentWeek}
-                      onStart={() =>
-                        isTrainer && selectedSchema.audience === 'group'
-                          ? handleOpenGroupSetup(dayIndex)
-                          : handleStartTraining(dayIndex)
-                      }
-                    />
-                  );
-                })}
-              </Box>
-            )}
+            </Box>
 
         <SchemaDeleteDialog
           open={openDeleteDialog}
@@ -624,7 +528,7 @@ export const SchemasPage = () => {
           onClose={handleCloseDeleteDialog}
           onConfirm={handleConfirmDelete}
         />
-      </ContentCard>
+      </Box>
 
       <GroupSessionSetupDialog
         open={groupSetup.open}

@@ -31,7 +31,7 @@ export function schemaEndLabel(schema: Pick<Schema, 'endDate' | 'audience'>, now
   return schema.audience === 'group' ? 'Wekelijks' : 'Geen einddatum';
 }
 
-function audiencePill(schema: Schema, assignee: SchemaListCardProps['assignee'], isStaff: boolean) {
+export function audiencePill(schema: Schema, assignee: SchemaListCardProps['assignee'], isStaff: boolean) {
   if (schema.audience === 'group') {
     const n = schema.participantIds?.length ?? 0;
     return { label: n > 0 ? `Groepsles · ${n} ${n === 1 ? 'persoon' : 'personen'}` : 'Groepsles', bg: designTokens.tertiaryContainer, fg: designTokens.onTertiaryContainer };
