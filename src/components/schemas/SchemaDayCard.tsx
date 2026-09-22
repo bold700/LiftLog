@@ -6,7 +6,7 @@
 import { Card, CardContent, Box, Typography, Button } from '@mui/material';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import type { Schema } from '../../types';
-import { getLastSessionDateForDay } from '../../utils/schemaSessionUtils';
+import { getLastSessionDateForDay, formatLastTrained } from '../../utils/schemaSessionUtils';
 import { getExerciseProgressInPeriod } from '../../utils/schemaProgressUtils';
 import { formatWarmupSummary, formatCardioSummary, formatCooldownSummary, formatStretchingSummary } from '../../utils/format';
 import { ExerciseDbDemo } from '../ExerciseDbDemo';
@@ -64,9 +64,7 @@ export const SchemaDayCard = ({ schema, dayIndex, isCurrentWeek, onStart }: Sche
           const last = getLastSessionDateForDay(schema.id, dayIndex);
           return (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-              {last
-                ? `Laatst getraind: ${new Date(last).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}`
-                : 'Nog niet getraind'}
+              {last ? `Laatst getraind: ${formatLastTrained(last)}` : 'Nog niet getraind'}
             </Typography>
           );
         })()}

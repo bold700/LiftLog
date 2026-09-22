@@ -78,3 +78,21 @@ export function getMarkedCompleteTime(
   }
   return latest;
 }
+
+/**
+ * Meest recente completedAt voor deze dag, ongeacht wanneer dat was (voor het bepalen van de
+ * volgende training in de cyclus — dat mag ook nog kloppen als het gemarkeerd is op een dag die
+ * langer dan 12 uur geleden is). 0 als nooit gemarkeerd.
+ */
+export function getLatestMarkedCompleteTimeEver(
+  schemaId: string,
+  schemaDayIndex: number
+): number {
+  let latest = 0;
+  for (const c of getCompletions()) {
+    if (c.schemaId !== schemaId || c.schemaDayIndex !== schemaDayIndex) continue;
+    const t = new Date(c.completedAt).getTime();
+    if (t > latest) latest = t;
+  }
+  return latest;
+}
