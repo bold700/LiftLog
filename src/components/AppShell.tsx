@@ -68,16 +68,18 @@ function ProfileMenuButton({
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const ariaLabel = viewed.isOther ? `${t('nav.profile')} · ${t('viewAs.viewingAs', { name: viewed.name })}` : t('nav.profile');
+  const name = viewed.isOther ? viewed.name : me?.displayName || me?.email || t('nav.profile');
+  const avatarSize = showName ? 20 : 32;
   const avatarWithBadge = (
     <Box sx={{ position: 'relative', display: 'flex', flexShrink: 0 }}>
-      <UserAvatar name={viewed.isOther ? viewed.name : me?.displayName} photoURL={viewed.isOther ? viewed.photoURL : me?.photoURL} size={showName ? 28 : 32} />
+      <UserAvatar name={viewed.isOther ? viewed.name : me?.displayName} photoURL={viewed.isOther ? viewed.photoURL : me?.photoURL} size={avatarSize} />
       {viewed.isOther && (
         <SupervisorAccountRoundedIcon
           sx={{
             position: 'absolute',
             bottom: -3,
             right: -3,
-            fontSize: 16,
+            fontSize: showName ? 12 : 16,
             color: designTokens.onPrimary,
             bgcolor: designTokens.primary,
             borderRadius: '50%',
@@ -90,18 +92,27 @@ function ProfileMenuButton({
     </Box>
   );
 
-  // Op de zijbalk moet dit knopje er precies zo uitzien als Inzichten/Workouts/…: zelfde
-  // padding, icoonbreedte en tekststijl (railItemSx), anders springt het eruit als "iets anders".
+  // Op de zijbalk moet dit knopje er qua opbouw (icoongrootte, afstand, tekst) precies als de
+  // "Uitloggen"-knop eronder zijn — zelfde component (Button + startIcon), zodat de tekst
+  // automatisch op dezelfde plek begint en de twee als een setje onderaan staan.
   const avatarButton = showName ? (
-    <ListItemButton onClick={(e) => setMenuAnchor(e.currentTarget)} aria-label={ariaLabel} sx={railItemSx(false)}>
-      <ListItemIcon>{avatarWithBadge}</ListItemIcon>
-      <ListItemText
-        primary={viewed.isOther ? viewed.name : me?.displayName || me?.email || t('nav.profile')}
-        secondary={viewed.isOther ? t('viewAs.viewingAs', { name: viewed.name }) : undefined}
-        primaryTypographyProps={{ noWrap: true }}
-        secondaryTypographyProps={{ noWrap: true }}
-      />
-    </ListItemButton>
+    <Button
+      onClick={(e) => setMenuAnchor(e.currentTarget)}
+      aria-label={ariaLabel}
+      startIcon={avatarWithBadge}
+      sx={{ alignSelf: 'flex-start', maxWidth: '100%', minWidth: 0, mx: 1, mb: 0.5, color: 'text.primary', textTransform: 'none' }}
+    >
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="body2" fontWeight={600} noWrap component="span" sx={{ display: 'block' }}>
+          {name}
+        </Typography>
+        {viewed.isOther && (
+          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+            {t('viewAs.viewingAs', { name: viewed.name })}
+          </Typography>
+        )}
+      </Box>
+    </Button>
   ) : (
     <Box
       component="button"
