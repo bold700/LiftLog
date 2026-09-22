@@ -388,8 +388,57 @@ export function NutritionPage() {
 
   const periodLabel = period === 'day' ? t('nutrition.summary.day') : period === 'week' ? t('nutrition.summary.weekAvg') : t('nutrition.summary.monthAvg');
 
+  /* Samenvatting: kcal groot bovenaan, macro's als rijen met eigen kleur (zoals het Figma-ontwerp).
+     Op desktop in dagweergave staat dit in de linkerkolom naast het zoeken/loggen; bij week/maand
+     staat het gewoon boven de dagbalken, want daar is geen tweede kolom mee te vullen. */
+  const summaryCard = (
+    <Card sx={{ ...NESTED_CARD_SX, mb: 2 }}>
+      <CardContent sx={{ '&:last-child': { pb: 2 } }}>
+        <Typography variant="caption" color="text.secondary">
+          {periodLabel}
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
+          <Typography variant="h4" fontWeight={800}>
+            {shown.kcal}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {goal?.kcal ? t('nutrition.summary.ofKcal', { kcal: goal.kcal }) : t('nutrition.summary.kcal')}
+          </Typography>
+        </Box>
+        {goal?.kcal ? (
+          <LinearProgress
+            variant="determinate"
+            value={Math.min(100, (shown.kcal / goal.kcal) * 100)}
+            sx={{ mt: 1, mb: 2, height: 8, borderRadius: 1, bgcolor: designTokens.cardBorder, '& .MuiLinearProgress-bar': { bgcolor: designTokens.primary } }}
+          />
+        ) : (
+          <Box sx={{ mb: 2 }} />
+        )}
+        {MACRO_ROW_KEYS.map((key) => (
+          <Box key={key} sx={{ mb: 1.5, '&:last-child': { mb: 0 } }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
+              <Typography variant="body2" fontWeight={600}>
+                {t(`nutrition.macros.${key}`)}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {shown[key]} g{goal && goal[key] ? ` ${t('nutrition.summary.ofGrams', { grams: goal[key] })}` : ''}
+              </Typography>
+            </Box>
+            {goal && goal[key] > 0 && (
+              <LinearProgress
+                variant="determinate"
+                value={Math.min(100, (shown[key] / goal[key]) * 100)}
+                sx={{ mt: 0.5, height: 5, borderRadius: 1, bgcolor: designTokens.cardBorder, '& .MuiLinearProgress-bar': { bgcolor: designTokens.tertiary } }}
+              />
+            )}
+          </Box>
+        ))}
+      </CardContent>
+    </Card>
+  );
+
   return (
-    <PageLayout>
+    <PageLayout maxWidth="none">
       <ContentCard>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 1 }}>
           {/* Op de telefoon staat de titel al in de bovenbalk van de schil (zie PageTitle); hier alleen op desktop, en met flexGrow zodat "Doel aanpassen" ernaast rechts blijft staan. */}
@@ -426,87 +475,49 @@ export function NutritionPage() {
           <TextField type="date" size="small" label={period === 'day' ? t('nutrition.date') : t('nutrition.until')} value={date} onChange={(e) => setDate(e.target.value)} InputLabelProps={{ shrink: true }} />
         </Box>
 
-        {/* Samenvatting: kcal groot bovenaan, macro's als rijen met eigen kleur (zoals het Figma-ontwerp) */}
-        <Card sx={{ ...NESTED_CARD_SX, mb: 2 }}>
-          <CardContent sx={{ '&:last-child': { pb: 2 } }}>
-            <Typography variant="caption" color="text.secondary">
-              {periodLabel}
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
-              <Typography variant="h4" fontWeight={800}>
-                {shown.kcal}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {goal?.kcal ? t('nutrition.summary.ofKcal', { kcal: goal.kcal }) : t('nutrition.summary.kcal')}
-              </Typography>
-            </Box>
-            {goal?.kcal ? (
-              <LinearProgress
-                variant="determinate"
-                value={Math.min(100, (shown.kcal / goal.kcal) * 100)}
-                sx={{ mt: 1, mb: 2, height: 8, borderRadius: 1, bgcolor: designTokens.cardBorder, '& .MuiLinearProgress-bar': { bgcolor: designTokens.primary } }}
-              />
-            ) : (
-              <Box sx={{ mb: 2 }} />
-            )}
-            {MACRO_ROW_KEYS.map((key) => (
-              <Box key={key} sx={{ mb: 1.5, '&:last-child': { mb: 0 } }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
-                  <Typography variant="body2" fontWeight={600}>
-                    {t(`nutrition.macros.${key}`)}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {shown[key]} g{goal && goal[key] ? ` ${t('nutrition.summary.ofGrams', { grams: goal[key] })}` : ''}
-                  </Typography>
-                </Box>
-                {goal && goal[key] > 0 && (
-                  <LinearProgress
-                    variant="determinate"
-                    value={Math.min(100, (shown[key] / goal[key]) * 100)}
-                    sx={{ mt: 0.5, height: 5, borderRadius: 1, bgcolor: designTokens.cardBorder, '& .MuiLinearProgress-bar': { bgcolor: designTokens.tertiary } }}
-                  />
-                )}
-              </Box>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Week/Maand: dagbalken */}
+        {/* Buiten dagweergave (week/maand) is er geen tweede kolom om mee te vullen: samenvatting
+            en dagbalken staan dan gewoon onder elkaar, over de volle breedte. */}
         {period !== 'day' && (
-          <Card sx={{ ...NESTED_CARD_SX, mb: 2 }}>
-            <CardContent sx={{ '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                {t('nutrition.kcalPerDay')}
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'stretch', gap: period === 'week' ? 1 : 0.4, height: 120 }}>
-                {perDay.map((p) => (
-                  <Box key={p.date} sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', gap: 0.5, minWidth: 0, height: '100%' }}>
-                    <Box
-                      title={`${p.date}: ${p.kcal} kcal`}
-                      sx={{
-                        width: '80%',
-                        height: `${Math.round((p.kcal / maxKcal) * 100)}%`,
-                        minHeight: p.kcal > 0 ? 2 : 0,
-                        bgcolor: goal?.kcal && p.kcal > goal.kcal ? 'warning.main' : 'success.main',
-                        borderRadius: 1,
-                        transition: 'height 0.2s ease',
-                      }}
-                    />
-                    {period === 'week' && (
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>
-                        {p.date.slice(8)}
-                      </Typography>
-                    )}
-                  </Box>
-                ))}
-              </Box>
-            </CardContent>
-          </Card>
+          <>
+            {summaryCard}
+            <Card sx={{ ...NESTED_CARD_SX, mb: 2 }}>
+              <CardContent sx={{ '&:last-child': { pb: 2 } }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                  {t('nutrition.kcalPerDay')}
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'stretch', gap: period === 'week' ? 1 : 0.4, height: 120 }}>
+                  {perDay.map((p) => (
+                    <Box key={p.date} sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', gap: 0.5, minWidth: 0, height: '100%' }}>
+                      <Box
+                        title={`${p.date}: ${p.kcal} kcal`}
+                        sx={{
+                          width: '80%',
+                          height: `${Math.round((p.kcal / maxKcal) * 100)}%`,
+                          minHeight: p.kcal > 0 ? 2 : 0,
+                          bgcolor: goal?.kcal && p.kcal > goal.kcal ? 'warning.main' : 'success.main',
+                          borderRadius: 1,
+                          transition: 'height 0.2s ease',
+                        }}
+                      />
+                      {period === 'week' && (
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>
+                          {p.date.slice(8)}
+                        </Typography>
+                      )}
+                    </Box>
+                  ))}
+                </Box>
+              </CardContent>
+            </Card>
+          </>
         )}
 
-        {/* Dag-modus: zoeken + loggen */}
+        {/* Dagweergave (Figma "Nutrition"): links de samenvatting, rechts zoeken/loggen en het
+            dag-overzicht per maaltijd — op mobiel gewoon onder elkaar. */}
         {period === 'day' && (
-          <>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3, alignItems: 'start' }}>
+            <Box sx={{ minWidth: 0 }}>{summaryCard}</Box>
+            <Box sx={{ minWidth: 0 }}>
             <input
               ref={fileInputRef}
               type="file"
@@ -717,7 +728,8 @@ export function NutritionPage() {
                 );
               })
             )}
-          </>
+            </Box>
+          </Box>
         )}
       </ContentCard>
 
