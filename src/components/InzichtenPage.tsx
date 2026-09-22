@@ -5,6 +5,7 @@ import { LoadingBlock } from './layout/LoadingBlock';
 // Grafiekpagina's (recharts) pas laden als het tabblad opent.
 const SpiergroepenPage = lazy(() => import('./SpiergroepenPage').then((m) => ({ default: m.SpiergroepenPage })));
 const OefeningenPage = lazy(() => import('./OefeningenPage').then((m) => ({ default: m.OefeningenPage })));
+const MetingenPage = lazy(() => import('./MetingenPage').then((m) => ({ default: m.MetingenPage })));
 import { LogsPage } from './LogsPage';
 import { LeaderboardPage } from './LeaderboardPage';
 import { NutritionInsights } from './NutritionInsights';
@@ -15,6 +16,7 @@ export const INZICHTEN_SUB = {
   LOGS: 2,
   LEADERBOARD: 3,
   VOEDING: 4,
+  METINGEN: 5,
 } as const;
 
 export interface InzichtenPageProps {
@@ -37,7 +39,7 @@ export const InzichtenPage = ({
   const wide = useMediaQuery(theme.breakpoints.up('sm'));
 
   useEffect(() => {
-    if (initialSubTab !== null && initialSubTab >= 0 && initialSubTab <= 4) {
+    if (initialSubTab !== null && initialSubTab >= 0 && initialSubTab <= 5) {
       setSubTab(initialSubTab);
       onConsumeInitialSubTab?.();
     }
@@ -72,6 +74,7 @@ export const InzichtenPage = ({
       >
         <Tab value={0} label="Spieren" id="inzichten-tab-0" aria-controls="inzichten-panel-0" />
         <Tab value={1} label="Oefeningen" id="inzichten-tab-1" aria-controls="inzichten-panel-1" />
+        <Tab value={5} label="Metingen" id="inzichten-tab-5" aria-controls="inzichten-panel-5" />
         <Tab value={4} label="Voeding" id="inzichten-tab-4" aria-controls="inzichten-panel-4" />
         <Tab value={2} label="Logs" id="inzichten-tab-2" aria-controls="inzichten-panel-2" />
         <Tab value={3} label="Ranglijst" id="inzichten-tab-3" aria-controls="inzichten-panel-3" />
@@ -103,6 +106,13 @@ export const InzichtenPage = ({
       </Box>
       <Box role="tabpanel" id="inzichten-panel-4" hidden={subTab !== 4} sx={{ flex: 1, minHeight: 0 }}>
         {subTab === 4 && <NutritionInsights />}
+      </Box>
+      <Box role="tabpanel" id="inzichten-panel-5" hidden={subTab !== 5} sx={{ flex: 1, minHeight: 0 }}>
+        {subTab === 5 && (
+          <Suspense fallback={<LoadingBlock />}>
+            <MetingenPage />
+          </Suspense>
+        )}
       </Box>
     </Box>
   );

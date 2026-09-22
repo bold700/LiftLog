@@ -25,7 +25,6 @@ const AssistentPage = lazy(() => import('./components/AssistentPage').then((m) =
 const LessenPage = lazy(() => import('./components/LessenPage').then((m) => ({ default: m.LessenPage })));
 const ProfielPage = lazy(() => import('./components/ProfielPage').then((m) => ({ default: m.ProfielPage })));
 const NutritionPage = lazy(() => import('./components/NutritionPage').then((m) => ({ default: m.NutritionPage })));
-const MetingenPage = lazy(() => import('./components/MetingenPage').then((m) => ({ default: m.MetingenPage })));
 import { LeaderboardAutoSync } from './components/LeaderboardAutoSync';
 import { AddFromSchemaProvider } from './context/AddFromSchemaContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -45,7 +44,6 @@ const TAB_SCHEMAS = 2;
 const TAB_PROFIEL = 3;
 const TAB_BEHEER = 4;
 const TAB_VOEDING = 5;
-const TAB_METINGEN = 6;
 const TAB_ASSISTENT = 7;
 const TAB_LESSEN = 9;
 
@@ -59,7 +57,6 @@ const TAB_SLUGS: Record<number, string> = {
   [TAB_PROFIEL]: 'profiel',
   [TAB_BEHEER]: 'beheer',
   [TAB_VOEDING]: 'voeding',
-  [TAB_METINGEN]: 'metingen',
   [TAB_ASSISTENT]: 'assistent',
   [TAB_LESSEN]: 'lessen',
 };
@@ -156,7 +153,8 @@ function AppContent() {
 
   const handleAddMeasurementFromFab = useCallback(() => {
     handleFabMenuClose();
-    setActiveTab(TAB_METINGEN);
+    setActiveTab(TAB_INZICHTEN);
+    setRequestedInsightsSubTab(INZICHTEN_SUB.METINGEN);
   }, [handleFabMenuClose]);
 
   useEffect(() => {
@@ -184,7 +182,6 @@ function AppContent() {
   ];
   const secondary: ShellDestination[] = [
     { label: t('nav.assistant'), icon: <AutoAwesomeRoundedIcon fontSize="small" />, tabIndex: TAB_ASSISTENT },
-    { label: t('nav.measurements'), icon: <MonitorWeightRoundedIcon fontSize="small" />, tabIndex: TAB_METINGEN },
     ...(isTrainer ? [{ label: t('nav.admin'), icon: <GroupRoundedIcon fontSize="small" />, tabIndex: TAB_BEHEER }] : []),
   ];
   const handleLogout = useCallback(() => {
@@ -216,8 +213,6 @@ function AppContent() {
         );
       case TAB_VOEDING:
         return <NutritionPage />;
-      case TAB_METINGEN:
-        return <MetingenPage />;
       default:
         return (
           <InzichtenPage

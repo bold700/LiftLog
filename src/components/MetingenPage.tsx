@@ -374,9 +374,9 @@ export function MetingenPage() {
   };
 
   return (
-    <PageLayout>
+    <PageLayout maxWidth="none">
       <ContentCard>
-        {/* Bovenbalk toont al "Metingen"; geen tweede titel nodig. */}
+        {/* De "Metingen"-tab hierboven maakt al duidelijk waar je bent; geen tweede titel nodig. */}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             {!isTrainer && profileCtx?.profile && (
