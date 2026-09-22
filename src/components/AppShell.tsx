@@ -16,12 +16,14 @@ import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import SupervisorAccountRoundedIcon from '@mui/icons-material/SupervisorAccountRounded';
+import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import { NavigationBar } from './NavigationBar';
 import { UserAvatar } from './UserAvatar';
 import { ViewAsSheet } from './ViewAsSheet';
 import { useI18n } from '../context/I18nContext';
 import { useProfile } from '../context/ProfileContext';
 import { useViewAs } from '../context/ViewAsContext';
+import { TopBarBackProvider, useTopBarBackVisible } from '../context/TopBarBackContext';
 import { designTokens } from '../theme/designTokens';
 
 export interface ShellDestination {
@@ -177,6 +179,8 @@ function ProfileMenuButton({
  * Plakt bovenaan, onder de statusbalk.
  */
 function MobileTopBar({ title, onNavigate, profileTabIndex }: { title: string; onNavigate: (tabIndex: number) => void; profileTabIndex?: number }) {
+  const { t } = useI18n();
+  const showBack = useTopBarBackVisible();
   return (
     <Box
       component="header"
@@ -193,6 +197,11 @@ function MobileTopBar({ title, onNavigate, profileTabIndex }: { title: string; o
         bgcolor: 'background.default',
       }}
     >
+      {showBack && (
+        <IconButton size="small" onClick={() => window.history.back()} sx={{ p: 0.5, ml: -0.5 }} aria-label={t('nav.back')}>
+          <ArrowBackIosNewIcon fontSize="small" />
+        </IconButton>
+      )}
       <Typography component="h1" variant="h6" sx={{ fontWeight: 600, flex: 1, minWidth: 0 }} noWrap>
         {title}
       </Typography>
@@ -278,7 +287,7 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
     const barIndex = Math.max(0, destinations.findIndex((d) => d.tabIndex === activeTab));
     const title = [...destinations, ...secondary].find((d) => d.tabIndex === activeTab)?.label ?? brand.name;
     return (
-      <>
+      <TopBarBackProvider>
         {/* Op een telefoon scrolt de inhoud onder de statusbalk door; deze strook houdt dat vlak dicht,
             zodat een paginatitel niet half achter de klok of de notch verdwijnt. */}
         <Box
@@ -302,7 +311,7 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
           onChange={(i) => destinations[i] && onNavigate(destinations[i].tabIndex)}
           tabs={destinations.map((d) => ({ label: d.label, icon: d.icon }))}
         />
-      </>
+      </TopBarBackProvider>
     );
   }
 

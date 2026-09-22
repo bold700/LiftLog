@@ -22,6 +22,7 @@ export const nl = {
     signOut: 'Uitloggen',
     shortcuts: 'Snel naar',
     mainNavigation: 'Hoofdnavigatie',
+    back: 'Terug',
   },
   viewAs: {
     menuLabel: 'Bekijk als',

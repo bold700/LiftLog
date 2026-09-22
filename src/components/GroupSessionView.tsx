@@ -13,9 +13,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  IconButton,
 } from '@mui/material';
-import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import { PageLayout, ContentCard } from './layout';
@@ -31,7 +29,6 @@ interface GroupSessionViewProps {
   session: GroupSession;
   participants: Profile[];
   currentUserId: string;
-  onBack: () => void;
 }
 
 type SchemaEx = Schema['days'][number]['exercises'][number];
@@ -42,7 +39,7 @@ function shortName(p: Profile): string {
   return p.displayName?.trim() || p.email?.split('@')[0] || 'Deelnemer';
 }
 
-export function GroupSessionView({ schema, session, participants, currentUserId, onBack }: GroupSessionViewProps) {
+export function GroupSessionView({ schema, session, participants, currentUserId }: GroupSessionViewProps) {
   const day = schema.days[session.dayIndex];
   const exercises = useMemo(() => day?.exercises ?? [], [day]);
 
@@ -199,9 +196,6 @@ export function GroupSessionView({ schema, session, participants, currentUserId,
     <PageLayout>
       <ContentCard>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-          <IconButton size="small" onClick={onBack} sx={{ p: 0.5 }} aria-label="Terug">
-            <ArrowBackIosNewIcon fontSize="small" />
-          </IconButton>
           <Typography variant="h6" fontWeight={600} sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {schema.name}
           </Typography>

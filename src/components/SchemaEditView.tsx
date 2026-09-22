@@ -2,13 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Typography,
   Box,
-  IconButton,
   Alert,
   TextField,
   Autocomplete,
   MenuItem,
 } from '@mui/material';
-import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import { Schema, SchemaDay, SchemaExercise, Formule7Routekaart } from '../types';
 import type { Profile, SchemaAudience } from '../types';
 import { useProfile } from '../context/ProfileContext';
@@ -386,9 +384,6 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
     <PageLayout>
       <ContentCard>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-            <IconButton size="small" onClick={onCancel} sx={{ p: 0.5 }} aria-label="Terug">
-              <ArrowBackIosNewIcon fontSize="small" />
-            </IconButton>
             <Typography variant="h5" sx={{ fontWeight: 600 }}>
               {showFormule7AiWizard ? 'Workout met AI (Formule 7)' : 'Workout bewerken'}
             </Typography>
