@@ -15,7 +15,7 @@ export function getCompletionCalendarDates(): string[] {
   return [...out];
 }
 
-function getCompletions(): DayCompletion[] {
+export function getCompletions(): DayCompletion[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];

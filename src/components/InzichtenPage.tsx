@@ -9,6 +9,7 @@ const MetingenPage = lazy(() => import('./MetingenPage').then((m) => ({ default:
 import { LogsPage } from './LogsPage';
 import { LeaderboardPage } from './LeaderboardPage';
 import { NutritionInsights } from './NutritionInsights';
+import { OverzichtPage } from './OverzichtPage';
 
 export const INZICHTEN_SUB = {
   INZICHTEN: 0,
@@ -17,6 +18,7 @@ export const INZICHTEN_SUB = {
   LEADERBOARD: 3,
   VOEDING: 4,
   METINGEN: 5,
+  OVERZICHT: 6,
 } as const;
 
 export interface InzichtenPageProps {
@@ -34,12 +36,12 @@ export const InzichtenPage = ({
   initialOpenSessionLogDialog,
   onConsumeInitialOpenSessionLogDialog,
 }: InzichtenPageProps) => {
-  const [subTab, setSubTab] = useState(0);
+  const [subTab, setSubTab] = useState<number>(INZICHTEN_SUB.OVERZICHT);
   const theme = useTheme();
   const wide = useMediaQuery(theme.breakpoints.up('sm'));
 
   useEffect(() => {
-    if (initialSubTab !== null && initialSubTab >= 0 && initialSubTab <= 5) {
+    if (initialSubTab !== null && initialSubTab >= 0 && initialSubTab <= 6) {
       setSubTab(initialSubTab);
       onConsumeInitialSubTab?.();
     }
@@ -72,6 +74,7 @@ export const InzichtenPage = ({
           },
         }}
       >
+        <Tab value={6} label="Overzicht" id="inzichten-tab-6" aria-controls="inzichten-panel-6" />
         <Tab value={0} label="Spieren" id="inzichten-tab-0" aria-controls="inzichten-panel-0" />
         <Tab value={1} label="Oefeningen" id="inzichten-tab-1" aria-controls="inzichten-panel-1" />
         <Tab value={5} label="Metingen" id="inzichten-tab-5" aria-controls="inzichten-panel-5" />
@@ -79,6 +82,14 @@ export const InzichtenPage = ({
         <Tab value={2} label="Logs" id="inzichten-tab-2" aria-controls="inzichten-panel-2" />
         <Tab value={3} label="Ranglijst" id="inzichten-tab-3" aria-controls="inzichten-panel-3" />
       </Tabs>
+      <Box role="tabpanel" id="inzichten-panel-6" hidden={subTab !== 6} sx={{ flex: 1, minHeight: 0 }}>
+        {subTab === 6 && (
+          <OverzichtPage
+            onOpenMuscles={() => setSubTab(INZICHTEN_SUB.INZICHTEN)}
+            onOpenLogs={() => setSubTab(INZICHTEN_SUB.LOGS)}
+          />
+        )}
+      </Box>
       <Box role="tabpanel" id="inzichten-panel-0" hidden={subTab !== 0} sx={{ flex: 1, minHeight: 0 }}>
         {subTab === 0 && (
           <Suspense fallback={<LoadingBlock />}>
