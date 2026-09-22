@@ -9,7 +9,7 @@
  * navigatiebalk, naast de "+"-knop. De bovenbalk is de "Top bar" uit het ontwerp: de titel van
  * het scherm en de avatar naar Profiel.
  */
-import { useState, type ReactNode } from 'react';
+import { useState, type MouseEvent, type ReactNode } from 'react';
 import { Box, Button, Divider, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
@@ -39,7 +39,8 @@ interface AppShellProps {
   destinations: ShellDestination[];
   /** Wat op een groot scherm onder de lijn staat en op de telefoon onder Profiel. */
   secondary: ShellDestination[];
-  onLog: () => void;
+  /** Opent hetzelfde keuzemenu (Oefening/Training/Voeding/Meting loggen) als op mobiel; de knop is het anker. */
+  onLog: (event: MouseEvent<HTMLElement>) => void;
   onLogout: () => void;
   /** Naam en logo van de studio; zonder huisstijl is dat VORM. */
   brand: { name: string; logoUrl: string | null };
