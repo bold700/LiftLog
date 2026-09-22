@@ -193,7 +193,7 @@ export function GroupSessionView({ schema, session, participants, currentUserId 
   const selCurrent = modalEx && selPid ? current[rowKey(selPid, modalEx.exerciseName)] : null;
 
   return (
-    <PageLayout>
+    <PageLayout maxWidth="none">
       <ContentCard>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
           <Typography variant="h6" fontWeight={600} sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

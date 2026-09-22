@@ -333,7 +333,7 @@ export const TrainingSessionView = ({
   const hasMultipleDays = schema.days.length > 1;
 
   return (
-    <PageLayout>
+    <PageLayout maxWidth="none">
       <ContentCard>
           <AppleHealthWorkoutCard
             storedSummary={healthSummary}
