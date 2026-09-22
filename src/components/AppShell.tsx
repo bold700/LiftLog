@@ -57,7 +57,7 @@ function ProfileMenuButton({
 }: {
   onNavigate: (tabIndex: number) => void;
   profileTabIndex: number;
-  /** Toont naam naast de avatar (zijbalk); zonder is het alleen de cirkel (bovenbalk). */
+  /** Toont naam naast de avatar, in dezelfde stijl/uitlijning als de andere zijbalk-items; zonder is het alleen de cirkel (bovenbalk). */
   showName?: boolean;
 }) {
   const { t } = useI18n();
@@ -67,57 +67,50 @@ function ProfileMenuButton({
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  const avatarButton = (
+  const ariaLabel = viewed.isOther ? `${t('nav.profile')} · ${t('viewAs.viewingAs', { name: viewed.name })}` : t('nav.profile');
+  const avatarWithBadge = (
+    <Box sx={{ position: 'relative', display: 'flex', flexShrink: 0 }}>
+      <UserAvatar name={viewed.isOther ? viewed.name : me?.displayName} photoURL={viewed.isOther ? viewed.photoURL : me?.photoURL} size={showName ? 28 : 32} />
+      {viewed.isOther && (
+        <SupervisorAccountRoundedIcon
+          sx={{
+            position: 'absolute',
+            bottom: -3,
+            right: -3,
+            fontSize: 16,
+            color: designTokens.onPrimary,
+            bgcolor: designTokens.primary,
+            borderRadius: '50%',
+            border: '1.5px solid',
+            borderColor: 'background.default',
+            p: 0.1,
+          }}
+        />
+      )}
+    </Box>
+  );
+
+  // Op de zijbalk moet dit knopje er precies zo uitzien als Inzichten/Workouts/…: zelfde
+  // padding, icoonbreedte en tekststijl (railItemSx), anders springt het eruit als "iets anders".
+  const avatarButton = showName ? (
+    <ListItemButton onClick={(e) => setMenuAnchor(e.currentTarget)} aria-label={ariaLabel} sx={railItemSx(false)}>
+      <ListItemIcon>{avatarWithBadge}</ListItemIcon>
+      <ListItemText
+        primary={viewed.isOther ? viewed.name : me?.displayName || me?.email || t('nav.profile')}
+        secondary={viewed.isOther ? t('viewAs.viewingAs', { name: viewed.name }) : undefined}
+        primaryTypographyProps={{ noWrap: true }}
+        secondaryTypographyProps={{ noWrap: true }}
+      />
+    </ListItemButton>
+  ) : (
     <Box
       component="button"
       type="button"
-      aria-label={viewed.isOther ? `${t('nav.profile')} · ${t('viewAs.viewingAs', { name: viewed.name })}` : t('nav.profile')}
+      aria-label={ariaLabel}
       onClick={(e) => setMenuAnchor(e.currentTarget)}
-      sx={{
-        position: 'relative',
-        p: 0,
-        border: 0,
-        bgcolor: 'transparent',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1.25,
-        width: showName ? '100%' : 'auto',
-        borderRadius: showName ? '999px' : '50%',
-        ...(showName && { px: 2, py: 1, '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' } }),
-      }}
+      sx={{ position: 'relative', p: 0, border: 0, bgcolor: 'transparent', cursor: 'pointer', borderRadius: '50%', display: 'flex' }}
     >
-      <Box sx={{ position: 'relative', display: 'flex', flexShrink: 0 }}>
-        <UserAvatar name={viewed.isOther ? viewed.name : me?.displayName} photoURL={viewed.isOther ? viewed.photoURL : me?.photoURL} size={32} />
-        {viewed.isOther && (
-          <SupervisorAccountRoundedIcon
-            sx={{
-              position: 'absolute',
-              bottom: -3,
-              right: -3,
-              fontSize: 16,
-              color: designTokens.onPrimary,
-              bgcolor: designTokens.primary,
-              borderRadius: '50%',
-              border: '1.5px solid',
-              borderColor: 'background.default',
-              p: 0.1,
-            }}
-          />
-        )}
-      </Box>
-      {showName && (
-        <Box sx={{ minWidth: 0, textAlign: 'left' }}>
-          <Typography variant="body2" fontWeight={600} noWrap>
-            {viewed.isOther ? viewed.name : me?.displayName || me?.email || t('nav.profile')}
-          </Typography>
-          {viewed.isOther && (
-            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-              {t('viewAs.viewingAs', { name: viewed.name })}
-            </Typography>
-          )}
-        </Box>
-      )}
+      {avatarWithBadge}
     </Box>
   );
 
@@ -368,11 +361,7 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
           </>
         )}
         <Box sx={{ flex: 1 }} />
-        {profileTabIndex != null && (
-          <Box sx={{ mx: 1, mb: 0.5 }}>
-            <ProfileMenuButton onNavigate={onNavigate} profileTabIndex={profileTabIndex} showName />
-          </Box>
-        )}
+        {profileTabIndex != null && <ProfileMenuButton onNavigate={onNavigate} profileTabIndex={profileTabIndex} showName />}
         <Button onClick={onLogout} startIcon={<LogoutRoundedIcon />} color="inherit" sx={{ alignSelf: 'flex-start', mx: 1, color: 'text.secondary' }}>
           {t('nav.signOut')}
         </Button>
