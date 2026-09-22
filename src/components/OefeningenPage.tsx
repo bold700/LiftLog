@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
-  Card,
-  CardContent,
+  Button,
   Typography,
   Box,
   Autocomplete,
@@ -19,22 +18,16 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import {
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ComposedChart,
-} from 'recharts';
+import { Line, LineChart, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { getAllExercisesByName, getExerciseNames, updateExercise, deleteExercise, getAllExercises } from '../utils/storage';
 import { Exercise } from '../types';
-import { MuscleHighlightBody } from './MuscleHighlightBody';
+import { findExerciseMetadata } from '../data/exerciseMetadata';
+import { getExerciseMuscleMapping } from '../utils/muscleMappingResolver';
+import { computeExerciseProgress, computeTrainingBalance, type BalancePair } from '../utils/exerciseInsights';
+import { formatLogDetails } from '../utils/insightsOverview';
 import { useExerciseSuggestions } from '../hooks/useExerciseSuggestions';
-import { formatExerciseDateShort, formatExerciseDetails } from '../utils/format';
 import { designTokens } from '../theme/designTokens';
-import { PageLayout, ContentCard, OutlineCard, EmptyState } from './layout';
+import { PageLayout, ContentCard, EmptyState } from './layout';
 
 // Import Material Web Components buttons
 import '@material/web/button/filled-button.js';
@@ -42,17 +35,52 @@ import '@material/web/button/text-button.js';
 import '@material/web/icon/icon.js';
 import { NumberField } from './NumberField';
 
-interface ChartData {
-  date: string;
-  gewicht: number;
+const cardSx = () => ({
+  backgroundColor: designTokens.cardBackground,
+  borderRadius: `${designTokens.cardRadius}px`,
+});
+
+const kg = (n: number) => `${String(n).replace('.', ',')} kg`;
+
+const DAY_FMT = new Intl.DateTimeFormat('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
+
+/** "Vandaag", "Gisteren", anders "vr 12 aug". */
+function sessionDayLabel(date: string): string {
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date}T12:00:00` : date);
+  const today = new Date();
+  const days = Math.round(
+    (new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() -
+      new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) /
+      86400000
+  );
+  if (days === 0) return 'Vandaag';
+  if (days === 1) return 'Gisteren';
+  const label = DAY_FMT.format(d).replace('.', '');
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+/** Twee delen naast elkaar (Figma "Training balance"): links primary, rechts tertiary. */
+function BalanceBar({ pair }: { pair: BalancePair }) {
+  return (
+    <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.625 }}>
+        <Typography variant="caption">{`${pair.a} ${pair.aPct}%`}</Typography>
+        <Typography variant="caption">{`${pair.b} ${100 - pair.aPct}%`}</Typography>
+      </Box>
+      <Box sx={{ display: 'flex', gap: '3px', height: 8 }}>
+        {pair.aPct > 0 && <Box sx={{ width: `${pair.aPct}%`, bgcolor: 'primary.main', borderRadius: 1 }} />}
+        {pair.aPct < 100 && <Box sx={{ flex: 1, bgcolor: designTokens.tertiary, borderRadius: 1 }} />}
+      </Box>
+    </Box>
+  );
 }
 
 export const OefeningenPage = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
   const [exerciseNames, setExerciseNames] = useState<string[]>([]);
-  const [chartData, setChartData] = useState<ChartData[]>([]);
   const [allExercises, setAllExercises] = useState<Exercise[]>([]);
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [menuExerciseId, setMenuExerciseId] = useState<string | null>(null);
@@ -76,54 +104,33 @@ export const OefeningenPage = () => {
   useEffect(() => {
     setExerciseNames(getExerciseNames());
     loadAllExercises();
+    // Figma opent met een oefening gekozen: neem de laatst gelogde.
+    const latest = [...getAllExercises()]
+      .filter((ex) => ex.name?.trim())
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    if (latest?.name) setSelectedExercise(latest.name);
   }, []);
-
-  useEffect(() => {
-    if (selectedExercise) {
-      const exercises = getAllExercisesByName(selectedExercise);
-      const sortedExercises = [...exercises].sort((a, b) => 
-        new Date(a.date).getTime() - new Date(b.date).getTime()
-      );
-      const data: ChartData[] = sortedExercises
-        .filter(ex => ex.weight !== undefined && ex.weight !== null)
-        .map(ex => {
-          return {
-            date: new Date(ex.date).toLocaleDateString('nl-NL', { 
-              month: 'short', 
-              day: 'numeric' 
-            }),
-            gewicht: ex.weight!,
-          };
-        });
-      setChartData(data);
-    }
-  }, [selectedExercise]);
 
   const loadAllExercises = () => {
     const exercises = getAllExercises();
     setAllExercises(exercises);
   };
 
-  // Stats berekening
-  const stats = useMemo(() => {
-    if (!selectedExercise) return null;
-    const exercises = getAllExercisesByName(selectedExercise);
-    // Filter alleen oefeningen met gewicht
-    const exercisesWithWeight = exercises.filter(ex => ex.weight !== undefined && ex.weight !== null);
-    if (exercisesWithWeight.length === 0) return null;
+  const progress = useMemo(
+    () => (selectedExercise ? computeExerciseProgress(getAllExercisesByName(selectedExercise)) : null),
+    // allExercises.length: opnieuw na bewerken/verwijderen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedExercise, allExercises.length]
+  );
 
-    const weights = exercisesWithWeight.map(ex => ex.weight!);
-    const max = Math.max(...weights);
-    const latest = weights[weights.length - 1];
-    const maxVsLatest = max - latest;
-
-    return {
-      max,
-      latest,
-      maxVsLatest,
-      totalWorkouts: exercisesWithWeight.length,
-    };
-  }, [selectedExercise]);
+  const balance = useMemo(
+    () =>
+      computeTrainingBalance(allExercises, (name) => ({
+        movementType: findExerciseMetadata(name)?.movementType,
+        primaryRegions: getExerciseMuscleMapping(name)?.primary ?? [],
+      })),
+    [allExercises]
+  );
 
   // Laatste 3 sessies
   const lastThreeSessions = useMemo(() => {
@@ -349,179 +356,180 @@ export const OefeningenPage = () => {
     }
   }, [allExercises.length, selectedExercise]);
 
+  const delta = progress && progress.previous != null ? progress.latest - progress.previous : null;
+  const balanceRows = [balance.pushPull, balance.upperLower, balance.compoundIsolation].filter(
+    (b): b is BalancePair => b != null
+  );
+
   return (
     <PageLayout maxWidth="none">
-      <ContentCard>
-        <Autocomplete
-            options={exerciseNames}
-            value={selectedExercise}
-            onChange={(_, newValue) => setSelectedExercise(newValue)}
-            clearOnEscape
-            clearText="Wissen"
-            noOptionsText="Geen oefeningen beschikbaar"
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Selecteer Oefening"
-                placeholder="Kies een oefening om progressie te zien (optioneel)"
-              />
-            )}
-          />
-      </ContentCard>
-
-      {selectedExercise && stats && (
+      {exerciseNames.length === 0 ? (
         <ContentCard>
-            {/* Progressie Sectie */}
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-                Progressie
+          <EmptyState>Nog geen oefeningen gelogd. Log er een om je progressie te zien.</EmptyState>
+        </ContentCard>
+      ) : (
+        <>
+          {/* Keuzebalk (Figma "Picker"): gekozen oefening met "Wijzig"; wijzigen opent de zoeklijst. */}
+          {selectedExercise && !picking ? (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                minHeight: 42,
+                pl: 1.75,
+                pr: 0.5,
+                mb: 2.5,
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: `${designTokens.cardRadius / 2}px`,
+              }}
+            >
+              <Typography variant="body2" sx={{ fontWeight: 600, flex: 1, minWidth: 0 }} noWrap>
+                {selectedExercise}
               </Typography>
+              <Button size="small" onClick={() => setPicking(true)} sx={{ textTransform: 'none', fontWeight: 600 }}>
+                Wijzig
+              </Button>
             </Box>
-            {/* Max Gewicht Sectie */}
-            <OutlineCard sx={{ mb: 4 }}>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Max Gewicht
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
-                  <Typography variant="h4" fontWeight={600} sx={{ color: 'secondary.main' }}>
-                    {stats.max} kg
-                  </Typography>
-                  {stats.maxVsLatest !== 0 && (
-                    <Typography 
-                      variant="h6" 
-                      fontWeight={600}
-                      color={stats.maxVsLatest > 0 ? 'error.main' : 'success.main'}
-                    >
-                      {stats.maxVsLatest > 0 ? '-' : '+'}{Math.abs(stats.maxVsLatest)} kg
+          ) : (
+            <Autocomplete
+              options={exerciseNames}
+              value={selectedExercise}
+              onChange={(_, newValue) => {
+                if (newValue) setSelectedExercise(newValue);
+                setPicking(false);
+              }}
+              onBlur={() => setPicking(false)}
+              openOnFocus
+              noOptionsText="Geen oefeningen gevonden"
+              sx={{ mb: 2.5 }}
+              renderInput={(params) => (
+                <TextField {...params} size="small" autoFocus={picking} label="Oefening" placeholder="Zoek een oefening" />
+              )}
+            />
+          )}
+
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: '3fr 2fr' },
+              gridTemplateAreas: { xs: '"max" "recent" "balance"', md: '"max recent" "balance recent"' },
+              gridTemplateRows: { md: 'auto 1fr' },
+              gap: { xs: 2.5, md: 2.5 },
+              alignItems: 'start',
+            }}
+          >
+            <Box sx={{ gridArea: 'max', ...cardSx(), p: { xs: 2, md: 3 }, minWidth: 0 }}>
+              <Typography variant="body2" color="text.secondary">
+                Max gewicht
+              </Typography>
+              {progress ? (
+                <>
+                  <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 1 }}>
+                    <Typography sx={{ fontSize: { xs: 36, md: 45 }, lineHeight: 1.15, fontWeight: 500 }}>
+                      {String(progress.max).replace('.', ',')}
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary" sx={{ flex: 1 }}>
+                      kg
+                    </Typography>
+                    {delta != null && delta !== 0 && (
+                      <Typography
+                        variant="body2"
+                        sx={{ fontWeight: 600, color: delta > 0 ? 'primary.main' : 'error.main' }}
+                      >
+                        {delta > 0 ? '+' : '−'}
+                        {kg(Math.abs(delta))}
+                      </Typography>
+                    )}
+                  </Box>
+                  {progress.previous != null && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                      Tegenover je vorige sessie, {kg(progress.previous)}
                     </Typography>
                   )}
-                </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                  Ten opzichte van laatste sessie ({stats.latest} kg)
+                  {progress.sessions.length > 1 && (
+                    <Box sx={{ width: '100%', height: { xs: 110, md: 160 }, mt: 2 }}>
+                      <ResponsiveContainer>
+                        <LineChart data={progress.sessions} margin={{ top: 8, right: 4, bottom: 4, left: 4 }}>
+                          <YAxis hide domain={['dataMin - 2', 'dataMax + 2']} />
+                          <Tooltip
+                            formatter={(value: number) => [kg(value), 'Gewicht']}
+                            labelFormatter={(_, payload) => (payload?.[0] ? sessionDayLabel(payload[0].payload.day) : '')}
+                          />
+                          <Line
+                            type="linear"
+                            dataKey="weight"
+                            stroke={theme.palette.primary.main}
+                            strokeWidth={2.5}
+                            dot={false}
+                            activeDot={{ r: 5 }}
+                            isAnimationActive={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </Box>
+                  )}
+                </>
+              ) : (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Nog geen gewicht gelogd voor deze oefening.
                 </Typography>
-            </OutlineCard>
+              )}
+            </Box>
 
-            {/* Laatste 3 Sessies */}
-            {lastThreeSessions.length > 0 && (
-              <>
-              <Card sx={{ mb: 4, backgroundColor: 'transparent', borderRadius: '16px', border: 'none', m: 0 }} elevation={0}>
-                <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
-                  <Typography variant="h6" gutterBottom>
-                    Laatste sessie(s)
-                  </Typography>
-                  <Box className="stagger-children" sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-                    {lastThreeSessions.map((exercise, index) => (
-                        <Card
-                          key={exercise.id}
-                          sx={{
-                            '--stagger-index': index,
-                            backgroundColor: 'transparent',
-                            borderRadius: `${designTokens.cardRadius}px`,
-                            border: `1px solid ${designTokens.cardBorder}`,
-                            m: 0,
-                            boxShadow: 'none',
-                            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                            '&:hover': { transform: 'translateY(-1px)', boxShadow: 1 },
-                          } as any}
-                          elevation={0}
-                        >
-                          <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                              <Box sx={{ flex: 1 }}>
-                                <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                                  {exercise.name || 'Notitie'}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                                  {formatExerciseDateShort(exercise.date)}
-                                </Typography>
-                                <Typography variant="body2" color="text.primary">
-                                  {formatExerciseDetails(exercise)}
-                                </Typography>
-                                {exercise.notes && String(exercise.notes).trim() && (
-                                  <Typography 
-                                    variant="body2" 
-                                    color="text.secondary" 
-                                    sx={{ 
-                                      mt: 1.5, 
-                                      fontStyle: 'italic', 
-                                      display: 'block',
-                                      opacity: 0.75,
-                                      fontSize: '0.875rem',
-                                      lineHeight: 1.5
-                                    }}
-                                  >
-                                    &quot;{String(exercise.notes).trim()}&quot;
-                                  </Typography>
-                                )}
-                              </Box>
-                              <IconButton
-                                size="small"
-                                onClick={(e) => handleMenuOpen(e, exercise.id)}
-                                sx={{ color: 'text.secondary', ml: 1 }}
-                              >
-                                <MoreVertIcon fontSize="small" />
-                              </IconButton>
-                            </Box>
-                          </CardContent>
-                        </Card>
-                    ))}
+            <Box sx={{ gridArea: 'recent', minWidth: 0 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                Recente sessies
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {lastThreeSessions.map((exercise) => (
+                  <Box
+                    key={exercise.id}
+                    sx={{ ...cardSx(), display: 'flex', alignItems: 'flex-start', gap: 1, pl: 2.25, pr: 0.5, py: 1.25 }}
+                  >
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {sessionDayLabel(exercise.date)}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" noWrap>
+                          {formatLogDetails(exercise)}
+                        </Typography>
+                      </Box>
+                      {exercise.notes?.trim() && (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                          “{exercise.notes.trim()}”
+                        </Typography>
+                      )}
+                    </Box>
+                    <IconButton
+                      size="small"
+                      aria-label="Log bewerken of verwijderen"
+                      onClick={(e) => handleMenuOpen(e, exercise.id)}
+                      sx={{ color: 'text.secondary', mt: -0.25 }}
+                    >
+                      <MoreVertIcon fontSize="small" />
+                    </IconButton>
                   </Box>
-                </CardContent>
-              </Card>
-              </>  
-            )}
-
-            {/* Spiergroepen Sectie */}
-            {selectedExercise && (
-              <Box sx={{ mt: 4 }}>
-                <Typography variant="h6" gutterBottom>
-                  Spiergroepen
-                </Typography>
-                <MuscleHighlightBody exerciseName={selectedExercise} />
+                ))}
               </Box>
-            )}
+            </Box>
 
-            {/* Grafiek voor progressie */}
-            {chartData.length > 0 && (
-              <Box sx={{ mt: 4 }}>
-                <Typography variant="h6" gutterBottom>
-                  Overzicht
+            {balanceRows.length > 0 && (
+              <Box sx={{ gridArea: 'balance', ...cardSx(), p: { xs: 2, md: 3 }, minWidth: 0 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5 }}>
+                  Trainingsbalans
                 </Typography>
-                <Box sx={{ width: '100%', height: 200, mt: 3 }}>
-                  <ResponsiveContainer>
-                    <ComposedChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="date" 
-                        label={{ value: 'Datum', position: 'insideBottom', offset: -5 }}
-                        tick={{ fontSize: 12 }}
-                      />
-                      <YAxis 
-                        label={{ value: 'Gewicht (kg)', angle: -90, position: 'insideLeft' }}
-                        tick={{ fontSize: 12 }}
-                      />
-                      <Tooltip />
-                      <Line
-                        type="monotone"
-                        dataKey="gewicht"
-                        stroke={theme.palette.primary.main}
-                        strokeWidth={3}
-                        dot={{ fill: theme.palette.primary.main, r: 5 }}
-                        activeDot={{ r: 7 }}
-                        name="Gewicht (kg)"
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75 }}>
+                  {balanceRows.map((pair) => (
+                    <BalanceBar key={pair.a} pair={pair} />
+                  ))}
                 </Box>
               </Box>
             )}
-        </ContentCard>
-      )}
-
-      {!selectedExercise && (
-        <ContentCard>
-          <EmptyState>Selecteer een oefening om de progressie en statistieken te bekijken.</EmptyState>
-        </ContentCard>
+          </Box>
+        </>
       )}
 
       {/* Menu voor edit/delete */}
