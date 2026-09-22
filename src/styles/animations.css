@@ -98,16 +98,20 @@
   animation: fadeIn 0.35s ease-out forwards;
 }
 
+/* "backwards", niet "forwards": na afloop mag er geen transform blijven hangen. Een transform op een
+   voorouder maakt die het ankerpunt van position: fixed, waardoor een snackbar of dialoog-achtig
+   element midden op de pagina belandt in plaats van onderaan het scherm. De eindtoestand van de
+   animatie is toch gewoon de normale toestand. */
 .animate-fade-in-up {
-  animation: fadeInUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: fadeInUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 .animate-fade-in-scale {
-  animation: fadeInScale 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: fadeInScale 0.3s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 .animate-tab-panel {
-  animation: tabPanelIn 0.25s ease-out forwards;
+  animation: tabPanelIn 0.25s ease-out backwards;
 }
 
 /* Stagger: zet --stagger-index op elk kind (0, 1, 2, ...).

@@ -1,15 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import {
-  Card,
-  CardContent,
-  Typography,
-  Box,
-  Snackbar,
-  Button,
-} from '@mui/material';
+import { Typography, Box, Snackbar, Button } from '@mui/material';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import { Schema, SchemaExercise } from '../types';
 import { Exercise } from '../types';
 import { deleteExercise } from '../utils/storage';
@@ -46,7 +39,9 @@ import { saveCheckin } from '../services/checkinService';
 import { LastHandoverNote } from './LastHandoverNote';
 import { CheckinDialog, type Feeling } from './CheckinDialog';
 import { designTokens } from '../theme/designTokens';
-import { PageLayout, ContentCard } from './layout';
+import { PageLayout, HeaderActions } from './layout';
+import { usePageTitle } from '../context/PageTitleContext';
+import { formatLogDetails } from '../utils/insightsOverview';
 import { AppleHealthWorkoutCard } from './AppleHealthWorkoutCard';
 import { ExerciseDbDemo } from './ExerciseDbDemo';
 import {
@@ -56,8 +51,6 @@ import {
   clearStoredHealthSummary,
 } from '../utils/healthWorkoutStorage';
 import type { AppleHealthWorkoutSummary } from '../plugins/healthWorkout';
-import '@material/web/button/filled-button.js';
-import '@material/web/icon/icon.js';
 
 interface TrainingSessionViewProps {
   schema: Schema;
@@ -322,6 +315,41 @@ export const TrainingSessionView = ({
     setHandover(draft.handover || null);
   }, []);
 
+  /** Welke oefening open staat; standaard de eerste die nog niet gelogd is. */
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  /** Rust na een log: tot wanneer (ms), en na welke oefening. Figma "Rest 0:42". */
+  const [rest, setRest] = useState<{ until: number; total: number } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!rest) return;
+    const id = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, [rest]);
+  useEffect(() => {
+    if (rest && now >= rest.until) setRest(null);
+  }, [rest, now]);
+
+  // Na een nieuwe log: rust starten met de rusttijd uit het schema en door naar de volgende oefening.
+  const lastRestFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!justLoggedExerciseId || lastRestFor.current === justLoggedExerciseId || !day) return;
+    const log = loggedExercises.find((l) => l.id === justLoggedExerciseId);
+    if (!log) return;
+    lastRestFor.current = justLoggedExerciseId;
+    const idx = day.exercises.findIndex((ex) => ex.exerciseName.toLowerCase() === log.name?.toLowerCase());
+    const secs = idx >= 0 ? day.exercises[idx].restSeconds ?? 0 : 0;
+    if (secs > 0) {
+      setNow(Date.now());
+      setRest({ until: Date.now() + secs * 1000, total: secs });
+    }
+    const nextOpen = day.exercises.findIndex(
+      (ex, i) => i !== idx && !findLogIdForExercise(loggedExercises, ex.exerciseName)
+    );
+    if (nextOpen >= 0) setSelectedIdx(nextOpen);
+  }, [justLoggedExerciseId, loggedExercises, day]);
+
+  usePageTitle(day ? `${day.dayLabel} · sessie` : null);
+
   if (!day) {
     return null;
   }
@@ -332,302 +360,355 @@ export const TrainingSessionView = ({
   const isDayComplete = dayMarkedComplete || allExercisesLogged;
   const hasMultipleDays = schema.days.length > 1;
 
-  return (
-    <PageLayout maxWidth="none">
-      <ContentCard>
-          <AppleHealthWorkoutCard
-            storedSummary={healthSummary}
-            onSummarySaved={onHealthSummarySaved}
-            onSummaryCleared={onHealthSummaryCleared}
-          />
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 3, flexWrap: 'wrap' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
-              <Typography variant="h5" sx={{ fontWeight: 600 }}>
-                {schema.name} – {day.dayLabel}
-              </Typography>
-            </Box>
-            {isDayComplete && hasMultipleDays && (
-              <Button
-                variant="contained"
-                endIcon={<ArrowForwardIosIcon sx={{ fontSize: 16 }} />}
-                onClick={onNextDay}
-                aria-label="Volgende dag"
-                sx={{
-                  bgcolor: 'primary.main',
-                  color: 'primary.contrastText',
-                  borderRadius: '20px',
-                  px: 2,
-                  py: 1.25,
-                  textTransform: 'none',
-                  fontWeight: 500,
-                  // Mag krimpen: een lange dagnaam liep anders het scherm uit.
-                  minWidth: 0,
-                  maxWidth: '100%',
-                  '&:hover': { bgcolor: 'primary.dark' },
-                }}
-              >
-                <Box
-                  component="span"
-                  sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                >
-                  {`Volgende dag: ${schema.days[(dayIndex + 1) % schema.days.length].dayLabel}`}
+  const loggedCount = day.exercises.filter((ex) => findLogIdForExercise(loggedExercises, ex.exerciseName)).length;
+  const firstOpen = day.exercises.findIndex((ex) => !findLogIdForExercise(loggedExercises, ex.exerciseName));
+  const current = selectedIdx ?? (firstOpen >= 0 ? firstOpen : 0);
+  const ex = day.exercises[current] ?? null;
+  const exLogId = ex ? findLogIdForExercise(loggedExercises, ex.exerciseName) : null;
+  const exLog = exLogId ? loggedExercises.find((l) => l.id === exLogId) ?? null : null;
+  const prev = ex ? previous.get(ex.exerciseName.trim().toLowerCase()) ?? null : null;
+  const nextIdx = day.exercises.findIndex((e, i) => i > current && !findLogIdForExercise(loggedExercises, e.exerciseName));
+  const next = nextIdx >= 0 ? day.exercises[nextIdx] : null;
+  const restLeft = rest ? Math.max(0, Math.ceil((rest.until - now) / 1000)) : 0;
+  const mmss = (secs: number) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+  const prescription = (e: SchemaExercise) =>
+    [
+      `${e.setsTarget} × ${e.repsTarget}`,
+      e.targetWeight ? `doel ${String(e.targetWeight).replace('.', ',')} kg` : null,
+      e.restSeconds ? `${e.restSeconds}s rust` : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  const extras = [
+    { label: 'Warming-up', text: formatWarmupSummary(day.warmup ?? schema.formule7?.warmup) },
+    { label: 'Cardio', text: formatCardioSummary(day.cardio ?? schema.formule7?.cardio) },
+    { label: 'Cooling-down', text: formatCooldownSummary(day.cooldown ?? schema.formule7?.cooldown) },
+    { label: 'Stretching', text: formatStretchingSummary(day.stretching ?? schema.formule7?.stretching) },
+  ].filter((x) => !!x.text);
+
+  const finishButton = !dayMarkedComplete ? (
+    <Button
+      variant="contained"
+      disableElevation
+      onClick={() => setCheckinOpen(true)}
+      aria-label="Training afronden en check-in invullen"
+      sx={{ borderRadius: '20px', textTransform: 'none', fontWeight: 500, height: 40, px: 2.5 }}
+    >
+      Training afronden
+    </Button>
+  ) : isDayComplete && hasMultipleDays ? (
+    <Button
+      variant="contained"
+      disableElevation
+      endIcon={<ArrowForwardIosIcon sx={{ fontSize: 14 }} />}
+      onClick={onNextDay}
+      aria-label="Volgende dag"
+      sx={{ borderRadius: '20px', textTransform: 'none', fontWeight: 500, height: 40, px: 2.5, minWidth: 0, maxWidth: '100%' }}
+    >
+      <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {`Volgende dag: ${schema.days[(dayIndex + 1) % schema.days.length].dayLabel}`}
+      </Box>
+    </Button>
+  ) : null;
+
+  const doneBanner = isDayComplete && (
+    <Box
+      sx={{
+        py: 1.25,
+        px: 2,
+        mb: 2,
+        borderRadius: 3,
+        bgcolor: designTokens.secondaryContainer,
+        color: designTokens.onSecondaryContainer,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 2,
+        flexWrap: 'wrap',
+      }}
+    >
+      <Typography variant="body2" fontWeight={500} sx={{ minWidth: 0, flex: 1 }}>
+        {dayMarkedComplete
+          ? allExercisesLogged
+            ? 'Training afgerond – alle oefeningen zijn gelogd.'
+            : 'Training voltooid (in één keer gemarkeerd).'
+          : 'Alle oefeningen zijn gelogd. Rond de training af met je check-in.'}
+      </Typography>
+      {dayMarkedComplete && !allExercisesLogged && (
+        <Button
+          variant="outlined"
+          size="small"
+          color="inherit"
+          onClick={() => {
+            clearDayComplete(schema.id, dayIndex);
+            setDayMarkedComplete(false);
+          }}
+          sx={{ whiteSpace: 'nowrap', borderRadius: '20px', textTransform: 'none', fontWeight: 500 }}
+        >
+          Reset markering
+        </Button>
+      )}
+    </Box>
+  );
+
+  /** De open oefening: plaatje, voorschrift, vorige keer en loggen (Figma: rechterpaneel / kaart op mobiel). */
+  const currentPanel = ex && (
+    <Box sx={{ bgcolor: designTokens.cardBackground, borderRadius: `${designTokens.cardRadius}px`, p: { xs: 2, md: 3 } }}>
+      <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+        <ExerciseDbDemo exerciseName={ex.exerciseName} variant="aside" />
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography sx={{ fontSize: { xs: 18, md: 22 }, fontWeight: 500, lineHeight: { xs: '24px', md: '28px' } }}>{ex.exerciseName}</Typography>
+          <Typography sx={{ fontSize: 13, lineHeight: '18px', color: 'text.secondary', mt: 0.25 }}>{prescription(ex)}</Typography>
+          {ex.notes && (
+            <Typography sx={{ fontSize: 12, lineHeight: '16px', color: 'text.secondary', fontStyle: 'italic', mt: 0.5 }}>{ex.notes}</Typography>
+          )}
+          {/* Zodat je tijdens het begeleiden meteen weet of er gewicht bij kan. */}
+          <Box
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 1,
+              mt: 1,
+              px: 1,
+              borderRadius: '8px',
+              bgcolor: prev ? designTokens.tertiaryContainer : 'transparent',
+              color: prev ? designTokens.onTertiaryContainer : 'text.disabled',
+              border: prev ? 'none' : `1px solid ${designTokens.cardBorder}`,
+              fontSize: 11,
+              lineHeight: '20px',
+            }}
+          >
+            {prev ? (
+              <>
+                <Box component="span" sx={{ fontWeight: 600 }}>
+                  Vorige keer
                 </Box>
-              </Button>
+                <span>
+                  {describePrevious(prev)}
+                  {shortDate(prev.date) && ` · ${shortDate(prev.date)}`}
+                </span>
+              </>
+            ) : (
+              'Nog niet eerder gelogd'
             )}
           </Box>
+        </Box>
+      </Box>
 
-          {logTarget && <LastHandoverNote userId={logTarget.userId} />}
+      {exLog && (
+        <Box
+          component={logTargetId ? 'div' : 'button'}
+          type={logTargetId ? undefined : 'button'}
+          onClick={() => !logTargetId && exLogId && handleGelogdClick(exLogId)}
+          aria-label={logTargetId ? 'Gelogd voor deze sporter' : 'Gelogd – klik om naar log te gaan'}
+          sx={{
+            all: 'unset',
+            boxSizing: 'border-box',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            width: '100%',
+            mt: 2,
+            px: 2,
+            minHeight: 52,
+            borderRadius: 3,
+            bgcolor: designTokens.cardBackgroundHigh,
+            cursor: logTargetId ? 'default' : 'pointer',
+          }}
+        >
+          <CheckCircleOutlineIcon sx={{ color: designTokens.primary }} />
+          <Typography sx={{ fontSize: 14, fontWeight: 500 }}>Gelogd</Typography>
+          <Typography sx={{ fontSize: 13, color: 'text.secondary', ml: 'auto' }}>{formatLogDetails(exLog)}</Typography>
+        </Box>
+      )}
 
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            <strong>Training afronden:</strong> log per oefening via &quot;Log toevoegen&quot;, of rond de hele training af met &quot;Training afronden&quot; hieronder.
-          </Typography>
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 2 }}>
+        <Button
+          variant={exLog ? 'outlined' : 'contained'}
+          disableElevation
+          startIcon={<AddRoundedIcon />}
+          onClick={() => handleLogToevoegen(ex)}
+          sx={{ borderRadius: '20px', textTransform: 'none', fontWeight: 500, height: 40, px: 2.5 }}
+        >
+          {exLog ? 'Nog een log' : 'Log toevoegen'}
+        </Button>
+        {next && (
+          <Button onClick={() => setSelectedIdx(nextIdx)} sx={{ borderRadius: '20px', textTransform: 'none', fontWeight: 500, height: 40, px: 2 }}>
+            Volgende oefening
+          </Button>
+        )}
+      </Box>
+    </Box>
+  );
 
-          {isDayComplete && (
+  const restCard = rest && (
+    <Box
+      role="timer"
+      aria-live="polite"
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 2,
+        mt: 1.5,
+        px: 2,
+        minHeight: 56,
+        borderRadius: 4,
+        bgcolor: designTokens.secondaryContainer,
+        color: designTokens.onSecondaryContainer,
+      }}
+    >
+      <Typography sx={{ fontSize: 14, fontWeight: 500 }}>Rust</Typography>
+      <Button size="small" color="inherit" onClick={() => setRest(null)} sx={{ textTransform: 'none', ml: 'auto' }}>
+        Overslaan
+      </Button>
+      <Typography sx={{ fontSize: 24, fontWeight: 400, fontVariantNumeric: 'tabular-nums' }}>{mmss(restLeft)}</Typography>
+    </Box>
+  );
+
+  const exerciseList = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      {day.exercises.map((e, i) => {
+        const logId = findLogIdForExercise(loggedExercises, e.exerciseName);
+        const log = logId ? loggedExercises.find((l) => l.id === logId) ?? null : null;
+        const selected = i === current;
+        return (
+          <Box
+            key={i}
+            role="button"
+            tabIndex={0}
+            aria-current={selected ? 'step' : undefined}
+            onClick={() => setSelectedIdx(i)}
+            onKeyDown={(ev) => (ev.key === 'Enter' || ev.key === ' ') && setSelectedIdx(i)}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              px: 2.5,
+              py: 1,
+              minHeight: 54,
+              borderRadius: 3,
+              cursor: 'pointer',
+              bgcolor: selected ? designTokens.secondaryContainer : designTokens.cardBackground,
+              color: selected ? designTokens.onSecondaryContainer : 'text.primary',
+              '&:hover': selected ? undefined : { bgcolor: designTokens.cardBackgroundHigh },
+            }}
+          >
             <Box
               sx={{
-                py: 1.5,
-                px: 2,
-                mb: 2,
-                borderRadius: 2,
-                bgcolor: 'success.light',
-                color: 'success.dark',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 2,
-                flexWrap: 'wrap',
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                flexShrink: 0,
+                bgcolor: log || selected ? designTokens.primary : designTokens.cardBorder,
+                opacity: log && !selected ? 0.8 : 1,
               }}
-            >
-              <Typography variant="body2" fontWeight={500} sx={{ minWidth: 0, flex: 1 }}>
-                {dayMarkedComplete
-                  ? allExercisesLogged
-                    ? 'Training afgerond – alle oefeningen zijn gelogd.'
-                    : 'Training voltooid (in één keer gemarkeerd).'
-                  : 'Alle oefeningen zijn gelogd. Rond de training hieronder af met je check-in.'}
+            />
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontSize: 13, fontWeight: 500, lineHeight: '18px' }} noWrap>
+                {e.exerciseName}
               </Typography>
-              {dayMarkedComplete && !allExercisesLogged && (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={() => {
-                    clearDayComplete(schema.id, dayIndex);
-                    setDayMarkedComplete(false);
-                  }}
-                  sx={{
-                    whiteSpace: 'nowrap',
-                    borderRadius: '20px',
-                    textTransform: 'none',
-                    fontWeight: 500,
-                  }}
-                >
-                  Reset markering
-                </Button>
-              )}
+              <Typography sx={{ fontSize: 11, lineHeight: '16px', opacity: 0.8 }} noWrap>
+                {log ? `${formatLogDetails(log) || 'gelogd'} · gelogd` : `${e.setsTarget} × ${e.repsTarget}`}
+              </Typography>
             </Box>
-          )}
-
-          {/* Blijft staan tot je écht hebt afgerond: ook met alles gelogd wil je de check-in nog
-              kunnen invullen. Eerder verdween deze knop juist zodra je klaar was. */}
-          {!dayMarkedComplete && (
-            <Button
-              variant="outlined"
-              color="inherit"
-              onClick={() => setCheckinOpen(true)}
-              aria-label="Training afronden en check-in invullen"
-              sx={{
-                mb: 2,
-                borderRadius: '20px',
-                textTransform: 'none',
-                fontWeight: 500,
-              }}
-            >
-              Training afronden
-            </Button>
-          )}
-
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {formatWarmupSummary(day.warmup ?? schema.formule7?.warmup) && (
-              <Card
-                sx={{
-                  backgroundColor: 'transparent',
-                  borderRadius: `${designTokens.cardRadius}px`,
-                  border: `1px solid ${designTokens.cardBorder}`,
-                  boxShadow: 'none',
-                }}
-              >
-                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                    Warming-up
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {formatWarmupSummary(day.warmup ?? schema.formule7?.warmup)}
-                  </Typography>
-                </CardContent>
-              </Card>
-            )}
-            {formatCardioSummary(day.cardio ?? schema.formule7?.cardio) && (
-              <Card
-                sx={{
-                  backgroundColor: 'transparent',
-                  borderRadius: `${designTokens.cardRadius}px`,
-                  border: `1px solid ${designTokens.cardBorder}`,
-                  boxShadow: 'none',
-                }}
-              >
-                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                    Cardio
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {formatCardioSummary(day.cardio ?? schema.formule7?.cardio)}
-                  </Typography>
-                </CardContent>
-              </Card>
-            )}
-            {day.exercises.map((ex, exIndex) => {
-              const logId = findLogIdForExercise(loggedExercises, ex.exerciseName);
-              const isLogged = logId !== null;
-              const prev = previous.get(ex.exerciseName.trim().toLowerCase()) ?? null;
-              return (
-                <Card
-                  key={exIndex}
-                  sx={{
-                    backgroundColor: 'transparent',
-                    borderRadius: `${designTokens.cardRadius}px`,
-                    border: `1px solid ${designTokens.cardBorder}`,
-                    boxShadow: 'none',
-                  }}
-                >
-                  <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: 1.5,
-                      }}
-                    >
-                      <ExerciseDbDemo exerciseName={ex.exerciseName} variant="aside" />
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                          <Typography variant="subtitle1" fontWeight={600}>
-                            {ex.exerciseName}
-                          </Typography>
-                          {isLogged && (
-                            <Box
-                              component="button"
-                              disabled={Boolean(logTargetId)}
-                              onClick={() => !logTargetId && logId && handleGelogdClick(logId)}
-                              sx={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 0.5,
-                                color: 'success.main',
-                                cursor: logTargetId ? 'default' : 'pointer',
-                                border: 'none',
-                                background: 'none',
-                                padding: 0,
-                                font: 'inherit',
-                                '&:hover': { textDecoration: logTargetId ? 'none' : 'underline' },
-                              }}
-                              aria-label={
-                                logTargetId
-                                  ? 'Gelogd voor deze sporter'
-                                  : 'Gelogd – klik om naar log te gaan'
-                              }
-                            >
-                              <CheckCircleOutlineIcon fontSize="small" />
-                              <Typography variant="caption" color="success.main" component="span">
-                                Gelogd
-                              </Typography>
-                            </Box>
-                          )}
-                        </Box>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          Voorgeschreven: {ex.setsTarget} × {ex.repsTarget} reps
-                          {ex.restSeconds != null && ex.restSeconds > 0 && ` · ${ex.restSeconds}s rust`}
-                        </Typography>
-                        {/* Zodat je tijdens het begeleiden meteen weet of er gewicht bij kan,
-                            zonder eerst naar Inzichten te hoeven. */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
-                          <TrendingUpIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                          {prev ? (
-                            <Typography variant="caption" color="text.secondary">
-                              Vorige keer:{' '}
-                              <Box component="span" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                                {describePrevious(prev)}
-                              </Box>
-                              {shortDate(prev.date) && ` · ${shortDate(prev.date)}`}
-                            </Typography>
-                          ) : (
-                            <Typography variant="caption" color="text.disabled">
-                              Nog niet eerder gelogd
-                            </Typography>
-                          )}
-                        </Box>
-                        {ex.notes && (
-                          <Typography variant="caption" color="text.secondary" display="block" fontStyle="italic" sx={{ mt: 0.5 }}>
-                            {ex.notes}
-                          </Typography>
-                        )}
-                        <Box
-                          sx={{ cursor: 'pointer', display: 'inline-block', mt: 1.5 }}
-                          onClick={() => handleLogToevoegen(ex)}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e) => e.key === 'Enter' && handleLogToevoegen(ex)}
-                        >
-                          {/* @ts-ignore */}
-                          <md-filled-button>
-                            <md-icon slot="start">add</md-icon>
-                            Log toevoegen
-                          </md-filled-button>
-                        </Box>
-                      </Box>
-                    </Box>
-                  </CardContent>
-                </Card>
-              );
-            })}
-            {formatCooldownSummary(day.cooldown ?? schema.formule7?.cooldown) && (
-              <Card
-                sx={{
-                  backgroundColor: 'transparent',
-                  borderRadius: `${designTokens.cardRadius}px`,
-                  border: `1px solid ${designTokens.cardBorder}`,
-                  boxShadow: 'none',
-                }}
-              >
-                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                    Cooling-down
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {formatCooldownSummary(day.cooldown ?? schema.formule7?.cooldown)}
-                  </Typography>
-                </CardContent>
-              </Card>
-            )}
-            {formatStretchingSummary(day.stretching ?? schema.formule7?.stretching) && (
-              <Card
-                sx={{
-                  backgroundColor: 'transparent',
-                  borderRadius: `${designTokens.cardRadius}px`,
-                  border: `1px solid ${designTokens.cardBorder}`,
-                  boxShadow: 'none',
-                }}
-              >
-                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
-                    Stretching
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {formatStretchingSummary(day.stretching ?? schema.formule7?.stretching)}
-                  </Typography>
-                </CardContent>
-              </Card>
-            )}
           </Box>
-      </ContentCard>
+        );
+      })}
+    </Box>
+  );
+
+  const extraCards = extras.map((x) => (
+    <Box key={x.label} sx={{ bgcolor: designTokens.cardBackground, borderRadius: 3, px: 2.5, py: 1.25 }}>
+      <Typography sx={{ fontSize: 11, fontWeight: 600, lineHeight: '16px', color: 'text.secondary' }}>{x.label}</Typography>
+      <Typography sx={{ fontSize: 13, lineHeight: '18px' }}>{x.text}</Typography>
+    </Box>
+  ));
+
+  const progressLabel = `${loggedCount} van ${day.exercises.length} gelogd`;
+
+  return (
+    <PageLayout maxWidth="none">
+      {/* Alleen desktop in de kop; op een telefoon staat de knop onderaan. */}
+      <HeaderActions>
+        <Box sx={{ display: { xs: 'none', md: 'flex' } }}>{finishButton}</Box>
+      </HeaderActions>
+
+      {logTarget && <LastHandoverNote userId={logTarget.userId} />}
+      {doneBanner}
+
+      {/* ---------- Telefoon ---------- */}
+      <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
+          <Typography sx={{ fontSize: 12, fontWeight: 500 }}>
+            {ex ? `Oefening ${current + 1} van ${day.exercises.length}` : progressLabel}
+          </Typography>
+          <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{progressLabel}</Typography>
+        </Box>
+        <Box sx={{ height: 6, borderRadius: 3, bgcolor: designTokens.cardBackgroundHigh, overflow: 'hidden', mb: 2 }}>
+          <Box
+            sx={{
+              height: '100%',
+              width: `${day.exercises.length ? (loggedCount / day.exercises.length) * 100 : 0}%`,
+              bgcolor: designTokens.primary,
+              borderRadius: 3,
+              transition: 'width 0.3s ease',
+            }}
+          />
+        </Box>
+        {currentPanel}
+        {restCard}
+        {next && (
+          <Typography sx={{ fontSize: 12, mt: 1.5, px: 0.5 }}>
+            <Box component="span" sx={{ fontWeight: 600, mr: 1.5 }}>
+              Volgende
+            </Box>
+            <Box component="span" sx={{ color: 'text.secondary' }}>
+              {next.exerciseName} · {next.setsTarget} × {next.repsTarget}
+            </Box>
+          </Typography>
+        )}
+        <Typography sx={{ fontSize: 13, fontWeight: 500, mt: 3, mb: 1 }}>Alle oefeningen</Typography>
+        {exerciseList}
+        {extraCards.length > 0 && <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>{extraCards}</Box>}
+        {finishButton && (
+          <Box sx={{ mt: 2.5, '& .MuiButton-root': { width: '100%', height: 56, borderRadius: '28px', fontSize: 16 } }}>{finishButton}</Box>
+        )}
+        <Box sx={{ mt: 2 }}>
+          <AppleHealthWorkoutCard storedSummary={healthSummary} onSummarySaved={onHealthSummarySaved} onSummaryCleared={onHealthSummaryCleared} />
+        </Box>
+      </Box>
+
+      {/* ---------- Desktop: oefeningen links, de open oefening rechts ---------- */}
+      <Box sx={{ display: { xs: 'none', md: 'grid' }, gridTemplateColumns: { md: '280px minmax(0, 1fr)', lg: '320px minmax(0, 1fr)' }, gap: 3, alignItems: 'start' }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography sx={{ fontSize: 12, fontWeight: 500, lineHeight: '16px', mb: 1 }}>
+            {ex ? `Oefening ${current + 1} van ${day.exercises.length}` : 'Oefeningen'} · {progressLabel}
+          </Typography>
+          {exerciseList}
+          {extraCards.length > 0 && <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>{extraCards}</Box>}
+          <Box sx={{ mt: 2 }}>
+            <AppleHealthWorkoutCard storedSummary={healthSummary} onSummarySaved={onHealthSummarySaved} onSummaryCleared={onHealthSummaryCleared} />
+          </Box>
+        </Box>
+        <Box sx={{ minWidth: 0, mt: 3 }}>
+          {currentPanel ?? (
+            <Typography variant="body2" color="text.secondary">
+              Geen oefeningen op deze dag.
+            </Typography>
+          )}
+          {restCard}
+          {next && (
+            <Typography sx={{ fontSize: 12, mt: 1.5, px: 0.5 }}>
+              <Box component="span" sx={{ fontWeight: 600, mr: 1.5 }}>
+                Volgende
+              </Box>
+              <Box component="span" sx={{ color: 'text.secondary' }}>
+                {next.exerciseName} · {next.setsTarget} × {next.repsTarget}
+              </Box>
+            </Typography>
+          )}
+        </Box>
+      </Box>
 
       <Snackbar
         open={snackbarOpen}
