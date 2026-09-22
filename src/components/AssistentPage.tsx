@@ -3,7 +3,7 @@ import { Box, Typography, TextField, IconButton, Chip, CircularProgress, Button 
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
-import { PageLayout, ContentCard, PageTitle } from './layout';
+import { PageLayout, ContentCard } from './layout';
 import { useProfile } from '../context/ProfileContext';
 import { askAssistant, labelForStep, type AssistantMessage } from '../services/assistantService';
 import { designTokens } from '../theme/designTokens';
@@ -75,8 +75,7 @@ export function AssistentPage() {
 
   return (
     <PageLayout>
-      <PageTitle>Assistent</PageTitle>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: -2, mb: 2, px: 0.5 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, px: 0.5 }}>
         {isStaff
           ? 'Vraag naar je sporters, maak schema’s of leg metingen vast — in gewone taal.'
           : 'Vraag je training op, log je sets of check je voeding — in gewone taal.'}

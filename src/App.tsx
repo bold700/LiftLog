@@ -244,11 +244,13 @@ function AppContent() {
           <Box
             sx={{
               flex: 1,
-              p: 3,
+              // Desktop: de schil geeft al 40 opzij en de paginakop erboven; inhoud lijnt uit met de titel (Figma).
+              p: { xs: 3, md: 0 },
               pb: { xs: 12, md: 4 },
               paddingTop: {
                 xs: 'calc(24px + env(safe-area-inset-top, 0px))',
                 sm: 'calc(24px + env(safe-area-inset-top, 0px))',
+                md: 0,
               },
               overflow: 'auto',
               scrollbarGutter: 'stable',

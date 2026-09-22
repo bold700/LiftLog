@@ -441,10 +441,6 @@ export function NutritionPage() {
     <PageLayout maxWidth="none">
       <ContentCard>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 1 }}>
-          {/* Op de telefoon staat de titel al in de bovenbalk van de schil (zie PageTitle); hier alleen op desktop, en met flexGrow zodat "Doel aanpassen" ernaast rechts blijft staan. */}
-          <Typography variant="h5" fontWeight={600} sx={{ display: { xs: 'none', md: 'block' }, flexGrow: 1 }}>
-            {t('nutrition.title')}
-          </Typography>
           <Button size="small" variant="text" onClick={() => setGoalOpen(true)}>
             {goal ? t('nutrition.editGoal') : t('nutrition.setGoal')}
           </Button>

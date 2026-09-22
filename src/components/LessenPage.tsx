@@ -23,7 +23,7 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
-import { PageLayout, ContentCard, PageTitle, EmptyState } from './layout';
+import { PageLayout, ContentCard, EmptyState } from './layout';
 import { CreditBalanceCard } from './SubscriptionCard';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
@@ -517,8 +517,7 @@ export function LessenPage() {
 
   return (
     <PageLayout maxWidth="none">
-      <PageTitle>{isStaff && myDayOnly ? 'Mijn dag' : 'Lessen'}</PageTitle>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: -2, mb: 2, px: 0.5 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, px: 0.5 }}>
         {isStaff
           ? myDayOnly
             ? 'Alleen je eigen sessies vandaag.'

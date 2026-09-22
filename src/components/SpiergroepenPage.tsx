@@ -1,244 +1,107 @@
-import { useMemo } from 'react';
-import { Typography, Box } from '@mui/material';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { useEffect, useMemo, useState } from 'react';
+import { Box, Typography } from '@mui/material';
 import { getAllExercises } from '../utils/storage';
-import { findExerciseMetadata } from '../data/exerciseMetadata';
-import { normalizeMuscleName, getDisplayName } from '../utils/muscleNames';
+import { getExerciseMuscleMapping } from '../utils/muscleMappingResolver';
+import { countMuscleSessions } from '../utils/muscleSessions';
 import { MuscleFrequencyBody, GREEN_TINTS } from './MuscleFrequencyBody';
-import { PageLayout, ContentCard, OutlineCard } from './layout';
+import { PageLayout } from './layout';
+import { designTokens } from '../theme/designTokens';
 
+const cardSx = () => ({
+  backgroundColor: designTokens.cardBackground,
+  borderRadius: `${designTokens.cardRadius}px`,
+});
+
+/** Figma "Insights · Muscles": links het lichaam met legenda, rechts "Meest getraind" als balken. */
 export const SpiergroepenPage = () => {
-  const insights = useMemo(() => {
-    const exercises = getAllExercises();
-    
-    // Tel primary muscles (zelfde als MuscleFrequencyBody)
-    const muscleCounts: Record<string, number> = {};
-    const movementTypeCounts: Record<string, number> = {};
-    let pushCount = 0;
-    let pullCount = 0;
-    
-    exercises.forEach(exercise => {
-      // Sla oefeningen zonder naam over (alleen notities)
-      if (!exercise.name) return;
-      
-      const metadata = findExerciseMetadata(exercise.name);
-      if (metadata) {
-        // Tel primary muscles (zelfde logica als MuscleFrequencyBody)
-        if (metadata.primaryMuscles) {
-          metadata.primaryMuscles.forEach(muscle => {
-            const normalized = normalizeMuscleName(muscle);
-            muscleCounts[normalized] = (muscleCounts[normalized] || 0) + 1;
-          });
-        }
-        
-        // Tel bewegingstypes
-        movementTypeCounts[metadata.movementType] = (movementTypeCounts[metadata.movementType] || 0) + 1;
-        
-        // Tel push/pull
-        if (metadata.movementType === 'Push') pushCount++;
-        if (metadata.movementType === 'Pull') pullCount++;
-      }
-    });
-    
-    // Sorteer spiergroepen op frequentie en map naar display namen
-    const topMuscles = Object.entries(muscleCounts)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 10)
-      .map(([muscle, count]) => ({ muscle: getDisplayName(muscle), count }));
-    
-    // Bereken push/pull ratio
-    const totalPushPull = pushCount + pullCount;
-    const pushPullRatio = totalPushPull > 0 
-      ? {
-          push: Math.round((pushCount / totalPushPull) * 100),
-          pull: Math.round((pullCount / totalPushPull) * 100),
-        }
-      : null;
-    
-    return {
-      topPrimaryMuscles: topMuscles,
-      topSecondaryMuscles: [],
-      movementTypeCounts,
-      pushPullRatio,
-      pushCount,
-      pullCount,
-      totalExercises: exercises.length,
-      exercisesWithMetadata: exercises.filter(ex => ex.name && findExerciseMetadata(ex.name) !== null).length,
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const refresh = () => setRefreshKey((k) => k + 1);
+    window.addEventListener('storage', refresh);
+    window.addEventListener('workoutUpdated', refresh);
+    return () => {
+      window.removeEventListener('storage', refresh);
+      window.removeEventListener('workoutUpdated', refresh);
     };
   }, []);
 
-  // Kleuren voor pie charts - gebruik dezelfde kleuren als de level SVG's
-  const COLORS_PRIMARY = GREEN_TINTS; // ['#D0EABF', '#A5C392', '#799A64', '#4B6738', '#293B1D']
-  const COLORS_PUSH_PULL = [GREEN_TINTS[4], GREEN_TINTS[2]]; // Level 5 en Level 3
-  const COLORS_MOVEMENT = [GREEN_TINTS[4], GREEN_TINTS[3], GREEN_TINTS[2], GREEN_TINTS[1]]; // Level 5, 4, 3, 2
+  const muscles = useMemo(
+    () => countMuscleSessions(getAllExercises(), (name) => getExerciseMuscleMapping(name)?.primary ?? []),
+    // refreshKey: opnieuw tellen zodra er iets gelogd is.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [refreshKey]
+  );
+  const max = muscles[0]?.sessions ?? 0;
 
   return (
     <PageLayout maxWidth="none">
-      <ContentCard>
-        {/* Bovenbalk toont al "Inzichten"; de Spieren/Oefeningen/…-tabs eronder maken duidelijk
-            in welke subtab je zit, dus geen aparte titel hier nodig. */}
-        <OutlineCard sx={{ '& .MuiCardContent-root': { pt: 2, px: 2 } }}>
-          <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-            Meest Getrainde Spiergroepen
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: '5fr 3fr' },
+          gap: { xs: 2, md: 2.5 },
+        }}
+      >
+        <Box sx={{ ...cardSx(), p: { xs: 2, md: 3 }, minWidth: 0 }}>
+          <MuscleFrequencyBody size="calc(50% - 12px)" aspectRatio="1 / 1.8" />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mt: 2 }} aria-label="Legenda: van minder naar meer getraind">
+            <Typography variant="caption" color="text.secondary">
+              Minder
+            </Typography>
+            {GREEN_TINTS.map((color) => (
+              <Box key={color} sx={{ width: 30, height: 12, borderRadius: '4px', backgroundColor: color }} />
+            ))}
+            <Typography variant="caption" color="text.secondary">
+              Meer
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Op mobiel staat de lijst los onder het lichaam (geen kaart), zoals in Figma. */}
+        <Box
+          sx={{
+            ...cardSx(),
+            backgroundColor: { xs: 'transparent', md: designTokens.cardBackground },
+            p: { xs: 0, md: 3 },
+            minWidth: 0,
+          }}
+        >
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.25 }}>
+            Meest getraind
           </Typography>
-              
-              {/* Body SVG */}
-              <Box sx={{ mb: 0, pb: 0, lineHeight: 0, display: 'flex', justifyContent: 'center' }}>
-                <MuscleFrequencyBody />
-              </Box>
-              
-              {/* Pie Chart */}
-              {insights.topPrimaryMuscles.length > 0 && (
-                <Box sx={{ width: '100%', height: 200, mt: '-40px', pt: 0 }}>
-                  <ResponsiveContainer>
-                    <PieChart>
-                      <Pie
-                        data={insights.topPrimaryMuscles.slice(0, 5).map(({ muscle, count }) => ({
-                          name: muscle,
-                          value: count,
-                        }))}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={{ stroke: '#3D532E', strokeWidth: 1 }}
-                        label={({ name, value, cx, cy, midAngle, outerRadius }) => {
-                          const RADIAN = Math.PI / 180;
-                          const radius = outerRadius + 20;
-                          const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                          const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                          return (
-                            <text
-                              x={x}
-                              y={y}
-                              fill="#3D532E"
-                              textAnchor={x > cx ? 'start' : 'end'}
-                              dominantBaseline="central"
-                              style={{ fontSize: '12px', fontWeight: 500 }}
-                            >
-                              {`${name} ${value}x`}
-                            </text>
-                          );
-                        }}
-                        outerRadius={60}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {insights.topPrimaryMuscles.slice(0, 5).map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS_PRIMARY[index % COLORS_PRIMARY.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
+          {muscles.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              Nog geen oefeningen gelogd.
+            </Typography>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+              {muscles.map(({ label, sessions }) => (
+                <Box key={label}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mb: 0.625 }}>
+                    <Typography variant="body2" noWrap>
+                      {label}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+                      {sessions} {sessions === 1 ? 'sessie' : 'sessies'}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ height: 6, borderRadius: 3, backgroundColor: designTokens.cardBackgroundHigh, overflow: 'hidden' }}>
+                    <Box
+                      sx={{
+                        height: '100%',
+                        width: `${(sessions / max) * 100}%`,
+                        borderRadius: 3,
+                        backgroundColor: 'primary.main',
+                      }}
+                    />
+                  </Box>
                 </Box>
-              )}
-        </OutlineCard>
-
-        {insights.pushPullRatio && (insights.pushPullRatio.push > 0 || insights.pushPullRatio.pull > 0) && (
-          <OutlineCard>
-                <Typography variant="h6" gutterBottom>
-                  Push/Pull Ratio
-                </Typography>
-                <Box sx={{ width: '100%', height: 200, mt: 2 }}>
-                  <ResponsiveContainer>
-                    <PieChart>
-                      <Pie
-                        data={[
-                          { name: 'Push', value: insights.pushPullRatio.push },
-                          { name: 'Pull', value: insights.pushPullRatio.pull },
-                        ]}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={{ stroke: '#3D532E', strokeWidth: 1 }}
-                        label={({ name, value, cx, cy, midAngle, outerRadius }) => {
-                          const RADIAN = Math.PI / 180;
-                          const radius = outerRadius + 20;
-                          const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                          const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                          return (
-                            <text
-                              x={x}
-                              y={y}
-                              fill="#3D532E"
-                              textAnchor={x > cx ? 'start' : 'end'}
-                              dominantBaseline="central"
-                              style={{ fontSize: '12px', fontWeight: 500 }}
-                            >
-                              {`${name} ${value}%`}
-                            </text>
-                          );
-                        }}
-                        outerRadius={60}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {[
-                          { name: 'Push', value: insights.pushPullRatio.push },
-                          { name: 'Pull', value: insights.pushPullRatio.pull },
-                        ].map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS_PUSH_PULL[index % COLORS_PUSH_PULL.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </Box>
-          </OutlineCard>
-        )}
-
-        {Object.keys(insights.movementTypeCounts).length > 0 && (
-          <OutlineCard>
-                <Typography variant="h6" gutterBottom>
-                  Bewegingstype Verdeling
-                </Typography>
-                <Box sx={{ width: '100%', height: 200, mt: 2 }}>
-                  <ResponsiveContainer>
-                    <PieChart>
-                      <Pie
-                        data={Object.entries(insights.movementTypeCounts)
-                          .sort(([, a], [, b]) => b - a)
-                          .map(([type, count]) => ({
-                            name: type,
-                            value: count,
-                          }))}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={{ stroke: '#3D532E', strokeWidth: 1 }}
-                        label={({ name, value, cx, cy, midAngle, outerRadius }) => {
-                          const RADIAN = Math.PI / 180;
-                          const radius = outerRadius + 20;
-                          const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                          const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                          return (
-                            <text
-                              x={x}
-                              y={y}
-                              fill="#3D532E"
-                              textAnchor={x > cx ? 'start' : 'end'}
-                              dominantBaseline="central"
-                              style={{ fontSize: '12px', fontWeight: 500 }}
-                            >
-                              {`${name} ${value}x`}
-                            </text>
-                          );
-                        }}
-                        outerRadius={60}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {Object.entries(insights.movementTypeCounts)
-                          .sort(([, a], [, b]) => b - a)
-                          .map((_, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS_MOVEMENT[index % COLORS_MOVEMENT.length]} />
-                          ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </Box>
-          </OutlineCard>
-        )}
-      </ContentCard>
+              ))}
+            </Box>
+          )}
+        </Box>
+      </Box>
     </PageLayout>
   );
 };
-
