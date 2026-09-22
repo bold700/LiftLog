@@ -320,8 +320,6 @@ export const en: Messages = {
     setGoal: 'Set goal',
     editGoal: 'Edit goal',
     periods: { day: 'Day', week: 'Week', month: 'Month' },
-    forWhom: 'For whom?',
-    myself: 'Myself',
     date: 'Date',
     until: 'Up to',
     summary: {

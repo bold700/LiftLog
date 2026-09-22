@@ -3,7 +3,6 @@ import {
   Box,
   Typography,
   TextField,
-  MenuItem,
   Accordion,
   AccordionSummary,
   AccordionDetails,
@@ -15,6 +14,7 @@ import { designTokens } from '../theme/designTokens';
 import { WeeklyCheckinDialog } from './WeeklyCheckinDialog';
 import { NumberField } from './NumberField';
 import { useProfile } from '../context/ProfileContext';
+import { useViewAs } from '../context/ViewAsContext';
 import { useNotify } from '../context/NotifyContext';
 import { updateProfile } from '../services/profileService';
 import {
@@ -97,7 +97,9 @@ export function MetingenPage() {
   const selfTrainerId = profileCtx?.profile?.trainerId ?? null;
 
   const [weeklyOpen, setWeeklyOpen] = useState(false);
-  const [targetId, setTargetId] = useState('');
+  // Wie je bekijkt, komt uit "Bekijk als" (avatarmenu); een eigen keuzelijst per pagina is er niet meer.
+  const { viewed } = useViewAs();
+  const targetId = viewed.isOther ? viewed.userId : '';
   const [items, setItems] = useState<Measurement[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -400,25 +402,6 @@ export function MetingenPage() {
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Houd je gewicht, vetpercentage, bodyscan, omtrekmaten en huidplooien bij en volg je voortgang.
         </Typography>
-
-        {isTrainer && sporters.length > 0 && (
-          <TextField
-            select
-            fullWidth
-            size="small"
-            label="Voor wie?"
-            value={targetId || 'self'}
-            onChange={(e) => setTargetId(e.target.value === 'self' ? '' : e.target.value)}
-            sx={{ mb: 2 }}
-          >
-            <MenuItem value="self">Mijzelf</MenuItem>
-            {sporters.map((s) => (
-              <MenuItem key={s.userId} value={s.userId}>
-                {s.displayName?.trim() || s.email || s.userId}
-              </MenuItem>
-            ))}
-          </TextField>
-        )}
 
         {/* Twee kolommen op desktop (Figma "Body"): links het huidige beeld en de trend, rechts
             de invoer en de historie die daaruit volgt. Op mobiel staat alles onder elkaar. */}

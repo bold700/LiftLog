@@ -322,8 +322,6 @@ export const nl = {
     setGoal: 'Doel instellen',
     editGoal: 'Doel aanpassen',
     periods: { day: 'Dag', week: 'Week', month: 'Maand' },
-    forWhom: 'Voor wie?',
-    myself: 'Mijzelf',
     date: 'Datum',
     until: 'Tot en met',
     summary: {
