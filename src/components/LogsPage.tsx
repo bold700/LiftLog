@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Alert,
-  Card,
-  CardContent,
+  Button,
+  Chip,
   Typography,
   Box,
-  IconButton,
   Menu,
   MenuItem,
   useMediaQuery,
@@ -13,7 +12,6 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { getAllExercises, updateExercise, deleteExercise } from '../utils/storage';
 import { getSessionLogs, saveSessionLog, deleteSessionLog } from '../utils/sessionLogStorage';
 import { getSchemas, getSchemaById } from '../utils/schemaStorage';
@@ -24,8 +22,19 @@ import { getLogsForUser, saveExerciseLog, deleteExerciseLog } from '../services/
 import { logToExercise } from '../utils/exerciseLogMapping';
 import { groupExercisesIntoTrainings } from '../utils/trainingGroups';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
-import { formatExerciseDateShort, formatExerciseDetails } from '../utils/format';
 import { designTokens } from '../theme/designTokens';
+import { filterPillSx } from '../theme/segmentedToggle';
+import {
+  DEFAULT_LOG_FILTER,
+  NO_SCHEMA,
+  exerciseNames,
+  filterLogs,
+  groupLogsByDay,
+  logDayLabel,
+  logRowDetails,
+  workoutOptions,
+  type LogFilter,
+} from '../utils/logList';
 import { PageLayout, ContentCard, EmptyState } from './layout';
 import { ExerciseEditDialog } from './logs/ExerciseEditDialog';
 import { DeleteExerciseDialog } from './logs/DeleteExerciseDialog';
@@ -36,6 +45,81 @@ import { DeleteSessionDialog } from './logs/DeleteSessionDialog';
 import '@material/web/button/filled-button.js';
 import '@material/web/button/text-button.js';
 import '@material/web/icon/icon.js';
+
+/** `short` staat op de pil, zodat de drie filters op een telefoon op één regel passen. */
+const PERIOD_OPTIONS: { label: string; short: string; days: number | null }[] = [
+  { label: 'Laatste 7 dagen', short: '7 dagen', days: 7 },
+  { label: 'Laatste 30 dagen', short: '30 dagen', days: 30 },
+  { label: 'Laatste 90 dagen', short: '90 dagen', days: 90 },
+  { label: 'Alle datums', short: 'Alle datums', days: null },
+];
+
+/**
+ * Eén regel in de lijst (Figma "Logs"): naam met eventuele notitie eronder, rechts gewicht en
+ * sets × reps. Tikken opent het menu met Bewerken en Verwijderen.
+ */
+function LogRow({
+  title,
+  note,
+  details,
+  onOpen,
+}: {
+  title: string;
+  note: string | null;
+  details: string;
+  onOpen?: (el: HTMLElement) => void;
+}) {
+  return (
+    <Box
+      role={onOpen ? 'button' : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      aria-haspopup={onOpen ? 'menu' : undefined}
+      onClick={onOpen ? (e) => onOpen(e.currentTarget) : undefined}
+      onKeyDown={
+        onOpen
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onOpen(e.currentTarget);
+              }
+            }
+          : undefined
+      }
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 2,
+        minHeight: 42,
+        px: { xs: 1.75, md: 2.5 },
+        py: 1,
+        borderRadius: 3,
+        bgcolor: designTokens.cardBackground,
+        cursor: onOpen ? 'pointer' : 'default',
+        transition: 'background-color 0.15s ease',
+        '&:hover': onOpen ? { bgcolor: designTokens.cardBackgroundHigh } : undefined,
+      }}
+    >
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography sx={{ fontSize: 14, fontWeight: 500, lineHeight: '20px' }} noWrap>
+          {title}
+        </Typography>
+        {note && (
+          <Typography sx={{ fontSize: 11, lineHeight: '16px', color: 'text.secondary' }} noWrap>
+            “{note}”
+          </Typography>
+        )}
+      </Box>
+      {details && (
+        <Typography sx={{ fontSize: 13, lineHeight: '18px', color: 'text.secondary', whiteSpace: 'nowrap', flexShrink: 0 }}>
+          {details}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+/** Filterpil zoals Figma: 12px, compact, zodat drie pillen en het aantal op een telefoon naast elkaar passen. */
+const pillSx = (selected: boolean) => ({ ...filterPillSx(selected), fontSize: { xs: 11, sm: 12 }, '& .MuiChip-label': { px: { xs: 1.125, sm: 1.25 } } });
 
 export interface LogsPageProps {
   /** Open direct het dialoog "Training log toevoegen" (bijv. na klik FAB → Training log). */
@@ -59,6 +143,8 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
   const [allExercises, setAllExercises] = useState<Exercise[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const [filter, setFilter] = useState<LogFilter>(DEFAULT_LOG_FILTER);
+  const [filterMenu, setFilterMenu] = useState<{ kind: 'period' | 'exercise' | 'workout'; anchor: HTMLElement } | null>(null);
   const [menuExerciseId, setMenuExerciseId] = useState<string | null>(null);
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
@@ -155,11 +241,6 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
       onConsumeOpenSessionLogDialog();
     }
   }, [openSessionLogDialogRequested, onConsumeOpenSessionLogDialog]);
-
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, exerciseId: string) => {
-    setMenuAnchorEl(event.currentTarget);
-    setMenuExerciseId(exerciseId);
-  };
 
   const handleMenuClose = () => {
     setMenuAnchorEl(null);
@@ -329,155 +410,222 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
     [allExercises, sessionLogs, viewingOther]
   );
 
+  /** Peildatum voor "Vandaag" en de periodefilter; het tabblad laadt opnieuw bij elke opening. */
+  const [now] = useState(() => new Date());
+  const visibleLogs = useMemo(() => filterLogs(allExercises, filter, now), [allExercises, filter, now]);
+  const nameOptions = useMemo(() => exerciseNames(allExercises), [allExercises]);
+  const workouts = useMemo(() => workoutOptions(allExercises), [allExercises]);
+  const schemaName = (id: string) => getSchemaById(id)?.name ?? 'Onbekende workout';
+
+  /**
+   * Trainingen met een eigen notitie of een handmatig toegevoegd trainingslog: die staan bovenaan
+   * hun dag, zodat de notitie en het bewerken van zo'n log niet verdwijnen. Met een oefeningfilter
+   * horen ze er niet bij.
+   */
+  const trainingNotesByDay = useMemo(() => {
+    const map = new Map<string, typeof trainings>();
+    if (filter.exerciseName) return map;
+    // Zelfde periode- en workoutfilter als de logs: een proef-log op die dag met dat schema.
+    const probe = (date: string, schemaId: string | null) =>
+      filterLogs([{ id: 'x', name: 'x', date, schemaId }], filter, now).length > 0;
+    for (const t of trainings) {
+      if (!t.notes && !t.sessionLogId) continue;
+      if (!probe(t.date, t.schemaId)) continue;
+      const list = map.get(t.date) ?? [];
+      list.push(t);
+      map.set(t.date, list);
+    }
+    return map;
+  }, [trainings, filter, now]);
+
+  const days = useMemo(() => {
+    const grouped = groupLogsByDay(visibleLogs, now);
+    const known = new Set(grouped.map((d) => d.day));
+    const extra = [...trainingNotesByDay.keys()].filter((d) => !known.has(d)).map((day) => ({ day, label: logDayLabel(day, now), logs: [] }));
+    return [...grouped, ...extra].sort((x, y) => (x.day < y.day ? 1 : x.day > y.day ? -1 : 0));
+  }, [visibleLogs, trainingNotesByDay, now]);
+
+  const periodLabel = PERIOD_OPTIONS.find((o) => o.days === filter.periodDays)?.short ?? 'Alle datums';
+  const workoutLabel =
+    filter.schemaId == null ? 'Alle workouts' : filter.schemaId === NO_SCHEMA ? 'Losse oefeningen' : schemaName(filter.schemaId);
+  const closeFilterMenu = () => setFilterMenu(null);
+
+  const trainingTitle = (t: (typeof trainings)[number]) => {
+    const schema = t.schemaId ? getSchemaById(t.schemaId) : null;
+    const dayLabel = t.schemaDayIndex != null ? schema?.days[t.schemaDayIndex]?.dayLabel ?? `Dag ${t.schemaDayIndex + 1}` : null;
+    return schema ? [schema.name, dayLabel].filter(Boolean).join(' – ') : 'Training';
+  };
+
   return (
     <PageLayout maxWidth="none">
-      <ContentCard>
-        {loadError && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            {loadError}
-          </Alert>
-        )}
+      {loadError && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {loadError}
+        </Alert>
+      )}
 
-        <Typography variant="subtitle2" color="text.secondary" fontWeight={600} sx={{ mb: 1 }}>
-          Trainingen
+      {/* Filters en aantal, zoals Figma: "Last 30 days · All exercises · All workouts   142 entries". */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.75, sm: 1 }, mb: 2.5, flexWrap: 'wrap' }}>
+        <Chip
+          size="small"
+          label={periodLabel}
+          onClick={(e) => setFilterMenu({ kind: 'period', anchor: e.currentTarget })}
+          sx={pillSx(filter.periodDays != null)}
+        />
+        <Chip
+          size="small"
+          label={filter.exerciseName ?? 'Alle oefeningen'}
+          onClick={(e) => setFilterMenu({ kind: 'exercise', anchor: e.currentTarget })}
+          onDelete={filter.exerciseName ? () => setFilter((f) => ({ ...f, exerciseName: null })) : undefined}
+          sx={{ ...pillSx(filter.exerciseName != null), maxWidth: 200 }}
+        />
+        <Chip
+          size="small"
+          label={workoutLabel}
+          onClick={(e) => setFilterMenu({ kind: 'workout', anchor: e.currentTarget })}
+          onDelete={filter.schemaId ? () => setFilter((f) => ({ ...f, schemaId: null })) : undefined}
+          sx={{ ...pillSx(filter.schemaId != null), maxWidth: 200 }}
+        />
+        <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto', whiteSpace: 'nowrap' }}>
+          {visibleLogs.length} {visibleLogs.length === 1 ? 'log' : 'logs'}
         </Typography>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 3 }}>
-          {trainings.map((t) => {
-            const schema = t.schemaId ? getSchemaById(t.schemaId) : null;
-            const dayLabel =
-              t.schemaDayIndex != null ? schema?.days[t.schemaDayIndex]?.dayLabel ?? `Dag ${t.schemaDayIndex + 1}` : null;
-            const title = schema ? [schema.name, dayLabel].filter(Boolean).join(' – ') : 'Losse oefeningen';
-            return (
-              <Card
-                key={t.id}
-                sx={{
-                  backgroundColor: 'transparent',
-                  borderRadius: `${designTokens.cardRadius}px`,
-                  border: `1px solid ${designTokens.cardBorder}`,
-                  boxShadow: 'none',
-                }}
-              >
-                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography variant="subtitle1" fontWeight={600}>
-                        {title}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        {formatExerciseDateShort(t.date)} · {t.exerciseCount}{' '}
-                        {t.exerciseCount === 1 ? 'oefening' : 'oefeningen'}
-                      </Typography>
-                      {t.exerciseNames.length > 0 && (
-                        <Typography variant="body2" color="text.primary" sx={{ mt: 1 }}>
-                          {t.exerciseNames.join(' · ')}
-                        </Typography>
-                      )}
-                      {t.notes && (
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontStyle: 'italic' }}>
-                          &quot;{t.notes}&quot;
-                        </Typography>
-                      )}
-                    </Box>
-                    {/* Alleen een handmatig toegevoegd trainingslog is te bewerken; een afgeleide
-                        groep bestaat niet als document. */}
-                    {t.sessionLogId && (
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          setMenuAnchorEl(e.currentTarget);
-                          setMenuExerciseId(`session-${t.sessionLogId}`);
-                        }}
-                        sx={{ color: 'text.secondary', ml: 1 }}
-                        aria-label="Menu training"
-                      >
-                        <MoreVertIcon fontSize="small" />
-                      </IconButton>
-                    )}
-                  </Box>
-                </CardContent>
-              </Card>
-            );
-          })}
-          {trainings.length === 0 && (
-            <EmptyState>
-              {viewingOther
+      </Box>
+
+      <Menu anchorEl={filterMenu?.anchor} open={filterMenu?.kind === 'period'} onClose={closeFilterMenu}>
+        {PERIOD_OPTIONS.map((o) => (
+          <MenuItem
+            key={o.label}
+            selected={filter.periodDays === o.days}
+            onClick={() => {
+              setFilter((f) => ({ ...f, periodDays: o.days }));
+              closeFilterMenu();
+            }}
+          >
+            {o.label}
+          </MenuItem>
+        ))}
+      </Menu>
+      <Menu
+        anchorEl={filterMenu?.anchor}
+        open={filterMenu?.kind === 'exercise'}
+        onClose={closeFilterMenu}
+        slotProps={{ paper: { sx: { maxHeight: 360 } } }}
+      >
+        <MenuItem
+          selected={filter.exerciseName == null}
+          onClick={() => {
+            setFilter((f) => ({ ...f, exerciseName: null }));
+            closeFilterMenu();
+          }}
+        >
+          Alle oefeningen
+        </MenuItem>
+        {nameOptions.map((n) => (
+          <MenuItem
+            key={n}
+            selected={filter.exerciseName === n}
+            onClick={() => {
+              setFilter((f) => ({ ...f, exerciseName: n }));
+              closeFilterMenu();
+            }}
+          >
+            {n}
+          </MenuItem>
+        ))}
+      </Menu>
+      <Menu anchorEl={filterMenu?.anchor} open={filterMenu?.kind === 'workout'} onClose={closeFilterMenu}>
+        <MenuItem
+          selected={filter.schemaId == null}
+          onClick={() => {
+            setFilter((f) => ({ ...f, schemaId: null }));
+            closeFilterMenu();
+          }}
+        >
+          Alle workouts
+        </MenuItem>
+        {workouts.schemaIds.map((id) => (
+          <MenuItem
+            key={id}
+            selected={filter.schemaId === id}
+            onClick={() => {
+              setFilter((f) => ({ ...f, schemaId: id }));
+              closeFilterMenu();
+            }}
+          >
+            {schemaName(id)}
+          </MenuItem>
+        ))}
+        {workouts.hasLoose && (
+          <MenuItem
+            selected={filter.schemaId === NO_SCHEMA}
+            onClick={() => {
+              setFilter((f) => ({ ...f, schemaId: NO_SCHEMA }));
+              closeFilterMenu();
+            }}
+          >
+            Losse oefeningen
+          </MenuItem>
+        )}
+      </Menu>
+
+      {days.length === 0 ? (
+        <ContentCard>
+          <EmptyState>
+            {allExercises.some((e) => e.name?.trim())
+              ? 'Geen logs die bij deze filters passen.'
+              : viewingOther
                 ? `${viewed.name} heeft nog geen oefeningen gelogd.`
-                : 'Nog geen trainingen. Zodra je oefeningen logt, staan ze hier per dag bij elkaar.'}
-            </EmptyState>
+                : 'Nog geen logs. Zodra je oefeningen logt, staan ze hier per dag.'}
+          </EmptyState>
+          {filter.periodDays != null && allExercises.some((e) => e.name?.trim()) && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+              <Button size="small" onClick={() => setFilter((f) => ({ ...f, periodDays: null }))}>
+                Toon alle datums
+              </Button>
+            </Box>
           )}
+        </ContentCard>
+      ) : (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+          {days.map((d) => (
+            <Box key={d.day}>
+              <Typography sx={{ fontSize: 13, fontWeight: 500, lineHeight: '18px', color: 'text.secondary', mb: 1 }}>
+                {d.label}
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {(trainingNotesByDay.get(d.day) ?? []).map((t) => (
+                  <LogRow
+                    key={t.id}
+                    title={trainingTitle(t)}
+                    note={t.notes}
+                    details={t.exerciseCount > 0 ? `${t.exerciseCount} ${t.exerciseCount === 1 ? 'oefening' : 'oefeningen'}` : 'Training'}
+                    onOpen={
+                      t.sessionLogId
+                        ? (el) => {
+                            setMenuAnchorEl(el);
+                            setMenuExerciseId(`session-${t.sessionLogId}`);
+                          }
+                        : undefined
+                    }
+                  />
+                ))}
+                {d.logs.map((ex) => (
+                  <LogRow
+                    key={ex.id}
+                    title={ex.name!.trim()}
+                    note={ex.notes?.trim() || null}
+                    details={logRowDetails(ex)}
+                    onOpen={(el) => {
+                      setMenuAnchorEl(el);
+                      setMenuExerciseId(ex.id);
+                    }}
+                  />
+                ))}
+              </Box>
+            </Box>
+          ))}
         </Box>
-
-        <Typography variant="subtitle2" color="text.secondary" fontWeight={600} sx={{ mb: 1 }}>
-          Oefeningen
-        </Typography>
-
-        {allExercises.length > 0 && (
-          <Box className="stagger-children" sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {allExercises.map((exercise, index) => (
-              <Card
-                key={exercise.id}
-                sx={{
-                  '--stagger-index': index,
-                  backgroundColor: 'transparent',
-                  borderRadius: `${designTokens.cardRadius}px`,
-                  border: `1px solid ${designTokens.cardBorder}`,
-                  m: 0,
-                  boxShadow: 'none',
-                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                  '&:hover': {
-                    transform: 'translateY(-1px)',
-                    boxShadow: 1,
-                  },
-                } as any}
-                elevation={0}
-              >
-                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <Box sx={{ flex: 1 }}>
-                      <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                        {exercise.name || 'Notitie'}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                        {formatExerciseDateShort(exercise.date)}
-                      </Typography>
-                      <Typography variant="body2" color="text.primary">
-                        {formatExerciseDetails(exercise)}
-                      </Typography>
-                          {exercise.notes && String(exercise.notes).trim() && (
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{
-                                mt: 1.5,
-                                fontStyle: 'italic',
-                                display: 'block',
-                                opacity: 0.75,
-                                fontSize: '0.875rem',
-                                lineHeight: 1.5
-                              }}
-                            >
-                              &quot;{String(exercise.notes).trim()}&quot;
-                            </Typography>
-                          )}
-                        </Box>
-                        <IconButton
-                          size="small"
-                          onClick={(e) => handleMenuOpen(e, exercise.id)}
-                          sx={{ color: 'text.secondary', ml: 1 }}
-                        >
-                          <MoreVertIcon fontSize="small" />
-                        </IconButton>
-                      </Box>
-                    </CardContent>
-                  </Card>
-            ))}
-          </Box>
-        )}
-
-        {allExercises.length === 0 && (
-          <EmptyState>Nog geen oefeningen gelogd. Begin met het toevoegen van je eerste oefening!</EmptyState>
-        )}
-      </ContentCard>
+      )}
 
       {/* Menu voor edit/delete (oefening of sessie-log) */}
       <Menu
