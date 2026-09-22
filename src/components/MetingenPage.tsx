@@ -376,10 +376,8 @@ export function MetingenPage() {
   return (
     <PageLayout>
       <ContentCard>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-          <Typography variant="h5" fontWeight={600}>
-            Metingen
-          </Typography>
+        {/* Bovenbalk toont al "Metingen"; geen tweede titel nodig. */}
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             {!isTrainer && profileCtx?.profile && (
               <Button size="small" variant="text" sx={{ textTransform: 'none' }} onClick={() => setWeeklyOpen(true)}>
