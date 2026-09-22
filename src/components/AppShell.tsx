@@ -25,6 +25,7 @@ import { useProfile } from '../context/ProfileContext';
 import { useViewAs } from '../context/ViewAsContext';
 import { TopBarBackProvider, useTopBarBackVisible } from '../context/TopBarBackContext';
 import { designTokens } from '../theme/designTokens';
+import { PAGE_HEADER_ACTIONS_ID } from './layout/HeaderActions';
 
 export interface ShellDestination {
   label: string;
@@ -393,6 +394,8 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
           <Typography component="h1" sx={{ fontSize: 28, lineHeight: '36px', fontWeight: 400 }} noWrap>
             {title}
           </Typography>
+          {/* Knoppen van het scherm zelf (HeaderActions), rechts in de kop zoals "New workout" in Figma. */}
+          <Box id={PAGE_HEADER_ACTIONS_ID} sx={{ ml: 'auto', pl: 2, display: 'flex', alignItems: 'center', gap: 1 }} />
         </Box>
         {children}
       </Box>
