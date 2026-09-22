@@ -3,6 +3,7 @@ import { Box } from '@mui/material';
 import { getAllExercises } from '../utils/storage';
 import { getExerciseMuscleMapping } from '../utils/muscleMappingResolver';
 import { normalizeMuscleName } from '../utils/muscleNames';
+import { isWithinLastDays } from '../utils/insightsOverview';
 
 // Import Level SVG bestanden - Level 1 (lichtste) tot Level 5 (donkerste)
 // Voorkant levels vanuit front levels folder
@@ -255,7 +256,14 @@ export const getColorForFrequency = (frequency: number, maxFrequency: number, so
   return GREEN_TINTS[level - 1]; // level 1-5 -> index 0-4
 };
 
-export const MuscleFrequencyBody = () => {
+interface MuscleFrequencyBodyProps {
+  /** Alleen logs van de laatste N dagen meetellen; zonder = alles. */
+  sinceDays?: number;
+  /** Breedte van elk figuur (px of CSS-lengte); de hoogte is gelijk. */
+  size?: number | string;
+}
+
+export const MuscleFrequencyBody = ({ sinceDays, size = 350 }: MuscleFrequencyBodyProps = {}) => {
   // State om component te forceren om te re-renderen bij updates
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -279,7 +287,10 @@ export const MuscleFrequencyBody = () => {
   }, []);
 
   const { frontFrequencies, backFrequencies, frontSvgMap, backSvgMap } = useMemo(() => {
-    const exercises = getAllExercises();
+    const now = new Date();
+    const exercises = getAllExercises().filter(
+      (ex) => sinceDays == null || isWithinLastDays(ex.date, sinceDays, now)
+    );
 
     const frontFreq: Record<string, number> = {};
     const backFreq: Record<string, number> = {};
@@ -379,7 +390,7 @@ export const MuscleFrequencyBody = () => {
       frontSvgMap: frontSvgMapping,
       backSvgMap: backSvgMapping
     };
-  }, [refreshKey]);
+  }, [refreshKey, sinceDays]);
 
   // Combineer alle frequenties voor ranking
   const allFrequencies = { ...frontFrequencies, ...backFrequencies };
@@ -450,8 +461,8 @@ export const MuscleFrequencyBody = () => {
       <Box
         sx={{
           position: 'relative',
-          width: '350px',
-          height: '350px',
+          width: size,
+          aspectRatio: '1 / 1',
           overflow: 'visible',
           display: 'flex',
           justifyContent: 'center',
@@ -481,8 +492,8 @@ export const MuscleFrequencyBody = () => {
       <Box
         sx={{
           position: 'relative',
-          width: '350px',
-          height: '350px',
+          width: size,
+          aspectRatio: '1 / 1',
           overflow: 'visible',
           display: 'flex',
           justifyContent: 'center',
