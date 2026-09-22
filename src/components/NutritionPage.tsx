@@ -3,7 +3,6 @@ import {
   Box,
   Typography,
   TextField,
-  MenuItem,
   IconButton,
   Card,
   CardContent,
@@ -44,6 +43,7 @@ const BarcodeScannerDialog = lazy(() =>
 );
 import { PageLayout, ContentCard } from './layout';
 import { useProfile } from '../context/ProfileContext';
+import { useViewAs } from '../context/ViewAsContext';
 import { useNotify } from '../context/NotifyContext';
 import { useI18n } from '../context/I18nContext';
 import { updateProfile } from '../services/profileService';
@@ -140,12 +140,13 @@ export function NutritionPage() {
   const profileCtx = useProfile();
   const notify = useNotify();
   const { t } = useI18n();
-  const isTrainer = profileCtx?.isTrainer ?? false;
   const sporters = profileCtx?.allSporters ?? [];
   const selfUid = profileCtx?.profile?.userId ?? '';
   const selfTrainerId = profileCtx?.profile?.trainerId ?? null;
 
-  const [targetId, setTargetId] = useState('');
+  // Wie je bekijkt, komt uit "Bekijk als" (avatarmenu); een eigen keuzelijst per pagina is er niet meer.
+  const { viewed } = useViewAs();
+  const targetId = viewed.isOther ? viewed.userId : '';
   const [period, setPeriod] = useState<Period>('day');
   const [date, setDate] = useState(todayIso());
   const [allLogs, setAllLogs] = useState<NutritionLog[]>([]);
@@ -458,16 +459,6 @@ export function NutritionPage() {
             <ToggleButton value="week">{t('nutrition.periods.week')}</ToggleButton>
             <ToggleButton value="month">{t('nutrition.periods.month')}</ToggleButton>
           </ToggleButtonGroup>
-          {isTrainer && sporters.length > 0 && (
-            <TextField select size="small" label={t('nutrition.forWhom')} value={targetId} onChange={(e) => setTargetId(e.target.value)} sx={{ minWidth: 150 }} SelectProps={{ displayEmpty: true }} InputLabelProps={{ shrink: true }}>
-              <MenuItem value="">{t('nutrition.myself')}</MenuItem>
-              {sporters.map((s) => (
-                <MenuItem key={s.userId} value={s.userId}>
-                  {s.displayName?.trim() || s.email || s.userId}
-                </MenuItem>
-              ))}
-            </TextField>
-          )}
           <TextField type="date" size="small" label={period === 'day' ? t('nutrition.date') : t('nutrition.until')} value={date} onChange={(e) => setDate(e.target.value)} InputLabelProps={{ shrink: true }} />
         </Box>
 
