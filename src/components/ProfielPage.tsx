@@ -216,239 +216,250 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
 
 
   return (
-    <PageLayout>
-      {uid && p?.role === 'sporter' && <SubscriptionCard userId={uid} />}
-      {uid && p?.role === 'sporter' && <BookingsCard userId={uid} />}
-      <ContentCard>
-        {/* Bovenbalk toont al "Profiel"; geen tweede titel nodig. */}
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-          Beheer je gegevens. Je naam wordt gebruikt in de app en in beheeroverzichten.
-        </Typography>
+    <PageLayout maxWidth="none">
+      {message && (
+        <Alert
+          severity={message.type}
+          icon={message.type === 'success' ? <CheckCircleRoundedIcon fontSize="inherit" /> : <ErrorOutlineRoundedIcon fontSize="inherit" />}
+          sx={{ mb: 2 }}
+        >
+          {message.text}
+        </Alert>
+      )}
 
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mb: 3 }}>
-          <UserAvatar name={displayName || p?.displayName} photoURL={p?.photoURL} size={72} />
-          <Box>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(e) => {
-                handlePhotoSelected(e.target.files?.[0] ?? null);
-                e.target.value = '';
-              }}
-            />
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              <Button variant="outlined" size="small" disabled={uploadingPhoto} onClick={() => fileInputRef.current?.click()} startIcon={<PhotoCameraRoundedIcon />}>
-                {uploadingPhoto ? 'Bezig…' : p?.photoURL ? 'Foto wijzigen' : 'Foto toevoegen'}
-              </Button>
-              {p?.photoURL && (
-                <Button variant="text" size="small" disabled={uploadingPhoto} onClick={handleRemovePhoto}>
-                  Verwijderen
-                </Button>
-              )}
-            </Box>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-              Zichtbaar op de ranglijst. Zonder foto tonen we je initialen. (max 5 MB)
+      {/* Twee kolommen op desktop (Figma "Profile"): links wie je bent en je gegevens,
+          rechts account-instellingen. Op mobiel staat alles gewoon onder elkaar. */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3, alignItems: 'start' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+          {uid && p?.role === 'sporter' && <SubscriptionCard userId={uid} />}
+          {uid && p?.role === 'sporter' && <BookingsCard userId={uid} />}
+          <ContentCard>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+              Beheer je gegevens. Je naam wordt gebruikt in de app en in beheeroverzichten.
             </Typography>
-          </Box>
-        </Box>
 
-        {message && (
-          <Alert
-            severity={message.type}
-            icon={message.type === 'success' ? <CheckCircleRoundedIcon fontSize="inherit" /> : <ErrorOutlineRoundedIcon fontSize="inherit" />}
-            sx={{ mb: 2 }}
-          >
-            {message.text}
-          </Alert>
-        )}
-
-        <Box sx={{ display: 'flex', width: '100%', flexDirection: 'column', gap: 2 }}>
-          <TextField
-            label="Profielnaam"
-            size="small"
-            fullWidth
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Bijv. Jan Jansen"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <PersonRoundedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                </InputAdornment>
-              ),
-            }}
-          />
-
-          <Box sx={{ mt: 0.5 }}>
-            <Typography variant="subtitle2" component="h2" sx={{ fontWeight: 600 }}>
-              Persoonlijke gegevens
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-              Wordt gebruikt om de AI-routekaart alvast in te vullen (leeftijd, geslacht, e.d.).
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-            <NumberField label="Lengte (cm)" size="small" fullWidth value={heightCm} onChange={setHeightCm} />
-            <TextField label="Geboortedatum" type="date" size="small" fullWidth value={birthDate} onChange={(e) => setBirthDate(e.target.value)} InputLabelProps={{ shrink: true }} />
-            <TextField select label="Geslacht" size="small" fullWidth value={gender || 'none'} onChange={(e) => setGender(e.target.value === 'none' ? '' : (e.target.value as typeof gender))}>
-              <MenuItem value="none">Niet opgegeven</MenuItem>
-              <MenuItem value="man">Man</MenuItem>
-              <MenuItem value="vrouw">Vrouw</MenuItem>
-              <MenuItem value="anders">Anders</MenuItem>
-            </TextField>
-            <NumberField label="Rusthartslag (bpm)" size="small" fullWidth value={restingHr} onChange={setRestingHr} />
-          </Box>
-
-          {/* Hartslagzones: uit leeftijd + rusthartslag, zelfde formule als de routekaart */}
-          <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 3 }}>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: 1, mb: 0.5 }}>
-              <Typography variant="subtitle2" component="h2" sx={{ fontWeight: 600 }}>
-                Hartslagzones
-              </Typography>
-              {hrZones && (
-                <Typography variant="caption" color="text.secondary">
-                  max {hrZones.maxHr} bpm (220 − leeftijd){hrZones.restingHr != null ? ` · rust ${hrZones.restingHr} bpm` : ''}
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mb: 3 }}>
+              <UserAvatar name={displayName || p?.displayName} photoURL={p?.photoURL} size={72} />
+              <Box>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(e) => {
+                    handlePhotoSelected(e.target.files?.[0] ?? null);
+                    e.target.value = '';
+                  }}
+                />
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  <Button variant="outlined" size="small" disabled={uploadingPhoto} onClick={() => fileInputRef.current?.click()} startIcon={<PhotoCameraRoundedIcon />}>
+                    {uploadingPhoto ? 'Bezig…' : p?.photoURL ? 'Foto wijzigen' : 'Foto toevoegen'}
+                  </Button>
+                  {p?.photoURL && (
+                    <Button variant="text" size="small" disabled={uploadingPhoto} onClick={handleRemovePhoto}>
+                      Verwijderen
+                    </Button>
+                  )}
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                  Zichtbaar op de ranglijst. Zonder foto tonen we je initialen. (max 5 MB)
                 </Typography>
-              )}
+              </Box>
             </Box>
-            {hrZones ? (
-              <>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                  {hrZones.method === 'karvonen'
-                    ? 'Berekend met de hartslagreserve (Karvonen): rust + (max − rust) × percentage.'
-                    : 'Berekend als percentage van de maximale hartslag. Vul je rusthartslag in voor zones op maat (Karvonen).'}
+
+            <Box sx={{ display: 'flex', width: '100%', flexDirection: 'column', gap: 2 }}>
+              <TextField
+                label="Profielnaam"
+                size="small"
+                fullWidth
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Bijv. Jan Jansen"
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <PersonRoundedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+
+              <Box sx={{ mt: 0.5 }}>
+                <Typography variant="subtitle2" component="h2" sx={{ fontWeight: 600 }}>
+                  Persoonlijke gegevens
                 </Typography>
-                <Box sx={{ overflowX: 'auto' }}>
-                  <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                    <Box component="thead">
-                      <Box component="tr" sx={{ textAlign: 'left', color: 'text.secondary', fontSize: 12 }}>
-                        <Box component="th" sx={{ py: 0.5, pr: 1, fontWeight: 500 }}>Zone</Box>
-                        <Box component="th" sx={{ py: 0.5, pr: 1, fontWeight: 500 }}>bpm</Box>
-                        <Box component="th" sx={{ py: 0.5, fontWeight: 500 }}>Waarvoor</Box>
-                      </Box>
-                    </Box>
-                    <Box component="tbody">
-                      {hrZones.zones.map((z) => (
-                        <Box component="tr" key={z.zone} sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
-                          <Box component="td" sx={{ py: 0.75, pr: 1.5, whiteSpace: 'nowrap', verticalAlign: 'top' }}>
-                            <Box component="span" sx={{ fontWeight: 500 }}>Z{z.zone}</Box>{' '}
-                            <Box component="span" sx={{ color: 'text.secondary' }}>{z.name}</Box>
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                              {Math.round(z.low * 100)}–{Math.round(z.high * 100)}%
-                            </Typography>
-                          </Box>
-                          <Box component="td" sx={{ py: 0.75, pr: 1, whiteSpace: 'nowrap', verticalAlign: 'top', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
-                            {z.lowBpm}–{z.highBpm}
-                          </Box>
-                          <Box component="td" sx={{ py: 0.75, verticalAlign: 'top', fontSize: 12, color: 'text.secondary' }}>
-                            {z.purpose}
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  Wordt gebruikt om de AI-routekaart alvast in te vullen (leeftijd, geslacht, e.d.).
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                <NumberField label="Lengte (cm)" size="small" fullWidth value={heightCm} onChange={setHeightCm} />
+                <TextField label="Geboortedatum" type="date" size="small" fullWidth value={birthDate} onChange={(e) => setBirthDate(e.target.value)} InputLabelProps={{ shrink: true }} />
+                <TextField select label="Geslacht" size="small" fullWidth value={gender || 'none'} onChange={(e) => setGender(e.target.value === 'none' ? '' : (e.target.value as typeof gender))}>
+                  <MenuItem value="none">Niet opgegeven</MenuItem>
+                  <MenuItem value="man">Man</MenuItem>
+                  <MenuItem value="vrouw">Vrouw</MenuItem>
+                  <MenuItem value="anders">Anders</MenuItem>
+                </TextField>
+                <NumberField label="Rusthartslag (bpm)" size="small" fullWidth value={restingHr} onChange={setRestingHr} />
+              </Box>
+
+              {/* Hartslagzones: uit leeftijd + rusthartslag, zelfde formule als de routekaart */}
+              <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 3 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: 1, mb: 0.5 }}>
+                  <Typography variant="subtitle2" component="h2" sx={{ fontWeight: 600 }}>
+                    Hartslagzones
+                  </Typography>
+                  {hrZones && (
+                    <Typography variant="caption" color="text.secondary">
+                      max {hrZones.maxHr} bpm (220 − leeftijd){hrZones.restingHr != null ? ` · rust ${hrZones.restingHr} bpm` : ''}
+                    </Typography>
+                  )}
+                </Box>
+                {hrZones ? (
+                  <>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                      {hrZones.method === 'karvonen'
+                        ? 'Berekend met de hartslagreserve (Karvonen): rust + (max − rust) × percentage.'
+                        : 'Berekend als percentage van de maximale hartslag. Vul je rusthartslag in voor zones op maat (Karvonen).'}
+                    </Typography>
+                    <Box sx={{ overflowX: 'auto' }}>
+                      <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                        <Box component="thead">
+                          <Box component="tr" sx={{ textAlign: 'left', color: 'text.secondary', fontSize: 12 }}>
+                            <Box component="th" sx={{ py: 0.5, pr: 1, fontWeight: 500 }}>Zone</Box>
+                            <Box component="th" sx={{ py: 0.5, pr: 1, fontWeight: 500 }}>bpm</Box>
+                            <Box component="th" sx={{ py: 0.5, fontWeight: 500 }}>Waarvoor</Box>
                           </Box>
                         </Box>
-                      ))}
+                        <Box component="tbody">
+                          {hrZones.zones.map((z) => (
+                            <Box component="tr" key={z.zone} sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
+                              <Box component="td" sx={{ py: 0.75, pr: 1.5, whiteSpace: 'nowrap', verticalAlign: 'top' }}>
+                                <Box component="span" sx={{ fontWeight: 500 }}>Z{z.zone}</Box>{' '}
+                                <Box component="span" sx={{ color: 'text.secondary' }}>{z.name}</Box>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                  {Math.round(z.low * 100)}–{Math.round(z.high * 100)}%
+                                </Typography>
+                              </Box>
+                              <Box component="td" sx={{ py: 0.75, pr: 1, whiteSpace: 'nowrap', verticalAlign: 'top', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+                                {z.lowBpm}–{z.highBpm}
+                              </Box>
+                              <Box component="td" sx={{ py: 0.75, verticalAlign: 'top', fontSize: 12, color: 'text.secondary' }}>
+                                {z.purpose}
+                              </Box>
+                            </Box>
+                          ))}
+                        </Box>
+                      </Box>
                     </Box>
-                  </Box>
-                </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                  De 220-formule wijkt per persoon tot zo'n 10 bpm af. Een gemeten maximum uit een test is nauwkeuriger.
-                </Typography>
-              </>
-            ) : (
-              <Typography variant="body2" color="text.secondary">
-                Vul je geboortedatum in om je hartslagzones te zien. Met rusthartslag worden ze op maat berekend.
-              </Typography>
-            )}
-          </Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                      De 220-formule wijkt per persoon tot zo'n 10 bpm af. Een gemeten maximum uit een test is nauwkeuriger.
+                    </Typography>
+                  </>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    Vul je geboortedatum in om je hartslagzones te zien. Met rusthartslag worden ze op maat berekend.
+                  </Typography>
+                )}
+              </Box>
 
-          <TextField
-            label="E-mail"
-            size="small"
-            fullWidth
-            value={email}
-            disabled
-            helperText={
-              isPasswordAccount
-                ? 'Klik op "E-mail wijzigen" om je e-mailadres te veranderen.'
-                : 'E-mail wordt beheerd via je aanbieder (Google, etc.).'
-            }
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <MailOutlineRoundedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                </InputAdornment>
-              ),
-            }}
-          />
-          {isPasswordAccount && (
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              <Button variant="outlined" size="small" onClick={() => setEmailDialogOpen(true)}>
-                E-mail wijzigen
-              </Button>
-              <Button variant="outlined" size="small" onClick={() => setPwdDialogOpen(true)}>
-                Wachtwoord wijzigen
+              <LimitationsEditor value={limitations} onChange={setLimitations} disabled={saving} />
+
+              <Button variant="contained" onClick={handleSave} disabled={saving} sx={{ alignSelf: 'flex-start' }}>
+                {saving ? 'Bezig…' : 'Opslaan'}
               </Button>
             </Box>
-          )}
-
-          {/* Taal: op het profiel, zodat elk apparaat dezelfde keuze laat zien (ontwerp: Account-kaart, rij "Language"). */}
-          <TextField
-            select
-            label={t('lang.label')}
-            size="small"
-            value={lang}
-            onChange={(e) => void setLang(e.target.value as Lang)}
-            helperText={t('profile.languageHelp')}
-            sx={{ maxWidth: 260 }}
-          >
-            {LANGS.map((l) => (
-              <MenuItem key={l} value={l}>
-                {t(`lang.${l}`)}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          {/* Uitloggen hoort bij het account (ontwerp: Account-kaart, knop "Sign out"); op desktop staat hij ook in de zijbalk. */}
-          {onLogout && (
-            <Button size="small" color="inherit" startIcon={<LogoutRoundedIcon />} onClick={onLogout} sx={{ alignSelf: 'flex-start', color: 'text.secondary' }}>
-              {t('nav.signOut')}
-            </Button>
-          )}
-
-          <Box component="fieldset" sx={{ mt: 0.5, width: '100%', minWidth: 0, m: 0, p: 0, border: 0 }}>
-            <Typography component="legend" variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, p: 0 }}>
-              Ranglijst (privacy)
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              Standaard tonen we je <strong>profielnaam</strong> op de ranglijst. Je kunt anoniem gaan of jezelf uitzetten.
-            </Typography>
-            <RadioGroup value={leaderboardVisibility} onChange={(e) => setLeaderboardVisibility(e.target.value as LeaderboardVisibility)}>
-              <FormControlLabel value="named" control={<Radio size="small" />} label="Met mijn profielnaam op de ranglijst (standaard)" />
-              <FormControlLabel value="anonymous" control={<Radio size="small" />} label="Anoniem op de ranglijst" />
-              <FormControlLabel
-                value="hidden"
-                control={<Radio size="small" />}
-                label={
-                  <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
-                    <VisibilityOffRoundedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                    Niet op de ranglijst
-                  </Box>
-                }
-              />
-            </RadioGroup>
-          </Box>
-
-          <LimitationsEditor value={limitations} onChange={setLimitations} disabled={saving} />
-
-          <Button variant="contained" onClick={handleSave} disabled={saving} sx={{ alignSelf: 'flex-start' }}>
-            {saving ? 'Bezig…' : 'Opslaan'}
-          </Button>
+          </ContentCard>
         </Box>
-      </ContentCard>
 
-      {uid && <PushNotificationsCard userId={uid} />}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+          <ContentCard>
+            <Box sx={{ display: 'flex', width: '100%', flexDirection: 'column', gap: 2 }}>
+              <TextField
+                label="E-mail"
+                size="small"
+                fullWidth
+                value={email}
+                disabled
+                helperText={
+                  isPasswordAccount
+                    ? 'Klik op "E-mail wijzigen" om je e-mailadres te veranderen.'
+                    : 'E-mail wordt beheerd via je aanbieder (Google, etc.).'
+                }
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <MailOutlineRoundedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              {isPasswordAccount && (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  <Button variant="outlined" size="small" onClick={() => setEmailDialogOpen(true)}>
+                    E-mail wijzigen
+                  </Button>
+                  <Button variant="outlined" size="small" onClick={() => setPwdDialogOpen(true)}>
+                    Wachtwoord wijzigen
+                  </Button>
+                </Box>
+              )}
 
-      {uid && <AiChatConnectCard userId={uid} />}
+              {/* Taal: op het profiel, zodat elk apparaat dezelfde keuze laat zien (ontwerp: Account-kaart, rij "Language"). */}
+              <TextField
+                select
+                label={t('lang.label')}
+                size="small"
+                value={lang}
+                onChange={(e) => void setLang(e.target.value as Lang)}
+                helperText={t('profile.languageHelp')}
+                sx={{ maxWidth: 260 }}
+              >
+                {LANGS.map((l) => (
+                  <MenuItem key={l} value={l}>
+                    {t(`lang.${l}`)}
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              {/* Uitloggen hoort bij het account (ontwerp: Account-kaart, knop "Sign out"); op desktop staat hij ook in de zijbalk. */}
+              {onLogout && (
+                <Button size="small" color="inherit" startIcon={<LogoutRoundedIcon />} onClick={onLogout} sx={{ alignSelf: 'flex-start', color: 'text.secondary' }}>
+                  {t('nav.signOut')}
+                </Button>
+              )}
+
+              <Box component="fieldset" sx={{ mt: 0.5, width: '100%', minWidth: 0, m: 0, p: 0, border: 0 }}>
+                <Typography component="legend" variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, p: 0 }}>
+                  Ranglijst (privacy)
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  Standaard tonen we je <strong>profielnaam</strong> op de ranglijst. Je kunt anoniem gaan of jezelf uitzetten.
+                </Typography>
+                <RadioGroup value={leaderboardVisibility} onChange={(e) => setLeaderboardVisibility(e.target.value as LeaderboardVisibility)}>
+                  <FormControlLabel value="named" control={<Radio size="small" />} label="Met mijn profielnaam op de ranglijst (standaard)" />
+                  <FormControlLabel value="anonymous" control={<Radio size="small" />} label="Anoniem op de ranglijst" />
+                  <FormControlLabel
+                    value="hidden"
+                    control={<Radio size="small" />}
+                    label={
+                      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                        <VisibilityOffRoundedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                        Niet op de ranglijst
+                      </Box>
+                    }
+                  />
+                </RadioGroup>
+              </Box>
+            </Box>
+          </ContentCard>
+
+          {uid && <PushNotificationsCard userId={uid} />}
+
+          {uid && <AiChatConnectCard userId={uid} />}
+        </Box>
+      </Box>
 
       <Dialog open={emailDialogOpen} onClose={() => setEmailDialogOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>E-mail wijzigen</DialogTitle>
