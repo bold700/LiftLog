@@ -534,13 +534,11 @@ export const TrainingSessionView = ({
                       sx={{
                         display: 'flex',
                         alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        gap: 2,
-                        flexWrap: 'wrap',
-                        flexDirection: { xs: 'column', sm: 'row' },
+                        gap: 1.5,
                       }}
                     >
-                      <Box sx={{ flex: 1, minWidth: { xs: '100%', sm: 160 } }}>
+                      <ExerciseDbDemo exerciseName={ex.exerciseName} variant="aside" />
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                           <Typography variant="subtitle1" fontWeight={600}>
                             {ex.exerciseName}
@@ -616,7 +614,6 @@ export const TrainingSessionView = ({
                           </md-filled-button>
                         </Box>
                       </Box>
-                      <ExerciseDbDemo exerciseName={ex.exerciseName} variant="aside" />
                     </Box>
                   </CardContent>
                 </Card>

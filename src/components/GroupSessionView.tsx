@@ -244,13 +244,12 @@ export function GroupSessionView({ schema, session, participants, currentUserId,
                     <Box
                       sx={{
                         display: 'flex',
-                        gap: 2,
-                        flexWrap: 'wrap',
-                        flexDirection: { xs: 'column', sm: 'row' },
+                        gap: 1.5,
                         alignItems: 'flex-start',
                       }}
                     >
-                      <Box sx={{ flex: 1, minWidth: { xs: '100%', sm: 160 } }}>
+                      <ExerciseDbDemo exerciseName={ex.exerciseName} variant="aside" />
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography variant="subtitle1" fontWeight={600}>
                           {ex.exerciseName}
                         </Typography>
@@ -280,7 +279,6 @@ export function GroupSessionView({ schema, session, participants, currentUserId,
                           </Typography>
                         </Box>
                       </Box>
-                      <ExerciseDbDemo exerciseName={ex.exerciseName} variant="aside" />
                     </Box>
                   </CardContent>
                 </Card>

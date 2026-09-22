@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Box, Typography, Collapse, IconButton, Skeleton } from '@mui/material';
+import { Box, Typography, Collapse, Dialog, IconButton, Skeleton } from '@mui/material';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import { apiUrl } from '../utils/apiOrigin';
 
 const SESSION_DEMO_PREFIX = 'liftlog:v4:exercise-demo:';
@@ -50,6 +51,7 @@ interface ExerciseDbDemoProps {
 export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDemoProps) {
   const [state, setState] = useState<DemoState>({ status: 'idle' });
   const [open, setOpen] = useState(false);
+  const [enlarged, setEnlarged] = useState(false);
   const [gifLoadFailed, setGifLoadFailed] = useState(false);
 
   const nameKey = exerciseName.trim();
@@ -194,23 +196,8 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
   }
 
   if (state.status === 'loading') {
-    if (variant === 'thumb') {
+    if (variant === 'thumb' || variant === 'aside') {
       return <Skeleton variant="rounded" width={52} height={52} sx={{ borderRadius: 1.5, flexShrink: 0 }} />;
-    }
-    if (variant === 'aside') {
-      return (
-        <Box
-          sx={{
-            flexShrink: 0,
-            order: { xs: -1, sm: 0 },
-            width: { xs: '100%', sm: 132 },
-            maxWidth: { xs: '100%', sm: 132 },
-            alignSelf: { xs: 'center', sm: 'flex-start' },
-          }}
-        >
-          <Skeleton variant="rounded" height={120} sx={{ borderRadius: 2.5 }} />
-        </Box>
-      );
     }
     return (
       <Box sx={{ mt: 1.5 }}>
@@ -244,6 +231,57 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
     );
   }
 
+  // Even klein als het overzicht (variant="thumb"), maar aanklikbaar: tijdens de training wil je
+  // meestal alleen even checken welke oefening het is, niet een grote afbeelding die de tekst
+  // wegdrukt. Wie de uitvoering toch groter wil zien, tikt erop.
+  if (variant === 'aside') {
+    return (
+      <>
+        <Box
+          component="button"
+          type="button"
+          onClick={() => setEnlarged(true)}
+          aria-label={`Vergroot animatie: ${state.displayName}`}
+          sx={{ p: 0, border: 0, background: 'none', cursor: 'pointer', flexShrink: 0, borderRadius: 1.5, display: 'block' }}
+        >
+          <Box
+            component="img"
+            src={state.gifUrl}
+            alt={state.displayName}
+            loading="lazy"
+            onError={() => setGifLoadFailed(true)}
+            sx={{
+              width: 52,
+              height: 52,
+              objectFit: 'cover',
+              borderRadius: 1.5,
+              display: 'block',
+              bgcolor: '#fff',
+            }}
+          />
+        </Box>
+        <Dialog open={enlarged} onClose={() => setEnlarged(false)} maxWidth="xs" fullWidth>
+          <Box sx={{ position: 'relative', p: 2 }}>
+            <IconButton
+              size="small"
+              aria-label="Sluiten"
+              onClick={() => setEnlarged(false)}
+              sx={{ position: 'absolute', top: 8, right: 8, bgcolor: 'background.paper' }}
+            >
+              <CloseRoundedIcon fontSize="small" />
+            </IconButton>
+            <Box
+              component="img"
+              src={state.gifUrl}
+              alt={`Animatie: ${state.displayName}`}
+              sx={{ width: '100%', height: 'auto', objectFit: 'contain', borderRadius: 2, display: 'block', mt: 3 }}
+            />
+          </Box>
+        </Dialog>
+      </>
+    );
+  }
+
   const mediaBlock = (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'center' }}>
       <Box
@@ -254,8 +292,7 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
         onError={() => setGifLoadFailed(true)}
         sx={{
           width: '100%',
-          maxWidth: variant === 'aside' ? { xs: '100%', sm: 160 } : 360,
-          maxHeight: variant === 'aside' ? { xs: 'none', sm: 130 } : 'none',
+          maxWidth: 360,
           height: 'auto',
           objectFit: 'contain',
           borderRadius: 2.5,
@@ -264,23 +301,6 @@ export function ExerciseDbDemo({ exerciseName, variant = 'aside' }: ExerciseDbDe
       />
     </Box>
   );
-
-  if (variant === 'aside') {
-    return (
-      <Box
-        sx={{
-          flexShrink: 0,
-          order: { xs: -1, sm: 0 },
-          width: { xs: '100%', sm: 'auto' },
-          minWidth: { sm: 120 },
-          maxWidth: { xs: '100%', sm: 200 },
-          alignSelf: 'center',
-        }}
-      >
-        {mediaBlock}
-      </Box>
-    );
-  }
 
   return (
     <Box sx={{ mt: 1.5 }}>
