@@ -47,10 +47,19 @@ interface AppShellProps {
 }
 
 /**
- * Bovenbalk op de telefoon (ontwerp "Top bar"): titel van het scherm en de avatar naar Profiel.
- * Plakt bovenaan, onder de statusbalk.
+ * Avatar met menu ("Naar profiel" / "Bekijk als"): de knop in de bovenbalk op de telefoon, en
+ * boven "Uitloggen" in de zijbalk op een groot scherm — zelfde gedrag, andere plek.
  */
-function MobileTopBar({ title, onNavigate, profileTabIndex }: { title: string; onNavigate: (tabIndex: number) => void; profileTabIndex?: number }) {
+function ProfileMenuButton({
+  onNavigate,
+  profileTabIndex,
+  showName,
+}: {
+  onNavigate: (tabIndex: number) => void;
+  profileTabIndex: number;
+  /** Toont naam naast de avatar (zijbalk); zonder is het alleen de cirkel (bovenbalk). */
+  showName?: boolean;
+}) {
   const { t } = useI18n();
   const profile = useProfile();
   const me = profile?.profile ?? null;
@@ -58,6 +67,112 @@ function MobileTopBar({ title, onNavigate, profileTabIndex }: { title: string; o
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  const avatarButton = (
+    <Box
+      component="button"
+      type="button"
+      aria-label={viewed.isOther ? `${t('nav.profile')} · ${t('viewAs.viewingAs', { name: viewed.name })}` : t('nav.profile')}
+      onClick={(e) => setMenuAnchor(e.currentTarget)}
+      sx={{
+        position: 'relative',
+        p: 0,
+        border: 0,
+        bgcolor: 'transparent',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.25,
+        width: showName ? '100%' : 'auto',
+        borderRadius: showName ? '999px' : '50%',
+        ...(showName && { px: 2, py: 1, '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' } }),
+      }}
+    >
+      <Box sx={{ position: 'relative', display: 'flex', flexShrink: 0 }}>
+        <UserAvatar name={viewed.isOther ? viewed.name : me?.displayName} photoURL={viewed.isOther ? viewed.photoURL : me?.photoURL} size={32} />
+        {viewed.isOther && (
+          <SupervisorAccountRoundedIcon
+            sx={{
+              position: 'absolute',
+              bottom: -3,
+              right: -3,
+              fontSize: 16,
+              color: designTokens.onPrimary,
+              bgcolor: designTokens.primary,
+              borderRadius: '50%',
+              border: '1.5px solid',
+              borderColor: 'background.default',
+              p: 0.1,
+            }}
+          />
+        )}
+      </Box>
+      {showName && (
+        <Box sx={{ minWidth: 0, textAlign: 'left' }}>
+          <Typography variant="body2" fontWeight={600} noWrap>
+            {viewed.isOther ? viewed.name : me?.displayName || me?.email || t('nav.profile')}
+          </Typography>
+          {viewed.isOther && (
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+              {t('viewAs.viewingAs', { name: viewed.name })}
+            </Typography>
+          )}
+        </Box>
+      )}
+    </Box>
+  );
+
+  return (
+    <>
+      {avatarButton}
+      <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
+        <MenuItem
+          onClick={() => {
+            setMenuAnchor(null);
+            onNavigate(profileTabIndex);
+          }}
+        >
+          <ListItemIcon>
+            <PersonRoundedIcon fontSize="small" />
+          </ListItemIcon>
+          {t('nav.profile')}
+        </MenuItem>
+        {mayViewOthers && (
+          <MenuItem
+            onClick={() => {
+              setMenuAnchor(null);
+              setPickerOpen(true);
+            }}
+          >
+            <ListItemIcon>
+              <VisibilityRoundedIcon fontSize="small" />
+            </ListItemIcon>
+            {viewed.isOther ? t('viewAs.viewingAs', { name: viewed.name }) : t('viewAs.menuLabel')}
+          </MenuItem>
+        )}
+      </Menu>
+      {mayViewOthers && (
+        <ViewAsSheet
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          sporters={profile?.allSporters ?? []}
+          viewedUserId={viewed.isOther ? viewed.userId : ''}
+          ownName={me?.displayName || me?.email || 'Mijzelf'}
+          ownPhotoURL={me?.photoURL}
+          onPick={(sporter) => {
+            setViewing(sporter ? { userId: sporter.userId, name: sporter.displayName?.trim() || sporter.email || 'Sporter', photoURL: sporter.photoURL } : null);
+            setPickerOpen(false);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * Bovenbalk op de telefoon (ontwerp "Top bar"): titel van het scherm en de avatar naar Profiel.
+ * Plakt bovenaan, onder de statusbalk.
+ */
+function MobileTopBar({ title, onNavigate, profileTabIndex }: { title: string; onNavigate: (tabIndex: number) => void; profileTabIndex?: number }) {
   return (
     <Box
       component="header"
@@ -77,75 +192,7 @@ function MobileTopBar({ title, onNavigate, profileTabIndex }: { title: string; o
       <Typography component="h1" variant="h6" sx={{ fontWeight: 600, flex: 1, minWidth: 0 }} noWrap>
         {title}
       </Typography>
-      {profileTabIndex != null && (
-        <>
-          <Box
-            component="button"
-            type="button"
-            aria-label={viewed.isOther ? `${t('nav.profile')} · ${t('viewAs.viewingAs', { name: viewed.name })}` : t('nav.profile')}
-            onClick={(e) => setMenuAnchor(e.currentTarget)}
-            sx={{ position: 'relative', p: 0, border: 0, bgcolor: 'transparent', cursor: 'pointer', borderRadius: '50%', display: 'flex' }}
-          >
-            <UserAvatar name={viewed.isOther ? viewed.name : me?.displayName} photoURL={viewed.isOther ? viewed.photoURL : me?.photoURL} size={32} />
-            {viewed.isOther && (
-              <SupervisorAccountRoundedIcon
-                sx={{
-                  position: 'absolute',
-                  bottom: -3,
-                  right: -3,
-                  fontSize: 16,
-                  color: designTokens.onPrimary,
-                  bgcolor: designTokens.primary,
-                  borderRadius: '50%',
-                  border: '1.5px solid',
-                  borderColor: 'background.default',
-                  p: 0.1,
-                }}
-              />
-            )}
-          </Box>
-          <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
-            <MenuItem
-              onClick={() => {
-                setMenuAnchor(null);
-                onNavigate(profileTabIndex);
-              }}
-            >
-              <ListItemIcon>
-                <PersonRoundedIcon fontSize="small" />
-              </ListItemIcon>
-              {t('nav.profile')}
-            </MenuItem>
-            {mayViewOthers && (
-              <MenuItem
-                onClick={() => {
-                  setMenuAnchor(null);
-                  setPickerOpen(true);
-                }}
-              >
-                <ListItemIcon>
-                  <VisibilityRoundedIcon fontSize="small" />
-                </ListItemIcon>
-                {viewed.isOther ? t('viewAs.viewingAs', { name: viewed.name }) : t('viewAs.menuLabel')}
-              </MenuItem>
-            )}
-          </Menu>
-          {mayViewOthers && (
-            <ViewAsSheet
-              open={pickerOpen}
-              onClose={() => setPickerOpen(false)}
-              sporters={profile?.allSporters ?? []}
-              viewedUserId={viewed.isOther ? viewed.userId : ''}
-              ownName={me?.displayName || me?.email || 'Mijzelf'}
-              ownPhotoURL={me?.photoURL}
-              onPick={(sporter) => {
-                setViewing(sporter ? { userId: sporter.userId, name: sporter.displayName?.trim() || sporter.email || 'Sporter', photoURL: sporter.photoURL } : null);
-                setPickerOpen(false);
-              }}
-            />
-          )}
-        </>
-      )}
+      {profileTabIndex != null && <ProfileMenuButton onNavigate={onNavigate} profileTabIndex={profileTabIndex} />}
     </Box>
   );
 }
@@ -321,6 +368,11 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
           </>
         )}
         <Box sx={{ flex: 1 }} />
+        {profileTabIndex != null && (
+          <Box sx={{ mx: 1, mb: 0.5 }}>
+            <ProfileMenuButton onNavigate={onNavigate} profileTabIndex={profileTabIndex} showName />
+          </Box>
+        )}
         <Button onClick={onLogout} startIcon={<LogoutRoundedIcon />} color="inherit" sx={{ alignSelf: 'flex-start', mx: 1, color: 'text.secondary' }}>
           {t('nav.signOut')}
         </Button>
