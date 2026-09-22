@@ -200,6 +200,24 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
     [staffName, t]
   );
 
+  /** Vaste weekmomenten kort, maandag eerst: "Do 19:00–20:00 · Za 10:00–11:00". */
+  const scheduleSummary = useCallback(
+    (c: ClassType) =>
+      [...c.schedule]
+        .sort(
+          (a, b) =>
+            WEEKDAY_ORDER.findIndex((w) => w.weekday === a.weekday) - WEEKDAY_ORDER.findIndex((w) => w.weekday === b.weekday) ||
+            a.startTime.localeCompare(b.startTime)
+        )
+        .map((slot) => {
+          const key = WEEKDAY_ORDER.find((w) => w.weekday === slot.weekday)?.key;
+          const day = key ? t(`classTypes.schedule.weekdayLabels.${key}`).slice(0, 2) : '';
+          return `${day} ${slot.startTime}–${slot.endTime}`;
+        })
+        .join(' · '),
+    [t]
+  );
+
   const isNew = useMemo(() => !!draft && !types.some((c) => c.id === draft.id), [draft, types]);
 
   const save = async () => {
@@ -350,6 +368,11 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
               <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
                 {summary(c)}
               </Typography>
+              {c.schedule.length > 0 && (
+                <Typography variant="caption" noWrap sx={{ display: 'block', color: 'primary.main', fontWeight: 500 }}>
+                  {scheduleSummary(c)}
+                </Typography>
+              )}
             </Box>
             <Chip
               size="small"
