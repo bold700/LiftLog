@@ -23,6 +23,10 @@ export const nl = {
     shortcuts: 'Snel naar',
     mainNavigation: 'Hoofdnavigatie',
   },
+  viewAs: {
+    menuLabel: 'Bekijk als',
+    viewingAs: 'Bekijkt als {name}',
+  },
   profile: {
     more: 'Meer',
     account: 'Account',

@@ -21,6 +21,10 @@ export const en: Messages = {
     shortcuts: 'Quick access',
     mainNavigation: 'Main navigation',
   },
+  viewAs: {
+    menuLabel: 'View as',
+    viewingAs: 'Viewing as {name}',
+  },
   profile: {
     more: 'More',
     account: 'Account',

@@ -15,6 +15,8 @@ export interface ViewedUser {
   userId: string;
   /** Naam om te tonen; leeg als we die niet kennen. */
   name: string;
+  /** Profielfoto, voor de avatar rechtsboven; null/undefined = geen foto (initialen). */
+  photoURL?: string | null;
   /** Kijk je bij iemand anders, of gewoon bij jezelf? */
   isOther: boolean;
 }
@@ -22,6 +24,7 @@ export interface ViewedUser {
 export interface ViewAsSelection {
   userId: string;
   name: string;
+  photoURL?: string | null;
 }
 
 /**
@@ -29,18 +32,20 @@ export interface ViewAsSelection {
  *
  * @param ownUserId  De ingelogde gebruiker.
  * @param ownName    Diens naam, voor de knop.
+ * @param ownPhotoURL Diens profielfoto, voor de avatar.
  * @param mayViewOthers Of deze rol bij een ander mag kijken (trainer of beheerder).
  * @param selection  De gekozen sporter, of null voor jezelf.
  */
 export function resolveViewedUser(
   ownUserId: string | null,
   ownName: string,
+  ownPhotoURL: string | null | undefined,
   mayViewOthers: boolean,
   selection: ViewAsSelection | null
 ): ViewedUser {
-  const self: ViewedUser = { userId: ownUserId ?? '', name: ownName, isOther: false };
+  const self: ViewedUser = { userId: ownUserId ?? '', name: ownName, photoURL: ownPhotoURL, isOther: false };
   if (!mayViewOthers || !selection) return self;
   // Jezelf kiezen uit de lijst is geen "bekijken als": de balk hoort dan weg te blijven.
   if (!selection.userId || selection.userId === ownUserId) return self;
-  return { userId: selection.userId, name: selection.name, isOther: true };
+  return { userId: selection.userId, name: selection.name, photoURL: selection.photoURL, isOther: true };
 }

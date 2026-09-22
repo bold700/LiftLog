@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Card,
   CardContent,
@@ -7,8 +7,6 @@ import {
   IconButton,
   Snackbar,
   Button,
-  TextField,
-  MenuItem,
 } from '@mui/material';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
@@ -44,6 +42,7 @@ import {
 } from '../utils/format';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { useProfile } from '../context/ProfileContext';
+import { useViewAs } from '../context/ViewAsContext';
 import { useNotify } from '../context/NotifyContext';
 import { saveCheckin } from '../services/checkinService';
 import { LastHandoverNote } from './LastHandoverNote';
@@ -92,23 +91,26 @@ export const TrainingSessionView = ({
   const addFromSchema = useAddFromSchema();
   const profileCtx = useProfile();
   const notify = useNotify();
+  const { viewed, setViewing } = useViewAs();
   const isTrainer = profileCtx?.isTrainer ?? false;
   const sporters = useMemo(() => profileCtx?.allSporters ?? [], [profileCtx?.allSporters]);
-  /** '' = de trainer logt voor zichzelf; anders het userId van de sporter. */
-  const logTargetId = addFromSchema?.logTargetId ?? '';
-  const setLogTargetId = addFromSchema?.setLogTargetId;
-  const applyDefaultLogTarget = addFromSchema?.applyDefaultLogTarget;
+  /** '' = de trainer logt voor zichzelf; anders het userId van de sporter waar "Bekijk als" op staat. */
+  const logTargetId = viewed.isOther ? viewed.userId : '';
   const logTarget = logTargetId ? sporters.find((sp) => sp.userId === logTargetId) ?? null : null;
 
-  // Een workout die aan één sporter hangt, staat meteen op die sporter: dat is bijna altijd
-  // voor wie de trainer de training start.
+  // Een workout die aan één sporter hangt, staat meteen op die sporter: dat is bijna altijd voor
+  // wie de trainer de training start. Eén keer per workout, zodat het "Bekijk als"-menu daarna
+  // leidend blijft als de trainer bewust iemand anders kiest.
   const schemaClientId = schema.clientId;
   const schemaId = schema.id;
+  const defaultedForSchema = useRef<string | null>(null);
   useEffect(() => {
-    if (!isTrainer || !applyDefaultLogTarget || !schemaClientId) return;
-    if (!sporters.some((sp) => sp.userId === schemaClientId)) return;
-    applyDefaultLogTarget(schemaId, schemaClientId);
-  }, [isTrainer, applyDefaultLogTarget, schemaClientId, schemaId, sporters]);
+    if (!isTrainer || !schemaClientId || defaultedForSchema.current === schemaId) return;
+    const client = sporters.find((sp) => sp.userId === schemaClientId);
+    if (!client) return;
+    defaultedForSchema.current = schemaId;
+    setViewing({ userId: client.userId, name: client.displayName?.trim() || client.email || 'Sporter', photoURL: client.photoURL });
+  }, [isTrainer, schemaClientId, schemaId, sporters, setViewing]);
   const [checkinOpen, setCheckinOpen] = useState(false);
   const [checkinSaving, setCheckinSaving] = useState(false);
   /** Overdracht uit stap 2 van de dialoog; gaat mee in de check-in die daarna wordt opgeslagen. */
@@ -380,32 +382,6 @@ export const TrainingSessionView = ({
               </Button>
             )}
           </Box>
-
-          {isTrainer && sporters.length > 0 && setLogTargetId && (
-            <TextField
-              select
-              size="small"
-              fullWidth
-              label="Training voor"
-              value={logTargetId}
-              onChange={(e) => setLogTargetId(e.target.value)}
-              SelectProps={{ displayEmpty: true }}
-              InputLabelProps={{ shrink: true }}
-              helperText={
-                logTarget
-                  ? 'Alles wat je hier logt komt onder het account van deze sporter.'
-                  : 'Je logt voor jezelf.'
-              }
-              sx={{ mb: 2 }}
-            >
-              <MenuItem value="">Mijzelf</MenuItem>
-              {sporters.map((sp) => (
-                <MenuItem key={sp.userId} value={sp.userId}>
-                  {sp.displayName?.trim() || sp.email || sp.userId}
-                </MenuItem>
-              ))}
-            </TextField>
-          )}
 
           {logTarget && <LastHandoverNote userId={logTarget.userId} />}
 

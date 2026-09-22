@@ -18,6 +18,7 @@ import { addExercise, getAllExercisesByName } from '../utils/storage';
 import { Exercise, ExerciseEffort } from '../types';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { useProfile } from '../context/ProfileContext';
+import { useViewAs } from '../context/ViewAsContext';
 import { useNotify } from '../context/NotifyContext';
 import { EffortPicker } from './EffortPicker';
 import { saveExerciseLog, getLastLogForUserExercise } from '../services/logService';
@@ -179,15 +180,12 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
   const addFromSchema = useAddFromSchema();
   const profileCtx = useProfile();
   const notify = useNotify();
+  const { viewed } = useViewAs();
   const isTrainer = profileCtx?.isTrainer ?? false;
   const sporters = profileCtx?.allSporters ?? [];
   const selfUid = profileCtx?.profile?.userId ?? null;
-  /**
-   * '' = voor mijzelf; anders userId van de sporter. Staat in de context, zodat de keuze uit de
-   * training hier doorwerkt en blijft staan als je meerdere oefeningen achter elkaar logt.
-   */
-  const logTargetId = addFromSchema?.logTargetId ?? '';
-  const setLogTargetId = addFromSchema?.setLogTargetId ?? (() => {});
+  /** '' = voor mijzelf; anders het userId van de sporter waar "Bekijk als" op staat. */
+  const logTargetId = viewed.isOther ? viewed.userId : '';
   /** True wanneer de oefening al is voorgevuld vanuit een training (dan geen auto-open dropdown). */
   const [prefilledFromSchema, setPrefilledFromSchema] = useState(false);
   const [exerciseName, setExerciseName] = useState('');
@@ -409,33 +407,14 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
   const formContent = (
     <>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {isTrainer && prefilledFromSchema && logTargetId && (
+            {isTrainer && logTargetId && (
               <Typography variant="body2" color="text.secondary">
                 Log gaat naar{' '}
                 <Box component="span" sx={{ fontWeight: 600, color: 'text.primary' }}>
                   {sporters.find((s) => s.userId === logTargetId)?.displayName?.trim() || 'de gekozen sporter'}
                 </Box>
-                . Wijzig dat in de training zelf.
+                . Wijzig via "Bekijk als" in het profielmenu rechtsboven.
               </Typography>
-            )}
-            {isTrainer && !prefilledFromSchema && sporters.length > 0 && (
-              <TextField
-                select
-                fullWidth
-                label="Voor wie loggen?"
-                value={logTargetId}
-                onChange={(e) => setLogTargetId(e.target.value)}
-                SelectProps={{ displayEmpty: true }}
-                InputLabelProps={{ shrink: true }}
-                helperText={logTargetId ? 'Log gaat onder het account van deze sporter.' : "Laat op 'Mijzelf' voor je eigen account."}
-              >
-                <MenuItem value="">Mijzelf</MenuItem>
-                {sporters.map((s) => (
-                  <MenuItem key={s.userId} value={s.userId}>
-                    {s.displayName?.trim() || s.email || s.userId}
-                  </MenuItem>
-                ))}
-              </TextField>
             )}
             <Autocomplete
               freeSolo={false}
