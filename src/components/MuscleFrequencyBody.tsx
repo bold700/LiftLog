@@ -259,11 +259,15 @@ export const getColorForFrequency = (frequency: number, maxFrequency: number, so
 interface MuscleFrequencyBodyProps {
   /** Alleen logs van de laatste N dagen meetellen; zonder = alles. */
   sinceDays?: number;
-  /** Breedte van elk figuur (px of CSS-lengte); de hoogte is gelijk. */
+  /** Breedte van elk figuur (px of CSS-lengte). */
   size?: number | string;
+  /** Verhouding breedte/hoogte van elk figuur. Staand (bijv. '1 / 1.8') snijdt de lege zijkanten van de tekening weg. */
+  aspectRatio?: string;
 }
 
-export const MuscleFrequencyBody = ({ sinceDays, size = 350 }: MuscleFrequencyBodyProps = {}) => {
+export const MuscleFrequencyBody = ({ sinceDays, size = 350, aspectRatio = '1 / 1' }: MuscleFrequencyBodyProps = {}) => {
+  // De tekeningen zijn 620×714 met veel ruimte naast het lichaam: in een staand vlak vullen we op hoogte.
+  const fit = aspectRatio === '1 / 1' ? 'contain' : 'cover';
   // State om component te forceren om te re-renderen bij updates
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -435,7 +439,7 @@ export const MuscleFrequencyBody = ({ sinceDays, size = 350 }: MuscleFrequencyBo
                 left: 0,
                 width: '100%',
                 height: '100%',
-                objectFit: 'contain',
+                objectFit: fit,
                 objectPosition: 'center',
                 pointerEvents: 'none',
               }}
@@ -462,7 +466,7 @@ export const MuscleFrequencyBody = ({ sinceDays, size = 350 }: MuscleFrequencyBo
         sx={{
           position: 'relative',
           width: size,
-          aspectRatio: '1 / 1',
+          aspectRatio,
           overflow: 'visible',
           display: 'flex',
           justifyContent: 'center',
@@ -480,7 +484,7 @@ export const MuscleFrequencyBody = ({ sinceDays, size = 350 }: MuscleFrequencyBo
             left: 0,
             width: '100%',
             height: '100%',
-            objectFit: 'contain',
+            objectFit: fit,
             objectPosition: 'center',
             zIndex: 1,
           }}
@@ -493,7 +497,7 @@ export const MuscleFrequencyBody = ({ sinceDays, size = 350 }: MuscleFrequencyBo
         sx={{
           position: 'relative',
           width: size,
-          aspectRatio: '1 / 1',
+          aspectRatio,
           overflow: 'visible',
           display: 'flex',
           justifyContent: 'center',
@@ -511,7 +515,7 @@ export const MuscleFrequencyBody = ({ sinceDays, size = 350 }: MuscleFrequencyBo
             left: 0,
             width: '100%',
             height: '100%',
-            objectFit: 'contain',
+            objectFit: fit,
             objectPosition: 'center',
             zIndex: 1,
           }}

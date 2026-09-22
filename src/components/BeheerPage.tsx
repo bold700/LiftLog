@@ -372,13 +372,11 @@ export function BeheerPage() {
     );
   }
 
-  // Kop naar het ontwerp: titel links, "Account toevoegen" rechts, daaronder de tabs.
+  // Kop naar het ontwerp: "Account toevoegen" rechts, daaronder de tabs.
   const header = (
     <>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 1.5 }}>
-        <Typography variant="h5" sx={{ fontWeight: 600, display: { xs: 'none', md: 'block' } }}>
-          {t('admin.title')}
-        </Typography>
+      {/* De titel staat in de kop van de schil; knoppen rechts op desktop, zoals voorheen links op mobiel. */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: { xs: 'flex-start', md: 'flex-end' }, gap: 2, mb: 1.5 }}>
         {section === 'lessoorten' ? (
           <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
             <Button variant="outlined" startIcon={<AddRoundedIcon />} onClick={() => setNewClassOpen(true)}>

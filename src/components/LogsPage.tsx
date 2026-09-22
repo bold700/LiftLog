@@ -26,7 +26,7 @@ import { groupExercisesIntoTrainings } from '../utils/trainingGroups';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { formatExerciseDateShort, formatExerciseDetails } from '../utils/format';
 import { designTokens } from '../theme/designTokens';
-import { PageLayout, ContentCard, PageTitle, EmptyState } from './layout';
+import { PageLayout, ContentCard, EmptyState } from './layout';
 import { ExerciseEditDialog } from './logs/ExerciseEditDialog';
 import { DeleteExerciseDialog } from './logs/DeleteExerciseDialog';
 import { SessionLogDialog } from './logs/SessionLogDialog';
@@ -332,8 +332,6 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
   return (
     <PageLayout maxWidth="none">
       <ContentCard>
-        <PageTitle>Log</PageTitle>
-
         {loadError && (
           <Alert severity="warning" sx={{ mb: 2 }}>
             {loadError}

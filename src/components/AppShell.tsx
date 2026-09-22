@@ -283,10 +283,10 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
   const theme = useTheme();
   const { t } = useI18n();
   const wide = useMediaQuery(theme.breakpoints.up('md'));
+  const title = [...destinations, ...secondary].find((d) => d.tabIndex === activeTab)?.label ?? brand.name;
 
   if (!wide) {
     const barIndex = Math.max(0, destinations.findIndex((d) => d.tabIndex === activeTab));
-    const title = [...destinations, ...secondary].find((d) => d.tabIndex === activeTab)?.label ?? brand.name;
     return (
       <TopBarBackProvider>
         {/* Op een telefoon scrolt de inhoud onder de statusbalk door; deze strook houdt dat vlak dicht,
@@ -387,7 +387,13 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
           {t('nav.signOut')}
         </Button>
       </Box>
-      <Box component="main" sx={{ flex: 1, minWidth: 0, px: 5, pt: 2 }}>
+      <Box component="main" sx={{ flex: 1, minWidth: 0, px: 5 }}>
+        {/* Paginakop zoals in Figma (Header, 92 hoog): de titel van het scherm. */}
+        <Box component="header" sx={{ display: 'flex', alignItems: 'center', minHeight: 92 }}>
+          <Typography component="h1" sx={{ fontSize: 28, lineHeight: '36px', fontWeight: 400 }} noWrap>
+            {title}
+          </Typography>
+        </Box>
         {children}
       </Box>
     </Box>
