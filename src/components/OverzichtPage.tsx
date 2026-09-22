@@ -21,12 +21,33 @@ const tileSx = () => ({
   borderRadius: `${designTokens.cardRadius}px`,
 });
 
-function StatTile({ value, label }: { value: string; label: string }) {
+interface StatTileProps {
+  value: string;
+  label: string;
+  /** Alleen op desktop achter het label; op mobiel is daar geen ruimte voor (Figma: drie smalle tegels). */
+  period?: string;
+  desktopOnly?: boolean;
+}
+
+function StatTile({ value, label, period, desktopOnly }: StatTileProps) {
   return (
-    <Box sx={{ ...tileSx(), px: 2, py: 1.75, minWidth: 0 }}>
+    <Box
+      sx={{
+        ...tileSx(),
+        px: 2,
+        py: 1.75,
+        minWidth: 0,
+        display: desktopOnly ? { xs: 'none', md: 'block' } : 'block',
+      }}
+    >
       <Typography sx={{ fontSize: 28, lineHeight: '36px', fontWeight: 500 }}>{value}</Typography>
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" color="text.secondary" noWrap>
         {label}
+        {period && (
+          <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>
+            {` · ${period}`}
+          </Box>
+        )}
       </Typography>
     </Box>
   );
@@ -86,15 +107,15 @@ export function OverzichtPage({ onOpenMuscles, onOpenLogs }: OverzichtPageProps)
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' },
-          gap: 2,
+          gridTemplateColumns: { xs: 'repeat(3, 1fr)', md: 'repeat(4, 1fr)' },
+          gap: { xs: 1.25, md: 2 },
           mb: 3,
         }}
       >
-        <StatTile value={String(stats.sessions)} label={`Trainingen · ${OVERVIEW_PERIOD_DAYS} d`} />
-        <StatTile value={formatVolume(stats.volumeKg)} label={`Volume · ${OVERVIEW_PERIOD_DAYS} d`} />
-        <StatTile value={`${stats.streakWeeks}w`} label="Weken op rij" />
-        <StatTile value={plan == null ? '–' : `${plan}%`} label="Schema deze week" />
+        <StatTile value={String(stats.sessions)} label="Trainingen" period={`${OVERVIEW_PERIOD_DAYS} d`} />
+        <StatTile value={formatVolume(stats.volumeKg)} label="Volume" period={`${OVERVIEW_PERIOD_DAYS} d`} />
+        <StatTile value={`${stats.streakWeeks}w`} label="Reeks" />
+        <StatTile value={plan == null ? '–' : `${plan}%`} label="Schema deze week" desktopOnly />
       </Box>
 
       {/* Twee kolommen op desktop (Figma "Overview"): spierfocus links, recente logs rechts. */}
@@ -155,7 +176,12 @@ export function OverzichtPage({ onOpenMuscles, onOpenLogs }: OverzichtPageProps)
                     )}
                   </Box>
                   <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
-                    {log.when}
+                    {log.day}
+                    {log.time && (
+                      <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                        {` ${log.time}`}
+                      </Box>
+                    )}
                   </Typography>
                 </Box>
               ))}

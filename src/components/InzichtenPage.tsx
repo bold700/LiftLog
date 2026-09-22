@@ -53,12 +53,14 @@ export const InzichtenPage = ({
         value={subTab}
         onChange={(_, v: number) => setSubTab(v)}
         variant={wide ? 'fullWidth' : 'scrollable'}
-        scrollButtons="auto"
-        allowScrollButtonsMobile
+        // Geen pijltjes: die reserveren links ruimte, en in Figma lopen de tabs vanaf de rand (swipen).
+        scrollButtons={false}
         sx={{
           minHeight: 48,
           mb: 2,
           width: '100%',
+          borderBottom: 1,
+          borderColor: 'divider',
           '& .MuiTab-root': {
             minHeight: 48,
             minWidth: 'auto',
