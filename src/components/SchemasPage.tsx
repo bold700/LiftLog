@@ -44,7 +44,7 @@ import { getMyPendingRequest } from '../services/workoutRequestService';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { useProfile } from '../context/ProfileContext';
 import { useShowBackButton } from '../context/TopBarBackContext';
-import { PageLayout, ContentCard, EmptyState } from './layout';
+import { PageLayout, ContentCard, EmptyState, HeaderActions } from './layout';
 import { SchemaDeleteDialog } from './schemas/SchemaDeleteDialog';
 import { GroupSessionSetupDialog } from './schemas/GroupSessionSetupDialog';
 import { WorkoutRequestDialog } from './schemas/WorkoutRequestDialog';
@@ -687,7 +687,7 @@ export const SchemasPage = () => {
         PageLayout met zijn automatische marges tot de inhoud krimpen i.p.v. 800px breed worden. */}
     <Box sx={{ flex: 1, minHeight: 0 }}>
     <PageLayout maxWidth="none">
-      <ContentCard>
+      <Box>
         <Box
           sx={{
             display: 'flex',
@@ -707,6 +707,7 @@ export const SchemasPage = () => {
             </Typography>
           )}
           {canCreateWorkouts && (
+            <HeaderActions>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
               {isTrainer && (
                 <Button
@@ -726,10 +727,11 @@ export const SchemasPage = () => {
                 {/* @ts-ignore */}
                 <md-filled-button>
                   <md-icon slot="start">add</md-icon>
-                  Nieuwe workout aanmaken
+                  Nieuwe workout
                 </md-filled-button>
               </Box>
             </Box>
+            </HeaderActions>
           )}
         </Box>
 
@@ -784,7 +786,10 @@ export const SchemasPage = () => {
               : 'Geen gewone workouts. Kijk in de andere tabs.'}
           </Typography>
         ) : (
-            <Box className="stagger-children" sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box
+              className="stagger-children"
+              sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' }, gap: { xs: 1.5, md: 2 } }}
+            >
               {visibleSchemas.map((schema, index) => (
                 <SchemaListCard
                   key={schema.id}
@@ -792,13 +797,14 @@ export const SchemasPage = () => {
                   index={index}
                   isThisWeek={isThisWeek(schema)}
                   assignee={assigneeSummary(schema)}
+                  isStaff={isTrainer}
                   nameOf={nameOf}
                   onClick={() => handleSchemaClick(schema)}
                 />
               ))}
           </Box>
         )}
-      </ContentCard>
+      </Box>
 
       <LesroosterImportDialog
         open={openLesroosterImport}
