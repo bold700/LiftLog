@@ -16,8 +16,6 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
-  useMediaQuery,
-  useTheme,
 } from '@mui/material';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
@@ -47,6 +45,7 @@ import { getColleagues } from '../services/profileService';
 import { designTokens } from '../theme/designTokens';
 import { segmentedToggleSx, filterPillSx } from '../theme/segmentedToggle';
 import { addWeeks } from '../utils/format';
+import { WeekTimeGrid } from './lessen/WeekTimeGrid';
 import type { Profile, SessionKind, StandingBooking } from '../types';
 
 /** Zonder eigen instelling geldt dit aantal uur, zoals de server standaard hanteert. */
@@ -102,9 +101,6 @@ const standingKey = (classTypeId: string, weekday: number, startTime: string) =>
 export function LessenPage() {
   const profileCtx = useProfile();
   const notify = useNotify();
-  const theme = useTheme();
-  /** Vanaf md past de week in zeven dagkolommen (Figma "Book a class"); daaronder stapelen we per dag. */
-  const wide = useMediaQuery(theme.breakpoints.up('md'));
   const me = profileCtx?.profile ?? null;
   const isStaff = me?.role === 'trainer' || me?.role === 'admin';
 
@@ -214,7 +210,7 @@ export function LessenPage() {
     }
     return map;
   }, [visibleClasses, weekStrip]);
-  /** Dezelfde week als gesorteerde lijst, alleen de dagen mét lessen (voor de gestapelde lijst op kleine schermen). */
+  /** Dezelfde week als gesorteerde lijst, alleen de dagen mét lessen (voor de tellingen boven het rooster). */
   const classesByDay = useMemo(
     () => Array.from(classesByDate.entries()).sort(([a], [b]) => a.localeCompare(b)),
     [classesByDate]
@@ -315,6 +311,23 @@ export function LessenPage() {
     [isStaff]
   );
 
+  /**
+   * Een blok in het weekrooster is te klein voor knoppen. Staf ziet de deelnemers, een sporter reserveert
+   * een open les; voor een eigen les of een afgelaste les gaan we naar die dag, waar Afmelden en Herstellen staan.
+   */
+  const handleBlockClick = useCallback(
+    (cls: StudioClass) => {
+      const mine = myBookingByClass.get(cls.id);
+      if (cls.cancelledAt || (!isStaff && mine)) {
+        setSelectedDate(cls.date);
+        setViewMode('day');
+        return;
+      }
+      handleRowClick(cls, mine);
+    },
+    [myBookingByClass, isStaff, handleRowClick]
+  );
+
   if (!me) return null;
 
   const renderClassRow = (cls: StudioClass) => {
@@ -389,124 +402,6 @@ export function LessenPage() {
           )}
           {isStaff && cls.cancelledAt && (
             <Button size="small" disabled={busy} onClick={() => void handleRestore(cls)}>
-              Herstellen
-            </Button>
-          )}
-        </Box>
-      </Box>
-    );
-  };
-
-  /**
-   * Compacte leskaart voor de dagkolommen van de weekweergave (Figma "Book a class"): tijd, titel,
-   * trainer en één pil met de stand. Kleur volgt de status: open = Primary Container, ingeschreven =
-   * Tertiary Container, vol/wachtlijst/afgelast = Surface Container High. Klikken doet hetzelfde als
-   * op de brede rij; de staf-acties staan klein rechtsboven.
-   */
-  const renderCompactCard = (cls: StudioClass) => {
-    const mine = myBookingByClass.get(cls.id);
-    const full = cls.bookedCount >= cls.capacity;
-    const busy = busyId === cls.id;
-    const left = Math.max(0, cls.capacity - cls.bookedCount);
-    const muted = !!cls.cancelledAt || (full && !mine);
-    const pillLabel = cls.cancelledAt
-      ? 'Afgelast'
-      : mine?.status === 'booked'
-        ? 'Ingeschreven'
-        : mine?.status === 'waitlist'
-          ? 'Op wachtlijst'
-          : full
-            ? 'Vol · wachtlijst'
-            : `${cls.creditCost} ${cls.creditCost === 1 ? 'credit' : 'credits'} · ${left} vrij`;
-    return (
-      <Box
-        key={cls.id}
-        role="button"
-        tabIndex={cls.cancelledAt ? -1 : 0}
-        onClick={() => handleRowClick(cls, mine)}
-        sx={{
-          position: 'relative',
-          borderRadius: 2,
-          p: 1.25,
-          bgcolor: mine?.status === 'booked' ? designTokens.tertiaryContainer : muted ? designTokens.cardBackgroundHigh : designTokens.primaryContainer,
-          color: mine?.status === 'booked' ? designTokens.onTertiaryContainer : muted ? 'text.secondary' : designTokens.onPrimaryContainer,
-          opacity: cls.cancelledAt ? 0.6 : 1,
-          cursor: cls.cancelledAt ? 'default' : 'pointer',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 0.25,
-          minWidth: 0,
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: SESSION_KIND_COLORS[cls.sessionKind], flexShrink: 0 }} />
-          <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.4 }}>
-            {cls.startTime}
-          </Typography>
-          {isStaff && !cls.cancelledAt && (
-            <IconButton
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                setCancelConfirmClass(cls);
-              }}
-              disabled={busy}
-              aria-label="Les verwijderen"
-              sx={{ ml: 'auto', mr: -0.5, mt: -0.5, p: 0.25, color: 'inherit' }}
-            >
-              <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
-            </IconButton>
-          )}
-        </Box>
-        <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.25, overflowWrap: 'anywhere' }}>
-          {cls.title}
-        </Typography>
-        {trainerNames[cls.trainerId] && (
-          <Typography variant="caption" sx={{ lineHeight: 1.4, opacity: 0.8 }} noWrap>
-            {trainerNames[cls.trainerId]}
-          </Typography>
-        )}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
-          <Box
-            component="span"
-            sx={{
-              px: 0.75,
-              py: 0.125,
-              borderRadius: '10px',
-              fontSize: 11,
-              fontWeight: 600,
-              lineHeight: 1.5,
-              whiteSpace: 'nowrap',
-              bgcolor: cls.cancelledAt ? 'error.main' : muted ? 'transparent' : designTokens.primary,
-              color: cls.cancelledAt ? 'error.contrastText' : muted ? 'text.secondary' : designTokens.onPrimary,
-              border: muted && !cls.cancelledAt ? `1px solid ${designTokens.cardBorder}` : 'none',
-            }}
-          >
-            {pillLabel}
-          </Box>
-          {!isStaff && mine && !cls.cancelledAt && (
-            <Button
-              size="small"
-              disabled={busy}
-              onClick={(e) => {
-                e.stopPropagation();
-                void handleCancel(mine);
-              }}
-              sx={{ minWidth: 0, px: 0.5, py: 0, fontSize: 11, lineHeight: 1.5, color: 'inherit' }}
-            >
-              Afmelden
-            </Button>
-          )}
-          {isStaff && cls.cancelledAt && (
-            <Button
-              size="small"
-              disabled={busy}
-              onClick={(e) => {
-                e.stopPropagation();
-                void handleRestore(cls);
-              }}
-              sx={{ minWidth: 0, px: 0.5, py: 0, fontSize: 11, lineHeight: 1.5 }}
-            >
               Herstellen
             </Button>
           )}
@@ -670,58 +565,26 @@ export function LessenPage() {
                     : 'Er staan nog geen lessen gepland. Je trainer zet ze hier neer.'}
               </EmptyState>
             </ContentCard>
-          ) : classesByDay.length === 0 && !wide ? (
-            <ContentCard>
-              <EmptyState>{roomFilter ? `Geen lessen in ${roomFilter} deze week.` : 'Geen lessen deze week.'}</EmptyState>
-            </ContentCard>
-          ) : wide ? (
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 1.5, alignItems: 'stretch' }}>
-              {weekStrip.map((d) => {
-                const dt = new Date(`${d}T12:00:00`);
-                const isToday = d === today();
-                const dayList = classesByDate.get(d) ?? [];
-                return (
-                  <Box
-                    key={d}
-                    sx={{
-                      bgcolor: designTokens.cardBackground,
-                      borderRadius: `${designTokens.cardRadius}px`,
-                      p: 1.5,
-                      minHeight: 280,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 1,
-                      minWidth: 0,
-                    }}
-                  >
-                    <Typography
-                      variant="caption"
-                      sx={{ fontWeight: isToday ? 700 : 600, textTransform: 'capitalize', color: isToday ? designTokens.primary : 'text.primary' }}
-                    >
-                      {WEEKDAY_SHORT[dt.getDay()]} {dt.getDate()}
-                    </Typography>
-                    {dayList.length === 0 ? (
-                      <Typography variant="caption" color="text.secondary">
-                        Geen lessen
-                      </Typography>
-                    ) : (
-                      dayList.map(renderCompactCard)
-                    )}
-                  </Box>
-                );
-              })}
-            </Box>
           ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-              {classesByDay.map(([date, dayList]) => (
-                <Box key={date}>
-                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1, textTransform: 'capitalize' }}>
-                    {relativeDayLabel(date)}
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>{dayList.map(renderClassRow)}</Box>
-                </Box>
-              ))}
-            </Box>
+            <>
+              {classesByDay.length === 0 && (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, px: 0.5 }}>
+                  {roomFilter ? `Geen lessen in ${roomFilter} deze week.` : 'Geen lessen deze week.'}
+                </Typography>
+              )}
+              <WeekTimeGrid
+                days={weekStrip}
+                classesByDate={classesByDate}
+                bookingByClass={myBookingByClass}
+                trainerNames={trainerNames}
+                today={today()}
+                onOpenClass={handleBlockClick}
+                onSelectDay={(d) => {
+                  setSelectedDate(d);
+                  setViewMode('day');
+                }}
+              />
+            </>
           )}
         </>
       )}
