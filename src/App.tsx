@@ -110,6 +110,7 @@ function AppContent() {
   const [addOpen, setAddOpen] = useState(false);
   const [requestedInsightsSubTab, setRequestedInsightsSubTab] = useState<number | null>(null);
   const [requestedOpenSessionLogDialog, setRequestedOpenSessionLogDialog] = useState(false);
+  const [requestedOpenMeasurementForm, setRequestedOpenMeasurementForm] = useState(false);
   const [fabAnchorEl, setFabAnchorEl] = useState<null | HTMLElement>(null);
   const fabMenuOpen = Boolean(fabAnchorEl);
   const profile = useProfile();
@@ -155,6 +156,7 @@ function AppContent() {
     handleFabMenuClose();
     setActiveTab(TAB_INZICHTEN);
     setRequestedInsightsSubTab(INZICHTEN_SUB.METINGEN);
+    setRequestedOpenMeasurementForm(true);
   }, [handleFabMenuClose]);
 
   useEffect(() => {
@@ -197,6 +199,8 @@ function AppContent() {
             onConsumeInitialSubTab={() => setRequestedInsightsSubTab(null)}
             initialOpenSessionLogDialog={requestedOpenSessionLogDialog}
             onConsumeInitialOpenSessionLogDialog={() => setRequestedOpenSessionLogDialog(false)}
+            initialOpenMeasurementForm={requestedOpenMeasurementForm}
+            onConsumeInitialOpenMeasurementForm={() => setRequestedOpenMeasurementForm(false)}
           />
         );
       case TAB_SCHEMAS:
@@ -220,6 +224,8 @@ function AppContent() {
             onConsumeInitialSubTab={() => setRequestedInsightsSubTab(null)}
             initialOpenSessionLogDialog={requestedOpenSessionLogDialog}
             onConsumeInitialOpenSessionLogDialog={() => setRequestedOpenSessionLogDialog(false)}
+            initialOpenMeasurementForm={requestedOpenMeasurementForm}
+            onConsumeInitialOpenMeasurementForm={() => setRequestedOpenMeasurementForm(false)}
           />
         );
     }

@@ -27,6 +27,9 @@ export interface InzichtenPageProps {
   onConsumeInitialSubTab?: () => void;
   /** Open direct het dialoog "Training log toevoegen" op de Logs-tab (bijv. na FAB → Training log). */
   initialOpenSessionLogDialog?: boolean;
+  /** Open op Metingen direct het invoervenster ("+ Log → Meting loggen"). */
+  initialOpenMeasurementForm?: boolean;
+  onConsumeInitialOpenMeasurementForm?: () => void;
   onConsumeInitialOpenSessionLogDialog?: () => void;
 }
 
@@ -34,6 +37,8 @@ export const InzichtenPage = ({
   initialSubTab = null,
   onConsumeInitialSubTab,
   initialOpenSessionLogDialog,
+  initialOpenMeasurementForm,
+  onConsumeInitialOpenMeasurementForm,
   onConsumeInitialOpenSessionLogDialog,
 }: InzichtenPageProps) => {
   const [subTab, setSubTab] = useState<number>(INZICHTEN_SUB.OVERZICHT);
@@ -123,7 +128,10 @@ export const InzichtenPage = ({
       <Box role="tabpanel" id="inzichten-panel-5" hidden={subTab !== 5} sx={{ flex: 1, minHeight: 0 }}>
         {subTab === 5 && (
           <Suspense fallback={<LoadingBlock />}>
-            <MetingenPage />
+            <MetingenPage
+              openFormRequested={initialOpenMeasurementForm}
+              onConsumeOpenForm={onConsumeInitialOpenMeasurementForm}
+            />
           </Suspense>
         )}
       </Box>
