@@ -30,9 +30,12 @@ export async function recognizeBodyScanPhotos(files: File[]): Promise<BodyScan |
 /**
  * Bodyscan via de QR-code van de BodyAnalyse-weegschaal ("Show qrcode"): de link uit de code
  * gaat naar de server, die de meting bij de fabrikant ophaalt. Exacte waarden, geen foto nodig.
+ * Zelfde endpoint als de fotoherkenning (/api/bodyscan-photo): die herkent aan `url`/`key` dat het
+ * om de QR-variant gaat. Geen los endpoint, want Vercel's Hobby-plan staat maximaal 12 serverless
+ * functions per deployment toe en dat aantal zat al op de rand.
  */
 export async function readBodyScanQr(url: string): Promise<BodyScan | null> {
-  const res = await fetch(apiUrl('/api/bodyscan-qr'), {
+  const res = await fetch(apiUrl('/api/bodyscan-photo'), {
     method: 'POST',
     headers: await authHeaders(),
     body: JSON.stringify({ url }),

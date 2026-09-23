@@ -32,9 +32,6 @@
     },
     "api/bodyscan-photo.mjs": {
       "maxDuration": 60
-    },
-    "api/bodyscan-qr.mjs": {
-      "maxDuration": 20
     }
   },
   "crons": [

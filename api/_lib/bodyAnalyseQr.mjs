@@ -6,7 +6,8 @@
  * een lijst van ~56 waarden is, in de volgorde waarin de pagina ze op het rapport zet
  * (afgeleid uit het tekenscript van de pagina, hello.js).
  *
- * Puur (geen netwerk), zodat de vertaling los te testen is; api/bodyscan-qr.mjs doet het ophalen.
+ * Puur (geen netwerk), zodat de vertaling los te testen is; api/bodyscan-photo.mjs doet het ophalen
+ * (in dezelfde functie als de fotoherkenning, i.p.v. een los endpoint — zie de uitleg daar).
  */
 
 export const BODYANALYSE_HOST = '119.23.70.228';
