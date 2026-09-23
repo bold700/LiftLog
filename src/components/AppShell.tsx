@@ -218,6 +218,17 @@ function MobileTopBar({ title, onNavigate, profileTabIndex }: { title: string; o
   );
 }
 
+/** Terugpijl vóór de titel in de desktopkop, voor een dieper scherm (bijv. een trainingssessie). */
+function DesktopBackButton() {
+  const { t } = useI18n();
+  if (!useTopBarBackVisible()) return null;
+  return (
+    <IconButton onClick={() => window.history.back()} aria-label={t('nav.back')} sx={{ ml: -1.5, mr: 1 }}>
+      <ArrowBackIosNewIcon fontSize="small" />
+    </IconButton>
+  );
+}
+
 /** Hoogte van de navigatiebalk plus de marge erboven: waar de "+"-knop en de toolbar op rusten (App.tsx: FAB op bottom 92). */
 const TOOLBAR_BOTTOM = 92;
 
@@ -327,6 +338,7 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
 
   return (
     <PageTitleProvider>
+    <TopBarBackProvider>
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       <Box
         component="nav"
@@ -400,6 +412,7 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
       <Box component="main" sx={{ flex: 1, minWidth: 0, px: 5 }}>
         {/* Paginakop zoals in Figma (Header, 92 hoog): de titel van het scherm. */}
         <Box component="header" sx={{ display: 'flex', alignItems: 'center', minHeight: 92 }}>
+          <DesktopBackButton />
           <Typography component="h1" sx={{ fontSize: 28, lineHeight: '36px', fontWeight: 400 }} noWrap>
             <ShellTitle fallback={title} />
           </Typography>
@@ -409,6 +422,7 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
         {children}
       </Box>
     </Box>
+    </TopBarBackProvider>
     </PageTitleProvider>
   );
 }
