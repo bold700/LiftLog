@@ -125,3 +125,33 @@ export function classFieldUpdates(existing, ct, endTime) {
   }
   return Object.keys(out).length ? out : null;
 }
+
+/** Weekdag (0 = zondag) van een "YYYY-MM-DD"-datum, los van de tijdzone van de server. */
+export function weekdayOf(dateIso) {
+  const [y, m, d] = String(dateIso).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+/** Hoort deze les bij dit vaste weekmoment (zelfde lessoort, weekdag en begintijd)? */
+export function inStandingSeries(cls, standing) {
+  return (
+    !!cls &&
+    !!standing &&
+    cls.classTypeId === standing.classTypeId &&
+    cls.startTime === standing.startTime &&
+    typeof cls.date === 'string' &&
+    weekdayOf(cls.date) === Number(standing.weekday)
+  );
+}
+
+/**
+ * Geldt een vaste les ("elke week") op deze datum? Alleen als hij aanstaat, de startdatum bereikt
+ * is en de datum niet in een pauze valt (vakantie: van `pausedFrom` t/m `pausedUntil`; zonder
+ * einddatum loopt de pauze door tot hij wordt opgeheven).
+ */
+export function standingAppliesOn(standing, dateIso) {
+  if (!standing || standing.active === false) return false;
+  if (standing.startDate && dateIso < standing.startDate) return false;
+  if (standing.pausedFrom && dateIso >= standing.pausedFrom && (!standing.pausedUntil || dateIso <= standing.pausedUntil)) return false;
+  return true;
+}

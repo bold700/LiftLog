@@ -41,6 +41,7 @@ import { LimitationsEditor } from './LimitationsEditor';
 import { todayIso } from '../utils/format';
 import { RequestsBanner } from './beheer/RequestsBanner';
 import { MembersList } from './beheer/MembersList';
+import { StandingBookingsCard } from './StandingBookingsCard';
 import { MembersToolbar } from './beheer/MembersToolbar';
 import {
   DEFAULT_MEMBER_FILTER,
@@ -586,6 +587,12 @@ export function BeheerPage() {
                       {creditError}
                     </Typography>
                   )}
+                </Box>
+              )}
+              {/* Vaste lessen van dit lid: de trainer zet een klant vast in (bijv. elke zaterdag HIIT). */}
+              {edit.role === 'sporter' && target.role === 'sporter' && (
+                <Box sx={{ gridColumn: { sm: '1 / -1' }, p: 2, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackgroundHigh }}>
+                  <StandingBookingsCard userId={target.userId} asStaff embedded />
                 </Box>
               )}
               <TextField label="Geboortedatum" type="date" size="small" fullWidth value={edit.birthDate} onChange={(e) => setEdit({ ...edit, birthDate: e.target.value })} InputLabelProps={{ shrink: true }} />
