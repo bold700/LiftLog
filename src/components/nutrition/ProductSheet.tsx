@@ -30,7 +30,7 @@ import { NumberField } from '../NumberField';
 import { useI18n } from '../../context/I18nContext';
 import { designTokens } from '../../theme/designTokens';
 import { portionsFor, type Portion } from '../../utils/portions';
-import { MEAL_ORDER, macrosForGrams, type FoodProduct, type MealMoment } from '../../services/nutritionService';
+import { MEAL_ORDER, NEVO_ATTRIBUTION, macrosForGrams, type FoodProduct, type MealMoment } from '../../services/nutritionService';
 
 const CUSTOM = 'custom';
 
@@ -269,6 +269,7 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
                 </Box>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
                   {t('nutrition.sheet.per100Note', {
+                    unit: product.unit === 'ml' ? 'ml' : 'g',
                     kcal: product.per100g.kcal,
                     protein: fmt1(product.per100g.protein),
                     carbs: fmt1(product.per100g.carbs),
@@ -276,6 +277,11 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
                   })}
                   {detailRows.length === 0 ? t('nutrition.sheet.noDetailsNote') : ''}
                 </Typography>
+                {product.source === 'nevo' && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                    {NEVO_ATTRIBUTION}
+                  </Typography>
+                )}
               </AccordionDetails>
             </Accordion>
           </Box>
