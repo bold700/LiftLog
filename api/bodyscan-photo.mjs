@@ -1,11 +1,21 @@
 import { applyCors } from './_lib/cors.mjs';
 import { requireUser, enforceRateLimit } from './_lib/requireUser.mjs';
 import { sanitizeBodyScan, BODY_SCAN_KEYS, BODY_SCAN_SEGMENT_KEYS } from './_lib/bodyScan.mjs';
+import { BODYANALYSE_DATA_URL, bodyAnalyseKeyFromInput, bodyScanFromCodeValue, codeValueList } from './_lib/bodyAnalyseQr.mjs';
 /**
- * Leest de uitslag van een lichaamsanalyse-weegschaal (BodyAnalyse/VA, InBody, …) van foto's
- * van het scherm of de uitdraai, met een vision-model (OpenAI). Geeft de waarden, de normaal-
- * waardes en de segmentale spier/vet-verdeling als JSON terug; de app laat de gebruiker alles
- * controleren voordat het bij de sporter wordt opgeslagen.
+ * Leest de uitslag van een lichaamsanalyse-weegschaal (BodyAnalyse/VA, InBody, …), op twee
+ * manieren:
+ * (1) van foto's van het scherm of de uitdraai, met een vision-model (OpenAI);
+ * (2) via de QR-code die de BodyAnalyse-weegschaal toont ("Show qrcode"): de app stuurt de link
+ *     (of sleutel) uit die code mee als `url`/`key`, en deze functie haalt de meting exact bij de
+ *     fabrikant op — geen AI, geen foto nodig. Dit gaat via de server (niet rechtstreeks vanuit de
+ *     app) omdat de bron een gewoon http-adres op een vast IP is, wat de app (https, ook in
+ *     Capacitor) niet zelf mag benaderen.
+ * Beide geven de waarden, de normaalwaardes en de segmentale spier/vet-verdeling als JSON terug;
+ * de app laat de gebruiker alles controleren voordat het bij de sporter wordt opgeslagen.
+ *
+ * Eén functiebestand voor beide (i.p.v. een los endpoint voor de QR-variant): Vercel's Hobby-plan
+ * staat maximaal 12 serverless functions per deployment toe, en dat aantal zat hier al op de rand.
  *
  * Zelfde opzet als food-photo: alleen ingelogd, daglimiet, foto's als data-URL.
  */
@@ -86,17 +96,56 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Per foto maximaal ~6 MB data-URL; maximaal 3 foto's (scherm bovenkant, onderkant, uitdraai). */
 const MAX_IMAGE_CHARS = 6 * 1024 * 1024;
 const MAX_IMAGES = 3;
+/** Aparte, iets hogere daglimiet voor de QR-variant: geen AI-kosten, wel een aanroep naar de fabrikant. */
+const QR_RATE_LIMIT_PER_DAY = 60;
+const QR_UPSTREAM_TIMEOUT_MS = 12_000;
+
+/** QR-code van de BodyAnalyse-weegschaal uitlezen: haalt de meting bij de fabrikant op, geen AI. */
+async function handleQrScan(req, res, user, key) {
+  if (!(await enforceRateLimit(user.db, res, user.uid, 'bodyscan-qr', QR_RATE_LIMIT_PER_DAY, DAY_MS))) return;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), QR_UPSTREAM_TIMEOUT_MS);
+  let payload;
+  try {
+    const upstream = await fetch(BODYANALYSE_DATA_URL + key, { signal: controller.signal, headers: { Accept: 'application/json' } });
+    if (!upstream.ok) {
+      console.error('[bodyscan-photo][qr] fabrikant antwoordde', upstream.status);
+      return json(res, 502, { error: 'De weegschaal-server gaf geen meting terug. Probeer het zo nog eens, of maak een foto.' });
+    }
+    payload = await upstream.json();
+  } catch (e) {
+    console.error('[bodyscan-photo][qr] ophalen mislukt:', e?.name === 'AbortError' ? 'timeout' : e);
+    return json(res, 504, { error: 'De weegschaal-server reageert niet. Probeer het zo nog eens, of maak een foto.' });
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const list = codeValueList(payload);
+  if (!list) {
+    console.error('[bodyscan-photo][qr] onverwachte vorm:', JSON.stringify(payload).slice(0, 300));
+    return json(res, 502, { error: 'De meting achter deze QR-code is niet leesbaar. Maak een foto van het scherm.' });
+  }
+  const scan = sanitizeBodyScan(bodyScanFromCodeValue(list));
+  if (!scan) return json(res, 422, { error: 'Geen meetwaarden gevonden achter deze QR-code.' });
+  return json(res, 200, { scan });
+}
 
 export default async function handler(req, res) {
   if (applyCors(req, res)) return;
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
+
+  const user = await requireUser(req, res);
+  if (!user) return;
+
+  // QR-code (of geplakte link): geen AI nodig, dus vóór de OPENAI_API_KEY-check.
+  const qrKey = bodyAnalyseKeyFromInput(req.body?.url ?? req.body?.key);
+  if (qrKey) return handleQrScan(req, res, user, qrKey);
+
   if (!process.env.OPENAI_API_KEY) {
     console.error('[bodyscan-photo] OPENAI_API_KEY ontbreekt');
     return json(res, 500, { error: 'Fotoherkenning is niet geconfigureerd op de server.' });
   }
-
-  const user = await requireUser(req, res);
-  if (!user) return;
 
   const raw = req.body?.images ?? (req.body?.image ? [req.body.image] : []);
   const images = Array.isArray(raw) ? raw : [];

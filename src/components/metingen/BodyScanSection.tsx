@@ -1,14 +1,18 @@
 // Bodyscan-invoer op de Metingen-pagina: foto's van de weegschaal laten uitlezen, de herkende
 // waarden controleren en bijwerken, en meteen zien hoe het rapport eruitziet.
 // Het concept (BodyScanDraft) leeft in MetingenPage, zodat opslaan/bewerken daar blijft.
-import { useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useMemo, useRef, useState } from 'react';
 import { Box, Button, CircularProgress, IconButton, MenuItem, TextField, Typography } from '@mui/material';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
 import PhotoLibraryRoundedIcon from '@mui/icons-material/PhotoLibraryRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
+import QrCodeScannerRoundedIcon from '@mui/icons-material/QrCodeScannerRounded';
 import { NumberField } from '../NumberField';
 import { BodyScanReport } from './BodyScanReport';
-import { recognizeBodyScanPhotos, BODY_SCAN_MAX_PHOTOS } from '../../services/bodyScanService';
+import { readBodyScanQr, recognizeBodyScanPhotos, BODY_SCAN_MAX_PHOTOS } from '../../services/bodyScanService';
+
+// De camera-scanner (zxing) laadt pas als er echt gescand wordt; hij is ook voor Voeding (streepjescodes).
+const BarcodeScannerDialog = lazy(() => import('../BarcodeScannerDialog').then((m) => ({ default: m.BarcodeScannerDialog })));
 import {
   BODY_SCAN_FIELDS,
   BODY_SCAN_SEGMENTS,
@@ -53,6 +57,10 @@ export function BodyScanSection({ draft, onDraftChange, onRecognized, onClear, p
   const [pending, setPending] = useState<PendingPhoto[]>([]);
   const [recognizing, setRecognizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [qrOpen, setQrOpen] = useState(false);
+  /** "Link plakken": voor als de QR-code al met de camera-app is gescand en de link in het klembord staat. */
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [link, setLink] = useState('');
 
   const hasValues = draftHasValues(draft);
   const preview = useMemo(() => (hasValues ? bodyScanFromDraft(draft) : null), [draft, hasValues]);
@@ -103,6 +111,28 @@ export function BodyScanSection({ draft, onDraftChange, onRecognized, onClear, p
     }
   };
 
+  /** QR-code (of geplakte link) van de weegschaal: de server haalt de exacte meting op. */
+  const readQr = async (url: string) => {
+    setQrOpen(false);
+    setRecognizing(true);
+    setError(null);
+    try {
+      const scan = await readBodyScanQr(url);
+      if (!scan) {
+        setError('Geen meetwaarden gevonden achter deze QR-code.');
+        return;
+      }
+      onRecognized(scan);
+      clearPending();
+      setLinkOpen(false);
+      setLink('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'QR-code uitlezen mislukt.');
+    } finally {
+      setRecognizing(false);
+    }
+  };
+
   const setValue = (key: keyof BodyScanDraft['values'], v: string) => onDraftChange({ ...draft, values: { ...draft.values, [key]: v } });
   const setSegment = (key: keyof BodyScanDraft['segments'], part: 'muscleKg' | 'fatKg', v: string) =>
     onDraftChange({ ...draft, segments: { ...draft.segments, [key]: { ...draft.segments[key], [part]: v } } });
@@ -121,8 +151,9 @@ export function BodyScanSection({ draft, onDraftChange, onRecognized, onClear, p
   return (
     <Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-        Fotografeer het scherm van de weegschaal (bovenste en onderste helft) of de uitdraai, recht van voren. De waarden worden uitgelezen en
-        komen hieronder te staan; controleer ze en pas aan waar nodig. De foto&apos;s zelf worden niet bewaard.
+        Kies op de weegschaal <strong>Show qrcode</strong> en scan de code: de meting komt dan exact binnen. Lukt dat niet, fotografeer dan het
+        scherm (bovenste en onderste helft) of de uitdraai, recht van voren. Controleer de waarden hieronder en pas aan waar nodig. Foto&apos;s
+        worden niet bewaard.
       </Typography>
 
       <input
@@ -149,6 +180,17 @@ export function BodyScanSection({ draft, onDraftChange, onRecognized, onClear, p
       />
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
         <Button
+          variant="contained"
+          size="small"
+          disableElevation
+          startIcon={recognizing && pending.length === 0 ? <CircularProgress size={14} color="inherit" /> : <QrCodeScannerRoundedIcon />}
+          disabled={recognizing}
+          onClick={() => setQrOpen(true)}
+          sx={{ textTransform: 'none', fontWeight: 600 }}
+        >
+          QR-code scannen
+        </Button>
+        <Button
           variant="outlined"
           size="small"
           startIcon={<PhotoCameraRoundedIcon />}
@@ -166,7 +208,39 @@ export function BodyScanSection({ draft, onDraftChange, onRecognized, onClear, p
         >
           Uit galerij
         </Button>
+        <Button variant="text" size="small" disabled={recognizing} onClick={() => setLinkOpen((v) => !v)} sx={{ textTransform: 'none' }}>
+          Link plakken
+        </Button>
       </Box>
+
+      {linkOpen && (
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mb: 1.5 }}>
+          <TextField
+            size="small"
+            fullWidth
+            label="Link uit de QR-code"
+            placeholder="http://119.23.70.228/tcy/index.html?…&key=…"
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+            inputProps={{ inputMode: 'url', autoCapitalize: 'none', autoCorrect: 'off' }}
+          />
+          <Button variant="outlined" size="small" disabled={recognizing || !link.trim()} onClick={() => void readQr(link.trim())} sx={{ flexShrink: 0, mt: 0.25 }}>
+            Uitlezen
+          </Button>
+        </Box>
+      )}
+
+      {qrOpen && (
+        <Suspense fallback={null}>
+          <BarcodeScannerDialog
+            open={qrOpen}
+            onClose={() => setQrOpen(false)}
+            onDetected={(code) => void readQr(code)}
+            title="QR-code van de weegschaal"
+            hint="Kies op de weegschaal 'Show qrcode' en richt de camera op de code."
+          />
+        </Suspense>
+      )}
 
       {pending.length > 0 && (
         <Box sx={{ mb: 1.5 }}>
