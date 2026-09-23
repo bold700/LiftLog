@@ -9,8 +9,11 @@ import process from 'node:process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-/** NL/EN-varianten → exacte catalogusnaam (canonical uit JSON). */
-const EXERCISE_ALIASES_RAW = {
+/**
+ * NL/EN-varianten → exacte catalogusnaam (canonical uit JSON). Ook gebruikt door de
+ * autocomplete-zoekindex (exerciseGifIndex.mjs), zodat "bankdrukken" ook Barbell Bench Press vindt.
+ */
+export const EXERCISE_ALIASES_RAW = {
   bankdrukken: 'Barbell Bench Press',
   'halter bankdrukken': 'Barbell Bench Press',
   benchpress: 'Barbell Bench Press',

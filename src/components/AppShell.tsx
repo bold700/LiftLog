@@ -186,7 +186,9 @@ function ShellTitle({ fallback }: { fallback: string }) {
 
 /**
  * Bovenbalk op de telefoon (ontwerp "Top bar"): titel van het scherm en de avatar naar Profiel.
- * Plakt bovenaan, onder de statusbalk.
+ * Staat als vast (niet-scrollend) kind boven .mobile-scroll, dus hij scrolt nooit mee en hoeft
+ * niet "sticky" te zijn — position: sticky in een geneste scrollcontainer + env(safe-area-inset-top)
+ * bleek op een echt toestel (Dynamic Island) de balk over de statusbalk te laten vallen.
  */
 function MobileTopBar({ title, onNavigate, profileTabIndex }: { title: string; onNavigate: (tabIndex: number) => void; profileTabIndex?: number }) {
   const { t } = useI18n();
@@ -195,9 +197,7 @@ function MobileTopBar({ title, onNavigate, profileTabIndex }: { title: string; o
     <Box
       component="header"
       sx={{
-        position: 'sticky',
-        top: 'env(safe-area-inset-top, 0px)',
-        zIndex: (th) => th.zIndex.appBar,
+        flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
         gap: 1,
@@ -314,25 +314,15 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
         {/* De schil is precies één scherm hoog (.mobile-shell) en scrolt van binnen; de navigatiebalk
             staat er als gewoon onderste kind in en de zwevende knoppen absoluut erboven. Zo kan iOS
             ze niet meer halverwege het scherm zetten (dat deed het met position: fixed na het
-            toetsenbord). */}
-        <Box className="mobile-shell" sx={{ position: 'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'background.default' }}>
-          {/* De inhoud scrolt onder de statusbalk door; deze strook houdt dat vlak dicht, zodat een
-              paginatitel niet half achter de klok of de notch verdwijnt. */}
-          <Box
-            aria-hidden
-            sx={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 'env(safe-area-inset-top, 0px)',
-              bgcolor: 'background.default',
-              zIndex: (th) => th.zIndex.appBar,
-              pointerEvents: 'none',
-            }}
-          />
+            toetsenbord). De bovenbalk staat om dezelfde reden als vast (niet-scrollend) kind vóór
+            .mobile-scroll, i.p.v. sticky erbinnen: op een echt toestel viel de balk anders over de
+            statusbalk/Dynamic Island. paddingTop op de schil zelf houdt de balk onder de statusbalk. */}
+        <Box
+          className="mobile-shell"
+          sx={{ position: 'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'background.default', pt: 'env(safe-area-inset-top, 0px)' }}
+        >
+          <MobileTopBar title={title} onNavigate={onNavigate} profileTabIndex={profileTabIndex} />
           <Box className="mobile-scroll" sx={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehaviorY: 'contain' }}>
-            <MobileTopBar title={title} onNavigate={onNavigate} profileTabIndex={profileTabIndex} />
             {children}
           </Box>
           {floating}
