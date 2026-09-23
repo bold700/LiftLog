@@ -207,12 +207,12 @@ export function AiGenerationPanel({ ai, isFormule7Template }: AiGenerationPanelP
             <Box sx={AI_PANEL_SHELL_SX}>
               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                 {isFormule7Template
-                  ? 'Genereer opnieuw met AI (Formule 7)'
+                  ? 'Genereer met AI (Formule 7)'
                   : 'Genereer workout met AI'}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                 {isFormule7Template
-                  ? 'Pas de casus of antwoorden aan en genereer opnieuw. De AI vult routekaart én trainingsdagen.'
+                  ? 'Beschrijf de casus, of vul hieronder de routekaart zelf in. De AI vult routekaart én trainingsdagen.'
                   : 'Beschrijf doel, niveau, aantal dagen, beschikbare apparatuur en eventuele blessures.'}
               </Typography>
               <TextField
