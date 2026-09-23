@@ -103,11 +103,13 @@ function num(v: string): number | null {
 }
 
 /** Formulier voor een nieuw account (aangemaakt door trainer/beheerder). */
+const ROLE_LABEL: Record<NewAccountState['role'], string> = { sporter: 'sporter', trainer: 'trainer', admin: 'beheerder' };
+
 interface NewAccountState {
   displayName: string;
   email: string;
   password: string;
-  role: 'sporter' | 'trainer';
+  role: 'sporter' | 'trainer' | 'admin';
   trainerId: string;
 }
 
@@ -275,7 +277,7 @@ export function BeheerPage() {
       const who = newAccount.displayName.trim() || mail;
       setMessage({
         type: 'success',
-        text: `Account aangemaakt voor ${who} (${newAccount.role === 'trainer' ? 'trainer' : 'sporter'}). Tijdelijk wachtwoord: ${newAccount.password} — geef dit door; e-mailverificatie is niet nodig en het wachtwoord kan later gewijzigd worden.`,
+        text: `Account aangemaakt voor ${who} (${ROLE_LABEL[newAccount.role]}). Tijdelijk wachtwoord: ${newAccount.password} — geef dit door; e-mailverificatie is niet nodig en het wachtwoord kan later gewijzigd worden.`,
       });
       setNewAccount(null);
       await load();
@@ -719,6 +721,7 @@ export function BeheerPage() {
               >
                 <MenuItem value="sporter">Sporter</MenuItem>
                 <MenuItem value="trainer">Trainer</MenuItem>
+                {isAdmin && <MenuItem value="admin">Beheerder</MenuItem>}
               </TextField>
               <TextField
                 select
