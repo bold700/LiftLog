@@ -103,6 +103,11 @@ await t('sporter maakt workout op naam van trainer → geweigerd', false, setDoc
 await t('trainer maakt workout → mag', true, setDoc(doc(as('trainer1'), 'workouts/w2'), { trainerId: 'trainer1', clientId: 'sporter1', name: 'x' }));
 await t('toegewezen sporter leest workout → mag', true, getDoc(doc(as('sporter1'), 'workouts/w2')));
 await t('andere sporter leest workout → geweigerd', false, getDoc(doc(as('sporter2'), 'workouts/w2')));
+await t('trainer maakt tweede workout → mag', true, setDoc(doc(as('trainer1'), 'workouts/wDel'), { trainerId: 'trainer1', clientId: null, name: 'weg' }));
+await t('sporter verwijdert workout van trainer → geweigerd', false, deleteDoc(doc(as('sporter1'), 'workouts/wDel')));
+await t('trainer verwijdert eigen workout → mag', true, deleteDoc(doc(as('trainer1'), 'workouts/wDel')));
+await t('trainer verwijdert workout van collega → geweigerd', false, deleteDoc(doc(as('trainerC2'), 'workouts/wC1')));
+await t('trainer studio B verwijdert workout studio A → geweigerd', false, deleteDoc(doc(as('trainerB'), 'workouts/w2')));
 await t('trainer leest workout van collega mét staffFullClientAccess aan → mag', true, getDoc(doc(as('trainerC2'), 'workouts/wC1')));
 await t('sporter (geen staf) leest workout van ander ondanks staffFullClientAccess → geweigerd', false, getDoc(doc(as('sporter1'), 'workouts/wC1')));
 
