@@ -161,8 +161,8 @@ export default async function handler(req, res) {
         return await setStandingBooking(res, db, uid, myOrgs, String(body.standingBookingId ?? '').trim(), body.active === true);
       case 'generateClassOccurrences':
         return await generateClassOccurrencesNow(res, db, myOrgs, isStaff, String(body.classTypeId ?? '').trim());
-      case 'removeClassOccurrences':
-        return await removeClassOccurrences(res, db, myOrgs, isStaff, String(body.classTypeId ?? '').trim());
+      case 'pruneStaleClasses':
+        return await pruneStaleClasses(res, db, myOrgs, isStaff);
       case 'grant':
         if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan credits aanpassen.', build: BUILD });
         return await grant(res, db, uid, myOrgs, body);
@@ -937,20 +937,26 @@ async function generateClassOccurrencesNow(res, db, myOrgs, isStaff, classTypeId
 }
 
 /**
- * Voordat een lessoort verdwijnt: zijn gegenereerde toekomstige lessen van het rooster halen. Lessen
+ * Het rooster van de eigen studio opruimen: toekomstige lessen van een verwijderde lessoort (ook
+ * handmatig geplande) en gegenereerde lessen van een verplaatst of weggehaald weekmoment. Lessen
  * waar al iemand op staat blijven staan (die afmelden doet de trainer bewust, met terugbetaling);
- * die komen terug in `staleWithBookings` zodat de app ze kan noemen.
+ * die komen terug in `staleWithBookings` zodat de app ze kan noemen. Aangeroepen na het verwijderen
+ * van een lessoort en bij het openen van Beheer → Lessoorten, zodat het rooster niet op de
+ * dagelijkse cron hoeft te wachten.
  */
-async function removeClassOccurrences(res, db, myOrgs, isStaff, classTypeId) {
+async function pruneStaleClasses(res, db, myOrgs, isStaff) {
   if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan het rooster aanpassen.', build: BUILD });
-  if (!classTypeId) return json(res, 400, { error: 'Geen lessoort opgegeven.', build: BUILD });
-  const snap = await db.collection('classTypes').doc(classTypeId).get();
-  if (snap.exists && !myOrgs.includes(orgIdOf(snap.data().orgId))) {
-    return json(res, 403, { error: 'Deze lessoort hoort niet bij jouw studio.', build: BUILD });
-  }
   const from = todayIso();
-  const classes = await futureClassesOfType(db, classTypeId, from, myOrgs);
-  const stale = staleGeneratedClasses(classes, new Map(), from);
+  const inMyOrg = (d) => myOrgs.includes(orgIdOf(d.orgId));
+  const [typesSnap, futureSnap] = await Promise.all([
+    db.collection('classTypes').get(),
+    db.collection('classes').where('date', '>=', from).get(),
+  ]);
+  const expected = new Map(
+    typesSnap.docs.filter((d) => inMyOrg(d.data())).map((d) => [d.id, expectedIdsForSchedule(d.id, d.data().schedule, from, WEEKS_AHEAD)])
+  );
+  const classes = futureSnap.docs.map((d) => ({ ...d.data(), id: d.id })).filter(inMyOrg);
+  const stale = staleGeneratedClasses(classes, expected, from);
   await deleteClasses(db, stale.remove);
   return json(res, 200, { removed: stale.remove.length, staleWithBookings: stale.keepBooked.map(staleSummary), build: BUILD });
 }

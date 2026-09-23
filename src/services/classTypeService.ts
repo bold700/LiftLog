@@ -121,9 +121,10 @@ export function generateClassOccurrencesNow(classTypeId: string): Promise<Genera
 }
 
 /**
- * Voor het verwijderen van een lessoort: zijn geplande lessen zonder inschrijvingen van het rooster
- * halen. Lessen met inschrijvingen blijven staan en komen terug, zodat de trainer ze bewust afmeldt.
+ * Het rooster van de studio opruimen: toekomstige lessen van een verwijderde lessoort en van een
+ * verplaatst of weggehaald weekmoment. Lessen met inschrijvingen blijven staan en komen terug,
+ * zodat de trainer ze bewust afmeldt.
  */
-export function removeClassOccurrences(classTypeId: string): Promise<{ removed: number; staleWithBookings: StaleClass[] }> {
-  return callBooking({ action: 'removeClassOccurrences', classTypeId });
+export function pruneStaleClasses(): Promise<{ removed: number; staleWithBookings: StaleClass[] }> {
+  return callBooking({ action: 'pruneStaleClasses' });
 }
