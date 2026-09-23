@@ -93,7 +93,7 @@ export const OefeningenPage = () => {
   const [sets, setSets] = useState('');
   const [reps, setReps] = useState('');
   const [notes, setNotes] = useState('');
-  const exerciseSuggestions = useExerciseSuggestions();
+  const exerciseSuggestions = useExerciseSuggestions(exerciseName);
   const editCancelButtonRef = useRef<any>(null);
   const editSaveButtonRef = useRef<any>(null);
   const deleteCancelButtonRef = useRef<any>(null);

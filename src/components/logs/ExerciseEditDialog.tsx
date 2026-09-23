@@ -43,7 +43,7 @@ export function ExerciseEditDialog({
   onClose,
   onSave,
 }: ExerciseEditDialogProps) {
-  const exerciseSuggestions = useExerciseSuggestions();
+  const exerciseSuggestions = useExerciseSuggestions(exerciseName);
   const editCancelButtonRef = useRef<any>(null);
   const editSaveButtonRef = useRef<any>(null);
 
