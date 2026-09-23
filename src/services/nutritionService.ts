@@ -4,6 +4,7 @@
  * - Loggen per account in Firestore `nutritionLogs` (zoals training-logs), zodat de
  *   trainer straks per klant de dagtotalen ziet.
  */
+import { searchNevo, type NevoData, type NevoRow } from '../utils/nevoSearch';
 import {
   collection,
   query,
@@ -37,7 +38,14 @@ export interface FoodProduct {
   nutriscore?: 'a' | 'b' | 'c' | 'd' | 'e' | null;
   /** Wat het etiket verder zegt, per 100 g. Null als er niets van bekend is. */
   details?: { sugars: number | null; fiber: number | null; saturatedFat: number | null; salt: number | null } | null;
+  /** Uit het Nederlands Voedingsstoffenbestand (NEVO-online, RIVM) in plaats van Open Food Facts. */
+  source?: 'nevo';
+  /** NEVO geeft dranken per 100 ml; de rest (en alles van Open Food Facts) per 100 g. */
+  unit?: 'g' | 'ml';
 }
+
+/** Voorgeschreven bronvermelding bij gegevens uit NEVO (voorwaarden NEVO-online 2025/9.0). */
+export const NEVO_ATTRIBUTION = 'Gebaseerd op gegevens van NEVO-online versie 2025/9.0, RIVM, Bilthoven';
 
 /** Bij welk moment van de dag iets is gegeten. */
 export type MealMoment = 'ontbijt' | 'lunch' | 'diner' | 'tussendoor';
@@ -91,52 +99,35 @@ function parseServingGrams(s: unknown): number | null {
 }
 
 /**
- * Curated basisproducten (vers/onbewerkt) met betrouwbare waarden per 100 g.
- * Verschijnen bovenaan, want zulke items zijn in Open Food Facts lastig te vinden.
+ * Het Nederlands Voedingsstoffenbestand pas laden bij de eerste zoekopdracht (±90 kB gezipt), zodat
+ * het de rest van de app niet vertraagt. Daarna blijft het in het geheugen.
  */
-interface CuratedFood {
-  name: string;
-  aliases: string[];
-  per100g: FoodProduct['per100g'];
-  servingGrams?: number | null;
+let nevoRows: Promise<NevoRow[]> | null = null;
+function loadNevo(): Promise<NevoRow[]> {
+  nevoRows ??= import('../data/nevo2025.json').then((m) => (m.default as NevoData).rows).catch(() => {
+    nevoRows = null;
+    return [];
+  });
+  return nevoRows;
 }
-const CURATED_FOODS: CuratedFood[] = [
-  { name: 'Banaan', aliases: ['banaan', 'banana'], per100g: { kcal: 89, protein: 1.1, carbs: 23, fat: 0.3 }, servingGrams: 120 },
-  { name: 'Appel', aliases: ['appel', 'apple'], per100g: { kcal: 52, protein: 0.3, carbs: 14, fat: 0.2 }, servingGrams: 150 },
-  { name: 'Sinaasappel', aliases: ['sinaasappel', 'orange'], per100g: { kcal: 47, protein: 0.9, carbs: 12, fat: 0.1 }, servingGrams: 130 },
-  { name: 'Ei (gekookt)', aliases: ['ei', 'egg', 'eieren'], per100g: { kcal: 143, protein: 13, carbs: 0.7, fat: 10 }, servingGrams: 55 },
-  { name: 'Kipfilet (rauw)', aliases: ['kip', 'kipfilet', 'chicken breast', 'chicken'], per100g: { kcal: 120, protein: 22.5, carbs: 0, fat: 2.6 }, servingGrams: 120 },
-  { name: 'Magere kwark', aliases: ['kwark', 'magere kwark', 'quark'], per100g: { kcal: 57, protein: 10, carbs: 3.4, fat: 0.2 }, servingGrams: 250 },
-  { name: 'Havermout', aliases: ['havermout', 'oats', 'oatmeal'], per100g: { kcal: 379, protein: 13, carbs: 67, fat: 7 }, servingGrams: 40 },
-  { name: 'Witte rijst (gekookt)', aliases: ['rijst', 'rice', 'witte rijst'], per100g: { kcal: 130, protein: 2.7, carbs: 28, fat: 0.3 }, servingGrams: 150 },
-  { name: 'Volkorenbrood', aliases: ['brood', 'volkorenbrood', 'bread', 'volkoren'], per100g: { kcal: 247, protein: 9, carbs: 41, fat: 3.4 }, servingGrams: 35 },
-  { name: 'Aardappel (gekookt)', aliases: ['aardappel', 'aardappelen', 'potato'], per100g: { kcal: 87, protein: 2, carbs: 20, fat: 0.1 }, servingGrams: 150 },
-  { name: 'Broccoli', aliases: ['broccoli'], per100g: { kcal: 34, protein: 2.8, carbs: 7, fat: 0.4 }, servingGrams: 100 },
-  { name: 'Amandelen', aliases: ['amandelen', 'almonds'], per100g: { kcal: 579, protein: 21, carbs: 22, fat: 50 }, servingGrams: 30 },
-  { name: 'Pindakaas', aliases: ['pindakaas', 'peanut butter'], per100g: { kcal: 588, protein: 25, carbs: 20, fat: 50 }, servingGrams: 15 },
-  { name: 'Halfvolle melk', aliases: ['melk', 'milk', 'halfvolle melk'], per100g: { kcal: 47, protein: 3.5, carbs: 4.8, fat: 1.5 }, servingGrams: 200 },
-  { name: 'Rundergehakt (rauw)', aliases: ['gehakt', 'rundergehakt', 'beef'], per100g: { kcal: 250, protein: 18, carbs: 0, fat: 20 }, servingGrams: 100 },
-  { name: 'Zalm (rauw)', aliases: ['zalm', 'salmon'], per100g: { kcal: 208, protein: 20, carbs: 0, fat: 13 }, servingGrams: 125 },
-  { name: 'Tonijn in water', aliases: ['tonijn', 'tuna'], per100g: { kcal: 116, protein: 26, carbs: 0, fat: 1 }, servingGrams: 100 },
-  { name: 'Volkoren pasta (gekookt)', aliases: ['pasta', 'volkoren pasta', 'spaghetti'], per100g: { kcal: 124, protein: 5, carbs: 25, fat: 1.1 }, servingGrams: 150 },
-  { name: 'Avocado', aliases: ['avocado'], per100g: { kcal: 160, protein: 2, carbs: 9, fat: 15 }, servingGrams: 100 },
-  { name: 'Griekse yoghurt', aliases: ['yoghurt', 'griekse yoghurt', 'yogurt'], per100g: { kcal: 97, protein: 9, carbs: 4, fat: 5 }, servingGrams: 150 },
-];
+
+async function nevoMatches(term: string): Promise<FoodProduct[]> {
+  const rows = await loadNevo();
+  return searchNevo(rows, term, 8).map((f) => ({
+    code: f.code,
+    name: f.name,
+    brand: 'NEVO',
+    imageUrl: null,
+    per100g: f.per100g,
+    servingGrams: null,
+    details: f.details,
+    source: 'nevo' as const,
+    unit: f.unit,
+  }));
+}
 
 function norm(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').trim();
-}
-
-function curatedMatches(term: string): FoodProduct[] {
-  const q = norm(term);
-  return CURATED_FOODS.filter((f) => f.aliases.some((a) => norm(a).includes(q) || q.includes(norm(a)))).map((f) => ({
-    code: `common:${f.name}`,
-    name: f.name,
-    brand: 'Vers',
-    imageUrl: null,
-    per100g: f.per100g,
-    servingGrams: f.servingGrams ?? null,
-  }));
 }
 
 /** Naam-relevantie t.o.v. de zoekterm (hoger = beter). */
@@ -153,17 +144,17 @@ function nameScore(name: string, q: string): number {
 export interface FoodSearchResult {
   products: FoodProduct[];
   /**
-   * True als Open Food Facts niet bereikbaar was. De eigen basisproducten staan er dan nog wel,
+   * True als Open Food Facts niet bereikbaar was. De basisproducten uit NEVO staan er dan nog wel,
    * zodat een storing bij hen niet het hele zoeken onbruikbaar maakt.
    */
   remoteFailed: boolean;
 }
 
-/** Zoek producten: eerst eigen basisproducten, daarna Open Food Facts (op relevantie). */
+/** Zoek producten: eerst basisproducten uit NEVO (RIVM), daarna merkproducten van Open Food Facts (op relevantie). */
 export async function searchFoods(term: string): Promise<FoodSearchResult> {
   const q = term.trim();
   if (!q) return { products: [], remoteFailed: false };
-  const curated = curatedMatches(q);
+  const nevoPromise = nevoMatches(q);
 
   let remote: FoodProduct[] = [];
   let remoteFailed = false;
@@ -176,15 +167,16 @@ export async function searchFoods(term: string): Promise<FoodSearchResult> {
     remoteFailed = true;
   }
 
+  const nevo = await nevoPromise;
   const nq = norm(q);
   const score = (p: FoodProduct) =>
     (p.per100g.kcal > 0 ? 30 : 0) + nameScore(p.name, nq) + (p.nl ? 15 : 0) + (p.imageUrl ? 5 : 0);
   remote.sort((a, b) => score(b) - score(a));
-  // Eigen basisproducten bovenaan. Dubbel is dezelfde naam bij hetzelfde merk: "Magere kwark" van
+  // Basisproducten uit NEVO bovenaan. Dubbel is dezelfde naam bij hetzelfde merk: "Magere kwark" van
   // Melkan, Optimel en Jumbo zijn drie producten, niet één — dat waren ze eerst wel.
   const keyOf = (p: FoodProduct) => `${norm(p.name)}|${norm(p.brand)}`;
-  const seen = new Set(curated.map(keyOf));
-  const products = [...curated];
+  const seen = new Set(nevo.map(keyOf));
+  const products = [...nevo];
   for (const p of remote) {
     const key = keyOf(p);
     if (seen.has(key)) continue;

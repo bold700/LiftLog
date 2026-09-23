@@ -53,6 +53,7 @@ import { useI18n } from '../context/I18nContext';
 import { updateProfile } from '../services/profileService';
 import type { NutritionGoal } from '../types';
 import {
+  NEVO_ATTRIBUTION,
   searchFoods,
   macrosForGrams,
   saveNutritionLog,
@@ -716,11 +717,17 @@ export function NutritionPage() {
                     </ListItemAvatar>
                     <ListItemText
                       primary={p.name}
-                      secondary={`${p.brand ? p.brand + ' · ' : ''}${p.per100g.kcal} kcal / 100g · ${t('nutrition.macroAbbr.protein')} ${p.per100g.protein} · ${t('nutrition.macroAbbr.carbs')} ${p.per100g.carbs} · ${t('nutrition.macroAbbr.fat')} ${p.per100g.fat}`}
+                      secondary={`${p.brand ? p.brand + ' · ' : ''}${p.per100g.kcal} kcal / 100${p.unit === 'ml' ? 'ml' : 'g'} · ${t('nutrition.macroAbbr.protein')} ${p.per100g.protein} · ${t('nutrition.macroAbbr.carbs')} ${p.per100g.carbs} · ${t('nutrition.macroAbbr.fat')} ${p.per100g.fat}`}
                     />
                   </ListItemButton>
                 ))}
               </List>
+            )}
+            {/* Voorwaarden NEVO-online: bronvermelding bij de gegevens. */}
+            {results.some((p) => p.source === 'nevo') && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: -1, mb: 2 }}>
+                NEVO: {NEVO_ATTRIBUTION}
+              </Typography>
             )}
 
             <Box sx={{ mt: 1 }} />
@@ -872,6 +879,10 @@ export function NutritionPage() {
         </Suspense>
       )}
 
+      {/* Dagtotalen zijn een berekening op NEVO-gegevens (en Open Food Facts): bronvermelding volgens de voorwaarden. */}
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 3, px: 0.5 }}>
+        {NEVO_ATTRIBUTION} en andere gegevens (Open Food Facts).
+      </Typography>
       <ProductSheet
         product={selected}
         grams={grams}

@@ -408,7 +408,7 @@ export const en: Messages = {
       fiber: 'Fibre',
       saturatedFat: 'Saturated fat',
       salt: 'Salt',
-      per100Note: 'Per 100 g: {kcal} kcal · P {protein} · C {carbs} · F {fat}',
+      per100Note: 'Per 100 {unit}: {kcal} kcal · P {protein} · C {carbs} · F {fat}',
       noDetailsNote: " · the label doesn't mention sugars, fibre or salt.",
       addToDiary: 'Add to diary',
     },

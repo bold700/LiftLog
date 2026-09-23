@@ -410,7 +410,7 @@ export const nl = {
       fiber: 'Vezels',
       saturatedFat: 'Verzadigd vet',
       salt: 'Zout',
-      per100Note: 'Per 100 g: {kcal} kcal · E {protein} · K {carbs} · V {fat}',
+      per100Note: 'Per 100 {unit}: {kcal} kcal · E {protein} · K {carbs} · V {fat}',
       noDetailsNote: ' · het etiket noemt geen suikers, vezels of zout.',
       addToDiary: 'Toevoegen aan dagboek',
     },

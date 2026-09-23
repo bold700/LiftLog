@@ -1,12 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
-import { defaultMealForNow, searchFoods } from '../../src/services/nutritionService';
+import { NEVO_ATTRIBUTION, defaultMealForNow, searchFoods } from '../../src/services/nutritionService';
+import nevo from '../../src/data/nevo2025.json';
 
 describe('searchFoods', () => {
-  it('geeft basisproducten terug als de server faalt', async () => {
+  it('geeft basisproducten uit NEVO terug als de server faalt', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }));
-    const r = await searchFoods('kwark');
+    const r = await searchFoods('magere kwark');
     expect(r.remoteFailed).toBe(true);
-    expect(r.products.map((p) => p.name)).toContain('Magere kwark');
+    expect(r.products[0]).toMatchObject({ name: 'Kwark magere', brand: 'NEVO', source: 'nevo', per100g: { kcal: 51, protein: 8.4 } });
   });
 
   it('voegt serverresultaten toe onder de basisproducten', async () => {
@@ -14,7 +15,7 @@ describe('searchFoods', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true, products: remote }) }));
     const r = await searchFoods('kwark');
     expect(r.remoteFailed).toBe(false);
-    expect(r.products[0].name).toBe('Magere kwark');
+    expect(r.products[0].source).toBe('nevo');
     expect(r.products.map((p) => p.name)).toContain('Kwark Jumbo');
   });
 
@@ -25,7 +26,7 @@ describe('searchFoods', () => {
     const remote = [mk('1', 'Melkan'), mk('2', 'Optimel'), mk('3', 'Optimel'), mk('4', 'Milbona', false)];
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true, products: remote }) }));
     const r = await searchFoods('kwark');
-    const brands = r.products.filter((p) => p.name === 'Magere kwark' && p.brand !== 'Vers').map((p) => p.brand);
+    const brands = r.products.filter((p) => p.name === 'Magere kwark' && p.source !== 'nevo').map((p) => p.brand);
     // Drie merken, en Optimel maar één keer.
     expect(brands).toEqual(['Melkan', 'Optimel', 'Milbona']);
   });
@@ -38,6 +39,12 @@ describe('searchFoods', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true, products: remote }) }));
     const r = await searchFoods('volle kwark');
     expect(r.products.filter((p) => p.name === 'Volle kwark')[0].brand).toBe('Jumbo');
+  });
+});
+
+describe('NEVO_ATTRIBUTION', () => {
+  it('noemt dezelfde versie als het ingebouwde bestand', () => {
+    expect(NEVO_ATTRIBUTION).toBe(`Gebaseerd op gegevens van ${nevo.source}`);
   });
 });
 
