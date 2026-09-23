@@ -26,3 +26,18 @@ export async function recognizeBodyScanPhotos(files: File[]): Promise<BodyScan |
   if (!res.ok) throw new Error(data?.error || 'Fotoherkenning mislukt');
   return parseBodyScan(data?.scan);
 }
+
+/**
+ * Bodyscan via de QR-code van de BodyAnalyse-weegschaal ("Show qrcode"): de link uit de code
+ * gaat naar de server, die de meting bij de fabrikant ophaalt. Exacte waarden, geen foto nodig.
+ */
+export async function readBodyScanQr(url: string): Promise<BodyScan | null> {
+  const res = await fetch(apiUrl('/api/bodyscan-qr'), {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ url }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || 'QR-code uitlezen mislukt');
+  return parseBodyScan(data?.scan);
+}

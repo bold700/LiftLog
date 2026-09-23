@@ -6,9 +6,18 @@ interface BarcodeScannerDialogProps {
   open: boolean;
   onClose: () => void;
   onDetected: (code: string) => void;
+  /** Kop en aanwijzing; standaard voor de streepjescode van een product (Voeding). Leest ook QR-codes. */
+  title?: string;
+  hint?: string;
 }
 
-export function BarcodeScannerDialog({ open, onClose, onDetected }: BarcodeScannerDialogProps) {
+export function BarcodeScannerDialog({
+  open,
+  onClose,
+  onDetected,
+  title = 'Barcode scannen',
+  hint = 'Richt de camera op de streepjescode van het product.',
+}: BarcodeScannerDialogProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
   const doneRef = useRef(false);
@@ -75,7 +84,7 @@ export function BarcodeScannerDialog({ open, onClose, onDetected }: BarcodeScann
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ pb: 0.5 }}>Barcode scannen</DialogTitle>
+      <DialogTitle sx={{ pb: 0.5 }}>{title}</DialogTitle>
       <DialogContent>
         {error ? (
           <Typography variant="body2" color="error">
@@ -117,7 +126,7 @@ export function BarcodeScannerDialog({ open, onClose, onDetected }: BarcodeScann
               <CircularProgress size={24} sx={{ position: 'absolute', top: '50%', left: '50%', mt: '-12px', ml: '-12px', color: '#fff' }} />
             )}
             <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-              Richt de camera op de streepjescode van het product.
+              {hint}
             </Typography>
           </Box>
         )}
