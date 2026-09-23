@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { classIdForOccurrence, missingOccurrences, occurrencesForSchedule, standingBookingId } from '../../api/_lib/classSchedule.mjs';
+import {
+  classFieldUpdates,
+  classIdForOccurrence,
+  expectedIdsForSchedule,
+  missingOccurrences,
+  occurrencesForSchedule,
+  staleGeneratedClasses,
+  standingBookingId,
+} from '../../api/_lib/classSchedule.mjs';
 
 // Donderdag 2026-09-24, voor een voorspelbaar vertrekpunt (weekday-tabel: zo=0 .. za=6).
 const THURSDAY = '2026-09-24';
@@ -69,5 +77,54 @@ describe('lesrooster: wat nog ontbreekt', () => {
     const schedule = [{ weekday: 4, startTime: '19:00', endTime: '20:00' }];
     const out = missingOccurrences('ct_1', schedule, THURSDAY, 2, new Set());
     expect(out).toHaveLength(2);
+  });
+});
+
+describe('lesrooster: verouderde lessen opruimen', () => {
+  const schedule = [{ weekday: 4, startTime: '19:15', endTime: '20:15' }];
+  const expected = new Map([['ct_1', expectedIdsForSchedule('ct_1', schedule, THURSDAY, 2)]]);
+  const cls = (id, date, extra = {}) => ({ id, classTypeId: 'ct_1', date, bookedCount: 0, waitlistCount: 0, ...extra });
+
+  it('laat lessen staan die het huidige schema oplevert', () => {
+    const ok = cls(classIdForOccurrence('ct_1', '2026-09-24', '19:15'), '2026-09-24');
+    expect(staleGeneratedClasses([ok], expected, THURSDAY)).toEqual({ remove: [], keepBooked: [] });
+  });
+
+  it('haalt een verschoven moment zonder inschrijvingen weg, en houdt er een met inschrijvingen', () => {
+    const empty = cls(classIdForOccurrence('ct_1', '2026-09-24', '20:00'), '2026-09-24');
+    const booked = cls(classIdForOccurrence('ct_1', '2026-10-01', '20:00'), '2026-10-01', { bookedCount: 2 });
+    const waiting = cls(classIdForOccurrence('ct_1', '2026-10-08', '20:00'), '2026-10-08', { waitlistCount: 1 });
+    const out = staleGeneratedClasses([empty, booked, waiting], expected, THURSDAY);
+    expect(out.remove.map((c) => c.id)).toEqual([empty.id]);
+    expect(out.keepBooked.map((c) => c.id)).toEqual([booked.id, waiting.id]);
+  });
+
+  it('ruimt alles van een verwijderde lessoort op', () => {
+    const gone = { ...cls(classIdForOccurrence('ct_2', '2026-09-24', '19:00'), '2026-09-24'), classTypeId: 'ct_2' };
+    expect(staleGeneratedClasses([gone], expected, THURSDAY).remove).toEqual([gone]);
+  });
+
+  it('blijft af van het verleden en van handmatig geplande lessen', () => {
+    const past = cls(classIdForOccurrence('ct_1', '2026-09-17', '20:00'), '2026-09-17');
+    const manual = cls('cls_abc', '2026-09-24');
+    expect(staleGeneratedClasses([past, manual], expected, THURSDAY)).toEqual({ remove: [], keepBooked: [] });
+  });
+
+  it('zonder schema verwacht het niets meer', () => {
+    expect(expectedIdsForSchedule('ct_1', [], THURSDAY, 2).size).toBe(0);
+  });
+});
+
+describe('lesrooster: lessoort-wijzigingen doorzetten', () => {
+  const ct = { name: 'Boksen', room: 'Zaal 1', description: null, sessionKind: 'group' };
+
+  it('geeft alleen de velden die echt anders zijn', () => {
+    const existing = { title: 'boksen', endTime: '21:00', room: 'Zaal 1', description: null, sessionKind: 'group', capacity: 12 };
+    expect(classFieldUpdates(existing, ct, '20:15')).toEqual({ title: 'Boksen', endTime: '20:15' });
+  });
+
+  it('geeft null als alles al klopt', () => {
+    const existing = { title: 'Boksen', endTime: '20:15', room: 'Zaal 1', description: null, sessionKind: 'group' };
+    expect(classFieldUpdates(existing, ct, '20:15')).toBeNull();
   });
 });

@@ -22,14 +22,13 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useProfile } from '../context/ProfileContext';
 import { useI18n } from '../context/I18nContext';
 import { useAuth } from '../context/AuthContext';
-import { getAllProfiles, updateProfile } from '../services/profileService';
+import { assignTrainerToSporter, getAllProfiles, getProfileByEmail, updateProfile } from '../services/profileService';
 import { deleteAccountAsAdmin } from '../services/adminAccountService';
 import type { LeaderboardVisibility, Membership, Plan, Profile, ProfileRole, Limitation } from '../types';
 import { PageLayout, ContentCard, HeaderActions } from './layout';
@@ -42,13 +41,22 @@ import { LimitationsEditor } from './LimitationsEditor';
 import { todayIso } from '../utils/format';
 import { RequestsBanner } from './beheer/RequestsBanner';
 import { MembersList } from './beheer/MembersList';
+import { MembersToolbar } from './beheer/MembersToolbar';
+import {
+  DEFAULT_MEMBER_FILTER,
+  DEFAULT_MEMBER_SORT,
+  filterMembers,
+  planOptions,
+  sortMembers,
+  type MemberFilter,
+  type MemberSort,
+} from '../utils/memberTable';
 import { ClassTypesPanel } from './beheer/ClassTypesPanel';
 import { SubscriptionsPanel } from './beheer/SubscriptionsPanel';
 import { BillingPanel } from './beheer/BillingPanel';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import { assignPlan, getActiveMembershipsForOrg, getPlans, renewDue, unassignPlan } from '../services/planService';
 import { getCreditBalancesForOrg, grantCredits } from '../services/classService';
-import { AddSporterByEmailCard } from './beheer/AddSporterByEmailCard';
 import { NewClassDialog } from './beheer/ClassSchedulingDialogs';
 import { NumberField } from './NumberField';
 import { designTokens } from '../theme/designTokens';
@@ -152,7 +160,8 @@ export function BeheerPage() {
   const [newPlanSignal, setNewPlanSignal] = useState(0);
   const [exportSignal, setExportSignal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState('');
+  const [memberFilter, setMemberFilter] = useState<MemberFilter>(DEFAULT_MEMBER_FILTER);
+  const [memberSort, setMemberSort] = useState<MemberSort>(DEFAULT_MEMBER_SORT);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [target, setTarget] = useState<Profile | null>(null);
@@ -211,10 +220,10 @@ export function BeheerPage() {
   );
 
   const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return profiles;
-    return profiles.filter((p) => [p.displayName, p.email, nameOf(p.trainerId)].some((s) => s?.toLowerCase().includes(q)));
-  }, [profiles, query, nameOf]);
+    const ctx = { credits, memberships, nameOf };
+    return sortMembers(filterMembers(profiles, memberFilter, ctx), memberSort, ctx);
+  }, [profiles, memberFilter, memberSort, credits, memberships, nameOf]);
+  const memberPlans = useMemo(() => planOptions(memberships), [memberships]);
 
   const openCreate = () => {
     setCreateError(null);
@@ -236,13 +245,32 @@ export function BeheerPage() {
       setCreateError('Vul een geldig e-mailadres in.');
       return;
     }
-    if (newAccount.password.length < 6) {
-      setCreateError('Het tijdelijke wachtwoord moet minstens 6 tekens zijn.');
-      return;
-    }
     setCreating(true);
     setCreateError(null);
     try {
+      // Heeft dit e-mailadres al een account (iemand die zich zelf heeft aangemeld)? Dan koppelen we
+      // die sporter in plaats van een tweede account te proberen; een wachtwoord is dan niet nodig.
+      const existing = await getProfileByEmail(mail).catch(() => null);
+      if (existing) {
+        if (existing.role !== 'sporter' || newAccount.role !== 'sporter') {
+          setCreateError('Er bestaat al een account met dit e-mailadres.');
+          return;
+        }
+        const trainerId = newAccount.trainerId || selfId;
+        const who = existing.displayName?.trim() || existing.email || mail;
+        if (existing.trainerId !== trainerId) {
+          await assignTrainerToSporter(existing.userId, trainerId);
+          await profileCtx?.refreshProfile();
+        }
+        setMessage({ type: 'success', text: `${who} had al een account en is gekoppeld.` });
+        setNewAccount(null);
+        await load();
+        return;
+      }
+      if (newAccount.password.length < 6) {
+        setCreateError('Het tijdelijke wachtwoord moet minstens 6 tekens zijn.');
+        return;
+      }
       await auth.adminCreateAccount(mail, newAccount.password, newAccount.role, newAccount.displayName.trim() || null, {
         trainerId: newAccount.role === 'sporter' ? newAccount.trainerId || null : null,
       });
@@ -448,22 +476,15 @@ export function BeheerPage() {
 
       <RequestsBanner profiles={profiles} onChanged={load} />
 
-      {/* Zoeken staat in het ontwerp alleen op de telefoon; op een groot scherm is de tabel zelf overzichtelijk. */}
-      <TextField
-        size="small"
-        fullWidth
-        placeholder={t('admin.search')}
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        sx={{ mb: 2, display: { xs: 'flex', md: 'none' }, '& .MuiOutlinedInput-root': { borderRadius: 999, bgcolor: designTokens.cardBackgroundHigh } }}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchRoundedIcon fontSize="small" />
-            </InputAdornment>
-          ),
-        }}
-        inputProps={{ 'aria-label': t('admin.searchMembers') }}
+      {/* Met veel leden: zoeken, filteren op rol en abonnement, sorteren (kolomkoppen of, op de telefoon, de keuzelijst). */}
+      <MembersToolbar
+        filter={memberFilter}
+        onFilter={setMemberFilter}
+        sort={memberSort}
+        onSort={setMemberSort}
+        plans={memberPlans}
+        shown={visible.length}
+        total={profiles.length}
       />
       {message && (
         <Alert severity={message.type} sx={{ mb: 2 }} onClose={() => setMessage(null)}>
@@ -471,7 +492,17 @@ export function BeheerPage() {
         </Alert>
       )}
 
-      <MembersList profiles={visible} credits={credits} memberships={memberships} selfId={selfId} loading={loading} hasAny={profiles.length > 0} onOpen={openEditor} />
+      <MembersList
+        profiles={visible}
+        credits={credits}
+        memberships={memberships}
+        selfId={selfId}
+        loading={loading}
+        hasAny={profiles.length > 0}
+        onOpen={openEditor}
+        sort={memberSort}
+        onSort={setMemberSort}
+      />
 
       <Dialog open={!!target && !!edit} onClose={closeEditor} maxWidth="sm" fullWidth fullScreen={fullScreen}>
         <DialogTitle>Profiel bewerken</DialogTitle>
@@ -644,7 +675,7 @@ export function BeheerPage() {
           <DialogContent>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Maak direct een account aan met een tijdelijk wachtwoord. E-mailverificatie is niet nodig: de gebruiker kan meteen inloggen en
-              jij kunt direct gegevens voor dit profiel bijhouden.
+              jij kunt direct gegevens voor dit profiel bijhouden. Heeft deze sporter al een account? Dan wordt dat account gekoppeld.
             </Typography>
             {createError && (
               <Alert severity="error" sx={{ mb: 2 }} onClose={() => setCreateError(null)}>
@@ -725,14 +756,6 @@ export function BeheerPage() {
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
               Geboortedatum, geslacht, lengte en rusthartslag vul je daarna in door op het profiel te tikken.
             </Typography>
-            {/* Tweede weg in dezelfde dialoog: iemand die al een account heeft aan jezelf koppelen. */}
-            <AddSporterByEmailCard
-              onAdded={async () => {
-                await load();
-                setNewAccount(null);
-              }}
-              onMessage={setMessage}
-            />
           </DialogContent>
         )}
         <DialogActions>

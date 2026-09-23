@@ -90,13 +90,40 @@ export async function deleteClassType(id: string): Promise<void> {
   await deleteDoc(doc(db, COLLECTION, id));
 }
 
+/** Een verouderde les die bleef staan omdat er al iemand op staat of op de wachtlijst. */
+export interface StaleClass {
+  id: string;
+  title: string;
+  date: string;
+  startTime: string;
+  bookedCount: number;
+}
+
+export interface GenerateResult {
+  created: number;
+  autoBooked: number;
+  autoWaitlisted: number;
+  autoSkippedNoCredits: number;
+  /** Verouderde lessen (verschoven of weggehaald weekmoment) zonder inschrijvingen die weg zijn. */
+  removed?: number;
+  /** Geplande lessen waarop naam, eindtijd, ruimte, omschrijving of soort is bijgewerkt. */
+  updated?: number;
+  staleWithBookings?: StaleClass[];
+}
+
 /**
- * Rooster meteen vullen voor deze lessoort, in plaats van tot de volgende dagelijkse cron te
- * wachten. Aanroepen nadat een lessoort met een terugkerend weekmoment is opgeslagen, anders zou
- * de eerste les pas de volgende dag verschijnen.
+ * Rooster meteen laten kloppen met deze lessoort, in plaats van tot de volgende dagelijkse cron te
+ * wachten: ontbrekende weekmomenten aanmaken, verschoven of weggehaalde momenten opruimen en
+ * wijzigingen (naam, eindtijd, ruimte) doorzetten op wat al gepland staat. Aanroepen na elke opslag.
  */
-export function generateClassOccurrencesNow(
-  classTypeId: string
-): Promise<{ created: number; autoBooked: number; autoWaitlisted: number; autoSkippedNoCredits: number }> {
+export function generateClassOccurrencesNow(classTypeId: string): Promise<GenerateResult> {
   return callBooking({ action: 'generateClassOccurrences', classTypeId });
+}
+
+/**
+ * Voor het verwijderen van een lessoort: zijn geplande lessen zonder inschrijvingen van het rooster
+ * halen. Lessen met inschrijvingen blijven staan en komen terug, zodat de trainer ze bewust afmeldt.
+ */
+export function removeClassOccurrences(classTypeId: string): Promise<{ removed: number; staleWithBookings: StaleClass[] }> {
+  return callBooking({ action: 'removeClassOccurrences', classTypeId });
 }

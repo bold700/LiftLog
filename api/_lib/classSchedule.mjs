@@ -62,3 +62,64 @@ export function missingOccurrences(classTypeId, schedule, fromDateIso, weeksAhea
     (o) => !existingKeys.has(classIdForOccurrence(classTypeId, o.date, o.startTime))
   );
 }
+
+/** Voorvoegsel van de id's die het rooster zelf aanmaakt voor een lessoort (zie `classIdForOccurrence`). */
+export function generatedPrefix(classTypeId) {
+  return `cls_gen_${classTypeId}_`;
+}
+
+/**
+ * Welke door het rooster aangemaakte lessen niet meer kloppen met hun lessoort: het weekmoment is
+ * verplaatst of weg, of de lessoort zelf bestaat niet meer. Alleen lessen vanaf `fromDateIso`
+ * (het verleden blijft zoals het was) en alleen gegenereerde lessen (een handmatig geplande les
+ * met een lessoort blijft altijd staan).
+ *
+ * `classes`: [{ id, classTypeId, date, bookedCount, waitlistCount }].
+ * `expectedIdsByType`: Map classTypeId → Set met de id's die het huidige schema oplevert; een
+ * lessoort die ontbreekt in de Map bestaat niet (meer), dus al zijn gegenereerde lessen zijn oud.
+ *
+ * Geeft `remove` (verouderd en niemand ingeschreven of op de wachtlijst: veilig weg) en
+ * `keepBooked` (verouderd maar met inschrijvingen: blijft staan, de trainer beslist).
+ */
+export function staleGeneratedClasses(classes, expectedIdsByType, fromDateIso) {
+  const remove = [];
+  const keepBooked = [];
+  for (const c of classes) {
+    if (!c || !c.classTypeId || typeof c.id !== 'string') continue;
+    if (!c.id.startsWith(generatedPrefix(c.classTypeId))) continue;
+    if (!c.date || c.date < fromDateIso) continue;
+    const expected = expectedIdsByType.get(c.classTypeId);
+    if (expected && expected.has(c.id)) continue;
+    const hasPeople = (Number(c.bookedCount) || 0) > 0 || (Number(c.waitlistCount) || 0) > 0;
+    (hasPeople ? keepBooked : remove).push(c);
+  }
+  return { remove, keepBooked };
+}
+
+/** De id's die het schema van een lessoort vanaf `fromDateIso` oplevert, voor `staleGeneratedClasses`. */
+export function expectedIdsForSchedule(classTypeId, schedule, fromDateIso, weeksAhead) {
+  const ids = new Set();
+  if (!Array.isArray(schedule)) return ids;
+  for (const o of occurrencesForSchedule(schedule, fromDateIso, weeksAhead)) ids.add(classIdForOccurrence(classTypeId, o.date, o.startTime));
+  return ids;
+}
+
+/**
+ * Velden van een lessoort die op zijn al geplande (toekomstige) lessen moeten meeveranderen: naam,
+ * eindtijd, ruimte, omschrijving en soort. Capaciteit, prijs en trainer bewust niet: daar hebben
+ * mensen al op geboekt. Geeft alleen de velden terug die echt anders zijn, of null.
+ */
+export function classFieldUpdates(existing, ct, endTime) {
+  const want = {
+    title: ct.name,
+    endTime: endTime ?? null,
+    room: ct.room ?? null,
+    description: ct.description ?? null,
+    sessionKind: ct.sessionKind ?? 'group',
+  };
+  const out = {};
+  for (const [k, v] of Object.entries(want)) {
+    if ((existing[k] ?? null) !== v) out[k] = v;
+  }
+  return Object.keys(out).length ? out : null;
+}
