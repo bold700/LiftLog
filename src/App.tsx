@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useCallback } from 'react';
-import { ThemeProvider, CssBaseline, Box, Fab, Menu, MenuItem, Alert, Button } from '@mui/material';
+import { ThemeProvider, CssBaseline, Box, Divider, Fab, Menu, MenuItem, Alert, Button } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import FitnessCenterRoundedIcon from '@mui/icons-material/FitnessCenterRounded';
 import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
@@ -9,6 +9,7 @@ import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
+import PostAddRoundedIcon from '@mui/icons-material/PostAddRounded';
 import MonitorWeightRoundedIcon from '@mui/icons-material/MonitorWeightRounded';
 import { lightTheme } from './theme';
 import { AppShell, type ShellDestination } from './components/AppShell';
@@ -111,6 +112,7 @@ function AppContent() {
   const [requestedInsightsSubTab, setRequestedInsightsSubTab] = useState<number | null>(null);
   const [requestedOpenSessionLogDialog, setRequestedOpenSessionLogDialog] = useState(false);
   const [requestedOpenMeasurementForm, setRequestedOpenMeasurementForm] = useState(false);
+  const [requestedCreateSchema, setRequestedCreateSchema] = useState(false);
   const [fabAnchorEl, setFabAnchorEl] = useState<null | HTMLElement>(null);
   const fabMenuOpen = Boolean(fabAnchorEl);
   const profile = useProfile();
@@ -159,8 +161,13 @@ function AppContent() {
     setRequestedOpenMeasurementForm(true);
   }, [handleFabMenuClose]);
 
-  useEffect(() => {
-  }, []);
+  /** Alle "aanmaken"-acties komen uit het +-menu, dus ook een nieuwe workout (staf). */
+  const handleNewWorkoutFromFab = useCallback(() => {
+    handleFabMenuClose();
+    setActiveTab(TAB_SCHEMAS);
+    setRequestedCreateSchema(true);
+  }, [handleFabMenuClose]);
+  const consumeRequestedCreateSchema = useCallback(() => setRequestedCreateSchema(false), []);
 
   const handleExerciseAdded = useCallback((opts?: { returnToSchema?: boolean }) => {
     setAddOpen(false);
@@ -204,7 +211,7 @@ function AppContent() {
           />
         );
       case TAB_SCHEMAS:
-        return <SchemasPage />;
+        return <SchemasPage initialCreateSchema={requestedCreateSchema} onConsumeInitialCreateSchema={consumeRequestedCreateSchema} />;
       case TAB_BEHEER:
         return <BeheerPage />;
       case TAB_ASSISTENT:
@@ -350,6 +357,13 @@ function AppContent() {
                   <MonitorWeightRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
                   Meting loggen
                 </MenuItem>
+                {isTrainer && <Divider />}
+                {isTrainer && (
+                  <MenuItem onClick={handleNewWorkoutFromFab}>
+                    <PostAddRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
+                    Workout aanmaken
+                  </MenuItem>
+                )}
               </Menu>
             </>
           )}

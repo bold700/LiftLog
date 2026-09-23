@@ -19,7 +19,6 @@ import {
 import { todayIso } from '../utils/format';
 import { Schema } from '../types';
 import type { GroupSession } from '../types';
-import { createEmptyFormule7 } from '../utils/formule7Defaults';
 import {
   getCategories,
   getSeriesOptions,
@@ -40,12 +39,10 @@ import { getMyPendingRequest } from '../services/workoutRequestService';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { useProfile } from '../context/ProfileContext';
 import { useShowBackButton } from '../context/TopBarBackContext';
-import { PageLayout, EmptyState, HeaderActions } from './layout';
+import { PageLayout, EmptyState } from './layout';
 import { SchemaDeleteDialog } from './schemas/SchemaDeleteDialog';
 import { GroupSessionSetupDialog } from './schemas/GroupSessionSetupDialog';
 import { WorkoutRequestDialog } from './schemas/WorkoutRequestDialog';
-import { NewSchemaDialog } from './schemas/NewSchemaDialog';
-import { LesroosterImportDialog } from './schemas/LesroosterImportDialog';
 import { SchemaPrintView } from './schemas/SchemaPrintView';
 import { SchemaDetailView } from './schemas/SchemaDetailView';
 import { usePageTitle } from '../context/PageTitleContext';
@@ -62,7 +59,13 @@ type View = 'list' | 'detail' | 'edit' | 'session' | 'groupSession';
 const VIEW_DEPTH: Record<View, number> = { list: 0, detail: 1, edit: 2, session: 2, groupSession: 2 };
 
 
-export const SchemasPage = () => {
+interface SchemasPageProps {
+  /** Vanuit het +-menu (App): meteen een nieuwe, lege workout aanmaken en bewerken. */
+  initialCreateSchema?: boolean;
+  onConsumeInitialCreateSchema?: () => void;
+}
+
+export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreateSchema }: SchemasPageProps = {}) => {
   const addFromSchema = useAddFromSchema();
   const {
     schemas,
@@ -152,8 +155,6 @@ export const SchemasPage = () => {
   const [sessionDayIndex, setSessionDayIndex] = useState<number>(0);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [justLoggedExerciseId, setJustLoggedExerciseId] = useState<string | null>(null);
-  const [openNewSchemaDialog, setOpenNewSchemaDialog] = useState(false);
-  const [openLesroosterImport, setOpenLesroosterImport] = useState(false);
   /** Statusmelding tijdens het maken van de PDF (plaatjes ophalen kan even duren). */
   const [pdfStatus, setPdfStatus] = useState<string | null>(null);
   const [pdfFailed, setPdfFailed] = useState(false);
@@ -201,33 +202,24 @@ export const SchemasPage = () => {
     setView('detail');
   }, []);
 
-  const handleNewSchemaClick = useCallback(() => {
-    setOpenNewSchemaDialog(true);
-  }, []);
-
-  const handleCreateFreeSchema = useCallback(async () => {
+  /**
+   * Nieuwe workout: gewoon leeg beginnen. Het 7-stappenformulier (Formule 7) en AI zet je daarna
+   * in de editor aan als je ze nodig hebt.
+   */
+  const handleCreateSchema = useCallback(async () => {
     const schema = createEmptySchema('Nieuwe workout');
     await saveSchema(schema);
     loadSchemas();
     setSelectedSchemaId(schema.id);
     setView('edit');
-    setOpenNewSchemaDialog(false);
   }, [createEmptySchema, saveSchema, loadSchemas]);
 
-  const handleCreateAiFormule7Schema = useCallback(async () => {
-    const base = createEmptySchema('Formule 7 workout (AI)');
-    const schema: Schema = {
-      ...base,
-      isFormule7Template: true,
-      formule7AssistMode: 'ai',
-      formule7: createEmptyFormule7(),
-    };
-    await saveSchema(schema);
-    loadSchemas();
-    setSelectedSchemaId(schema.id);
-    setView('edit');
-    setOpenNewSchemaDialog(false);
-  }, [createEmptySchema, saveSchema, loadSchemas]);
+  // Aanmaken gebeurt via het +-menu (FAB, of "+ Log" op desktop): dat zet deze vlag.
+  useEffect(() => {
+    if (!initialCreateSchema) return;
+    onConsumeInitialCreateSchema?.();
+    if (canCreateWorkouts) void handleCreateSchema();
+  }, [initialCreateSchema, onConsumeInitialCreateSchema, canCreateWorkouts, handleCreateSchema]);
 
   const handleSaveSchema = useCallback(
     async (updated: Schema) => {
@@ -592,52 +584,14 @@ export const SchemasPage = () => {
     <Box sx={{ flex: 1, minHeight: 0 }}>
     <PageLayout maxWidth="none">
       <Box>
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: activeCategory ? 'space-between' : 'flex-end',
-            gap: 2,
-            mb: 2,
-            flexWrap: 'wrap',
-          }}
-        >
-          {/* Boven de kaart staat al "Workouts" in de bovenbalk; die titel hoeft hier niet nog
-              eens te staan. Bij een gekozen categorie (bijv. "Groepslessen") is de naam wel
-              nieuwe informatie, dus die tonen we hier nog wel. */}
-          {activeCategory && (
-            <Typography variant="h5" sx={{ fontWeight: 600 }}>
-              {activeCategory}
-            </Typography>
-          )}
-          {canCreateWorkouts && (
-            <HeaderActions>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-              {isTrainer && (
-                <Button
-                  onClick={() => setOpenLesroosterImport(true)}
-                  sx={{ textTransform: 'none', color: 'text.secondary' }}
-                >
-                  Lesrooster importeren
-                </Button>
-              )}
-              <Box
-                sx={{ display: 'inline-block' }}
-                onClick={handleNewSchemaClick}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && handleNewSchemaClick()}
-              >
-                {/* @ts-ignore */}
-                <md-filled-button>
-                  <md-icon slot="start">add</md-icon>
-                  Nieuwe workout
-                </md-filled-button>
-              </Box>
-            </Box>
-            </HeaderActions>
-          )}
-        </Box>
+        {/* Boven de kaart staat al "Workouts" in de bovenbalk; die titel hoeft hier niet nog eens
+            te staan. Bij een gekozen categorie (bijv. "Groepslessen") is de naam wel nieuwe
+            informatie. Aanmaken gaat via het +-menu. */}
+        {activeCategory && (
+          <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
+            {activeCategory}
+          </Typography>
+        )}
 
         <SchemaListFilters
           activeCategory={activeCategory}
@@ -659,7 +613,7 @@ export const SchemasPage = () => {
         ) : schemas.length === 0 ? (
           <EmptyState>
             {canCreateWorkouts ? (
-              'Nog geen workouts. Maak er een aan om te beginnen.'
+              'Nog geen workouts. Maak er een aan met de +-knop.'
             ) : (
               <Box sx={{ textAlign: 'center' }}>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -710,20 +664,6 @@ export const SchemasPage = () => {
         )}
       </Box>
 
-      <LesroosterImportDialog
-        open={openLesroosterImport}
-        onClose={() => {
-          setOpenLesroosterImport(false);
-          loadSchemas();
-        }}
-      />
-
-      <NewSchemaDialog
-        open={openNewSchemaDialog}
-        onClose={() => setOpenNewSchemaDialog(false)}
-        onCreateFree={handleCreateFreeSchema}
-        onCreateAi={handleCreateAiFormule7Schema}
-      />
 
       <WorkoutRequestDialog
         open={requestOpen}
