@@ -69,14 +69,15 @@ export function generatedPrefix(classTypeId) {
 }
 
 /**
- * Welke door het rooster aangemaakte lessen niet meer kloppen met hun lessoort: het weekmoment is
- * verplaatst of weg, of de lessoort zelf bestaat niet meer. Alleen lessen vanaf `fromDateIso`
- * (het verleden blijft zoals het was) en alleen gegenereerde lessen (een handmatig geplande les
- * met een lessoort blijft altijd staan).
+ * Welke lessen niet meer kloppen met hun lessoort: het weekmoment is verplaatst of weg, of de
+ * lessoort zelf bestaat niet meer. Alleen lessen vanaf `fromDateIso` (het verleden blijft zoals
+ * het was). Bestaat de lessoort nog, dan gaat het alleen om lessen die het rooster zelf maakte (een
+ * handmatig geplande les met die lessoort blijft staan). Is de lessoort verwijderd, dan hoort geen
+ * enkele toekomstige les ervan nog op het rooster, ook niet een handmatig geplande.
  *
  * `classes`: [{ id, classTypeId, date, bookedCount, waitlistCount }].
  * `expectedIdsByType`: Map classTypeId → Set met de id's die het huidige schema oplevert; een
- * lessoort die ontbreekt in de Map bestaat niet (meer), dus al zijn gegenereerde lessen zijn oud.
+ * lessoort die ontbreekt in de Map bestaat niet (meer).
  *
  * Geeft `remove` (verouderd en niemand ingeschreven of op de wachtlijst: veilig weg) en
  * `keepBooked` (verouderd maar met inschrijvingen: blijft staan, de trainer beslist).
@@ -86,10 +87,11 @@ export function staleGeneratedClasses(classes, expectedIdsByType, fromDateIso) {
   const keepBooked = [];
   for (const c of classes) {
     if (!c || !c.classTypeId || typeof c.id !== 'string') continue;
-    if (!c.id.startsWith(generatedPrefix(c.classTypeId))) continue;
     if (!c.date || c.date < fromDateIso) continue;
     const expected = expectedIdsByType.get(c.classTypeId);
-    if (expected && expected.has(c.id)) continue;
+    if (expected) {
+      if (!c.id.startsWith(generatedPrefix(c.classTypeId)) || expected.has(c.id)) continue;
+    }
     const hasPeople = (Number(c.bookedCount) || 0) > 0 || (Number(c.waitlistCount) || 0) > 0;
     (hasPeople ? keepBooked : remove).push(c);
   }

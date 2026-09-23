@@ -30,7 +30,7 @@ import {
   generateClassOccurrencesNow,
   getClassTypes,
   newClassTypeId,
-  removeClassOccurrences,
+  pruneStaleClasses,
   saveClassType,
   type StaleClass,
 } from '../../services/classTypeService';
@@ -139,6 +139,12 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Bij openen het rooster stil laten opruimen: lessen van verwijderde lessoorten of oude
+  // weekmomenten (bijv. van voor deze opruimregel bestond) hoeven niet op de nachtelijke cron te wachten.
+  useEffect(() => {
+    void pruneStaleClasses().catch(() => null);
+  }, []);
 
   useEffect(() => {
     if (!orgId) return;
@@ -285,10 +291,10 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
     if (!draft) return;
     setSaving(true);
     try {
-      // Eerst de geplande lessen zonder inschrijvingen van het rooster, anders blijven ze als
-      // "spooklessen" staan zonder lessoort.
-      const pruned = await removeClassOccurrences(draft.id).catch(() => null);
       await deleteClassType(draft.id);
+      // Daarna de geplande lessen zonder inschrijvingen van het rooster, anders blijven ze als
+      // "spooklessen" staan zonder lessoort.
+      const pruned = await pruneStaleClasses().catch(() => null);
       notify.success(t('classTypes.deleted'));
       warnStaleKept(pruned?.staleWithBookings);
       setConfirmDelete(false);

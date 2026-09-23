@@ -99,9 +99,10 @@ describe('lesrooster: verouderde lessen opruimen', () => {
     expect(out.keepBooked.map((c) => c.id)).toEqual([booked.id, waiting.id]);
   });
 
-  it('ruimt alles van een verwijderde lessoort op', () => {
+  it('ruimt alles van een verwijderde lessoort op, ook handmatig geplande lessen', () => {
     const gone = { ...cls(classIdForOccurrence('ct_2', '2026-09-24', '19:00'), '2026-09-24'), classTypeId: 'ct_2' };
-    expect(staleGeneratedClasses([gone], expected, THURSDAY).remove).toEqual([gone]);
+    const goneManual = { ...cls('cls_manual', '2026-09-25'), classTypeId: 'ct_2' };
+    expect(staleGeneratedClasses([gone, goneManual], expected, THURSDAY).remove).toEqual([gone, goneManual]);
   });
 
   it('blijft af van het verleden en van handmatig geplande lessen', () => {
