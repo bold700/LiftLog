@@ -747,7 +747,7 @@ describe('terugkerende lessen (cron)', () => {
     expect(store[createdId]).toMatchObject({ orgId: 'vanas', title: 'Kicking', startTime: '19:00', endTime: '20:00', trainerId: 'trainer1', classTypeId: 'ct1', bookedCount: 0 });
   });
 
-  it('slaat een lessoort zonder vaste trainer over (de cron kiest zelf geen trainer)', async () => {
+  it('plant een lessoort zonder vaste trainer ook in, zonder trainer op de les', async () => {
     store['classTypes/ct2'] = {
       orgId: 'vanas', name: 'Open gym', capacity: null, creditCost: 0,
       defaultTrainerId: null, schemaId: null,
@@ -755,8 +755,7 @@ describe('terugkerende lessen (cron)', () => {
     };
     const res = await getCron('Bearer test-secret');
     expect(res.statusCode).toBe(200);
-    expect(res.body.skippedNoTrainer).toContain('ct2');
-    expect(store[`classes/cls_gen_ct2_${todayIso()}_0800`]).toBeUndefined();
+    expect(store[`classes/cls_gen_ct2_${todayIso()}_0800`]).toMatchObject({ title: 'Open gym', trainerId: null });
   });
 
   it('maakt een moment niet nog een keer aan als het al bestaat, ook als het is afgelast', async () => {

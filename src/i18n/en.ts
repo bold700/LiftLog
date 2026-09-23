@@ -109,7 +109,7 @@ export const en: Messages = {
     people: { one: '1 person', other: '{count} people' },
     noLimit: 'No limit',
     defaultTrainer: 'Default trainer',
-    anyTrainer: 'Any trainer',
+    anyTrainer: 'No fixed trainer',
     linkedWorkout: 'Linked workout',
     noWorkout: 'No workout',
     delete: 'Delete',
@@ -144,7 +144,6 @@ export const en: Messages = {
     schedule: {
       title: 'Recurring',
       help: 'Pick fixed weekly slots; these get added to the schedule automatically, up to 8 weeks ahead.',
-      needsTrainer: 'Pick a default trainer first to schedule this.',
       add: 'Add a slot',
       removeSlot: 'Remove slot',
       start: 'From',

@@ -111,7 +111,7 @@ export const nl = {
     people: { one: '1 persoon', other: '{count} personen' },
     noLimit: 'Geen limiet',
     defaultTrainer: 'Vaste trainer',
-    anyTrainer: 'Elke trainer',
+    anyTrainer: 'Geen vaste trainer',
     linkedWorkout: 'Gekoppeld schema',
     noWorkout: 'Geen schema',
     delete: 'Verwijderen',
@@ -146,7 +146,6 @@ export const nl = {
     schedule: {
       title: 'Terugkerend',
       help: 'Kies vaste weekmomenten; die komen dan zelf op het rooster, tot 8 weken vooruit.',
-      needsTrainer: 'Kies eerst een vaste trainer om dit te kunnen plannen.',
       add: 'Moment toevoegen',
       removeSlot: 'Moment verwijderen',
       start: 'Van',
