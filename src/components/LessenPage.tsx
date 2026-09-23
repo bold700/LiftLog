@@ -44,6 +44,7 @@ import { getOrg } from '../services/orgService';
 import { getColleagues } from '../services/profileService';
 import { designTokens } from '../theme/designTokens';
 import { segmentedToggleSx, filterPillSx } from '../theme/segmentedToggle';
+import { FilterGroup, FilterSheet } from './FilterSheet';
 import { addWeeks } from '../utils/format';
 import { WeekTimeGrid } from './lessen/WeekTimeGrid';
 import type { Profile, SessionKind, StandingBooking } from '../types';
@@ -410,17 +411,31 @@ export function LessenPage() {
     );
   };
 
+  const legend = (
+    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+      {SESSION_KIND_KEYS.map((k) => (
+        <Box key={k} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: SESSION_KIND_COLORS[k] }} />
+          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+            {SESSION_KIND_LABELS[k]}
+          </Typography>
+        </Box>
+      ))}
+    </Box>
+  );
+
   return (
     <PageLayout maxWidth="none">
-      {/* Figma "Schedule": weergave, ruimtes en legenda op één regel; op een smal scherm loopt het door. */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, rowGap: 1, mb: 2, flexWrap: 'wrap' }}>
+      {/* Figma "Schedule": weergave, ruimtes en legenda op één regel. Op de telefoon blijft alleen
+          Week/Dag/Inhaallessen staan; de rest zit achter de filterknop in een bottom sheet. */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, rowGap: 1, mb: 2 }}>
         {isStaff && (
           <ToggleButtonGroup
             size="small"
             exclusive
             value={myDayOnly ? 'mine' : 'all'}
             onChange={(_, v: 'all' | 'mine' | null) => v && setMyDayOnly(v === 'mine')}
-            sx={segmentedToggleSx}
+            sx={{ ...segmentedToggleSx, display: { xs: 'none', md: 'inline-flex' } }}
             aria-label="Rooster of mijn dag"
           >
             <ToggleButton value="all">Rooster</ToggleButton>
@@ -440,23 +455,39 @@ export function LessenPage() {
           <ToggleButton value="makeups">Inhaallessen</ToggleButton>
         </ToggleButtonGroup>
         {roomOptions.length > 0 && (
-          <Box role="group" aria-label="Ruimte" sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Box role="group" aria-label="Ruimte" sx={{ display: { xs: 'none', md: 'flex' }, gap: 1, flexWrap: 'wrap' }}>
             <Chip label="Alle ruimtes" size="small" onClick={() => setRoomFilter('')} sx={filterPillSx(roomFilter === '')} />
             {roomOptions.map((r) => (
               <Chip key={r} label={r} size="small" onClick={() => setRoomFilter(r)} sx={filterPillSx(roomFilter === r)} />
             ))}
           </Box>
         )}
-        {viewMode !== 'makeups' && (
-          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', ml: { md: 'auto' } }}>
-            {SESSION_KIND_KEYS.map((k) => (
-              <Box key={k} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: SESSION_KIND_COLORS[k] }} />
-                <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
-                  {SESSION_KIND_LABELS[k]}
-                </Typography>
-              </Box>
-            ))}
+        {viewMode !== 'makeups' && <Box sx={{ display: { xs: 'none', md: 'flex' }, ml: 'auto' }}>{legend}</Box>}
+        {(isStaff || roomOptions.length > 0 || viewMode !== 'makeups') && (
+          <Box sx={{ display: { xs: 'flex', md: 'none' }, ml: 'auto' }}>
+            <FilterSheet
+              activeCount={(myDayOnly ? 1 : 0) + (roomFilter ? 1 : 0)}
+              onReset={() => {
+                setMyDayOnly(false);
+                setRoomFilter('');
+              }}
+            >
+              {isStaff && (
+                <FilterGroup label="Laten zien">
+                  <Chip label="Hele rooster" onClick={() => setMyDayOnly(false)} sx={filterPillSx(!myDayOnly)} />
+                  <Chip label="Mijn dag" onClick={() => setMyDayOnly(true)} sx={filterPillSx(myDayOnly)} />
+                </FilterGroup>
+              )}
+              {roomOptions.length > 0 && (
+                <FilterGroup label="Ruimte">
+                  <Chip label="Alle ruimtes" onClick={() => setRoomFilter('')} sx={filterPillSx(roomFilter === '')} />
+                  {roomOptions.map((r) => (
+                    <Chip key={r} label={r} onClick={() => setRoomFilter(r)} sx={filterPillSx(roomFilter === r)} />
+                  ))}
+                </FilterGroup>
+              )}
+              {viewMode !== 'makeups' && <FilterGroup label="Legenda">{legend}</FilterGroup>}
+            </FilterSheet>
           </Box>
         )}
       </Box>
