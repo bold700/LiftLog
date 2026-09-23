@@ -1,16 +1,12 @@
 /**
- * Pagina om eigen profielgegevens te beheren (naam, e-mail tonen).
+ * Eigen profiel: eerst alles als tekst; "Wijzigen" maakt er één formulier van (gegevens, doelen,
+ * ranglijst, e-mail, wachtwoord, taal) dat je in één keer opslaat of annuleert.
  */
 import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import {
   Alert,
   Box,
   Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
   FormControlLabel,
   MenuItem,
   Radio,
@@ -18,7 +14,6 @@ import {
   TextField,
   Typography,
   InputAdornment,
-  Select,
   CircularProgress,
 } from '@mui/material';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
@@ -75,29 +70,10 @@ function FieldRow({ label, children }: { label: string; children: ReactNode }) {
           textAlign: 'right',
           display: 'flex',
           justifyContent: 'flex-end',
-          // Een waarde die je kunt aanpassen moet er ook zo uitzien: vlak bij hover, rand bij focus.
-          '&:has(input, .MuiSelect-select)': {
-            mr: -1,
-            px: 1,
-            py: 0.5,
-            borderRadius: 1,
-            cursor: 'text',
-            transition: 'background-color 0.15s ease, box-shadow 0.15s ease',
-            '&:hover': { bgcolor: designTokens.cardBackgroundHigh },
-            '&:focus-within': { bgcolor: designTokens.cardBackgroundHigh, boxShadow: `inset 0 -2px 0 ${designTokens.primary}` },
-          },
         }}
       >
         {children}
       </Box>
-    </Box>
-  );
-}
-
-function LinkButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
-  return (
-    <Box component="button" type="button" onClick={onClick} sx={{ all: 'unset', cursor: 'pointer', fontSize: 14, '&:hover': { textDecoration: 'underline' } }}>
-      {children}
     </Box>
   );
 }
@@ -122,69 +98,23 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  /** Melding staat bovenaan; na opslaan onderaan (telefoon) er even naartoe schuiven, anders mis je hem. */
+  const messageRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (message) messageRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  }, [message]);
 
-  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
-  const [newEmail, setNewEmail] = useState('');
-  const [currentPwd, setCurrentPwd] = useState('');
-  const [emailSaving, setEmailSaving] = useState(false);
-  const [pwdDialogOpen, setPwdDialogOpen] = useState(false);
-  const [pwdCurrent, setPwdCurrent] = useState('');
-  const [pwdNew, setPwdNew] = useState('');
-  const [pwdSaving, setPwdSaving] = useState(false);
+  // Account en doelen doen mee in hetzelfde formulier: alles in één keer wijzigen en opslaan.
+  const [emailInput, setEmailInput] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [langChoice, setLangChoice] = useState<Lang>(lang);
+  const [goalWeight, setGoalWeight] = useState('');
+  const [goalKcal, setGoalKcal] = useState('');
+  const [goalProtein, setGoalProtein] = useState('');
+  const [goalCarbs, setGoalCarbs] = useState('');
+  const [goalFat, setGoalFat] = useState('');
   const isPasswordAccount = auth?.user?.providerData?.some((pr) => pr.providerId === 'password') ?? false;
-
-  const handleChangePassword = useCallback(async () => {
-    if (!auth) return;
-    if (pwdNew.length < 6) {
-      setMessage({ type: 'error', text: 'Nieuw wachtwoord moet minstens 6 tekens zijn.' });
-      return;
-    }
-    if (!pwdCurrent) {
-      setMessage({ type: 'error', text: 'Vul je huidige wachtwoord in.' });
-      return;
-    }
-    setPwdSaving(true);
-    setMessage(null);
-    try {
-      await auth.changePassword(pwdCurrent, pwdNew);
-      setPwdDialogOpen(false);
-      setPwdCurrent('');
-      setPwdNew('');
-      setMessage({ type: 'success', text: 'Wachtwoord gewijzigd.' });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Wachtwoord wijzigen mislukt.';
-      setMessage({ type: 'error', text: msg.includes('wrong-password') || msg.includes('invalid-credential') ? 'Onjuist huidig wachtwoord.' : msg });
-    } finally {
-      setPwdSaving(false);
-    }
-  }, [auth, pwdCurrent, pwdNew]);
-
-  const handleChangeEmail = useCallback(async () => {
-    if (!auth) return;
-    const target = newEmail.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target)) {
-      setMessage({ type: 'error', text: 'Vul een geldig nieuw e-mailadres in.' });
-      return;
-    }
-    if (!currentPwd) {
-      setMessage({ type: 'error', text: 'Vul je huidige wachtwoord in.' });
-      return;
-    }
-    setEmailSaving(true);
-    setMessage(null);
-    try {
-      await auth.changeEmail(currentPwd, target);
-      setEmailDialogOpen(false);
-      setNewEmail('');
-      setCurrentPwd('');
-      setMessage({ type: 'success', text: `Verificatiemail verstuurd naar ${target}. Klik de link om je e-mail te wijzigen.` });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'E-mail wijzigen mislukt.';
-      setMessage({ type: 'error', text: msg.includes('wrong-password') || msg.includes('invalid-credential') ? 'Onjuist wachtwoord.' : msg });
-    } finally {
-      setEmailSaving(false);
-    }
-  }, [auth, newEmail, currentPwd]);
 
   const p = profile?.profile;
   const uid = auth?.user?.uid ?? p?.userId;
@@ -241,7 +171,17 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
     setGender(p?.gender ?? '');
     setRestingHr(p?.restingHrBpm != null ? String(p.restingHrBpm) : '');
     setLimitations(p?.limitations ?? []);
-  }, [p]);
+    setEmailInput(auth?.user?.email ?? p?.email ?? '');
+    setNewPassword('');
+    setCurrentPassword('');
+    setLangChoice(lang);
+    const str = (n: number | null | undefined) => (n ? String(n) : '');
+    setGoalWeight(p?.weightGoalKg ? String(p.weightGoalKg).replace('.', ',') : '');
+    setGoalKcal(str(p?.nutritionGoal?.kcal));
+    setGoalProtein(str(p?.nutritionGoal?.protein));
+    setGoalCarbs(str(p?.nutritionGoal?.carbs));
+    setGoalFat(str(p?.nutritionGoal?.fat));
+  }, [p, auth?.user?.email, lang]);
 
   useEffect(() => {
     resetForm();
@@ -253,11 +193,41 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
     setMessage(null);
   }, [resetForm]);
 
+  const currentEmail = auth?.user?.email ?? p?.email ?? '';
+  const emailChanged = isPasswordAccount && emailInput.trim().toLowerCase() !== currentEmail.toLowerCase();
+  /** E-mail of wachtwoord wijzigen vraagt om je huidige wachtwoord (Firebase wil je opnieuw herkennen). */
+  const needsCurrentPassword = emailChanged || newPassword.length > 0;
+
   const handleSave = useCallback(async () => {
-    if (!uid || !profile) return;
+    if (!uid || !profile || !auth) return;
+    const numOrNull = (v: string) => (v.trim() ? Number(v.replace(',', '.')) : null);
+    const targetEmail = emailInput.trim();
+    if (emailChanged && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+      setMessage({ type: 'error', text: 'Vul een geldig e-mailadres in.' });
+      return;
+    }
+    if (newPassword && newPassword.length < 6) {
+      setMessage({ type: 'error', text: 'Een nieuw wachtwoord moet minstens 6 tekens zijn.' });
+      return;
+    }
+    if (needsCurrentPassword && !currentPassword) {
+      setMessage({ type: 'error', text: 'Vul je huidige wachtwoord in om je e-mail of wachtwoord te wijzigen.' });
+      return;
+    }
     setSaving(true);
     setMessage(null);
+    const done: string[] = [];
     try {
+      // Eerst wat je huidige wachtwoord nodig heeft: klopt dat niet, dan is er nog niets half opgeslagen.
+      if (newPassword) {
+        await auth.changePassword(currentPassword, newPassword);
+        done.push('Wachtwoord gewijzigd.');
+      }
+      if (emailChanged) {
+        await auth.changeEmail(currentPassword, targetEmail);
+        done.push(`Bevestig je nieuwe e-mailadres via de link die naar ${targetEmail} is gestuurd; tot dan log je in met je oude adres.`);
+      }
+      const goalNums = [goalKcal, goalProtein, goalCarbs, goalFat].map((v) => numOrNull(v) ?? 0);
       await updateProfile(uid, {
         displayName: displayName.trim() || null,
         leaderboardVisibility,
@@ -266,19 +236,32 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
         gender: gender || null,
         restingHrBpm: restingHr.trim() ? Number(restingHr) : null,
         limitations,
+        weightGoalKg: numOrNull(goalWeight),
+        nutritionGoal: goalNums.some((n) => n > 0)
+          ? { kcal: goalNums[0], protein: goalNums[1], carbs: goalNums[2], fat: goalNums[3] }
+          : null,
       });
+      if (langChoice !== lang) await setLang(langChoice);
       await profile.refreshProfile();
       setEditing(false);
-      setMessage({ type: 'success', text: 'Profiel opgeslagen.' });
+      setNewPassword('');
+      setCurrentPassword('');
+      setMessage({ type: 'success', text: ['Profiel opgeslagen.', ...done].join(' ') });
     } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Opslaan mislukt.';
+      const wrongPwd = msg.includes('wrong-password') || msg.includes('invalid-credential');
       setMessage({
         type: 'error',
-        text: e instanceof Error ? e.message : 'Opslaan mislukt.',
+        text: wrongPwd ? 'Je huidige wachtwoord klopt niet. Er is niets gewijzigd.' : [...done, msg].join(' '),
       });
     } finally {
       setSaving(false);
     }
-  }, [uid, profile, displayName, leaderboardVisibility, heightCm, birthDate, gender, restingHr, limitations]);
+  }, [
+    uid, profile, auth, emailInput, emailChanged, newPassword, needsCurrentPassword, currentPassword,
+    displayName, leaderboardVisibility, heightCm, birthDate, gender, restingHr, limitations,
+    goalWeight, goalKcal, goalProtein, goalCarbs, goalFat, langChoice, lang, setLang,
+  ]);
 
   const email = auth?.user?.email ?? p?.email ?? '';
   /** "maart 2025": wanneer het profiel is aangemaakt (Figma "Member since March 2025"). */
@@ -342,6 +325,7 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
     <PageLayout maxWidth="none">
       {message && (
         <Alert
+          ref={messageRef}
           severity={message.type}
           icon={message.type === 'success' ? <CheckCircleRoundedIcon fontSize="inherit" /> : <ErrorOutlineRoundedIcon fontSize="inherit" />}
           sx={{ mb: 2 }}
@@ -421,6 +405,9 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
         </Box>
       </Box>
 
+      {/* Telefoon: Wijzigen (en tijdens bewerken Annuleren/Opslaan) direct onder je naam; op desktop in de paginakop. */}
+      <Box sx={{ display: { xs: 'flex', md: 'none' }, gap: 1, mb: 2 }}>{editActions}</Box>
+
       {/* Twee kolommen op desktop (Figma "Profile"): links abonnement, boekingen en je gegevens;
           rechts doelen, ranglijst en account. Op een telefoon staat alles onder elkaar. */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '14fr 14fr' }, gap: { xs: 2, md: 2.5 }, alignItems: 'start' }}>
@@ -498,8 +485,6 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
             <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: editing ? 1.5 : 1 }}>
               Je naam staat in de app en op de ranglijst. Leeftijd en geslacht vullen de AI-routekaart alvast in.
             </Typography>
-            {/* Op een telefoon staan de knoppen hier; op desktop in de paginakop. */}
-            <Box sx={{ display: { xs: 'flex', md: 'none' }, gap: 1, mt: 2 }}>{editActions}</Box>
           </Box>
 
           {/* Hartslagzones: uit leeftijd + rusthartslag, zelfde formule als de routekaart */}
@@ -569,12 +554,39 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
           {/* Doelen: wat er op Metingen en Voeding is ingesteld, op één plek (Figma "Goals"). */}
           <Box sx={{ ...sectionSx(), order: { xs: 4, md: 0 } }}>
             <SectionTitle>Doelen</SectionTitle>
-            <FieldRow label="Streefgewicht">{p?.weightGoalKg ? `${String(p.weightGoalKg).replace('.', ',')} kg` : '–'}</FieldRow>
-            <FieldRow label="Calorieën per dag">{p?.nutritionGoal?.kcal ? `${p.nutritionGoal.kcal.toLocaleString('nl-NL')} kcal` : '–'}</FieldRow>
-            <FieldRow label="Eiwit">{p?.nutritionGoal?.protein ? `${p.nutritionGoal.protein} g` : '–'}</FieldRow>
-            <FieldRow label="Koolhydraten">{p?.nutritionGoal?.carbs ? `${p.nutritionGoal.carbs} g` : '–'}</FieldRow>
-            <FieldRow label="Vet">{p?.nutritionGoal?.fat ? `${p.nutritionGoal.fat} g` : '–'}</FieldRow>
-            <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 1 }}>Aanpassen doe je bij Metingen (gewicht) en Voeding (calorieën en macro's).</Typography>
+            {editing ? (
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr' }, gap: 2, pt: 1 }}>
+                <NumberField
+                  label="Streefgewicht"
+                  decimal
+                  value={goalWeight}
+                  onChange={setGoalWeight}
+                  fullWidth
+                  InputProps={{ endAdornment: <InputAdornment position="end">kg</InputAdornment> }}
+                />
+                <NumberField
+                  label="Calorieën per dag"
+                  value={goalKcal}
+                  onChange={setGoalKcal}
+                  fullWidth
+                  InputProps={{ endAdornment: <InputAdornment position="end">kcal</InputAdornment> }}
+                />
+                <NumberField label="Eiwit" value={goalProtein} onChange={setGoalProtein} fullWidth InputProps={{ endAdornment: <InputAdornment position="end">g</InputAdornment> }} />
+                <NumberField label="Koolhydraten" value={goalCarbs} onChange={setGoalCarbs} fullWidth InputProps={{ endAdornment: <InputAdornment position="end">g</InputAdornment> }} />
+                <NumberField label="Vet" value={goalFat} onChange={setGoalFat} fullWidth InputProps={{ endAdornment: <InputAdornment position="end">g</InputAdornment> }} />
+              </Box>
+            ) : (
+              <>
+                <FieldRow label="Streefgewicht">{p?.weightGoalKg ? `${String(p.weightGoalKg).replace('.', ',')} kg` : '–'}</FieldRow>
+                <FieldRow label="Calorieën per dag">{p?.nutritionGoal?.kcal ? `${p.nutritionGoal.kcal.toLocaleString('nl-NL')} kcal` : '–'}</FieldRow>
+                <FieldRow label="Eiwit">{p?.nutritionGoal?.protein ? `${p.nutritionGoal.protein} g` : '–'}</FieldRow>
+                <FieldRow label="Koolhydraten">{p?.nutritionGoal?.carbs ? `${p.nutritionGoal.carbs} g` : '–'}</FieldRow>
+                <FieldRow label="Vet">{p?.nutritionGoal?.fat ? `${p.nutritionGoal.fat} g` : '–'}</FieldRow>
+              </>
+            )}
+            <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: editing ? 1.5 : 1 }}>
+              Dezelfde doelen als bij Metingen (gewicht) en Voeding (calorieën en macro's).
+            </Typography>
           </Box>
 
           <Box sx={{ ...sectionSx(), order: { xs: 5, md: 0 } }}>
@@ -593,40 +605,64 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
 
           <Box sx={{ ...sectionSx(), order: { xs: 6, md: 0 } }}>
             <SectionTitle>Account</SectionTitle>
-            <FieldRow label="E-mail">
-              <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', maxWidth: 240 }} title={email}>
-                {email}
+            {editing ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1, pb: 1 }}>
+                <TextField
+                  label="E-mail"
+                  type="email"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  disabled={!isPasswordAccount}
+                  helperText={isPasswordAccount ? 'Na opslaan krijg je een bevestigingslink op het nieuwe adres.' : 'Beheerd via je aanbieder (Google, etc.).'}
+                  autoComplete="email"
+                  inputProps={{ autoCapitalize: 'none', autoCorrect: 'off' }}
+                  fullWidth
+                />
+                {isPasswordAccount && (
+                  <TextField
+                    label="Nieuw wachtwoord"
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    helperText="Leeg laten als je het niet wilt wijzigen. Minstens 6 tekens."
+                    autoComplete="new-password"
+                    fullWidth
+                  />
+                )}
+                {needsCurrentPassword && (
+                  <TextField
+                    label="Huidig wachtwoord"
+                    type="password"
+                    required
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    helperText="Nodig om je e-mail of wachtwoord te wijzigen."
+                    autoComplete="current-password"
+                    fullWidth
+                  />
+                )}
+                {/* Taal: op het profiel, zodat elk apparaat dezelfde keuze laat zien. */}
+                <TextField select label={t('lang.label')} value={langChoice} onChange={(e) => setLangChoice(e.target.value as Lang)} fullWidth>
+                  {LANGS.map((l) => (
+                    <MenuItem key={l} value={l}>
+                      {t(`lang.${l}`)}
+                    </MenuItem>
+                  ))}
+                </TextField>
               </Box>
-            </FieldRow>
-            {isPasswordAccount && (
+            ) : (
               <>
-                <FieldRow label="E-mailadres wijzigen">
-                  <LinkButton onClick={() => setEmailDialogOpen(true)}>Wijzigen</LinkButton>
+                <FieldRow label="E-mail">
+                  <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', maxWidth: 240 }} title={email}>
+                    {email}
+                  </Box>
                 </FieldRow>
-                <FieldRow label="Wachtwoord">
-                  <LinkButton onClick={() => setPwdDialogOpen(true)}>Wijzigen</LinkButton>
-                </FieldRow>
+                {isPasswordAccount && <FieldRow label="Wachtwoord">••••••••</FieldRow>}
+                <FieldRow label={t('lang.label')}>{t(`lang.${lang}`)}</FieldRow>
+                {!isPasswordAccount && (
+                  <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 0.5 }}>E-mail wordt beheerd via je aanbieder (Google, etc.).</Typography>
+                )}
               </>
-            )}
-            {/* Taal: op het profiel, zodat elk apparaat dezelfde keuze laat zien (ontwerp: Account-kaart, rij "Language"). */}
-            <FieldRow label={t('lang.label')}>
-              <Select
-                variant="standard"
-                disableUnderline
-                value={lang}
-                onChange={(e) => void setLang(e.target.value as Lang)}
-                inputProps={{ 'aria-label': t('lang.label') }}
-                sx={{ fontSize: 14, '& .MuiSelect-select': { textAlign: 'right', py: 0.25 } }}
-              >
-                {LANGS.map((l) => (
-                  <MenuItem key={l} value={l}>
-                    {t(`lang.${l}`)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FieldRow>
-            {!isPasswordAccount && (
-              <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 0.5 }}>E-mail wordt beheerd via je aanbieder (Google, etc.).</Typography>
             )}
             {/* Uitloggen hoort bij het account (ontwerp: Account-kaart, "Sign out"); op desktop staat hij ook in de zijbalk. */}
             {onLogout && (
@@ -656,40 +692,8 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
         </Box>
       </Box>
 
-      <Dialog open={emailDialogOpen} onClose={() => setEmailDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>E-mail wijzigen</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Je krijgt een verificatiemail op het nieuwe adres. Je e-mail wijzigt pas nadat je die link hebt bevestigd.
-          </DialogContentText>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, py: 1 }}>
-            <TextField label="Nieuw e-mailadres" type="email" size="small" fullWidth value={newEmail} onChange={(e) => setNewEmail(e.target.value)} autoComplete="email" autoFocus />
-            <TextField label="Huidig wachtwoord" type="password" size="small" fullWidth value={currentPwd} onChange={(e) => setCurrentPwd(e.target.value)} autoComplete="current-password" />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEmailDialogOpen(false)}>Annuleren</Button>
-          <Button variant="contained" onClick={handleChangeEmail} disabled={emailSaving}>
-            {emailSaving ? 'Bezig…' : 'Verzenden'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={pwdDialogOpen} onClose={() => setPwdDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Wachtwoord wijzigen</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, py: 1 }}>
-            <TextField label="Huidig wachtwoord" type="password" size="small" fullWidth value={pwdCurrent} onChange={(e) => setPwdCurrent(e.target.value)} autoComplete="current-password" autoFocus />
-            <TextField label="Nieuw wachtwoord" type="password" size="small" fullWidth value={pwdNew} onChange={(e) => setPwdNew(e.target.value)} autoComplete="new-password" helperText="Minstens 6 tekens." />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPwdDialogOpen(false)}>Annuleren</Button>
-          <Button variant="contained" onClick={handleChangePassword} disabled={pwdSaving}>
-            {pwdSaving ? 'Bezig…' : 'Opslaan'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Telefoon: na een lang formulier ook onderaan opslaan, zonder terug te scrollen. */}
+      {editing && <Box sx={{ display: { xs: 'flex', md: 'none' }, gap: 1, mt: 2.5 }}>{editActions}</Box>}
     </PageLayout>
   );
 }
