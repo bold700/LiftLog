@@ -238,6 +238,76 @@ function AppContent() {
     }
   };
 
+  /** De +-knop met zijn menu: de schil zet hem buiten het scrollende deel (zie AppShell). */
+  const floating = !addOpen ? (
+        <>
+          <Fab
+            aria-label="Log toevoegen"
+            sx={{
+              display: { xs: 'inline-flex', md: 'none' },
+              // Absoluut in de schil (die is op de telefoon één scherm hoog), zie AppShell.
+              position: 'absolute',
+              bottom: 92,
+              right: 16,
+              zIndex: 1001,
+              bgcolor: 'primary.light',
+              color: 'primary.dark',
+              transition: 'transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease',
+              '&:hover': {
+                bgcolor: 'primary.light',
+                transform: 'scale(1.08)',
+                boxShadow: 4,
+              },
+              '&:active': {
+                transform: 'scale(0.96)',
+              },
+            }}
+            onClick={handleFabClick}
+          >
+            <AddRoundedIcon />
+          </Fab>
+          <Menu
+            anchorEl={fabAnchorEl}
+            open={fabMenuOpen}
+            onClose={handleFabMenuClose}
+            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+            transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            slotProps={{
+              paper: {
+                sx: {
+                  mt: -2,
+                  minWidth: 200,
+                },
+              },
+            }}
+          >
+            <MenuItem onClick={handleAddExerciseFromFab}>
+              <FitnessCenterRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
+              Oefening loggen
+            </MenuItem>
+            <MenuItem onClick={handleAddTrainingLogFromFab}>
+              <EventNoteRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
+              Training loggen
+            </MenuItem>
+            <MenuItem onClick={handleAddNutritionFromFab}>
+              <RestaurantRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
+              Voeding loggen
+            </MenuItem>
+            <MenuItem onClick={handleAddMeasurementFromFab}>
+              <MonitorWeightRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
+              Meting loggen
+            </MenuItem>
+            {isTrainer && <Divider />}
+            {isTrainer && (
+              <MenuItem onClick={handleNewWorkoutFromFab}>
+                <PostAddRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
+                Workout aanmaken
+              </MenuItem>
+            )}
+          </Menu>
+        </>
+  ) : null;
+
   return (
       <AddFromSchemaProvider
         onSwitchToAddTab={openAdd}
@@ -253,13 +323,14 @@ function AppContent() {
           onLogout={handleLogout}
           brand={{ name: branding?.name ?? 'VORM', logoUrl: branding?.logoUrl ?? null }}
           profileTabIndex={TAB_PROFIEL}
+          floating={floating}
         >
           <Box
             sx={{
               flex: 1,
               // Desktop: de schil geeft al 40 opzij en de paginakop erboven; inhoud lijnt uit met de titel (Figma).
               p: { xs: 3, md: 0 },
-              pb: { xs: 12, md: 4 },
+              pb: { xs: 10, md: 4 },
               paddingTop: {
                 xs: 'calc(24px + env(safe-area-inset-top, 0px))',
                 sm: 'calc(24px + env(safe-area-inset-top, 0px))',
@@ -300,73 +371,6 @@ function AppContent() {
             <Suspense fallback={<LoadingBlock />}>{renderPage()}</Suspense>
           </Box>
 
-          {!addOpen && (
-            <>
-              <Fab
-                aria-label="Log toevoegen"
-                sx={{
-                  display: { xs: 'inline-flex', md: 'none' },
-                  position: 'fixed',
-                  bottom: 92,
-                  right: 16,
-                  zIndex: 1001,
-                  bgcolor: 'primary.light',
-                  color: 'primary.dark',
-                  transition: 'transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease',
-                  '&:hover': {
-                    bgcolor: 'primary.light',
-                    transform: 'scale(1.08)',
-                    boxShadow: 4,
-                  },
-                  '&:active': {
-                    transform: 'scale(0.96)',
-                  },
-                }}
-                onClick={handleFabClick}
-              >
-                <AddRoundedIcon />
-              </Fab>
-              <Menu
-                anchorEl={fabAnchorEl}
-                open={fabMenuOpen}
-                onClose={handleFabMenuClose}
-                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-                transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-                slotProps={{
-                  paper: {
-                    sx: {
-                      mt: -2,
-                      minWidth: 200,
-                    },
-                  },
-                }}
-              >
-                <MenuItem onClick={handleAddExerciseFromFab}>
-                  <FitnessCenterRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
-                  Oefening loggen
-                </MenuItem>
-                <MenuItem onClick={handleAddTrainingLogFromFab}>
-                  <EventNoteRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
-                  Training loggen
-                </MenuItem>
-                <MenuItem onClick={handleAddNutritionFromFab}>
-                  <RestaurantRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
-                  Voeding loggen
-                </MenuItem>
-                <MenuItem onClick={handleAddMeasurementFromFab}>
-                  <MonitorWeightRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
-                  Meting loggen
-                </MenuItem>
-                {isTrainer && <Divider />}
-                {isTrainer && (
-                  <MenuItem onClick={handleNewWorkoutFromFab}>
-                    <PostAddRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
-                    Workout aanmaken
-                  </MenuItem>
-                )}
-              </Menu>
-            </>
-          )}
 
         </AppShell>
 

@@ -48,6 +48,8 @@ interface AppShellProps {
   brand: { name: string; logoUrl: string | null };
   /** Tab van Profiel: waar de avatar in de bovenbalk heen gaat. */
   profileTabIndex?: number;
+  /** Zwevende knoppen (de +-knop met zijn menu): staan buiten het scrollende deel, onderaan de schil. */
+  floating?: ReactNode;
   children: ReactNode;
 }
 
@@ -245,7 +247,8 @@ function FloatingToolbar({ items, activeTab, onNavigate }: { items: ShellDestina
       component="nav"
       aria-label={t('nav.shortcuts')}
       sx={{
-        position: 'fixed',
+        // Absoluut in de schil (die is één scherm hoog), niet fixed: zie .mobile-shell in index.css.
+        position: 'absolute',
         bottom: TOOLBAR_BOTTOM,
         left: '50%',
         transform: 'translateX(-50%)',
@@ -297,7 +300,7 @@ const railItemSx = (active: boolean) => ({
   '&:hover': { bgcolor: active ? designTokens.secondaryContainer : 'rgba(0,0,0,0.04)' },
 });
 
-export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog, onLogout, brand, profileTabIndex, children }: AppShellProps) {
+export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog, onLogout, brand, profileTabIndex, floating, children }: AppShellProps) {
   const theme = useTheme();
   const { t } = useI18n();
   const wide = useMediaQuery(theme.breakpoints.up('md'));
@@ -308,29 +311,38 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
     return (
       <PageTitleProvider>
       <TopBarBackProvider>
-        {/* Op een telefoon scrolt de inhoud onder de statusbalk door; deze strook houdt dat vlak dicht,
-            zodat een paginatitel niet half achter de klok of de notch verdwijnt. */}
-        <Box
-          aria-hidden
-          sx={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 'env(safe-area-inset-top, 0px)',
-            bgcolor: 'background.default',
-            zIndex: (th) => th.zIndex.appBar,
-            pointerEvents: 'none',
-          }}
-        />
-        <MobileTopBar title={title} onNavigate={onNavigate} profileTabIndex={profileTabIndex} />
-        {children}
-        <FloatingToolbar items={secondary} activeTab={activeTab} onNavigate={onNavigate} />
-        <NavigationBar
-          value={barIndex}
-          onChange={(i) => destinations[i] && onNavigate(destinations[i].tabIndex)}
-          tabs={destinations.map((d) => ({ label: d.label, icon: d.icon }))}
-        />
+        {/* De schil is precies één scherm hoog (.mobile-shell) en scrolt van binnen; de navigatiebalk
+            staat er als gewoon onderste kind in en de zwevende knoppen absoluut erboven. Zo kan iOS
+            ze niet meer halverwege het scherm zetten (dat deed het met position: fixed na het
+            toetsenbord). */}
+        <Box className="mobile-shell" sx={{ position: 'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'background.default' }}>
+          {/* De inhoud scrolt onder de statusbalk door; deze strook houdt dat vlak dicht, zodat een
+              paginatitel niet half achter de klok of de notch verdwijnt. */}
+          <Box
+            aria-hidden
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 'env(safe-area-inset-top, 0px)',
+              bgcolor: 'background.default',
+              zIndex: (th) => th.zIndex.appBar,
+              pointerEvents: 'none',
+            }}
+          />
+          <Box className="mobile-scroll" sx={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehaviorY: 'contain' }}>
+            <MobileTopBar title={title} onNavigate={onNavigate} profileTabIndex={profileTabIndex} />
+            {children}
+          </Box>
+          {floating}
+          <FloatingToolbar items={secondary} activeTab={activeTab} onNavigate={onNavigate} />
+          <NavigationBar
+            value={barIndex}
+            onChange={(i) => destinations[i] && onNavigate(destinations[i].tabIndex)}
+            tabs={destinations.map((d) => ({ label: d.label, icon: d.icon }))}
+          />
+        </Box>
       </TopBarBackProvider>
       </PageTitleProvider>
     );
@@ -421,6 +433,7 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
         </Box>
         {children}
       </Box>
+      {floating}
     </Box>
     </TopBarBackProvider>
     </PageTitleProvider>

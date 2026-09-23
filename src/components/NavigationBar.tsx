@@ -91,11 +91,10 @@ export const NavigationBar = ({ value, onChange, tabs }: NavigationBarProps) => 
     <md-navigation-bar
       ref={navBarRef}
       activeIndex={value}
+      // Geen position: fixed: de balk is het onderste kind van de schil (AppShell), die zelf één
+      // scherm hoog is en van binnen scrolt.
       style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
+        flexShrink: 0,
         zIndex: 1000,
         '--md-navigation-bar-container-height': '80px',
       } as any}
