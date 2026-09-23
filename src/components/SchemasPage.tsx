@@ -52,6 +52,7 @@ import { SchemaListCard } from './schemas/SchemaListCard';
 import { NewSchemaDialog, type NewSchemaMode } from './schemas/NewSchemaDialog';
 import { SwipeActions } from './SwipeActions';
 import { useNotify } from '../context/NotifyContext';
+import { scrollPageToTop } from '../utils/scrollPage';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { createEmptyFormule7 } from '../utils/formule7Defaults';
@@ -165,7 +166,7 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
   /** Wisselt van filter en springt terug naar de bovenkant van de lijst. */
   const applyFilter = useCallback((change: () => void) => {
     change();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollPageToTop();
   }, []);
   const [sessionDayIndex, setSessionDayIndex] = useState<number>(0);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);

@@ -32,6 +32,17 @@ body {
   min-height: 100vh;
 }
 
+/*
+ * Telefoon: de schil is precies één scherm hoog en scrolt van binnen (zie AppShell). Het document
+ * zelf scrolt dus niet, en de navigatiebalk en de +-knop staan gewoon onderaan de schil in plaats
+ * van position: fixed. iOS zette fixed elementen na het toetsenbord soms middenin het scherm.
+ * dvh volgt de zichtbare hoogte; oudere browsers vallen terug op vh.
+ */
+.mobile-shell {
+  height: 100vh;
+  height: 100dvh;
+}
+
 /* Standaard: print-layout verbergen op scherm, scherm-layout tonen */
 .workout-detail-print {
   display: none;
