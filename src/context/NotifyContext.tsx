@@ -48,7 +48,8 @@ export function NotifyProvider({ children }: { children: ReactNode }) {
       <Snackbar
         key={current?.key}
         open={current !== null}
-        autoHideDuration={current?.severity === 'error' ? 6000 : 3500}
+        // Lange meldingen (bijv. welke lessen bleven staan) krijgen meer leestijd.
+        autoHideDuration={Math.min(10000, Math.max(current?.severity === 'error' ? 6000 : 3500, (current?.message.length ?? 0) * 60))}
         onClose={(_, reason) => {
           if (reason === 'clickaway') return;
           setCurrent(null);

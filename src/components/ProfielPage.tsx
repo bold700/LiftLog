@@ -67,7 +67,28 @@ function FieldRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, minHeight: 34 }}>
       <Typography sx={{ fontSize: 14, lineHeight: '20px', flexShrink: 0 }}>{label}</Typography>
-      <Box sx={{ minWidth: 0, fontSize: 14, textAlign: 'right', display: 'flex', justifyContent: 'flex-end' }}>{children}</Box>
+      <Box
+        sx={{
+          minWidth: 0,
+          fontSize: 14,
+          textAlign: 'right',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          // Een waarde die je kunt aanpassen moet er ook zo uitzien: vlak bij hover, rand bij focus.
+          '&:has(input, .MuiSelect-select)': {
+            mr: -1,
+            px: 1,
+            py: 0.5,
+            borderRadius: 1,
+            cursor: 'text',
+            transition: 'background-color 0.15s ease, box-shadow 0.15s ease',
+            '&:hover': { bgcolor: designTokens.cardBackgroundHigh },
+            '&:focus-within': { bgcolor: designTokens.cardBackgroundHigh, boxShadow: `inset 0 -2px 0 ${designTokens.primary}` },
+          },
+        }}
+      >
+        {children}
+      </Box>
     </Box>
   );
 }
@@ -407,7 +428,7 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
               />
             </FieldRow>
             <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 1 }}>
-              Je naam staat in de app en op de ranglijst. Leeftijd en geslacht vullen de AI-routekaart alvast in.
+              Tik op een waarde om die te wijzigen en sla op met Wijzigingen opslaan. Je naam staat in de app en op de ranglijst. Leeftijd en geslacht vullen de AI-routekaart alvast in.
             </Typography>
             {/* Op een telefoon staat opslaan hier; op desktop in de paginakop. */}
             <Button

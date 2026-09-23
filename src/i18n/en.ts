@@ -47,6 +47,19 @@ export const en: Messages = {
     },
     comingSoon: 'Coming in a later step.',
     review: 'Review',
+    memberFilters: {
+      all: 'Everyone',
+      sporters: 'Members',
+      staff: 'Staff',
+      allPlans: 'All plans',
+      noPlan: 'No plan',
+      plan: 'Plan',
+      sortBy: 'Sort',
+      asc: 'ascending',
+      desc: 'descending',
+      count: { one: '1 member', other: '{count} members' },
+      countOf: '{count} of {total}',
+    },
     searchMembers: 'Search members',
     columns: {
       name: 'Name',
@@ -138,6 +151,7 @@ export const en: Messages = {
       end: 'Until',
       timeInvalid: 'End time must be after the start time.',
       generateFailed: 'Class type saved, but the schedule could not be filled in right away. That happens automatically at the next daily update.',
+      staleKept: '{count} class(es) on an old time slot were kept because people are booked: {list}. Cancel them in Classes if they are not happening.',
       weekdayLabels: {
         sun: 'Sunday',
         mon: 'Monday',

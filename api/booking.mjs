@@ -55,7 +55,15 @@ import { buildInvoicePdf, invoiceFileName } from './_lib/invoicePdf.mjs';
 import { logoToDataUrl } from './_lib/invoiceLogo.mjs';
 import { buildInvoiceEmail, mailConfigured, sendViaResend } from './_lib/invoiceEmail.mjs';
 import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey } from './_lib/molliePayments.mjs';
-import { classIdForOccurrence, missingOccurrences, occurrencesForSchedule, standingBookingId } from './_lib/classSchedule.mjs';
+import {
+  classFieldUpdates,
+  classIdForOccurrence,
+  expectedIdsForSchedule,
+  missingOccurrences,
+  occurrencesForSchedule,
+  staleGeneratedClasses,
+  standingBookingId,
+} from './_lib/classSchedule.mjs';
 
 const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
 
@@ -153,6 +161,8 @@ export default async function handler(req, res) {
         return await setStandingBooking(res, db, uid, myOrgs, String(body.standingBookingId ?? '').trim(), body.active === true);
       case 'generateClassOccurrences':
         return await generateClassOccurrencesNow(res, db, myOrgs, isStaff, String(body.classTypeId ?? '').trim());
+      case 'removeClassOccurrences':
+        return await removeClassOccurrences(res, db, myOrgs, isStaff, String(body.classTypeId ?? '').trim());
       case 'grant':
         if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan credits aanpassen.', build: BUILD });
         return await grant(res, db, uid, myOrgs, body);
@@ -815,6 +825,16 @@ async function generateClasses(req, res, db) {
   const totals = { created: 0, autoBooked: 0, autoWaitlisted: 0, autoSkippedNoCredits: 0 };
   const skippedNoTrainer = [];
 
+  // Eerst opruimen: gegenereerde lessen van een verplaatst weekmoment of een verwijderde lessoort.
+  const from = todayIso();
+  const expected = new Map(
+    typesSnap.docs.map((d) => [d.id, expectedIdsForSchedule(d.id, d.data().schedule, from, WEEKS_AHEAD)])
+  );
+  const futureSnap = await db.collection('classes').where('date', '>=', from).get();
+  const stale = staleGeneratedClasses(futureSnap.docs.map((d) => ({ ...d.data(), id: d.id })), expected, from);
+  await deleteClasses(db, stale.remove);
+  const pruned = { removed: stale.remove.length, staleWithBookings: stale.keepBooked.length };
+
   for (const typeDoc of typesSnap.docs) {
     const ct = typeDoc.data();
     if (!Array.isArray(ct.schedule) || ct.schedule.length === 0) continue;
@@ -829,7 +849,7 @@ async function generateClasses(req, res, db) {
     totals.autoSkippedNoCredits += result.autoSkippedNoCredits;
   }
 
-  return json(res, 200, { ...totals, skippedNoTrainer, build: BUILD });
+  return json(res, 200, { ...totals, ...pruned, skippedNoTrainer, build: BUILD });
 }
 
 /**
@@ -907,11 +927,82 @@ async function generateClassOccurrencesNow(res, db, myOrgs, isStaff, classTypeId
   if (!snap.exists) return json(res, 404, { error: 'Deze lessoort bestaat niet (meer).', build: BUILD });
   const ct = snap.data();
   if (!myOrgs.includes(orgIdOf(ct.orgId))) return json(res, 403, { error: 'Deze lessoort hoort niet bij jouw studio.', build: BUILD });
-  if (!Array.isArray(ct.schedule) || ct.schedule.length === 0 || !ct.defaultTrainerId) {
-    return json(res, 200, { created: 0, autoBooked: 0, autoWaitlisted: 0, autoSkippedNoCredits: 0, build: BUILD });
+  // Altijd eerst het rooster laten kloppen met de lessoort zoals hij nu is opgeslagen: verschoven of
+  // weggehaalde weekmomenten opruimen en naam/eindtijd/ruimte doorzetten op wat al gepland staat.
+  const synced = await syncClassType(db, classTypeId, ct);
+  const empty = { created: 0, autoBooked: 0, autoWaitlisted: 0, autoSkippedNoCredits: 0 };
+  const result =
+    Array.isArray(ct.schedule) && ct.schedule.length > 0 && ct.defaultTrainerId ? await generateForClassType(db, classTypeId, ct) : empty;
+  return json(res, 200, { ...result, ...synced, build: BUILD });
+}
+
+/**
+ * Voordat een lessoort verdwijnt: zijn gegenereerde toekomstige lessen van het rooster halen. Lessen
+ * waar al iemand op staat blijven staan (die afmelden doet de trainer bewust, met terugbetaling);
+ * die komen terug in `staleWithBookings` zodat de app ze kan noemen.
+ */
+async function removeClassOccurrences(res, db, myOrgs, isStaff, classTypeId) {
+  if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan het rooster aanpassen.', build: BUILD });
+  if (!classTypeId) return json(res, 400, { error: 'Geen lessoort opgegeven.', build: BUILD });
+  const snap = await db.collection('classTypes').doc(classTypeId).get();
+  if (snap.exists && !myOrgs.includes(orgIdOf(snap.data().orgId))) {
+    return json(res, 403, { error: 'Deze lessoort hoort niet bij jouw studio.', build: BUILD });
   }
-  const result = await generateForClassType(db, classTypeId, ct);
-  return json(res, 200, { ...result, build: BUILD });
+  const from = todayIso();
+  const classes = await futureClassesOfType(db, classTypeId, from, myOrgs);
+  const stale = staleGeneratedClasses(classes, new Map(), from);
+  await deleteClasses(db, stale.remove);
+  return json(res, 200, { removed: stale.remove.length, staleWithBookings: stale.keepBooked.map(staleSummary), build: BUILD });
+}
+
+/** Toekomstige lessen van één lessoort (binnen de eigen studio's). Filter op datum in het geheugen: geen extra index nodig. */
+async function futureClassesOfType(db, classTypeId, from, myOrgs) {
+  const snap = await db.collection('classes').where('classTypeId', '==', classTypeId).get();
+  return snap.docs
+    .map((d) => ({ ...d.data(), id: d.id }))
+    .filter((c) => typeof c.date === 'string' && c.date >= from && (!myOrgs || myOrgs.includes(orgIdOf(c.orgId))));
+}
+
+const staleSummary = (c) => ({ id: c.id, title: c.title ?? '', date: c.date, startTime: c.startTime ?? '', bookedCount: Number(c.bookedCount) || 0 });
+
+async function deleteClasses(db, classes) {
+  for (let i = 0; i < classes.length; i += 400) {
+    const batch = db.batch();
+    for (const c of classes.slice(i, i + 400)) batch.delete(db.collection('classes').doc(c.id));
+    await batch.commit();
+  }
+}
+
+/**
+ * Na het opslaan van een lessoort: gegenereerde lessen die het schema niet meer oplevert weghalen
+ * (als er niemand op staat) en op de lessen die blijven de naam, eindtijd, ruimte, omschrijving en
+ * soort bijwerken. Alleen hier, niet in de dagelijkse cron, zodat een aanpassing op één losse les
+ * blijft staan tot de trainer de lessoort zelf weer wijzigt.
+ */
+async function syncClassType(db, classTypeId, ct) {
+  const from = todayIso();
+  const schedule = Array.isArray(ct.schedule) ? ct.schedule : [];
+  const expectedIds = expectedIdsForSchedule(classTypeId, schedule, from, WEEKS_AHEAD);
+  const classes = await futureClassesOfType(db, classTypeId, from, [orgIdOf(ct.orgId)]);
+  const stale = staleGeneratedClasses(classes, new Map([[classTypeId, expectedIds]]), from);
+  await deleteClasses(db, stale.remove);
+
+  const endTimeFor = (c) => {
+    const weekday = new Date(`${c.date}T00:00:00`).getDay();
+    return schedule.find((s) => s.weekday === weekday && s.startTime === c.startTime)?.endTime ?? c.endTime ?? null;
+  };
+  const updates = [];
+  for (const c of classes) {
+    if (!expectedIds.has(c.id)) continue;
+    const u = classFieldUpdates(c, ct, endTimeFor(c));
+    if (u) updates.push([c.id, u]);
+  }
+  for (let i = 0; i < updates.length; i += 400) {
+    const batch = db.batch();
+    for (const [id, u] of updates.slice(i, i + 400)) batch.update(db.collection('classes').doc(id), { ...u, updatedAt: new Date().toISOString() });
+    await batch.commit();
+  }
+  return { removed: stale.remove.length, updated: updates.length, staleWithBookings: stale.keepBooked.map(staleSummary) };
 }
 
 /**

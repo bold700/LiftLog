@@ -3,11 +3,12 @@
  * abonnement, credits), op de telefoon kaartjes met abonnement en credits onder de naam.
  * Abonnementen bestaan nog niet; die kolom toont een streepje tot die stap er is.
  */
-import { Box, Chip, Table, TableBody, TableCell, TableHead, TableRow, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Chip, Table, TableBody, TableCell, TableHead, TableRow, TableSortLabel, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useI18n } from '../../context/I18nContext';
 import { UserAvatar } from '../UserAvatar';
 import { designTokens } from '../../theme/designTokens';
 import type { Membership, Profile, ProfileRole } from '../../types';
+import type { MemberSort, MemberSortKey } from '../../utils/memberTable';
 
 interface MembersListProps {
   profiles: Profile[];
@@ -19,9 +20,14 @@ interface MembersListProps {
   loading: boolean;
   hasAny: boolean;
   onOpen: (p: Profile) => void;
+  /** Sortering van de tabel; klik op een kolomkop om te sorteren (nog een keer: andersom). */
+  sort?: MemberSort;
+  onSort?: (s: MemberSort) => void;
 }
 
-export function MembersList({ profiles, credits, memberships = {}, selfId, loading, hasAny, onOpen }: MembersListProps) {
+const COLUMNS: MemberSortKey[] = ['name', 'email', 'role', 'subscription', 'credits'];
+
+export function MembersList({ profiles, credits, memberships = {}, selfId, loading, hasAny, onOpen, sort, onSort }: MembersListProps) {
   const { t } = useI18n();
   const theme = useTheme();
   const wide = useMediaQuery(theme.breakpoints.up('md'));
@@ -92,11 +98,25 @@ export function MembersList({ profiles, credits, memberships = {}, selfId, loadi
       <Table size="medium" sx={{ '& td, & th': { borderBottom: 0, py: 1.5 }, '& th': { color: 'text.secondary', fontSize: 12, fontWeight: 500, pb: 0.5 } }}>
         <TableHead>
           <TableRow>
-            <TableCell>{t('admin.columns.name')}</TableCell>
-            <TableCell>{t('admin.columns.email')}</TableCell>
-            <TableCell>{t('admin.columns.role')}</TableCell>
-            <TableCell>{t('admin.columns.subscription')}</TableCell>
-            <TableCell>{t('admin.columns.credits')}</TableCell>
+            {COLUMNS.map((key) => {
+              const active = sort?.key === key;
+              return (
+                <TableCell key={key} sortDirection={active ? sort!.dir : false}>
+                  {onSort ? (
+                    <TableSortLabel
+                      active={active}
+                      direction={active ? sort!.dir : 'asc'}
+                      onClick={() => onSort({ key, dir: active && sort!.dir === 'asc' ? 'desc' : 'asc' })}
+                      sx={{ '&.Mui-active': { color: 'text.primary' } }}
+                    >
+                      {t(`admin.columns.${key}`)}
+                    </TableSortLabel>
+                  ) : (
+                    t(`admin.columns.${key}`)
+                  )}
+                </TableCell>
+              );
+            })}
           </TableRow>
         </TableHead>
         <TableBody>

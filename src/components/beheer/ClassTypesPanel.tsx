@@ -25,7 +25,15 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useI18n } from '../../context/I18nContext';
 import { useNotify } from '../../context/NotifyContext';
 import { useProfile } from '../../context/ProfileContext';
-import { deleteClassType, generateClassOccurrencesNow, getClassTypes, newClassTypeId, saveClassType } from '../../services/classTypeService';
+import {
+  deleteClassType,
+  generateClassOccurrencesNow,
+  getClassTypes,
+  newClassTypeId,
+  removeClassOccurrences,
+  saveClassType,
+  type StaleClass,
+} from '../../services/classTypeService';
 import { getWorkoutsForUser } from '../../services/workoutFirestore';
 import { getOrg, saveOrgRooms } from '../../services/orgService';
 import { NumberField } from '../NumberField';
@@ -94,7 +102,7 @@ const toDraft = (c: ClassType): Draft => ({
 });
 
 export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const notify = useNotify();
   const profile = useProfile();
   const theme = useTheme();
@@ -244,13 +252,16 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         description: draft.description.trim() || null,
         createdAt: draft.createdAt,
       });
-      // Meteen het rooster vullen in plaats van tot de volgende dagelijkse cron te wachten —
-      // anders lijkt een net opgeslagen weekmoment (tijdelijk) nergens te staan. Mislukt dit,
-      // dan is de lessoort zelf al wel opgeslagen; de cron haalt het de volgende dag alsnog in.
-      if (draft.schedule.length > 0) {
-        await generateClassOccurrencesNow(draft.id).catch((e) => notify.error(t('classTypes.schedule.generateFailed'), e));
-      }
+      // Meteen het rooster laten kloppen in plaats van tot de volgende dagelijkse cron te wachten:
+      // nieuwe weekmomenten erop, verschoven of weggehaalde eraf, naam/tijd/ruimte bijgewerkt. Ook
+      // zonder schema, zodat oude lessen van een weggehaald moment verdwijnen. Mislukt dit, dan is
+      // de lessoort zelf al wel opgeslagen; de cron haalt het de volgende dag alsnog in.
+      const synced = await generateClassOccurrencesNow(draft.id).catch((e) => {
+        notify.error(t('classTypes.schedule.generateFailed'), e);
+        return null;
+      });
       notify.success(t('classTypes.saved'));
+      warnStaleKept(synced?.staleWithBookings);
       await load();
       if (!wide) setDraft(null);
     } catch (e) {
@@ -260,12 +271,26 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
     }
   };
 
+  /** Oude lessen met inschrijvingen blijven staan; noem ze, zodat de trainer ze bewust afmeldt. */
+  const warnStaleKept = (stale: StaleClass[] | undefined) => {
+    if (!stale?.length) return;
+    const list = stale
+      .slice(0, 3)
+      .map((c) => `${new Date(`${c.date}T12:00:00`).toLocaleDateString(lang === 'en' ? 'en-GB' : 'nl-NL', { weekday: 'short', day: 'numeric', month: 'short' })} ${c.startTime}`)
+      .join(', ');
+    notify.info(t('classTypes.schedule.staleKept', { count: stale.length, list: stale.length > 3 ? `${list} …` : list }));
+  };
+
   const remove = async () => {
     if (!draft) return;
     setSaving(true);
     try {
+      // Eerst de geplande lessen zonder inschrijvingen van het rooster, anders blijven ze als
+      // "spooklessen" staan zonder lessoort.
+      const pruned = await removeClassOccurrences(draft.id).catch(() => null);
       await deleteClassType(draft.id);
       notify.success(t('classTypes.deleted'));
+      warnStaleKept(pruned?.staleWithBookings);
       setConfirmDelete(false);
       setDraft(null);
       await load();

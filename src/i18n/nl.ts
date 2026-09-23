@@ -49,6 +49,19 @@ export const nl = {
     },
     comingSoon: 'Komt in een volgende stap.',
     review: 'Bekijken',
+    memberFilters: {
+      all: 'Iedereen',
+      sporters: 'Sporters',
+      staff: 'Staf',
+      allPlans: 'Alle abonnementen',
+      noPlan: 'Zonder abonnement',
+      plan: 'Abonnement',
+      sortBy: 'Sorteer',
+      asc: 'oplopend',
+      desc: 'aflopend',
+      count: { one: '1 lid', other: '{count} leden' },
+      countOf: '{count} van {total}',
+    },
     searchMembers: 'Zoek leden',
     columns: {
       name: 'Naam',
@@ -140,6 +153,7 @@ export const nl = {
       end: 'Tot',
       timeInvalid: 'Eindtijd moet na de starttijd liggen.',
       generateFailed: 'Lessoort opgeslagen, maar het rooster kon niet meteen gevuld worden. Dat gebeurt automatisch bij de volgende dagelijkse update.',
+      staleKept: '{count} les(sen) op een oud moment bleven staan omdat er al iemand is ingeschreven: {list}. Meld ze af via Lessen als ze niet doorgaan.',
       weekdayLabels: {
         sun: 'Zondag',
         mon: 'Maandag',
