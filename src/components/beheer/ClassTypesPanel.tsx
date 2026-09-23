@@ -240,7 +240,6 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
     const capacity = draft.capacity.trim() === '' ? null : Number(draft.capacity);
     const creditCost = Number(draft.creditCost);
     if (!name) return setError(t('classTypes.nameRequired'));
-    if (draft.schedule.length > 0 && !draft.defaultTrainerId) return setError(t('classTypes.schedule.needsTrainer'));
     if (draft.schedule.some((s) => s.endTime <= s.startTime)) return setError(t('classTypes.schedule.timeInvalid'));
     setSaving(true);
     setError(null);
@@ -465,7 +464,17 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
           </MenuItem>
         ))}
       </TextField>
-      <TextField select label={t('classTypes.defaultTrainer')} size="small" fullWidth value={draft.defaultTrainerId} onChange={(e) => setDraft({ ...draft, defaultTrainerId: e.target.value })}>
+      <TextField
+        select
+        label={t('classTypes.defaultTrainer')}
+        size="small"
+        fullWidth
+        value={draft.defaultTrainerId}
+        onChange={(e) => setDraft({ ...draft, defaultTrainerId: e.target.value })}
+        // Zonder vaste trainer is de lege waarde een echte keuze: toon hem ook als tekst in het veld.
+        SelectProps={{ displayEmpty: true }}
+        InputLabelProps={{ shrink: true }}
+      >
         <MenuItem value="">{t('classTypes.anyTrainer')}</MenuItem>
         {staff.map((p) => (
           <MenuItem key={p.userId} value={p.userId}>
@@ -489,11 +498,6 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
           {t('classTypes.schedule.help')}
         </Typography>
-        {!draft.defaultTrainerId && (
-          <Typography variant="caption" color="warning.main" sx={{ display: 'block', mb: 1.5 }}>
-            {t('classTypes.schedule.needsTrainer')}
-          </Typography>
-        )}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 1.5 }}>
           {draft.schedule.map((slot, i) => (
             <Box key={i} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -552,7 +556,6 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         <Button
           size="small"
           startIcon={<AddRoundedIcon />}
-          disabled={!draft.defaultTrainerId}
           onClick={() => setDraft({ ...draft, schedule: [...draft.schedule, { weekday: 1, startTime: '19:00', endTime: '20:00' }] })}
         >
           {t('classTypes.schedule.add')}

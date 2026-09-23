@@ -17,11 +17,12 @@ import {
   RadioGroup,
   TextField,
   Typography,
-  InputBase,
+  InputAdornment,
   Select,
   CircularProgress,
 } from '@mui/material';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
+import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
@@ -101,7 +102,6 @@ function LinkButton({ onClick, children }: { onClick: () => void; children: Reac
   );
 }
 
-const rowInputSx = { fontSize: 14, maxWidth: 220, '& input': { padding: 0 } } as const;
 const columnSx = { display: { xs: 'contents', md: 'flex' }, flexDirection: 'column', gap: 2.5, minWidth: 0 } as const;
 const radioSx = { my: -0.25, '& .MuiFormControlLabel-label': { fontSize: 14 } } as const;
 
@@ -117,6 +117,8 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
   const [restingHr, setRestingHr] = useState('');
   const [limitations, setLimitations] = useState<Limitation[]>([]);
   const [saving, setSaving] = useState(false);
+  /** Bekijken of bewerken: pas na "Wijzigen" worden de gegevens invoervelden (M3 outlined). */
+  const [editing, setEditing] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -230,16 +232,26 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
     }
   }, [uid, profile]);
 
-  useEffect(() => {
-    if (p?.displayName != null) setDisplayName(p.displayName);
-    else if (p !== undefined) setDisplayName('');
+  /** Formulier terugzetten naar wat er is opgeslagen (bij laden en bij Annuleren). */
+  const resetForm = useCallback(() => {
+    setDisplayName(p?.displayName ?? '');
     setLeaderboardVisibility(p?.leaderboardVisibility ?? 'named');
     setHeightCm(p?.heightCm != null ? String(p.heightCm) : '');
     setBirthDate(p?.birthDate ?? '');
     setGender(p?.gender ?? '');
     setRestingHr(p?.restingHrBpm != null ? String(p.restingHrBpm) : '');
     setLimitations(p?.limitations ?? []);
-  }, [p?.displayName, p?.leaderboardVisibility, p?.heightCm, p?.birthDate, p?.gender, p?.restingHrBpm, p?.limitations, p]);
+  }, [p]);
+
+  useEffect(() => {
+    resetForm();
+  }, [resetForm]);
+
+  const handleCancel = useCallback(() => {
+    resetForm();
+    setEditing(false);
+    setMessage(null);
+  }, [resetForm]);
 
   const handleSave = useCallback(async () => {
     if (!uid || !profile) return;
@@ -256,6 +268,7 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
         limitations,
       });
       await profile.refreshProfile();
+      setEditing(false);
       setMessage({ type: 'success', text: 'Profiel opgeslagen.' });
     } catch (e) {
       setMessage({
@@ -280,6 +293,51 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
   const hrZones = heartRateZones(ageNow, restingNum);
 
 
+  const pillSx = { borderRadius: '20px', textTransform: 'none', fontWeight: 500, height: 40, px: 2.5 } as const;
+  const editActions = editing ? (
+    <>
+      <Button variant="text" onClick={handleCancel} disabled={saving} sx={{ ...pillSx, flex: { xs: 1, md: 'none' } }}>
+        Annuleren
+      </Button>
+      <Button variant="contained" disableElevation onClick={handleSave} disabled={saving} sx={{ ...pillSx, flex: { xs: 1, md: 'none' } }}>
+        {saving ? (
+          'Bezig…'
+        ) : (
+          <>
+            <Box component="span" sx={{ display: { xs: 'inline', md: 'none' } }}>
+              Opslaan
+            </Box>
+            <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>
+              Wijzigingen opslaan
+            </Box>
+          </>
+        )}
+      </Button>
+    </>
+  ) : (
+    <Button
+      variant="outlined"
+      startIcon={<EditRoundedIcon />}
+      onClick={() => {
+        setMessage(null);
+        setEditing(true);
+      }}
+      sx={{ ...pillSx, flex: { xs: 1, md: 'none' } }}
+    >
+      Wijzigen
+    </Button>
+  );
+
+  const genderLabel = { man: 'Man', vrouw: 'Vrouw', anders: 'Anders' } as const;
+  const birthLabel = birthDate
+    ? new Date(`${birthDate}T12:00:00`).toLocaleDateString(lang === 'en' ? 'en-GB' : 'nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
+    : '–';
+  const visibilityLabel: Record<LeaderboardVisibility, string> = {
+    named: 'Met mijn profielnaam',
+    anonymous: 'Anoniem',
+    hidden: 'Verborgen',
+  };
+
   return (
     <PageLayout maxWidth="none">
       {message && (
@@ -292,13 +350,9 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
         </Alert>
       )}
 
-      {/* Desktop: "Wijzigingen opslaan" rechts in de paginakop (Figma). */}
+      {/* Desktop: rechts in de paginakop eerst "Wijzigen"; tijdens bewerken "Annuleren" en "Wijzigingen opslaan". */}
       <HeaderActions>
-        <Box sx={{ display: { xs: 'none', md: 'flex' } }}>
-          <Button variant="contained" disableElevation onClick={handleSave} disabled={saving} sx={{ borderRadius: '20px', textTransform: 'none', fontWeight: 500, height: 40, px: 2.5 }}>
-            {saving ? 'Bezig…' : 'Wijzigingen opslaan'}
-          </Button>
-        </Box>
+        <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1 }}>{editActions}</Box>
       </HeaderActions>
 
       {/* Wie je bent: grote avatar (tik om de foto te wijzigen), naam en sinds wanneer je lid bent. */}
@@ -386,60 +440,66 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
 
           <Box sx={{ ...sectionSx(), order: { xs: 3, md: 0 } }}>
             <SectionTitle>Persoonlijke gegevens</SectionTitle>
-            <FieldRow label="Profielnaam">
-              <InputBase value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Bijv. Jan Jansen" inputProps={{ 'aria-label': 'Profielnaam', style: { textAlign: 'right' } }} sx={rowInputSx} />
-            </FieldRow>
-            <FieldRow label="Geboortedatum">
-              <InputBase type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} inputProps={{ 'aria-label': 'Geboortedatum', style: { textAlign: 'right' } }} sx={rowInputSx} />
-            </FieldRow>
-            <FieldRow label="Geslacht">
-              <Select
-                variant="standard"
-                disableUnderline
-                value={gender || 'none'}
-                onChange={(e) => setGender(e.target.value === 'none' ? '' : (e.target.value as typeof gender))}
-                inputProps={{ 'aria-label': 'Geslacht' }}
-                sx={{ fontSize: 14, '& .MuiSelect-select': { textAlign: 'right', py: 0.25 } }}
-              >
-                <MenuItem value="none">Niet opgegeven</MenuItem>
-                <MenuItem value="man">Man</MenuItem>
-                <MenuItem value="vrouw">Vrouw</MenuItem>
-                <MenuItem value="anders">Anders</MenuItem>
-              </Select>
-            </FieldRow>
-            <FieldRow label="Lengte">
-              <NumberField
-                variant="standard"
-                value={heightCm}
-                onChange={setHeightCm}
-                placeholder="–"
-                InputProps={{ disableUnderline: true, endAdornment: <Box component="span" sx={{ fontSize: 14, color: 'text.secondary', ml: 0.5 }}>cm</Box> }}
-                inputProps={{ 'aria-label': 'Lengte in cm', style: { textAlign: 'right', width: 48, fontSize: 14, padding: 0 } }}
-              />
-            </FieldRow>
-            <FieldRow label="Rusthartslag">
-              <NumberField
-                variant="standard"
-                value={restingHr}
-                onChange={setRestingHr}
-                placeholder="–"
-                InputProps={{ disableUnderline: true, endAdornment: <Box component="span" sx={{ fontSize: 14, color: 'text.secondary', ml: 0.5 }}>bpm</Box> }}
-                inputProps={{ 'aria-label': 'Rusthartslag in bpm', style: { textAlign: 'right', width: 48, fontSize: 14, padding: 0 } }}
-              />
-            </FieldRow>
-            <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 1 }}>
-              Tik op een waarde om die te wijzigen en sla op met Wijzigingen opslaan. Je naam staat in de app en op de ranglijst. Leeftijd en geslacht vullen de AI-routekaart alvast in.
+            {editing ? (
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, pt: 1 }}>
+                <TextField
+                  label="Profielnaam"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Bijv. Jan Jansen"
+                  fullWidth
+                  autoFocus
+                  sx={{ gridColumn: { sm: '1 / -1' } }}
+                />
+                <TextField
+                  label="Geboortedatum"
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  fullWidth
+                />
+                <TextField
+                  select
+                  label="Geslacht"
+                  value={gender || 'none'}
+                  onChange={(e) => setGender(e.target.value === 'none' ? '' : (e.target.value as typeof gender))}
+                  fullWidth
+                >
+                  <MenuItem value="none">Niet opgegeven</MenuItem>
+                  <MenuItem value="man">Man</MenuItem>
+                  <MenuItem value="vrouw">Vrouw</MenuItem>
+                  <MenuItem value="anders">Anders</MenuItem>
+                </TextField>
+                <NumberField
+                  label="Lengte"
+                  value={heightCm}
+                  onChange={setHeightCm}
+                  fullWidth
+                  InputProps={{ endAdornment: <InputAdornment position="end">cm</InputAdornment> }}
+                />
+                <NumberField
+                  label="Rusthartslag"
+                  value={restingHr}
+                  onChange={setRestingHr}
+                  fullWidth
+                  InputProps={{ endAdornment: <InputAdornment position="end">bpm</InputAdornment> }}
+                />
+              </Box>
+            ) : (
+              <>
+                <FieldRow label="Profielnaam">{displayName || '–'}</FieldRow>
+                <FieldRow label="Geboortedatum">{birthLabel}</FieldRow>
+                <FieldRow label="Geslacht">{gender ? genderLabel[gender] : '–'}</FieldRow>
+                <FieldRow label="Lengte">{heightCm ? `${heightCm} cm` : '–'}</FieldRow>
+                <FieldRow label="Rusthartslag">{restingHr ? `${restingHr} bpm` : '–'}</FieldRow>
+              </>
+            )}
+            <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: editing ? 1.5 : 1 }}>
+              Je naam staat in de app en op de ranglijst. Leeftijd en geslacht vullen de AI-routekaart alvast in.
             </Typography>
-            {/* Op een telefoon staat opslaan hier; op desktop in de paginakop. */}
-            <Button
-              variant="contained"
-              disableElevation
-              onClick={handleSave}
-              disabled={saving}
-              sx={{ display: { md: 'none' }, mt: 2, width: '100%', height: 48, borderRadius: '24px', textTransform: 'none', fontWeight: 500 }}
-            >
-              {saving ? 'Bezig…' : 'Wijzigingen opslaan'}
-            </Button>
+            {/* Op een telefoon staan de knoppen hier; op desktop in de paginakop. */}
+            <Box sx={{ display: { xs: 'flex', md: 'none' }, gap: 1, mt: 2 }}>{editActions}</Box>
           </Box>
 
           {/* Hartslagzones: uit leeftijd + rusthartslag, zelfde formule als de routekaart */}
@@ -501,7 +561,7 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
           </Box>
 
           <Box sx={{ ...sectionSx(), order: { xs: 8, md: 0 } }}>
-            <LimitationsEditor value={limitations} onChange={setLimitations} disabled={saving} />
+            <LimitationsEditor value={limitations} onChange={setLimitations} disabled={saving || !editing} />
           </Box>
         </Box>
 
@@ -519,12 +579,16 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
 
           <Box sx={{ ...sectionSx(), order: { xs: 5, md: 0 } }}>
             <SectionTitle id="ranglijst-titel">Ranglijst</SectionTitle>
-            <RadioGroup aria-labelledby="ranglijst-titel" value={leaderboardVisibility} onChange={(e) => setLeaderboardVisibility(e.target.value as LeaderboardVisibility)}>
-              <FormControlLabel value="named" control={<Radio size="small" />} label="Met mijn profielnaam" sx={radioSx} />
-              <FormControlLabel value="anonymous" control={<Radio size="small" />} label="Anoniem" sx={radioSx} />
-              <FormControlLabel value="hidden" control={<Radio size="small" />} label="Verborgen" sx={radioSx} />
-            </RadioGroup>
-            <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 0.5 }}>Alleen totalen worden gedeeld; je logs blijven privé. Wordt bewaard met Wijzigingen opslaan.</Typography>
+            {editing ? (
+              <RadioGroup aria-labelledby="ranglijst-titel" value={leaderboardVisibility} onChange={(e) => setLeaderboardVisibility(e.target.value as LeaderboardVisibility)}>
+                <FormControlLabel value="named" control={<Radio size="small" />} label="Met mijn profielnaam" sx={radioSx} />
+                <FormControlLabel value="anonymous" control={<Radio size="small" />} label="Anoniem" sx={radioSx} />
+                <FormControlLabel value="hidden" control={<Radio size="small" />} label="Verborgen" sx={radioSx} />
+              </RadioGroup>
+            ) : (
+              <FieldRow label="Zichtbaarheid">{visibilityLabel[leaderboardVisibility]}</FieldRow>
+            )}
+            <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 0.5 }}>Alleen totalen worden gedeeld; je logs blijven privé.</Typography>
           </Box>
 
           <Box sx={{ ...sectionSx(), order: { xs: 6, md: 0 } }}>

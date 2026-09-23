@@ -823,7 +823,6 @@ async function generateClasses(req, res, db) {
 
   const typesSnap = await db.collection('classTypes').get();
   const totals = { created: 0, autoBooked: 0, autoWaitlisted: 0, autoSkippedNoCredits: 0 };
-  const skippedNoTrainer = [];
 
   // Eerst opruimen: gegenereerde lessen van een verplaatst weekmoment of een verwijderde lessoort.
   const from = todayIso();
@@ -838,10 +837,6 @@ async function generateClasses(req, res, db) {
   for (const typeDoc of typesSnap.docs) {
     const ct = typeDoc.data();
     if (!Array.isArray(ct.schedule) || ct.schedule.length === 0) continue;
-    if (!ct.defaultTrainerId) {
-      skippedNoTrainer.push(typeDoc.id);
-      continue;
-    }
     const result = await generateForClassType(db, typeDoc.id, ct);
     totals.created += result.created;
     totals.autoBooked += result.autoBooked;
@@ -849,7 +844,7 @@ async function generateClasses(req, res, db) {
     totals.autoSkippedNoCredits += result.autoSkippedNoCredits;
   }
 
-  return json(res, 200, { ...totals, ...pruned, skippedNoTrainer, build: BUILD });
+  return json(res, 200, { ...totals, ...pruned, build: BUILD });
 }
 
 /**
@@ -882,7 +877,8 @@ async function generateForClassType(db, classTypeId, ct) {
       date: o.date,
       startTime: o.startTime,
       endTime: o.endTime,
-      trainerId: ct.defaultTrainerId,
+      // Zonder vaste trainer staat de les zonder trainer op het rooster (bijv. wisselende trainers).
+      trainerId: ct.defaultTrainerId || null,
       capacity: ct.capacity ?? 999,
       creditCost: ct.creditCost ?? 1,
       schemaId: ct.schemaId ?? null,
@@ -932,7 +928,7 @@ async function generateClassOccurrencesNow(res, db, myOrgs, isStaff, classTypeId
   const synced = await syncClassType(db, classTypeId, ct);
   const empty = { created: 0, autoBooked: 0, autoWaitlisted: 0, autoSkippedNoCredits: 0 };
   const result =
-    Array.isArray(ct.schedule) && ct.schedule.length > 0 && ct.defaultTrainerId ? await generateForClassType(db, classTypeId, ct) : empty;
+    Array.isArray(ct.schedule) && ct.schedule.length > 0 ? await generateForClassType(db, classTypeId, ct) : empty;
   return json(res, 200, { ...result, ...synced, build: BUILD });
 }
 
