@@ -197,9 +197,14 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && writesMyOrg()
         && request.resource.data.trainerId == request.auth.uid;
-      allow update, delete: if isSignedIn()
+      allow update: if isSignedIn()
         && sameOrg()
         && writesMyOrg()
+        && resource.data.trainerId == request.auth.uid;
+      // Verwijderen apart: dan is er geen nieuw document (request.resource is null), dus
+      // writesMyOrg() zou altijd weigeren. sameOrg() kijkt naar het bestaande document.
+      allow delete: if isSignedIn()
+        && sameOrg()
         && resource.data.trainerId == request.auth.uid;
     }
 

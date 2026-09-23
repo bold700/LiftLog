@@ -51,6 +51,7 @@ import type { AssigneeOption } from './schemas/SchemaListFilters';
 import { SchemaListCard } from './schemas/SchemaListCard';
 import { NewSchemaDialog, type NewSchemaMode } from './schemas/NewSchemaDialog';
 import { SwipeActions } from './SwipeActions';
+import { useNotify } from '../context/NotifyContext';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { createEmptyFormule7 } from '../utils/formule7Defaults';
@@ -64,6 +65,13 @@ type View = 'list' | 'detail' | 'edit' | 'session' | 'groupSession';
 /** Hoe diep elk scherm zit, voor de history-gebaseerde terugnavigatie (zie handleNextDay hieronder). */
 const VIEW_DEPTH: Record<View, number> = { list: 0, detail: 1, edit: 2, session: 2, groupSession: 2 };
 
+
+/** Verwijderen mislukt: meestal omdat een andere trainer de workout heeft gemaakt (alleen die mag hem weghalen). */
+function deleteErrorMessage(e: unknown): string {
+  const code = (e as { code?: string })?.code;
+  if (code === 'permission-denied') return 'Deze workout kan alleen de trainer die hem maakte verwijderen.';
+  return e instanceof Error && e.message ? `Verwijderen mislukt: ${e.message}` : 'Verwijderen mislukt.';
+}
 
 interface SchemasPageProps {
   /** Vanuit het +-menu (App): meteen een nieuwe, lege workout aanmaken en bewerken. */
@@ -85,6 +93,7 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
     isTrainer,
   } = useWorkouts();
   const profile = useProfile();
+  const notify = useNotify();
   const sportersForAssignment = useMemo(() => (isTrainer ? (profile?.allSporters ?? []) : []), [isTrainer, profile?.allSporters]);
   const [view, setView] = useState<View>('list');
   const [selectedSchemaId, setSelectedSchemaId] = useState<string | null>(null);
@@ -258,9 +267,14 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
     const target = listDeleteTarget;
     setListDeleteTarget(null);
     if (!target) return;
-    await deleteSchema(target.id);
+    try {
+      await deleteSchema(target.id);
+      notify.success(`"${target.name}" is verwijderd.`);
+    } catch (e) {
+      notify.error(deleteErrorMessage(e));
+    }
     loadSchemas();
-  }, [listDeleteTarget, deleteSchema, loadSchemas]);
+  }, [listDeleteTarget, deleteSchema, loadSchemas, notify]);
 
   const handleSaveSchema = useCallback(
     async (updated: Schema) => {
@@ -333,13 +347,19 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
 
   const handleConfirmDelete = useCallback(async () => {
     if (selectedSchemaId) {
-      await deleteSchema(selectedSchemaId);
+      try {
+        await deleteSchema(selectedSchemaId);
+      } catch (e) {
+        setOpenDeleteDialog(false);
+        notify.error(deleteErrorMessage(e));
+        return;
+      }
       setOpenDeleteDialog(false);
       loadSchemas();
       // handleBack (via popstate) ruimt selectedSchemaId op en zet de view terug naar 'list'.
       window.history.back();
     }
-  }, [selectedSchemaId, deleteSchema, loadSchemas]);
+  }, [selectedSchemaId, deleteSchema, loadSchemas, notify]);
 
   const handleCloseDeleteDialog = useCallback(() => {
     setOpenDeleteDialog(false);
