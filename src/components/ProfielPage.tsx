@@ -35,6 +35,7 @@ import { UserAvatar } from './UserAvatar';
 import { AiChatConnectCard } from './AiChatConnectCard';
 import { SubscriptionCard } from './SubscriptionCard';
 import { BookingsCard } from './BookingsCard';
+import { StandingBookingsCard } from './StandingBookingsCard';
 import { ageOnDate } from '../utils/bodyFat';
 import { heartRateZones } from '../utils/heartRate';
 import { todayIso } from '../utils/format';
@@ -422,6 +423,11 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
           {uid && p?.role === 'sporter' && (
             <Box sx={{ order: { xs: 2, md: 0 } }}>
               <BookingsCard userId={uid} />
+            </Box>
+          )}
+          {uid && p?.role === 'sporter' && (
+            <Box sx={{ order: { xs: 2, md: 0 } }}>
+              <StandingBookingsCard userId={uid} />
             </Box>
           )}
 

@@ -894,3 +894,77 @@ describe('rooster meteen vullen na het opslaan van een lessoort', () => {
     expect(res.body.created).toBe(0);
   });
 });
+
+describe('vaste lessen vanuit het profiel', () => {
+  const inDays = (n) => {
+    const d = new Date(Date.now() + n * 86_400_000);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const d1 = inDays(7);
+  const d2 = inDays(14);
+  const d3 = inDays(21);
+  const weekday = new Date(`${d1}T12:00:00`).getDay();
+  const cls = (date, extra = {}) => ({
+    orgId: 'vanas', title: 'HIIT', date, startTime: '09:00', endTime: '10:00', trainerId: 'trainer1',
+    capacity: 8, creditCost: 1, bookedCount: 0, waitlistCount: 0, classTypeId: 'ct9', ...extra,
+  });
+  const sbId = `sb_ct9_sporter1_${weekday}_0900`;
+  const myBookings = () => Object.values(store).filter((v) => v.userId === 'sporter1' && v.classId && ['booked', 'waitlist'].includes(v.status));
+
+  beforeEach(() => {
+    store['classTypes/ct9'] = {
+      orgId: 'vanas', name: 'HIIT', capacity: 8, creditCost: 1, defaultTrainerId: 'trainer1',
+      schedule: [{ weekday, startTime: '09:00', endTime: '10:00' }],
+    };
+    store['classes/w1'] = cls(d1);
+    store['classes/w2'] = cls(d2);
+    store['classes/w3'] = cls(d3);
+    store['classes/anders'] = cls(d1, { startTime: '18:00' });
+  });
+
+  it('boekt meteen de weken die al op het rooster staan', async () => {
+    const res = await post({ action: 'addStandingBooking', classTypeId: 'ct9', weekday, startTime: '09:00' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ standingBookingId: sbId, booked: 3, skippedNoCredits: 0 });
+    expect(myBookings().map((b) => b.classId).sort()).toEqual(['w1', 'w2', 'w3']);
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(0);
+    expect(store[`standingBookings/${sbId}`]).toMatchObject({ active: true, userId: 'sporter1' });
+  });
+
+  it('begint pas op de startdatum', async () => {
+    const res = await post({ action: 'addStandingBooking', classTypeId: 'ct9', weekday, startTime: '09:00', startDate: d2 });
+    expect(res.body.booked).toBe(2);
+    expect(myBookings().map((b) => b.classId).sort()).toEqual(['w2', 'w3']);
+  });
+
+  it('een trainer zet het voor een klant; een sporter niet voor een ander', async () => {
+    const byTrainer = await post({ action: 'addStandingBooking', classTypeId: 'ct9', weekday, startTime: '09:00', userId: 'sporter1' }, 'trainer1');
+    expect(byTrainer.statusCode).toBe(200);
+    expect(myBookings()).toHaveLength(3);
+    const bySporter = await post({ action: 'addStandingBooking', classTypeId: 'ct9', weekday, startTime: '09:00', userId: 'sporter1' }, 'sporter2');
+    expect(bySporter.statusCode).toBe(403);
+  });
+
+  it('weigert een weekmoment dat niet bij de lessoort hoort', async () => {
+    const res = await post({ action: 'addStandingBooking', classTypeId: 'ct9', weekday, startTime: '07:00' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('stoppen meldt de geboekte lessen af, met credit terug buiten de termijn', async () => {
+    await post({ action: 'addStandingBooking', classTypeId: 'ct9', weekday, startTime: '09:00' });
+    const res = await post({ action: 'setStandingBooking', standingBookingId: sbId, active: false });
+    expect(res.body).toMatchObject({ active: false, cancelled: 3, refunded: 3 });
+    expect(myBookings()).toHaveLength(0);
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(3);
+  });
+
+  it('pauze meldt alleen de lessen in die periode af, en opheffen boekt ze weer', async () => {
+    await post({ action: 'addStandingBooking', classTypeId: 'ct9', weekday, startTime: '09:00' });
+    const paused = await post({ action: 'pauseStandingBooking', standingBookingId: sbId, from: d2, until: d2 });
+    expect(paused.body.cancelled).toBe(1);
+    expect(myBookings().map((b) => b.classId).sort()).toEqual(['w1', 'w3']);
+    const resumed = await post({ action: 'pauseStandingBooking', standingBookingId: sbId, from: null });
+    expect(resumed.body.booked).toBe(1);
+    expect(myBookings().map((b) => b.classId).sort()).toEqual(['w1', 'w2', 'w3']);
+  });
+});

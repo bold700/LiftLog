@@ -59,9 +59,11 @@ import {
   classFieldUpdates,
   classIdForOccurrence,
   expectedIdsForSchedule,
+  inStandingSeries,
   missingOccurrences,
   occurrencesForSchedule,
   staleGeneratedClasses,
+  standingAppliesOn,
   standingBookingId,
 } from './_lib/classSchedule.mjs';
 
@@ -158,7 +160,11 @@ export default async function handler(req, res) {
       case 'cancel':
         return await cancel(res, db, uid, myOrgs, isStaff, String(body.bookingId ?? '').trim());
       case 'setStandingBooking':
-        return await setStandingBooking(res, db, uid, myOrgs, String(body.standingBookingId ?? '').trim(), body.active === true);
+        return await setStandingBooking(res, db, uid, myOrgs, isStaff, String(body.standingBookingId ?? '').trim(), body.active === true);
+      case 'addStandingBooking':
+        return await addStandingBooking(res, db, uid, myOrgs, isStaff, body);
+      case 'pauseStandingBooking':
+        return await pauseStandingBooking(res, db, uid, myOrgs, isStaff, body);
       case 'generateClassOccurrences':
         return await generateClassOccurrencesNow(res, db, myOrgs, isStaff, String(body.classTypeId ?? '').trim());
       case 'pruneStaleClasses':
@@ -197,16 +203,17 @@ export default async function handler(req, res) {
   } catch (e) {
     // Een verwachte weigering (geen plek, geen saldo) komt hier als Error langs met een nette tekst.
     const message = e instanceof Error ? e.message : 'Er ging iets mis.';
-    if (e?.expected) return json(res, 409, { error: message, build: BUILD });
+    if (e?.expected) return json(res, e.status ?? 409, { error: message, build: BUILD });
     console.error('[booking] mislukt:', e);
     return json(res, 500, { error: 'Reservering verwerken mislukt.', build: BUILD });
   }
 }
 
 /** Weigering die de gebruiker moet zien (geen plek, geen saldo) — geen serverfout. */
-function refuse(message) {
+function refuse(message, status) {
   const err = new Error(message);
   err.expected = true;
+  if (status) err.status = status;
   return err;
 }
 
@@ -363,8 +370,13 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
  */
 async function cancel(res, db, uid, myOrgs, isStaff, bookingId) {
   if (!bookingId) return json(res, 400, { error: 'Geen reservering opgegeven.', build: BUILD });
+  const result = await cancelBookingCore(db, uid, myOrgs, isStaff, bookingId);
+  return json(res, 200, { ...result, build: BUILD });
+}
 
-  const result = await db.runTransaction(async (tx) => {
+/** Het eigenlijke afmelden, ook gebruikt bij het stoppen of pauzeren van een vaste les. */
+async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
+  return db.runTransaction(async (tx) => {
     const bookingRef = db.collection('bookings').doc(bookingId);
     const bookingSnap = await tx.get(bookingRef);
     if (!bookingSnap.exists) throw refuse('Deze reservering bestaat niet (meer).');
@@ -458,21 +470,163 @@ async function cancel(res, db, uid, myOrgs, isStaff, bookingId) {
 
     return { cancelled: true, refunded: refund, promotedUserId: promoted ? String(promoted.data.userId) : null };
   });
-
-  return json(res, 200, { ...result, build: BUILD });
 }
 
-/** "Elke week inschrijven" aan- of uitzetten. Alleen de sporter van wie de inschrijving is. */
-async function setStandingBooking(res, db, uid, myOrgs, standingId, active) {
-  if (!standingId) return json(res, 400, { error: 'Geen inschrijving opgegeven.', build: BUILD });
-  const ref = db.collection('standingBookings').doc(standingId);
-  const snap = await ref.get();
-  if (!snap.exists) return json(res, 404, { error: 'Deze inschrijving bestaat niet (meer).', build: BUILD });
-  const data = snap.data();
-  if (!myOrgs.includes(orgIdOf(data.orgId))) return json(res, 403, { error: 'Deze inschrijving hoort niet bij jouw studio.', build: BUILD });
-  if (data.userId !== uid) return json(res, 403, { error: 'Dit is niet jouw inschrijving.', build: BUILD });
-  await ref.set({ active, updatedAt: new Date().toISOString() }, { merge: true });
-  return json(res, 200, { active, build: BUILD });
+/**
+ * Een vaste les ophalen en controleren of deze persoon hem mag aanpassen: de sporter zelf, of
+ * staf van dezelfde studio (een trainer die de vaste lessen van zijn klant beheert).
+ */
+async function loadStandingForActor(db, uid, myOrgs, isStaff, standingId) {
+  if (!standingId) throw refuse('Geen vaste les opgegeven.', 400);
+  const snap = await db.collection('standingBookings').doc(standingId).get();
+  if (!snap.exists) throw refuse('Deze vaste les bestaat niet (meer).', 404);
+  const data = { ...snap.data(), id: snap.id };
+  if (!myOrgs.includes(orgIdOf(data.orgId))) throw refuse('Deze vaste les hoort niet bij jouw studio.', 403);
+  if (data.userId !== uid && !isStaff) throw refuse('Dit is niet jouw vaste les.', 403);
+  return data;
+}
+
+/** Toekomstige lessen van het weekmoment van een vaste les, oudste eerst. */
+async function futureSeriesClasses(db, standing) {
+  const from = todayIso();
+  const now = Date.now();
+  const snap = await db.collection('classes').where('classTypeId', '==', standing.classTypeId).get();
+  return snap.docs
+    .map((d) => ({ ...d.data(), id: d.id }))
+    .filter((c) => orgIdOf(c.orgId) === orgIdOf(standing.orgId) && typeof c.date === 'string' && c.date >= from)
+    .filter((c) => inStandingSeries(c, standing) && (classStartsAt(c)?.getTime() ?? 0) > now)
+    .sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
+}
+
+/**
+ * De lessen die al op het rooster staan meteen boeken. De cron boekt alleen lessen die hij nieuw
+ * aanmaakt; zonder dit zou een vaste les pas over 8 weken voor het eerst gelden.
+ */
+async function bookExistingForStanding(db, standing) {
+  const counts = { booked: 0, skippedFull: 0, skippedNoCredits: 0 };
+  for (const cls of await futureSeriesClasses(db, standing)) {
+    if (cls.cancelledAt || !standingAppliesOn(standing, cls.date)) continue;
+    const r = await attemptStandingBooking(db, orgIdOf(standing.orgId), cls.id, standing);
+    if (r) counts[r.outcome]++;
+  }
+  return counts;
+}
+
+/**
+ * Geboekte lessen van een vaste les afmelden (stoppen, of een pauze). Gewoon afmelden: binnen de
+ * termijn credit terug, daarbuiten niet — zelfde regel als losse lessen.
+ */
+async function cancelSeriesBookings(db, uid, myOrgs, isStaff, standing, inRange) {
+  const classIds = new Set((await futureSeriesClasses(db, standing)).filter((c) => inRange(c.date)).map((c) => c.id));
+  if (classIds.size === 0) return { cancelled: 0, refunded: 0 };
+  const snap = await db.collection('bookings').where('userId', '==', standing.userId).get();
+  let cancelled = 0;
+  let refunded = 0;
+  for (const d of snap.docs) {
+    const b = d.data();
+    if (!classIds.has(String(b.classId)) || !['booked', 'waitlist'].includes(String(b.status))) continue;
+    const r = await cancelBookingCore(db, uid, myOrgs, isStaff, d.id).catch(() => null);
+    if (r) {
+      cancelled++;
+      if (r.refunded) refunded++;
+    }
+  }
+  return { cancelled, refunded };
+}
+
+/**
+ * Een vaste les aan- of uitzetten. Uit: de al geboekte lessen worden ook afgemeld. Aan: de lessen
+ * die al op het rooster staan worden meteen geboekt.
+ */
+async function setStandingBooking(res, db, uid, myOrgs, isStaff, standingId, active) {
+  const standing = await loadStandingForActor(db, uid, myOrgs, isStaff, standingId);
+  await db.collection('standingBookings').doc(standing.id).set({ active, updatedAt: new Date().toISOString() }, { merge: true });
+  const next = { ...standing, active };
+  if (!active) {
+    const r = await cancelSeriesBookings(db, uid, myOrgs, isStaff, standing, () => true);
+    return json(res, 200, { active, ...r, build: BUILD });
+  }
+  const counts = await bookExistingForStanding(db, next);
+  return json(res, 200, { active, ...counts, build: BUILD });
+}
+
+/**
+ * Een vaste les toevoegen vanuit het profiel: een weekmoment van een lessoort, vanaf een datum.
+ * Voor jezelf, of (staf) voor een lid van de studio.
+ */
+async function addStandingBooking(res, db, uid, myOrgs, isStaff, body) {
+  const classTypeId = String(body?.classTypeId ?? '').trim();
+  const weekday = Number(body?.weekday);
+  const startTime = String(body?.startTime ?? '').trim();
+  const startDate = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.startDate ?? '')) ? String(body.startDate) : todayIso();
+  const targetUserId = String(body?.userId ?? '').trim() || uid;
+  if (!classTypeId || !Number.isInteger(weekday) || !/^\d{2}:\d{2}$/.test(startTime)) {
+    return json(res, 400, { error: 'Kies een lessoort en een weekmoment.', build: BUILD });
+  }
+
+  if (targetUserId !== uid) {
+    if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan dit voor een ander instellen.', build: BUILD });
+    const targetSnap = await db.collection('profiles').doc(targetUserId).get();
+    if (!targetSnap.exists) return json(res, 404, { error: 'Sporter niet gevonden.', build: BUILD });
+    const t = targetSnap.data() ?? {};
+    const targetOrgs = Array.isArray(t.orgIds) && t.orgIds.length ? t.orgIds.map(String) : [orgIdOf(t.orgId)];
+    if (!myOrgs.some((o) => targetOrgs.includes(o))) return json(res, 403, { error: 'Deze sporter zit niet in jouw studio.', build: BUILD });
+  }
+
+  const ctSnap = await db.collection('classTypes').doc(classTypeId).get();
+  if (!ctSnap.exists) return json(res, 404, { error: 'Deze lessoort bestaat niet (meer).', build: BUILD });
+  const ct = ctSnap.data();
+  const orgId = orgIdOf(ct.orgId);
+  if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Deze lessoort hoort niet bij jouw studio.', build: BUILD });
+  const slot = (Array.isArray(ct.schedule) ? ct.schedule : []).find((sl) => Number(sl.weekday) === weekday && sl.startTime === startTime);
+  if (!slot) return json(res, 400, { error: 'Dit weekmoment staat niet (meer) bij deze lessoort.', build: BUILD });
+
+  const id = standingBookingId(classTypeId, targetUserId, weekday, startTime);
+  const now = new Date().toISOString();
+  const standing = {
+    id,
+    orgId,
+    userId: targetUserId,
+    classTypeId,
+    weekday,
+    startTime,
+    active: true,
+    startDate,
+    pausedFrom: null,
+    pausedUntil: null,
+    lastOutcome: null,
+    lastOutcomeDate: null,
+    createdByUserId: uid,
+    updatedAt: now,
+  };
+  const ref = db.collection('standingBookings').doc(id);
+  const existing = await ref.get();
+  await ref.set(existing.exists ? standing : { ...standing, createdAt: now }, { merge: true });
+  const counts = await bookExistingForStanding(db, standing);
+  return json(res, 200, { standingBookingId: id, ...counts, build: BUILD });
+}
+
+/**
+ * Pauze (vakantie) instellen of opheffen: van `from` t/m `until` (leeg = tot je hem opheft).
+ * Geboekte lessen in die periode worden afgemeld; lessen erbuiten die nu weer meetellen, geboekt.
+ */
+async function pauseStandingBooking(res, db, uid, myOrgs, isStaff, body) {
+  const standing = await loadStandingForActor(db, uid, myOrgs, isStaff, String(body?.standingBookingId ?? '').trim());
+  const isDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v ?? ''));
+  const from = isDate(body?.from) ? String(body.from) : null;
+  const until = from && isDate(body?.until) ? String(body.until) : null;
+  if (from && until && until < from) return json(res, 400, { error: 'De einddatum ligt voor de begindatum.', build: BUILD });
+
+  await db
+    .collection('standingBookings')
+    .doc(standing.id)
+    .set({ pausedFrom: from, pausedUntil: until, updatedAt: new Date().toISOString() }, { merge: true });
+  const next = { ...standing, pausedFrom: from, pausedUntil: until };
+  const cancelledResult = from
+    ? await cancelSeriesBookings(db, uid, myOrgs, isStaff, standing, (date) => !standingAppliesOn(next, date))
+    : { cancelled: 0, refunded: 0 };
+  const counts = await bookExistingForStanding(db, next);
+  return json(res, 200, { ...cancelledResult, ...counts, build: BUILD });
 }
 
 /** Credits handmatig aanpassen (toekennen of afboeken). Elke mutatie komt ook in het grootboek te staan. */
@@ -902,7 +1056,7 @@ async function generateForClassType(db, classTypeId, ct) {
   for (const o of missing) {
     const weekday = new Date(`${o.date}T00:00:00`).getDay();
     const classId = classIdForOccurrence(classTypeId, o.date, o.startTime);
-    const outcome = await autoBookStandingBookings(db, ct.orgId, classId, classTypeId, weekday, o.startTime);
+    const outcome = await autoBookStandingBookings(db, ct.orgId, classId, classTypeId, weekday, o.startTime, o.date);
     result.autoBooked += outcome.booked;
     result.autoWaitlisted += outcome.skippedFull;
     result.autoSkippedNoCredits += outcome.skippedNoCredits;
@@ -1013,7 +1167,7 @@ async function syncClassType(db, classTypeId, ct) {
  * saldo toegestaan? geboekt. Vol? wachtlijst. Geen saldo? die week overgeslagen, met een reden op
  * de inschrijving zodat de sporter dat op zijn Profiel kan zien.
  */
-async function autoBookStandingBookings(db, orgId, classId, classTypeId, weekday, startTime) {
+async function autoBookStandingBookings(db, orgId, classId, classTypeId, weekday, startTime, date) {
   const counts = { booked: 0, skippedFull: 0, skippedNoCredits: 0 };
   const snap = await db
     .collection('standingBookings')
@@ -1025,7 +1179,9 @@ async function autoBookStandingBookings(db, orgId, classId, classTypeId, weekday
     .get();
 
   for (const doc of snap.docs) {
-    const result = await attemptStandingBooking(db, orgId, classId, doc.data());
+    // Nog niet begonnen, of in een pauze (vakantie): deze week overslaan.
+    if (!standingAppliesOn(doc.data(), date)) continue;
+    const result = await attemptStandingBooking(db, orgId, classId, { ...doc.data(), id: doc.id });
     if (result) counts[result.outcome]++;
   }
   return counts;

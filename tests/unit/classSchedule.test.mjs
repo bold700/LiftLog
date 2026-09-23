@@ -6,7 +6,10 @@ import {
   missingOccurrences,
   occurrencesForSchedule,
   staleGeneratedClasses,
+  standingAppliesOn,
   standingBookingId,
+  inStandingSeries,
+  weekdayOf,
 } from '../../api/_lib/classSchedule.mjs';
 
 // Donderdag 2026-09-24, voor een voorspelbaar vertrekpunt (weekday-tabel: zo=0 .. za=6).
@@ -127,5 +130,32 @@ describe('lesrooster: lessoort-wijzigingen doorzetten', () => {
   it('geeft null als alles al klopt', () => {
     const existing = { title: 'Boksen', endTime: '20:15', room: 'Zaal 1', description: null, sessionKind: 'group' };
     expect(classFieldUpdates(existing, ct, '20:15')).toBeNull();
+  });
+});
+
+describe('vaste lessen: welke datum telt mee', () => {
+  const sb = (extra = {}) => ({ classTypeId: 'ct_1', weekday: 6, startTime: '09:00', active: true, ...extra });
+
+  it('herkent de lessen van hetzelfde weekmoment', () => {
+    expect(weekdayOf('2026-09-26')).toBe(6); // zaterdag
+    expect(inStandingSeries({ classTypeId: 'ct_1', date: '2026-09-26', startTime: '09:00' }, sb())).toBe(true);
+    expect(inStandingSeries({ classTypeId: 'ct_1', date: '2026-09-26', startTime: '10:00' }, sb())).toBe(false);
+    expect(inStandingSeries({ classTypeId: 'ct_1', date: '2026-09-27', startTime: '09:00' }, sb())).toBe(false);
+    expect(inStandingSeries({ classTypeId: 'ct_2', date: '2026-09-26', startTime: '09:00' }, sb())).toBe(false);
+  });
+
+  it('telt pas vanaf de startdatum, en niet als hij uit staat', () => {
+    expect(standingAppliesOn(sb({ startDate: '2026-10-03' }), '2026-09-26')).toBe(false);
+    expect(standingAppliesOn(sb({ startDate: '2026-10-03' }), '2026-10-03')).toBe(true);
+    expect(standingAppliesOn(sb({ active: false }), '2026-10-03')).toBe(false);
+  });
+
+  it('slaat een pauze over, met of zonder einddatum', () => {
+    const paused = sb({ pausedFrom: '2026-10-10', pausedUntil: '2026-10-17' });
+    expect(standingAppliesOn(paused, '2026-10-03')).toBe(true);
+    expect(standingAppliesOn(paused, '2026-10-10')).toBe(false);
+    expect(standingAppliesOn(paused, '2026-10-17')).toBe(false);
+    expect(standingAppliesOn(paused, '2026-10-24')).toBe(true);
+    expect(standingAppliesOn(sb({ pausedFrom: '2026-10-10', pausedUntil: null }), '2027-01-02')).toBe(false);
   });
 });

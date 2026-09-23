@@ -507,6 +507,11 @@ export interface StandingBooking {
   startTime: string;
   /** Uit: blijft bestaan (voor de geschiedenis), maar de cron slaat 'm over. */
   active: boolean;
+  /** Vanaf deze datum (YYYY-MM-DD); null = meteen. */
+  startDate: string | null;
+  /** Pauze (vakantie): van t/m; `pausedUntil` null = tot opheffen. Geen pauze: beide null. */
+  pausedFrom: string | null;
+  pausedUntil: string | null;
   /** Wat er gebeurde bij de laatst gegenereerde les van dit weekmoment; null als het nog niet is geprobeerd. */
   lastOutcome: StandingBookingOutcome | null;
   /** Datum (YYYY-MM-DD) van die laatste poging. */

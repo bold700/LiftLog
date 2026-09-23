@@ -127,6 +127,9 @@ function toStandingBooking(data: Record<string, unknown>, id: string): StandingB
     weekday: num(data.weekday),
     startTime: str(data.startTime, '00:00'),
     active: data.active !== false,
+    startDate: typeof data.startDate === 'string' ? data.startDate : null,
+    pausedFrom: typeof data.pausedFrom === 'string' ? data.pausedFrom : null,
+    pausedUntil: typeof data.pausedUntil === 'string' ? data.pausedUntil : null,
     lastOutcome: toOutcome(data.lastOutcome),
     lastOutcomeDate: data.lastOutcomeDate ? str(data.lastOutcomeDate) : null,
     createdAt: str(data.createdAt),
@@ -148,7 +151,8 @@ export async function getUpcomingClasses(fromDate: string): Promise<StudioClass[
 /** Eigen reserveringen (alle statussen, zodat de geschiedenis zichtbaar blijft). */
 export async function getMyBookings(userId: string): Promise<Booking[]> {
   if (!isFirebaseConfigured() || !db) return [];
-  const q = query(collection(db, BOOKINGS), where('userId', '==', userId));
+  // Met de studio erbij: staf mag zo ook de boekingen van een lid lezen (de regels kijken naar de studio).
+  const q = query(collection(db, BOOKINGS), where('orgId', '==', requireOrgId()), where('userId', '==', userId));
   const snap = await getDocs(q);
   return snap.docs.map((d) => toBooking(d.data(), d.id));
 }
@@ -156,7 +160,7 @@ export async function getMyBookings(userId: string): Promise<Booking[]> {
 /** Eigen "elke week inschrijven"-instellingen, actief en uitgezet (voor het overzicht op Profiel). */
 export async function getMyStandingBookings(userId: string): Promise<StandingBooking[]> {
   if (!isFirebaseConfigured() || !db) return [];
-  const q = query(collection(db, STANDING_BOOKINGS), where('userId', '==', userId));
+  const q = query(collection(db, STANDING_BOOKINGS), where('orgId', '==', requireOrgId()), where('userId', '==', userId));
   const snap = await getDocs(q);
   return snap.docs.map((d) => toStandingBooking(d.data(), d.id));
 }
@@ -318,8 +322,36 @@ export function cancelBooking(bookingId: string): Promise<{ refunded: boolean; p
   return callBooking({ action: 'cancel', bookingId });
 }
 
+/** Wat de server deed met de lessen van een vaste les. */
+export interface StandingResult {
+  booked?: number;
+  skippedFull?: number;
+  skippedNoCredits?: number;
+  cancelled?: number;
+  refunded?: number;
+}
+
+/**
+ * Vaste les toevoegen: een weekmoment van een lessoort, vanaf een datum. De lessen die al op het
+ * rooster staan worden meteen geboekt. `userId` alleen voor staf (voor een lid).
+ */
+export function addStandingBooking(input: {
+  classTypeId: string;
+  weekday: number;
+  startTime: string;
+  startDate?: string;
+  userId?: string;
+}): Promise<StandingResult & { standingBookingId: string }> {
+  return callBooking({ action: 'addStandingBooking', ...input });
+}
+
+/** Pauze (vakantie) instellen van t/m, of opheffen met `from: null`. */
+export function pauseStandingBooking(standingBookingId: string, from: string | null, until: string | null): Promise<StandingResult> {
+  return callBooking({ action: 'pauseStandingBooking', standingBookingId, from, until });
+}
+
 /** "Elke week inschrijven" aan- of uitzetten voor een bestaand weekmoment. */
-export function setStandingBookingActive(standingBookingId: string, active: boolean): Promise<{ active: boolean }> {
+export function setStandingBookingActive(standingBookingId: string, active: boolean): Promise<StandingResult & { active: boolean }> {
   return callBooking({ action: 'setStandingBooking', standingBookingId, active });
 }
 
