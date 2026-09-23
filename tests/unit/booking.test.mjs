@@ -84,9 +84,15 @@ function makeDb() {
     batch: () => {
       const ops = [];
       return {
-        set: (ref, value) => ops.push([ref, value]),
+        set: (ref, value, opts) => ops.push(['set', ref, value, opts]),
+        update: (ref, value) => ops.push(['update', ref, value]),
+        delete: (ref) => ops.push(['delete', ref]),
         commit: async () => {
-          for (const [ref, value] of ops) data.set(ref.__path, applyValue(null, value));
+          for (const [kind, ref, value, opts] of ops) {
+            if (kind === 'delete') data.delete(ref.__path);
+            else if (kind === 'update' || opts?.merge) data.set(ref.__path, applyValue(data.get(ref.__path), value));
+            else data.set(ref.__path, applyValue(null, value));
+          }
           store = Object.fromEntries(data);
         },
       };
@@ -966,5 +972,116 @@ describe('vaste lessen vanuit het profiel', () => {
     const resumed = await post({ action: 'pauseStandingBooking', standingBookingId: sbId, from: null });
     expect(resumed.body.booked).toBe(1);
     expect(myBookings().map((b) => b.classId).sort()).toEqual(['w1', 'w2', 'w3']);
+  });
+});
+
+describe('vaste PT-momenten (privé-lessoort per lid)', () => {
+  const inDays = (n) => {
+    const d = new Date(Date.now() + n * 86_400_000);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  // Over drie dagen, zodat de eerste les altijd in de toekomst ligt en ruim buiten de afmeldtermijn.
+  const first = inDays(3);
+  const weekday = new Date(`${first}T12:00:00`).getDay();
+  const ctId = `ctp_sporter1_${weekday}_1800`;
+  const sbId = `sb_${ctId}_sporter1_${weekday}_1800`;
+  const ptClasses = () =>
+    Object.entries(store)
+      .filter(([k, v]) => k.startsWith('classes/') && v.classTypeId === ctId)
+      .map(([k, v]) => ({ ...v, id: k.slice('classes/'.length) }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  const futurePt = () => ptClasses().filter((c) => c.date >= first);
+  const myActive = () => Object.values(store).filter((v) => v.userId === 'sporter1' && v.classId && ['booked', 'waitlist'].includes(v.status));
+  const slot = (extra = {}) => ({
+    action: 'addPersonalSlot', userId: 'sporter1', baseClassTypeId: 'ctPT', weekday, startTime: '18:00', endTime: '19:00', startDate: first, ...extra,
+  });
+
+  beforeEach(() => {
+    store['classTypes/ctPT'] = {
+      orgId: 'vanas', name: 'Personal training', capacity: 1, creditCost: 1, defaultTrainerId: 'trainer1', sessionKind: '1on1', schedule: [],
+    };
+    store['creditAccounts/vanas__sporter1'].balance = 20;
+  });
+
+  it('een trainer zet "elke week 18:00" voor een lid: privé-lessoort, lessen op het rooster en geboekt', async () => {
+    const res = await post(slot(), 'trainer1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ classTypeId: ctId, standingBookingId: sbId });
+    expect(store[`classTypes/${ctId}`]).toMatchObject({ privateFor: 'sporter1', capacity: 1, defaultTrainerId: 'trainer1', name: 'Personal training' });
+    const classes = futurePt();
+    expect(classes.length).toBeGreaterThanOrEqual(7);
+    expect(classes.every((c) => c.privateFor === 'sporter1' && c.trainerId === 'trainer1' && !c.cancelledAt)).toBe(true);
+    expect(res.body.booked).toBe(classes.length);
+    expect(myActive()).toHaveLength(classes.length);
+  });
+
+  it('alleen staf; een ander lid kan de privé-les niet boeken', async () => {
+    expect((await post(slot(), 'sporter1')).statusCode).toBe(403);
+    await post(slot(), 'trainer1');
+    const other = await post({ action: 'book', classId: futurePt()[0].id }, 'sporter2');
+    expect(other.statusCode).toBe(409);
+    expect(other.body.error).toMatch(/persoonlijke afspraak/);
+  });
+
+  it('weigert een lid of trainer van een andere studio en een eindtijd voor de begintijd', async () => {
+    expect((await post(slot({ userId: 'sporterB' }), 'trainer1')).statusCode).toBe(403);
+    expect((await post(slot({ trainerId: 'sporter2' }), 'trainer1')).statusCode).toBe(400);
+    expect((await post(slot({ endTime: '17:00' }), 'trainer1')).statusCode).toBe(400);
+  });
+
+  it('"deze keer niet" haalt de les van het rooster; opnieuw boeken zet hem terug', async () => {
+    await post(slot(), 'trainer1');
+    const cls = futurePt()[0];
+    const booking = myActive().find((b) => b.classId === cls.id);
+    const bookingId = Object.entries(store).find(([, v]) => v === booking)[0].slice('bookings/'.length);
+    const cancelled = await post({ action: 'cancel', bookingId });
+    expect(cancelled.body.refunded).toBe(true);
+    expect(store[`classes/${cls.id}`]).toMatchObject({ autoCancelled: true, bookedCount: 0 });
+    expect(store[`classes/${cls.id}`].cancelledAt).toBeTruthy();
+
+    const again = await post({ action: 'book', classId: cls.id });
+    expect(again.statusCode).toBe(200);
+    expect(store[`classes/${cls.id}`]).toMatchObject({ cancelledAt: null, autoCancelled: false, bookedCount: 1 });
+  });
+
+  it('pauze haalt die weken van het rooster, opheffen zet ze terug en boekt ze weer', async () => {
+    await post(slot(), 'trainer1');
+    const second = futurePt()[1];
+    const paused = await post({ action: 'pauseStandingBooking', standingBookingId: sbId, from: second.date, until: second.date });
+    expect(paused.body.cancelled).toBe(1);
+    expect(store[`classes/${second.id}`].autoCancelled).toBe(true);
+    const resumed = await post({ action: 'pauseStandingBooking', standingBookingId: sbId, from: null });
+    expect(resumed.body.booked).toBe(1);
+    expect(store[`classes/${second.id}`]).toMatchObject({ cancelledAt: null, bookedCount: 1 });
+  });
+
+  it('een les die de trainer zelf afgelastte komt niet terug bij het opheffen van een pauze', async () => {
+    await post(slot(), 'trainer1');
+    const second = futurePt()[1];
+    await post({ action: 'pauseStandingBooking', standingBookingId: sbId, from: second.date, until: second.date });
+    store[`classes/${second.id}`] = { ...store[`classes/${second.id}`], autoCancelled: false };
+    const resumed = await post({ action: 'pauseStandingBooking', standingBookingId: sbId, from: null });
+    expect(resumed.body.booked).toBe(0);
+    expect(store[`classes/${second.id}`].cancelledAt).toBeTruthy();
+  });
+
+  it('weken voor de startdatum staan niet als lege les op het rooster', async () => {
+    const res = await post(slot({ startDate: inDays(10) }), 'trainer1');
+    const before = futurePt().filter((c) => c.date < inDays(10));
+    expect(before.length).toBeGreaterThan(0);
+    expect(before.every((c) => c.cancelledAt && c.autoCancelled)).toBe(true);
+    expect(res.body.booked).toBe(futurePt().length - before.length);
+  });
+
+  it('stoppen meldt af en haalt het PT-moment helemaal weg', async () => {
+    await post(slot(), 'trainer1');
+    const res = await post({ action: 'setStandingBooking', standingBookingId: sbId, active: false }, 'trainer1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.cancelled).toBeGreaterThanOrEqual(7);
+    expect(myActive()).toHaveLength(0);
+    expect(futurePt()).toHaveLength(0);
+    expect(store[`classTypes/${ctId}`]).toBeUndefined();
+    expect(store[`standingBookings/${sbId}`]).toBeUndefined();
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(20);
   });
 });

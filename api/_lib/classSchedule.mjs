@@ -155,3 +155,28 @@ export function standingAppliesOn(standing, dateIso) {
   if (standing.pausedFrom && dateIso >= standing.pausedFrom && (!standing.pausedUntil || dateIso <= standing.pausedUntil)) return false;
   return true;
 }
+
+/**
+ * Deterministieke id voor een persoonlijk weekmoment (vaste PT, bijv. "Bas elke vrijdag 18:00"):
+ * één privé-lessoort per lid en weekmoment. Opnieuw instellen overschrijft dezelfde in plaats van
+ * een tweede aan te maken.
+ */
+export function personalClassTypeId(userId, weekday, startTime) {
+  return `ctp_${userId}_${weekday}_${String(startTime).replace(':', '')}`;
+}
+
+/**
+ * Wordt een privé-les (van één lid) leeg na deze wijziging? Dan gaat hij van het rooster van de
+ * trainer af (afgelast, met `autoCancelled` zodat hij terugkomt als het lid zich weer aanmeldt).
+ */
+export function privateClassEmptyAfter(cls, { bookedDelta = 0, waitlistDelta = 0 } = {}) {
+  if (!cls || !cls.privateFor || cls.cancelledAt) return false;
+  const booked = (Number(cls.bookedCount) || 0) + bookedDelta;
+  const waiting = (Number(cls.waitlistCount) || 0) + waitlistDelta;
+  return booked <= 0 && waiting <= 0;
+}
+
+/** Mag deze (automatisch afgelaste) privé-les voor dit lid weer open? Een les die de trainer zelf afgelastte niet. */
+export function canReopenPrivateClass(cls, userId) {
+  return !!cls && !!cls.cancelledAt && cls.autoCancelled === true && !!cls.privateFor && cls.privateFor === userId;
+}

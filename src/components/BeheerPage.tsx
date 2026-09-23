@@ -211,6 +211,7 @@ export function BeheerPage() {
   }, [isTrainer, load]);
 
   const trainers = useMemo(() => profiles.filter((p) => p.role === 'trainer' || p.role === 'admin'), [profiles]);
+  const trainerOptions = useMemo(() => trainers.map((tr) => ({ userId: tr.userId, name: tr.displayName?.trim() || tr.email || tr.userId })), [trainers]);
   const nameOf = useCallback(
     (userId: string | null | undefined) => {
       if (!userId) return null;
@@ -592,7 +593,13 @@ export function BeheerPage() {
               {/* Vaste lessen van dit lid: de trainer zet een klant vast in (bijv. elke zaterdag HIIT). */}
               {edit.role === 'sporter' && target.role === 'sporter' && (
                 <Box sx={{ gridColumn: { sm: '1 / -1' }, p: 2, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackgroundHigh }}>
-                  <StandingBookingsCard userId={target.userId} asStaff embedded />
+                  <StandingBookingsCard
+                    userId={target.userId}
+                    asStaff
+                    embedded
+                    trainers={trainerOptions}
+                    defaultTrainerId={edit.trainerId || null}
+                  />
                 </Box>
               )}
               <TextField label="Geboortedatum" type="date" size="small" fullWidth value={edit.birthDate} onChange={(e) => setEdit({ ...edit, birthDate: e.target.value })} InputLabelProps={{ shrink: true }} />

@@ -50,6 +50,10 @@ export interface StudioClass {
   /** Korte omschrijving voor de sporter, getoond in de boekingsdialoog; null = geen omschrijving. */
   description: string | null;
   cancelledAt: string | null;
+  /** Vast PT-moment van één lid (userId): alleen dat lid (en staf) ziet en boekt deze les. */
+  privateFor: string | null;
+  /** Afgelast omdat het lid zich afmeldde (niet door de trainer): komt terug als het lid zich weer aanmeldt. */
+  autoCancelled: boolean;
   createdAt: string;
 }
 
@@ -93,6 +97,8 @@ function toClass(data: Record<string, unknown>, id: string): StudioClass {
     sessionKind: toSessionKind(data.sessionKind),
     description: data.description ? str(data.description) : null,
     cancelledAt: data.cancelledAt ? str(data.cancelledAt) : null,
+    privateFor: typeof data.privateFor === 'string' && data.privateFor ? data.privateFor : null,
+    autoCancelled: data.autoCancelled === true,
     createdAt: str(data.createdAt),
   };
 }
@@ -343,6 +349,23 @@ export function addStandingBooking(input: {
   userId?: string;
 }): Promise<StandingResult & { standingBookingId: string }> {
   return callBooking({ action: 'addStandingBooking', ...input });
+}
+
+/**
+ * Vast PT-moment voor een lid (alleen staf): elke week op deze dag en tijd, bij deze trainer, op
+ * basis van een lessoort (prijs, soort, ruimte). Er komt een privé-lessoort met dat ene
+ * weekmoment; het rooster vult zich en het lid wordt elke week geboekt.
+ */
+export function addPersonalSlot(input: {
+  userId: string;
+  baseClassTypeId: string;
+  weekday: number;
+  startTime: string;
+  endTime: string;
+  trainerId: string | null;
+  startDate: string;
+}): Promise<StandingResult & { classTypeId: string; standingBookingId: string }> {
+  return callBooking({ action: 'addPersonalSlot', ...input });
 }
 
 /** Pauze (vakantie) instellen van t/m, of opheffen met `from: null`. */
