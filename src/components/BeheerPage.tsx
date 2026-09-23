@@ -57,7 +57,6 @@ import { BillingPanel } from './beheer/BillingPanel';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import { assignPlan, getActiveMembershipsForOrg, getPlans, renewDue, unassignPlan } from '../services/planService';
 import { getCreditBalancesForOrg, grantCredits } from '../services/classService';
-import { NewClassDialog } from './beheer/ClassSchedulingDialogs';
 import { NumberField } from './NumberField';
 import { designTokens } from '../theme/designTokens';
 
@@ -151,7 +150,6 @@ export function BeheerPage() {
   }, []);
   // Kop-knop op Lessoorten: elke klik telt op, het paneel opent dan een lege lessoort.
   const [newTypeSignal, setNewTypeSignal] = useState(0);
-  const [newClassOpen, setNewClassOpen] = useState(false);
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [credits, setCredits] = useState<Record<string, number>>({});
@@ -408,14 +406,9 @@ export function BeheerPage() {
       <HeaderActions>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 2, mb: { xs: 1.5, md: 0 } }}>
         {section === 'lessoorten' ? (
-          <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
-            <Button variant="outlined" startIcon={<AddRoundedIcon />} onClick={() => setNewClassOpen(true)}>
-              Les toevoegen
-            </Button>
-            <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewTypeSignal((n) => n + 1)}>
-              {t('classTypes.newType')}
-            </Button>
-          </Box>
+          <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewTypeSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
+            {t('classTypes.newType')}
+          </Button>
         ) : section === 'abonnementen' ? (
           <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewPlanSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
             {t('plans.newPlan')}
@@ -458,13 +451,6 @@ export function BeheerPage() {
             </ContentCard>
           )}
         </PageLayout>
-        <NewClassDialog
-          open={newClassOpen}
-          onClose={() => setNewClassOpen(false)}
-          trainerId={selfId}
-          staff={trainers}
-          onCreated={() => setNewClassOpen(false)}
-        />
       </Box>
     );
   }
