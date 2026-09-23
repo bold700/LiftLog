@@ -412,57 +412,54 @@ export function LessenPage() {
 
   return (
     <PageLayout maxWidth="none">
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, px: 0.5 }}>
-        {isStaff
-          ? myDayOnly
-            ? 'Alleen je eigen sessies vandaag.'
-            : 'Zet lessen op het rooster; sporters reserveren met credits.'
-          : 'Reserveer met je credits.'}
-      </Typography>
-
-      {isStaff && (
-        <Box sx={{ mb: 1.5 }}>
+      {/* Figma "Schedule": weergave, ruimtes en legenda op één regel; op een smal scherm loopt het door. */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, rowGap: 1, mb: 2, flexWrap: 'wrap' }}>
+        {isStaff && (
           <ToggleButtonGroup
             size="small"
             exclusive
             value={myDayOnly ? 'mine' : 'all'}
             onChange={(_, v: 'all' | 'mine' | null) => v && setMyDayOnly(v === 'mine')}
             sx={segmentedToggleSx}
+            aria-label="Rooster of mijn dag"
           >
             <ToggleButton value="all">Rooster</ToggleButton>
             <ToggleButton value="mine">Mijn dag</ToggleButton>
           </ToggleButtonGroup>
-        </Box>
-      )}
-
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5, flexWrap: 'wrap' }}>
-        <ToggleButtonGroup size="small" exclusive value={viewMode} onChange={(_, v: ViewMode | null) => v && setViewMode(v)} sx={segmentedToggleSx}>
+        )}
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={viewMode}
+          onChange={(_, v: ViewMode | null) => v && setViewMode(v)}
+          sx={segmentedToggleSx}
+          aria-label="Weergave"
+        >
           <ToggleButton value="week">Week</ToggleButton>
           <ToggleButton value="day">Dag</ToggleButton>
           <ToggleButton value="makeups">Inhaallessen</ToggleButton>
         </ToggleButtonGroup>
         {roomOptions.length > 0 && (
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-            <Chip label="Alle" size="small" onClick={() => setRoomFilter('')} sx={filterPillSx(roomFilter === '')} />
+          <Box role="group" aria-label="Ruimte" sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Chip label="Alle ruimtes" size="small" onClick={() => setRoomFilter('')} sx={filterPillSx(roomFilter === '')} />
             {roomOptions.map((r) => (
               <Chip key={r} label={r} size="small" onClick={() => setRoomFilter(r)} sx={filterPillSx(roomFilter === r)} />
             ))}
           </Box>
         )}
+        {viewMode !== 'makeups' && (
+          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', ml: { md: 'auto' } }}>
+            {SESSION_KIND_KEYS.map((k) => (
+              <Box key={k} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: SESSION_KIND_COLORS[k] }} />
+                <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                  {SESSION_KIND_LABELS[k]}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        )}
       </Box>
-
-      {viewMode !== 'makeups' && (
-        <Box sx={{ display: 'flex', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
-          {SESSION_KIND_KEYS.map((k) => (
-            <Box key={k} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: SESSION_KIND_COLORS[k] }} />
-              <Typography variant="caption" color="text.secondary">
-                {SESSION_KIND_LABELS[k]}
-              </Typography>
-            </Box>
-          ))}
-        </Box>
-      )}
 
       {/* Creditsaldo prominent bovenaan het rooster, zoals in het Figma-ontwerp ("8 credits left"). */}
       <CreditBalanceCard userId={me.userId} />
