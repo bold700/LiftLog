@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties } from 'react';
 import {
   Typography,
   Box,
@@ -49,6 +49,12 @@ import { usePageTitle } from '../context/PageTitleContext';
 import { SchemaListFilters } from './schemas/SchemaListFilters';
 import type { AssigneeOption } from './schemas/SchemaListFilters';
 import { SchemaListCard } from './schemas/SchemaListCard';
+import { NewSchemaDialog, type NewSchemaMode } from './schemas/NewSchemaDialog';
+import { SwipeActions } from './SwipeActions';
+import EditRoundedIcon from '@mui/icons-material/EditRounded';
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import { createEmptyFormule7 } from '../utils/formule7Defaults';
+import { designTokens } from '../theme/designTokens';
 import '@material/web/button/filled-button.js';
 import '@material/web/button/text-button.js';
 import '@material/web/icon/icon.js';
@@ -154,6 +160,16 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
   }, []);
   const [sessionDayIndex, setSessionDayIndex] = useState<number>(0);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+  const [openNewSchemaDialog, setOpenNewSchemaDialog] = useState(false);
+  /**
+   * Een net aangemaakte workout staat pas in de database na "Opslaan": tot dan is het een concept
+   * hier in de state. Annuleren laat dus geen lege "Nieuwe workout" achter.
+   */
+  const [draft, setDraft] = useState<{ schema: Schema; mode: NewSchemaMode } | null>(null);
+  const draftIdRef = useRef<string | null>(null);
+  /** Lijst: welke kaart is opzij geveegd (Bewerken/Verwijderen), en welke wordt verwijderd. */
+  const [swipedId, setSwipedId] = useState<string | null>(null);
+  const [listDeleteTarget, setListDeleteTarget] = useState<Schema | null>(null);
   const [justLoggedExerciseId, setJustLoggedExerciseId] = useState<string | null>(null);
   /** Statusmelding tijdens het maken van de PDF (plaatjes ophalen kan even duren). */
   const [pdfStatus, setPdfStatus] = useState<string | null>(null);
@@ -188,7 +204,11 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
     return () => window.removeEventListener('workoutUpdated', handler);
   }, [view, loadSchemas]);
 
-  const selectedSchema = selectedSchemaId ? getSchemaById(selectedSchemaId) : null;
+  const selectedSchema = selectedSchemaId
+    ? draft && draft.schema.id === selectedSchemaId
+      ? draft.schema
+      : getSchemaById(selectedSchemaId)
+    : null;
   // Op de detailweergave staat de naam van de workout in de paginakop (Figma), niet "Workouts".
   usePageTitle(view === 'detail' && selectedSchema ? selectedSchema.name : null);
 
@@ -203,27 +223,53 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
   }, []);
 
   /**
-   * Nieuwe workout: gewoon leeg beginnen. Het 7-stappenformulier (Formule 7) en AI zet je daarna
-   * in de editor aan als je ze nodig hebt.
+   * Nieuwe workout, op de gekozen manier: zelf (leeg), de 7-stappenroute (Formule 7-routekaart)
+   * of met AI (het AI-vak bovenaan de editor). Nog niet opslaan: zie `draft`.
    */
-  const handleCreateSchema = useCallback(async () => {
-    const schema = createEmptySchema('Nieuwe workout');
-    await saveSchema(schema);
-    loadSchemas();
-    setSelectedSchemaId(schema.id);
-    setView('edit');
-  }, [createEmptySchema, saveSchema, loadSchemas]);
+  const handleChooseNewSchema = useCallback(
+    (mode: NewSchemaMode) => {
+      const base = createEmptySchema('Nieuwe workout');
+      const schema: Schema =
+        mode === 'formule7'
+          ? { ...base, isFormule7Template: true, formule7AssistMode: 'manual', formule7: createEmptyFormule7() }
+          : base;
+      draftIdRef.current = schema.id;
+      setDraft({ schema, mode });
+      setOpenNewSchemaDialog(false);
+      setSelectedSchemaId(schema.id);
+      setView('edit');
+    },
+    [createEmptySchema]
+  );
 
   // Aanmaken gebeurt via het +-menu (FAB, of "+ Log" op desktop): dat zet deze vlag.
   useEffect(() => {
     if (!initialCreateSchema) return;
     onConsumeInitialCreateSchema?.();
-    if (canCreateWorkouts) void handleCreateSchema();
-  }, [initialCreateSchema, onConsumeInitialCreateSchema, canCreateWorkouts, handleCreateSchema]);
+    if (canCreateWorkouts) setOpenNewSchemaDialog(true);
+  }, [initialCreateSchema, onConsumeInitialCreateSchema, canCreateWorkouts]);
+
+  /** Vanuit de lijst (veeg naar links): meteen bewerken of verwijderen. */
+  const handleEditFromList = useCallback((schema: Schema) => {
+    setSelectedSchemaId(schema.id);
+    setView('edit');
+  }, []);
+  const handleConfirmListDelete = useCallback(async () => {
+    const target = listDeleteTarget;
+    setListDeleteTarget(null);
+    if (!target) return;
+    await deleteSchema(target.id);
+    loadSchemas();
+  }, [listDeleteTarget, deleteSchema, loadSchemas]);
 
   const handleSaveSchema = useCallback(
     async (updated: Schema) => {
       await saveSchema(updated);
+      // Het concept staat nu echt in de lijst; terug gaat dan naar de detailweergave.
+      if (draftIdRef.current === updated.id) {
+        draftIdRef.current = null;
+        setDraft(null);
+      }
       loadSchemas();
       // Via history.back() (i.p.v. direct setView) zodat de teruggeduwde history-entry van het
       // bewerkscherm meteen mee verdwijnt — zie de history-navigatie hieronder.
@@ -274,6 +320,14 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
   );
 
   const handleCancelEdit = useCallback(() => {
+    // Een nooit opgeslagen concept heeft geen detailweergave: terug naar de lijst en weggooien.
+    if (draftIdRef.current) {
+      draftIdRef.current = null;
+      setDraft(null);
+      setSelectedSchemaId(null);
+      setView('list');
+      return;
+    }
     setView('detail');
   }, []);
 
@@ -436,20 +490,31 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
     }
   }, [view]);
 
+  // Staat in elk scherm klaar: het +-menu kan hem ook openen tijdens een workout of het bewerken
+  // (dan blijft dat scherm eronder gewoon staan tot je een keuze maakt).
+  const newSchemaDialog = (
+    <NewSchemaDialog open={openNewSchemaDialog} onClose={() => setOpenNewSchemaDialog(false)} onChoose={handleChooseNewSchema} />
+  );
+
   if (view === 'edit' && selectedSchema) {
     return (
+      <>
       <SchemaEditView
         schema={selectedSchema}
+        startWithAi={draft?.schema.id === selectedSchema.id && draft.mode === 'ai'}
         onSave={handleSaveSchema}
         onCancel={() => window.history.back()}
         sporters={sportersForAssignment}
         categories={categories}
       />
+      {newSchemaDialog}
+      </>
     );
   }
 
   if (view === 'session' && selectedSchema && selectedSchema.days[sessionDayIndex]) {
     return (
+      <>
       <TrainingSessionView
         schema={selectedSchema}
         dayIndex={sessionDayIndex}
@@ -457,6 +522,8 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
         justLoggedExerciseId={justLoggedExerciseId}
         onClearJustLogged={() => setJustLoggedExerciseId(null)}
       />
+      {newSchemaDialog}
+      </>
     );
   }
 
@@ -467,18 +534,22 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
         activeGroupSession.participantIds.includes(p.userId)
       );
       return (
+        <>
         <GroupSessionView
           schema={schemaForSession}
           session={activeGroupSession}
           participants={participants}
           currentUserId={profile?.profile?.userId ?? ''}
         />
+        {newSchemaDialog}
+        </>
       );
     }
   }
 
   if (view === 'detail' && selectedSchema) {
     return (
+      <>
       <PageLayout maxWidth="none">
         <Box>
             {/* Print-vriendelijke variant: eenvoudige header + tabel per dag */}
@@ -536,6 +607,8 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
         onConfirm={handleConfirmGroupStart}
       />
     </PageLayout>
+    {newSchemaDialog}
+    </>
     );
   }
 
@@ -648,22 +721,62 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
               className="stagger-children"
               sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' }, gap: { xs: 1.5, md: 2 } }}
             >
-              {visibleSchemas.map((schema, index) => (
-                <SchemaListCard
-                  key={schema.id}
-                  schema={schema}
-                  index={index}
-                  isThisWeek={isThisWeek(schema)}
-                  assignee={assigneeSummary(schema)}
-                  isStaff={isTrainer}
-                  nameOf={nameOf}
-                  onClick={() => handleSchemaClick(schema)}
-                />
-              ))}
+              {visibleSchemas.map((schema, index) => {
+                const card = (
+                  <SchemaListCard
+                    key={schema.id}
+                    schema={schema}
+                    index={index}
+                    isThisWeek={isThisWeek(schema)}
+                    assignee={assigneeSummary(schema)}
+                    isStaff={isTrainer}
+                    nameOf={nameOf}
+                    onClick={() => handleSchemaClick(schema)}
+                  />
+                );
+                if (!canCreateWorkouts) return card;
+                // Staf: naar links vegen voor Bewerken en Verwijderen (zoals in iOS/Android-lijsten).
+                return (
+                  <SwipeActions
+                    key={schema.id}
+                    radius={designTokens.cardRadius}
+                    style={{ '--stagger-index': Math.min(index, 8) } as CSSProperties}
+                    open={swipedId === schema.id}
+                    onOpenChange={(o) => setSwipedId(o ? schema.id : null)}
+                    actions={[
+                      {
+                        label: 'Bewerken',
+                        icon: <EditRoundedIcon fontSize="small" />,
+                        onClick: () => handleEditFromList(schema),
+                        bg: designTokens.secondaryContainer,
+                        fg: designTokens.onSecondaryContainer,
+                      },
+                      {
+                        label: 'Verwijderen',
+                        icon: <DeleteOutlineRoundedIcon fontSize="small" />,
+                        onClick: () => setListDeleteTarget(schema),
+                        bg: 'error.main',
+                        fg: 'error.contrastText',
+                      },
+                    ]}
+                  >
+                    {card}
+                  </SwipeActions>
+                );
+              })}
           </Box>
         )}
       </Box>
 
+
+      <SchemaDeleteDialog
+        open={!!listDeleteTarget}
+        schemaName={listDeleteTarget?.name ?? ''}
+        onClose={() => setListDeleteTarget(null)}
+        onConfirm={() => void handleConfirmListDelete()}
+      />
+
+      {newSchemaDialog}
 
       <WorkoutRequestDialog
         open={requestOpen}

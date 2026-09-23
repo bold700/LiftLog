@@ -5,10 +5,8 @@ import {
   Alert,
   TextField,
   Autocomplete,
-  Button,
   MenuItem,
 } from '@mui/material';
-import ChecklistRoundedIcon from '@mui/icons-material/ChecklistRounded';
 import { Schema, SchemaDay, SchemaExercise, Formule7Routekaart } from '../types';
 import type { Profile, SchemaAudience } from '../types';
 import { useProfile } from '../context/ProfileContext';
@@ -42,11 +40,13 @@ interface SchemaEditViewProps {
   sporters?: Profile[];
   /** Bestaande categorieën (voor suggesties in het categorie-veld). */
   categories?: string[];
+  /** Nieuwe workout gekozen als "Met AI": het AI-vak staat bovenaan. Anders blijft de editor kaal. */
+  startWithAi?: boolean;
 }
 
 const DURATION_WEEKS_OPTIONS = [4, 5, 6, 7, 8, 12, 26];
 
-export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], categories = [] }: SchemaEditViewProps) => {
+export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], categories = [], startWithAi = false }: SchemaEditViewProps) => {
   const me = useProfile()?.profile ?? null;
   // Trainer kan ook aan zichzelf toewijzen
   const assignOptions = me ? [me, ...sporters.filter((s) => s.userId !== me.userId)] : sporters;
@@ -63,10 +63,7 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
   const [days, setDays] = useState<SchemaDay[]>(
     schema.days.length > 0 ? schema.days : [{ dayLabel: 'Dag 1', exercises: [] }]
   );
-  /**
-   * Het 7-stappenformulier (Formule 7-routekaart) is een optie: een nieuwe workout begint leeg, de
-   * trainer zet het formulier aan als hij die methode wil gebruiken.
-   */
+  /** 7-stappenroute (Formule 7-routekaart): gekozen bij het aanmaken ("Nieuwe workout"). */
   const [isF7, setIsF7] = useState(Boolean(schema.isFormule7Template));
   const [formule7, setFormule7] = useState<Formule7Routekaart | null>(() =>
     schema.formule7 ?? (schema.isFormule7Template ? createEmptyFormule7() : null)
@@ -381,20 +378,15 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
     schema.formule7AssistMode === 'ai' &&
     !aiEditorUnlocked;
 
+  // Het AI-vak alleen bij een workout die "Met AI" is gestart, of een Formule 7-workout die met
+  // de AI is gemaakt (opnieuw genereren). Verder blijft de editor rustig.
   const showAiGenerationPanel =
     !hideAiCompletely &&
     !showFormule7AiWizard &&
-    (!isF7 ||
-      schema.formule7AssistMode === undefined ||
-      schema.formule7AssistMode === 'ai');
+    (startWithAi || (isF7 && schema.formule7AssistMode === 'ai'));
 
   const showFormule7RoutekaartBlock =
     isF7 && Boolean(formule7) && !showFormule7AiWizard;
-
-  const enableFormule7 = () => {
-    setFormule7((f) => f ?? createEmptyFormule7());
-    setIsF7(true);
-  };
 
   return (
     <PageLayout maxWidth="none">
@@ -430,42 +422,6 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
             )}
             sx={{ mb: 2 }}
           />
-
-          {!isF7 && (
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 2,
-                flexWrap: 'wrap',
-                p: 2,
-                mb: 2,
-                borderRadius: 2,
-                border: '1px solid',
-                borderColor: 'divider',
-              }}
-            >
-              <Box sx={{ flex: '1 1 220px', minWidth: 0 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                  7-stappenformulier (Formule 7)
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Werk je met de Formule 7-methode? Vul de routekaart stap voor stap in (intake, doel, frequentie …) en laat de workout genereren.
-                </Typography>
-              </Box>
-              <Button variant="outlined" startIcon={<ChecklistRoundedIcon />} onClick={enableFormule7} sx={{ textTransform: 'none', flexShrink: 0 }}>
-                7-stappenformulier gebruiken
-              </Button>
-            </Box>
-          )}
-
-          {isF7 && !showFormule7AiWizard && (
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
-              <Button size="small" onClick={() => setIsF7(false)} sx={{ textTransform: 'none' }}>
-                7-stappenformulier weghalen
-              </Button>
-            </Box>
-          )}
 
           {showFormule7AiWizard && <AiFormule7Wizard ai={ai} />}
 
