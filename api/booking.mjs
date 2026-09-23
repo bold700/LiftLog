@@ -59,9 +59,12 @@ import {
   classFieldUpdates,
   classIdForOccurrence,
   expectedIdsForSchedule,
+  canReopenPrivateClass,
   inStandingSeries,
   missingOccurrences,
   occurrencesForSchedule,
+  personalClassTypeId,
+  privateClassEmptyAfter,
   staleGeneratedClasses,
   standingAppliesOn,
   standingBookingId,
@@ -165,6 +168,8 @@ export default async function handler(req, res) {
         return await addStandingBooking(res, db, uid, myOrgs, isStaff, body);
       case 'pauseStandingBooking':
         return await pauseStandingBooking(res, db, uid, myOrgs, isStaff, body);
+      case 'addPersonalSlot':
+        return await addPersonalSlot(res, db, uid, myOrgs, isStaff, body);
       case 'generateClassOccurrences':
         return await generateClassOccurrencesNow(res, db, myOrgs, isStaff, String(body.classTypeId ?? '').trim());
       case 'pruneStaleClasses':
@@ -264,7 +269,11 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
     const cls = classSnap.data();
     const orgId = orgIdOf(cls.orgId);
     if (!myOrgs.includes(orgId)) throw refuse('Deze les hoort niet bij jouw studio.');
-    if (cls.cancelledAt) throw refuse('Deze les is afgelast.');
+    // Een privé-les (vaste PT van één lid) is alleen voor dat lid; zelf afgemeld? Dan mag het lid
+    // hem weer terugzetten ("toch wel").
+    if (cls.privateFor && cls.privateFor !== beneficiaryUid) throw refuse('Deze les is een persoonlijke afspraak van iemand anders.');
+    const reopen = canReopenPrivateClass(cls, beneficiaryUid);
+    if (cls.cancelledAt && !reopen) throw refuse('Deze les is afgelast.');
 
     const startsAt = classStartsAt(cls);
     if (startsAt && startsAt.getTime() < Date.now()) throw refuse('Deze les is al geweest.');
@@ -308,10 +317,11 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    const reopened = reopen ? { cancelledAt: null, autoCancelled: false } : {};
     if (onWaitlist) {
-      tx.set(classRef, { waitlistCount: FieldValue.increment(1) }, { merge: true });
+      tx.set(classRef, { waitlistCount: FieldValue.increment(1), ...reopened }, { merge: true });
     } else {
-      tx.set(classRef, { bookedCount: FieldValue.increment(1) }, { merge: true });
+      tx.set(classRef, { bookedCount: FieldValue.increment(1), ...reopened }, { merge: true });
       if (cost > 0) {
         tx.set(accountRef, { orgId, userId: beneficiaryUid, balance: balance - cost, updatedAt: now }, { merge: true });
         tx.set(db.collection('creditLedger').doc(newId('cl')), {
@@ -468,6 +478,14 @@ async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
       tx.set(classRef, { bookedCount: FieldValue.increment(-1) }, { merge: true });
     }
 
+    // Privé-les (vaste PT) waar nu niemand meer op staat: van het rooster van de trainer af. De
+    // credit-regel hierboven keek nog naar de les zoals hij was, dus dit geeft geen gratis afmelding.
+    const emptied = privateClassEmptyAfter(cls, {
+      bookedDelta: booking.status === 'booked' && !promoted ? -1 : 0,
+      waitlistDelta: booking.status === 'waitlist' || promoted ? -1 : 0,
+    });
+    if (emptied) tx.set(classRef, { cancelledAt: now, autoCancelled: true }, { merge: true });
+
     return { cancelled: true, refunded: refund, promotedUserId: promoted ? String(promoted.data.userId) : null };
   });
 }
@@ -505,7 +523,7 @@ async function futureSeriesClasses(db, standing) {
 async function bookExistingForStanding(db, standing) {
   const counts = { booked: 0, skippedFull: 0, skippedNoCredits: 0 };
   for (const cls of await futureSeriesClasses(db, standing)) {
-    if (cls.cancelledAt || !standingAppliesOn(standing, cls.date)) continue;
+    if ((cls.cancelledAt && !canReopenPrivateClass(cls, standing.userId)) || !standingAppliesOn(standing, cls.date)) continue;
     const r = await attemptStandingBooking(db, orgIdOf(standing.orgId), cls.id, standing);
     if (r) counts[r.outcome]++;
   }
@@ -540,6 +558,11 @@ async function cancelSeriesBookings(db, uid, myOrgs, isStaff, standing, inRange)
  */
 async function setStandingBooking(res, db, uid, myOrgs, isStaff, standingId, active) {
   const standing = await loadStandingForActor(db, uid, myOrgs, isStaff, standingId);
+  const ctSnap = await db.collection('classTypes').doc(String(standing.classTypeId)).get();
+  if (ctSnap.exists && ctSnap.data().privateFor) {
+    if (active) return json(res, 400, { error: 'Een gestopt PT-moment zet je opnieuw vast via "PT-moment".', build: BUILD });
+    return json(res, 200, { active: false, ...(await removePersonalSlot(db, uid, myOrgs, isStaff, standing)), build: BUILD });
+  }
   await db.collection('standingBookings').doc(standing.id).set({ active, updatedAt: new Date().toISOString() }, { merge: true });
   const next = { ...standing, active };
   if (!active) {
@@ -578,15 +601,23 @@ async function addStandingBooking(res, db, uid, myOrgs, isStaff, body) {
   const ct = ctSnap.data();
   const orgId = orgIdOf(ct.orgId);
   if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Deze lessoort hoort niet bij jouw studio.', build: BUILD });
+  if (ct.privateFor && ct.privateFor !== targetUserId) return json(res, 403, { error: 'Dit is een persoonlijke afspraak van iemand anders.', build: BUILD });
   const slot = (Array.isArray(ct.schedule) ? ct.schedule : []).find((sl) => Number(sl.weekday) === weekday && sl.startTime === startTime);
   if (!slot) return json(res, 400, { error: 'Dit weekmoment staat niet (meer) bij deze lessoort.', build: BUILD });
 
-  const id = standingBookingId(classTypeId, targetUserId, weekday, startTime);
+  const standing = await writeStanding(db, { orgId, userId: targetUserId, classTypeId, weekday, startTime, startDate, createdByUserId: uid });
+  const counts = await bookExistingForStanding(db, standing);
+  return json(res, 200, { standingBookingId: standing.id, ...counts, build: BUILD });
+}
+
+/** De vaste les (weer) vastleggen, actief en zonder pauze. Deterministische id: nooit dubbel. */
+async function writeStanding(db, { orgId, userId, classTypeId, weekday, startTime, startDate, createdByUserId }) {
+  const id = standingBookingId(classTypeId, userId, weekday, startTime);
   const now = new Date().toISOString();
   const standing = {
     id,
     orgId,
-    userId: targetUserId,
+    userId,
     classTypeId,
     weekday,
     startTime,
@@ -596,14 +627,118 @@ async function addStandingBooking(res, db, uid, myOrgs, isStaff, body) {
     pausedUntil: null,
     lastOutcome: null,
     lastOutcomeDate: null,
-    createdByUserId: uid,
+    createdByUserId,
     updatedAt: now,
   };
   const ref = db.collection('standingBookings').doc(id);
   const existing = await ref.get();
   await ref.set(existing.exists ? standing : { ...standing, createdAt: now }, { merge: true });
+  return standing;
+}
+
+/** Zit dit lid in een studio van de staf? Gooit een nette weigering als dat niet zo is. */
+async function requireMemberOfMyOrgs(db, myOrgs, userId) {
+  const snap = await db.collection('profiles').doc(userId).get();
+  if (!snap.exists) throw refuse('Sporter niet gevonden.', 404);
+  const t = snap.data() ?? {};
+  const orgs = Array.isArray(t.orgIds) && t.orgIds.length ? t.orgIds.map(String) : [orgIdOf(t.orgId)];
+  if (!myOrgs.some((o) => orgs.includes(o))) throw refuse('Deze sporter zit niet in jouw studio.', 403);
+  return t;
+}
+
+/**
+ * Vast PT-moment voor één lid ("Bas traint elke vrijdag 18:00 bij Kenny"), zonder dat daarvoor een
+ * groepsles op het rooster hoeft te staan. Hergebruikt het mechanisme van lessoorten: er komt een
+ * privé-lessoort (alleen voor dit lid, niet zichtbaar in Beheer → Lessoorten of voor andere
+ * leden) met één weekmoment, gebaseerd op een bestaande lessoort (prijs, soort, ruimte). Het
+ * rooster vult zich dan vanzelf en de vaste les boekt het lid elke week.
+ * Alleen staf: het gaat om de agenda van de trainer.
+ */
+async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
+  if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan een PT-moment vastzetten.', build: BUILD });
+  const userId = String(body?.userId ?? '').trim();
+  const baseClassTypeId = String(body?.baseClassTypeId ?? '').trim();
+  const weekday = Number(body?.weekday);
+  const startTime = String(body?.startTime ?? '').trim();
+  const endTime = String(body?.endTime ?? '').trim();
+  const startDate = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.startDate ?? '')) ? String(body.startDate) : todayIso();
+  const isTime = (v) => /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
+  if (!userId || !baseClassTypeId) return json(res, 400, { error: 'Kies een lid en een lessoort.', build: BUILD });
+  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6 || !isTime(startTime) || !isTime(endTime)) {
+    return json(res, 400, { error: 'Kies een dag en een begin- en eindtijd.', build: BUILD });
+  }
+  if (endTime <= startTime) return json(res, 400, { error: 'De eindtijd ligt voor de begintijd.', build: BUILD });
+
+  await requireMemberOfMyOrgs(db, myOrgs, userId);
+  const baseSnap = await db.collection('classTypes').doc(baseClassTypeId).get();
+  if (!baseSnap.exists) return json(res, 404, { error: 'Deze lessoort bestaat niet (meer).', build: BUILD });
+  const base = baseSnap.data();
+  const orgId = orgIdOf(base.orgId);
+  if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Deze lessoort hoort niet bij jouw studio.', build: BUILD });
+  if (base.privateFor) return json(res, 400, { error: 'Kies een gewone lessoort als basis.', build: BUILD });
+
+  // Trainer: gekozen, anders de vaste trainer van de lessoort, anders wie het instelt.
+  const trainerId = String(body?.trainerId ?? '').trim() || base.defaultTrainerId || uid;
+  if (trainerId !== uid) {
+    const tSnap = await db.collection('profiles').doc(trainerId).get();
+    const tr = tSnap.exists ? tSnap.data() : null;
+    const trOrgs = tr ? (Array.isArray(tr.orgIds) && tr.orgIds.length ? tr.orgIds.map(String) : [orgIdOf(tr.orgId)]) : [];
+    if (!tr || !['trainer', 'admin'].includes(String(tr.role)) || !trOrgs.includes(orgId)) {
+      return json(res, 400, { error: 'Deze trainer hoort niet bij jouw studio.', build: BUILD });
+    }
+  }
+
+  const id = personalClassTypeId(userId, weekday, startTime);
+  const now = new Date().toISOString();
+  const ref = db.collection('classTypes').doc(id);
+  const existing = await ref.get();
+  const ct = {
+    id,
+    orgId,
+    name: base.name,
+    // Eén lid per PT-moment; duo-PT met twee vaste leden komt later.
+    capacity: 1,
+    creditCost: base.creditCost ?? 1,
+    defaultTrainerId: trainerId,
+    schemaId: base.schemaId ?? null,
+    schedule: [{ weekday, startTime, endTime }],
+    room: base.room ?? null,
+    sessionKind: base.sessionKind ?? '1on1',
+    description: base.description ?? null,
+    privateFor: userId,
+    baseClassTypeId,
+    createdAt: existing.exists ? existing.data().createdAt ?? now : now,
+    updatedAt: now,
+  };
+  await ref.set(ct);
+
+  // Eerst de vaste les, dan het rooster: nieuw gemaakte lessen worden zo meteen voor het lid geboekt.
+  const standing = await writeStanding(db, { orgId, userId, classTypeId: id, weekday, startTime, startDate, createdByUserId: uid });
+  if (existing.exists) await syncClassType(db, id, ct);
+  const generated = await generateForClassType(db, id, ct);
   const counts = await bookExistingForStanding(db, standing);
-  return json(res, 200, { standingBookingId: id, ...counts, build: BUILD });
+  return json(res, 200, {
+    classTypeId: id,
+    standingBookingId: standing.id,
+    booked: generated.autoBooked + counts.booked,
+    skippedFull: generated.autoWaitlisted + counts.skippedFull,
+    skippedNoCredits: generated.autoSkippedNoCredits + counts.skippedNoCredits,
+    build: BUILD,
+  });
+}
+
+/**
+ * Een PT-moment stoppen: geboekte lessen afmelden (gewone afmeldregel), de privé-lessoort en de
+ * vaste les weghalen en de lege toekomstige lessen van het rooster halen. Wat al geweest is blijft.
+ */
+async function removePersonalSlot(db, uid, myOrgs, isStaff, standing) {
+  const r = await cancelSeriesBookings(db, uid, myOrgs, isStaff, standing, () => true);
+  const classTypeId = String(standing.classTypeId);
+  const future = await futureClassesOfType(db, classTypeId, todayIso(), [orgIdOf(standing.orgId)]);
+  await deleteClasses(db, future.filter((c) => !(Number(c.bookedCount) > 0) && !(Number(c.waitlistCount) > 0)));
+  await db.collection('classTypes').doc(classTypeId).delete();
+  await db.collection('standingBookings').doc(String(standing.id)).delete();
+  return r;
 }
 
 /**
@@ -1040,6 +1175,8 @@ async function generateForClassType(db, classTypeId, ct) {
       room: ct.room ?? null,
       sessionKind: ct.sessionKind ?? 'group',
       description: ct.description ?? null,
+      // Vaste PT van één lid (Profiel → Vaste lessen → PT-moment): alleen voor dat lid te boeken.
+      privateFor: ct.privateFor ?? null,
       bookedCount: 0,
       waitlistCount: 0,
       cancelledAt: null,
@@ -1053,6 +1190,7 @@ async function generateForClassType(db, classTypeId, ct) {
   // Nieuw gemaakte lessen: iedereen met een actieve "elke week"-inschrijving op dit weekmoment
   // meteen meeboeken. Alleen voor deze net aangemaakte lessen — die zijn per definitie nog niet
   // eerder geprobeerd, dus dit gebeurt precies één keer per les.
+  const emptyPrivate = [];
   for (const o of missing) {
     const weekday = new Date(`${o.date}T00:00:00`).getDay();
     const classId = classIdForOccurrence(classTypeId, o.date, o.startTime);
@@ -1060,6 +1198,15 @@ async function generateForClassType(db, classTypeId, ct) {
     result.autoBooked += outcome.booked;
     result.autoWaitlisted += outcome.skippedFull;
     result.autoSkippedNoCredits += outcome.skippedNoCredits;
+    // Vaste PT in een week dat het lid niet komt (pauze, nog niet begonnen, geen credits): niet
+    // als lege les op het rooster van de trainer laten staan.
+    if (ct.privateFor && outcome.booked + outcome.skippedFull === 0) emptyPrivate.push(classId);
+  }
+  if (emptyPrivate.length > 0) {
+    const cancelBatch = db.batch();
+    const nowIso = new Date().toISOString();
+    for (const id of emptyPrivate) cancelBatch.set(db.collection('classes').doc(id), { cancelledAt: nowIso, autoCancelled: true }, { merge: true });
+    await cancelBatch.commit();
   }
   return result;
 }
@@ -1200,8 +1347,11 @@ async function attemptStandingBooking(db, orgId, classId, standing) {
   const result = await db.runTransaction(async (tx) => {
     const classRef = db.collection('classes').doc(classId);
     const classSnap = await tx.get(classRef);
-    if (!classSnap.exists || classSnap.data().cancelledAt) return null;
+    if (!classSnap.exists) return null;
     const cls = classSnap.data();
+    const reopen = canReopenPrivateClass(cls, userId);
+    if (cls.cancelledAt && !reopen) return null;
+    if (cls.privateFor && cls.privateFor !== userId) return null;
 
     const mine = await tx.get(db.collection('bookings').where('classId', '==', classId).where('userId', '==', userId));
     if (mine.docs.some((d) => ['booked', 'waitlist'].includes(String(d.data().status)))) return null;
@@ -1228,10 +1378,11 @@ async function attemptStandingBooking(db, orgId, classId, standing) {
       createdAt: nowIso,
       updatedAt: FieldValue.serverTimestamp(),
     });
+    const reopened = reopen ? { cancelledAt: null, autoCancelled: false } : {};
     if (onWaitlist) {
-      tx.set(classRef, { waitlistCount: FieldValue.increment(1) }, { merge: true });
+      tx.set(classRef, { waitlistCount: FieldValue.increment(1), ...reopened }, { merge: true });
     } else {
-      tx.set(classRef, { bookedCount: FieldValue.increment(1) }, { merge: true });
+      tx.set(classRef, { bookedCount: FieldValue.increment(1), ...reopened }, { merge: true });
       if (cost > 0) {
         tx.set(accountRef, { orgId, userId, balance: balance - cost, updatedAt: nowIso }, { merge: true });
         tx.set(db.collection('creditLedger').doc(newId('cl')), {

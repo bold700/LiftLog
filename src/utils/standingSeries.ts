@@ -5,7 +5,11 @@
 import type { Booking, StudioClass } from '../services/classService';
 import type { StandingBooking } from '../types';
 
-export type SeriesStatus = 'booked' | 'waitlist' | 'paused' | 'cancelledClass' | 'skipped' | 'notStarted';
+/**
+ * `optedOut`: het lid meldde zich die week af ("deze keer niet"); `cancelledClass`: de studio
+ * gelastte de les af; `skipped`: niet geboekt (vol of geen credits).
+ */
+export type SeriesStatus = 'booked' | 'waitlist' | 'paused' | 'cancelledClass' | 'optedOut' | 'skipped' | 'notStarted';
 
 export interface SeriesOccurrence {
   cls: StudioClass;
@@ -35,6 +39,7 @@ export function seriesOccurrences(
   limit = 4
 ): SeriesOccurrence[] {
   const active = new Map(bookings.filter((b) => b.status === 'booked' || b.status === 'waitlist').map((b) => [b.classId, b]));
+  const cancelledByMember = new Set(bookings.filter((b) => b.status === 'cancelled').map((b) => b.classId));
   return classes
     .filter((c) => c.date >= fromDate && inSeries(c, s))
     .sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`))
@@ -42,10 +47,11 @@ export function seriesOccurrences(
     .map((cls) => {
       const booking = active.get(cls.id) ?? null;
       let status: SeriesStatus;
-      if (cls.cancelledAt) status = 'cancelledClass';
+      if (cls.cancelledAt && !cls.autoCancelled) status = 'cancelledClass';
       else if (booking) status = booking.status === 'waitlist' ? 'waitlist' : 'booked';
       else if (s.startDate && cls.date < s.startDate) status = 'notStarted';
       else if (isPausedOn(s, cls.date)) status = 'paused';
+      else if (cls.autoCancelled || cancelledByMember.has(cls.id)) status = 'optedOut';
       else status = 'skipped';
       return { cls, booking, status };
     });

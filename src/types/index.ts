@@ -483,6 +483,12 @@ export interface ClassType {
   sessionKind: SessionKind;
   /** Korte omschrijving voor de sporter, getoond in de boekingsdialoog; null = geen omschrijving. */
   description: string | null;
+  /**
+   * Vast PT-moment van één lid (userId), aangemaakt via Profiel → Vaste lessen → PT-moment. Zo'n
+   * privé-lessoort staat niet in Beheer → Lessoorten en is alleen voor dat lid te boeken; null =
+   * een gewone lessoort.
+   */
+  privateFor: string | null;
   createdAt: string;
   updatedAt: string;
 }

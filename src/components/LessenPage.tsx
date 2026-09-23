@@ -174,11 +174,17 @@ export function LessenPage() {
     return map;
   }, [bookings]);
 
-  /** "Mijn dag": alleen de lessen waar ík als trainer op sta. */
-  const scopedClasses = useMemo(
-    () => (myDayOnly && me ? classes.filter((c) => c.trainerId === me.userId) : classes),
-    [classes, myDayOnly, me]
-  );
+  /**
+   * "Mijn dag": alleen de lessen waar ík als trainer op sta. Een vast PT-moment van een lid
+   * (privé-les) ziet alleen dat lid en de staf; een week waarin het lid niet komt (afgemeld,
+   * pauze) staat voor niemand op het rooster — die zie je op het profiel bij Vaste lessen.
+   */
+  const scopedClasses = useMemo(() => {
+    const visible = classes.filter(
+      (c) => !c.privateFor || (!c.autoCancelled && (isStaff || c.privateFor === me?.userId))
+    );
+    return myDayOnly && me ? visible.filter((c) => c.trainerId === me.userId) : visible;
+  }, [classes, myDayOnly, me, isStaff]);
   /**
    * Ruimtes die daadwerkelijk in gebruik zijn, voor het filter. `room` is vrije tekst (geen
    * vaste lijst), dus genormaliseerd op hoofdletters/spaties: anders levert "Boven" naast "boven"
