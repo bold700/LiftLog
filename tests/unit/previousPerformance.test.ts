@@ -4,6 +4,8 @@ import {
   fromLocalExercises,
   fromSporterLogs,
   describePrevious,
+  buildPersonalRecords,
+  describeRecord,
   type PreviousPerformance,
 } from '../../src/utils/previousPerformance';
 import type { Exercise, ExerciseLog } from '../../src/types';
@@ -93,5 +95,47 @@ describe('describePrevious', () => {
 
   it('toont alleen het gewicht als reps ontbreken', () => {
     expect(describePrevious(entry({ reps: null, sets: null }))).toBe('25 kg');
+  });
+});
+
+describe('buildPersonalRecords', () => {
+  it('kiest het zwaarste gewicht ooit, niet de laatste keer', () => {
+    const pr = buildPersonalRecords([
+      entry({ weight: 30, reps: 8, date: '2026-09-20' }),
+      entry({ weight: 35, reps: 5, date: '2026-08-01' }),
+      entry({ weight: 25, reps: 12, date: '2026-07-01' }),
+    ]);
+    expect(pr.get('lat pulldown')).toMatchObject({ weight: 35, reps: 5, date: '2026-08-01' });
+  });
+
+  it('bij gelijk gewicht wint de meeste herhalingen; bij gelijkspel de eerste keer', () => {
+    const pr = buildPersonalRecords([
+      entry({ weight: 35, reps: 6, date: '2026-09-01' }),
+      entry({ weight: 35, reps: 8, date: '2026-09-10' }),
+      entry({ weight: 35, reps: 8, date: '2026-09-20' }),
+    ]);
+    expect(pr.get('lat pulldown')?.date).toBe('2026-09-10');
+  });
+
+  it('zonder gewicht tellen de herhalingen; met gewicht gaat voor', () => {
+    const pr = buildPersonalRecords([
+      entry({ exerciseName: 'Pull-up', weight: null, reps: 12, date: '2026-09-01' }),
+      entry({ exerciseName: 'pull-up', weight: null, reps: 9, date: '2026-09-10' }),
+      entry({ exerciseName: 'Dip', weight: null, reps: 20, date: '2026-09-01' }),
+      entry({ exerciseName: 'Dip', weight: 5, reps: 6, date: '2026-09-10' }),
+    ]);
+    expect(pr.get('pull-up')?.reps).toBe(12);
+    expect(pr.get('dip')).toMatchObject({ weight: 5, reps: 6 });
+  });
+
+  it('slaat lege logs over', () => {
+    expect(buildPersonalRecords([entry({ weight: null, reps: null })]).size).toBe(0);
+  });
+});
+
+describe('describeRecord', () => {
+  it('gewicht met komma en herhalingen', () => {
+    expect(describeRecord(entry({ weight: 92.5, reps: 6 }))).toBe('92,5 kg × 6');
+    expect(describeRecord(entry({ weight: null, reps: 20 }))).toBe('20 herhalingen');
   });
 });

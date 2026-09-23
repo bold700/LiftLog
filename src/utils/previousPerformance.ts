@@ -43,32 +43,83 @@ export function buildPreviousPerformance(entries: PreviousPerformance[]): Map<st
  * gelogd: dat is geen "vorige keer".
  */
 export function fromLocalExercises(exercises: Exercise[], excludeIds: Set<string>): Map<string, PreviousPerformance> {
-  const usable = exercises.filter((ex) => ex.name && !excludeIds.has(ex.id));
-  return buildPreviousPerformance(
-    usable.map((ex) => ({
+  return buildPreviousPerformance(localEntries(exercises.filter((ex) => !excludeIds.has(ex.id))));
+}
+
+/** Logs van een sporter (Firestore) naar dezelfde vorm. */
+export function fromSporterLogs(logs: ExerciseLog[], excludeIds: Set<string>): Map<string, PreviousPerformance> {
+  return buildPreviousPerformance(sporterEntries(logs.filter((l) => !excludeIds.has(l.id))));
+}
+
+/** Eigen logs (lokaal) als lijst in de gedeelde vorm; volgorde blijft zoals aangeleverd. */
+export function localEntries(exercises: Exercise[]): PreviousPerformance[] {
+  return exercises
+    .filter((ex) => ex.name)
+    .map((ex) => ({
       exerciseName: ex.name ?? '',
       weight: num(ex.weight),
       sets: num(ex.sets),
       reps: num(ex.reps),
       date: ex.date,
       notes: ex.notes ?? null,
-    }))
-  );
+    }));
 }
 
-/** Logs van een sporter (Firestore) naar dezelfde vorm. */
-export function fromSporterLogs(logs: ExerciseLog[], excludeIds: Set<string>): Map<string, PreviousPerformance> {
-  const usable = logs.filter((l) => l.exerciseName && !excludeIds.has(l.id));
-  return buildPreviousPerformance(
-    usable.map((l) => ({
+/** Logs van een sporter als lijst in de gedeelde vorm. */
+export function sporterEntries(logs: ExerciseLog[]): PreviousPerformance[] {
+  return logs
+    .filter((l) => l.exerciseName)
+    .map((l) => ({
       exerciseName: l.exerciseName,
       weight: num(l.weight),
       sets: num(l.sets),
       reps: num(l.reps),
       date: l.date,
       notes: l.notes ?? null,
-    }))
-  );
+    }));
+}
+
+/**
+ * Is `a` een betere prestatie dan `b`? Het zwaarste gewicht wint; bij gelijk gewicht de meeste
+ * herhalingen. Zonder gewicht (eigen lichaamsgewicht) tellen alleen de herhalingen, en een log
+ * met gewicht gaat altijd voor een zonder.
+ */
+function isBetter(a: PreviousPerformance, b: PreviousPerformance): boolean {
+  const wa = a.weight != null && a.weight > 0 ? a.weight : null;
+  const wb = b.weight != null && b.weight > 0 ? b.weight : null;
+  if (wa != null || wb != null) {
+    if (wb == null) return true;
+    if (wa == null) return false;
+    if (wa !== wb) return wa > wb;
+  }
+  return (a.reps ?? 0) > (b.reps ?? 0);
+}
+
+/**
+ * Personal record per oefening: het beste ooit (zie `isBetter`), inclusief wat er vandaag al is
+ * gelogd, zodat een nieuw record meteen zichtbaar is. Bij een gelijke prestatie telt de eerste
+ * keer dat het lukte. Logs zonder gewicht én zonder herhalingen tellen niet mee.
+ */
+export function buildPersonalRecords(entries: PreviousPerformance[]): Map<string, PreviousPerformance> {
+  const out = new Map<string, PreviousPerformance>();
+  const oldestFirst = [...entries].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  for (const entry of oldestFirst) {
+    if (!entry.exerciseName?.trim()) continue;
+    if (!(entry.weight != null && entry.weight > 0) && !(entry.reps != null && entry.reps > 0)) continue;
+    const k = key(entry.exerciseName);
+    const best = out.get(k);
+    if (!best || isBetter(entry, best)) out.set(k, entry);
+  }
+  return out;
+}
+
+/** Kort, voor de PR-chip: "92,5 kg × 6", of "20 herhalingen" zonder gewicht. */
+export function describeRecord(p: PreviousPerformance): string {
+  if (p.weight != null && p.weight > 0) {
+    const w = `${String(p.weight).replace('.', ',')} kg`;
+    return p.reps != null && p.reps > 0 ? `${w} × ${p.reps}` : w;
+  }
+  return p.reps === 1 ? '1 herhaling' : `${p.reps ?? 0} herhalingen`;
 }
 
 /** Korte samenvatting voor in de lijst: "25 kg × 10" of "3 × 12" als er geen gewicht is. */

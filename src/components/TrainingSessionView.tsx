@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Typography, Box, Snackbar, Button } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
+import EmojiEventsRoundedIcon from '@mui/icons-material/EmojiEventsRounded';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { Schema, SchemaExercise } from '../types';
 import { Exercise } from '../types';
@@ -17,6 +18,10 @@ import {
   fromSporterLogs,
   describePrevious,
   shortDate,
+  buildPersonalRecords,
+  describeRecord,
+  localEntries,
+  sporterEntries,
   type PreviousPerformance,
 } from '../utils/previousPerformance';
 import { getAllExercises } from '../utils/storage';
@@ -150,6 +155,8 @@ export const TrainingSessionView = ({
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   /** Wat deze persoon de vorige keer deed, per oefeningnaam (kleine letters). */
   const [previous, setPrevious] = useState<Map<string, PreviousPerformance>>(new Map());
+  /** Personal record per oefeningnaam (kleine letters): het beste ooit, vandaag meegeteld. */
+  const [records, setRecords] = useState<Map<string, PreviousPerformance>>(new Map());
 
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
   const healthStorageKey = useMemo(
@@ -175,7 +182,9 @@ export const TrainingSessionView = ({
     if (!logTargetId) {
       const logged = getLoggedExercisesForSchemaDayInLast12Hours(schema.id, dayIndex);
       setLoggedExercises(logged);
-      setPrevious(fromLocalExercises(getAllExercises(), new Set(logged.map((ex) => ex.id))));
+      const all = getAllExercises();
+      setPrevious(fromLocalExercises(all, new Set(logged.map((ex) => ex.id))));
+      setRecords(buildPersonalRecords(localEntries(all)));
       return;
     }
     getLogsForUser(logTargetId)
@@ -183,10 +192,12 @@ export const TrainingSessionView = ({
         const logged = loggedExercisesFromSporterLogs(logs, schema.id, dayIndex);
         setLoggedExercises(logged);
         setPrevious(fromSporterLogs(logs, new Set(logged.map((ex) => ex.id))));
+        setRecords(buildPersonalRecords(sporterEntries(logs)));
       })
       .catch(() => {
         setLoggedExercises([]);
         setPrevious(new Map());
+        setRecords(new Map());
       });
   }, [schema.id, dayIndex, logTargetId]);
 
@@ -367,6 +378,9 @@ export const TrainingSessionView = ({
   const exLogId = ex ? findLogIdForExercise(loggedExercises, ex.exerciseName) : null;
   const exLog = exLogId ? loggedExercises.find((l) => l.id === exLogId) ?? null : null;
   const prev = ex ? previous.get(ex.exerciseName.trim().toLowerCase()) ?? null : null;
+  const record = ex ? records.get(ex.exerciseName.trim().toLowerCase()) ?? null : null;
+  // Vandaag gezet en er was al eerder gelogd: dan is het een nieuw record.
+  const newRecord = !!record && !!prev && record.date.slice(0, 10) === today;
   const nextIdx = day.exercises.findIndex((e, i) => i > current && !findLogIdForExercise(loggedExercises, e.exerciseName));
   const next = nextIdx >= 0 ? day.exercises[nextIdx] : null;
   const restLeft = rest ? Math.max(0, Math.ceil((rest.until - now) / 1000)) : 0;
@@ -462,34 +476,59 @@ export const TrainingSessionView = ({
           {ex.notes && (
             <Typography sx={{ fontSize: 12, lineHeight: '16px', color: 'text.secondary', fontStyle: 'italic', mt: 0.5 }}>{ex.notes}</Typography>
           )}
-          {/* Zodat je tijdens het begeleiden meteen weet of er gewicht bij kan. */}
-          <Box
-            sx={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 1,
-              mt: 1,
-              px: 1,
-              borderRadius: '8px',
-              bgcolor: prev ? designTokens.tertiaryContainer : 'transparent',
-              color: prev ? designTokens.onTertiaryContainer : 'text.disabled',
-              border: prev ? 'none' : `1px solid ${designTokens.cardBorder}`,
-              fontSize: 11,
-              lineHeight: '20px',
-            }}
-          >
-            {prev ? (
-              <>
+          {/* Zodat je tijdens het begeleiden meteen weet of er gewicht bij kan, en wat het record is. */}
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 1 }}>
+            <Box
+              sx={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 1,
+                px: 1,
+                borderRadius: '8px',
+                bgcolor: prev ? designTokens.tertiaryContainer : 'transparent',
+                color: prev ? designTokens.onTertiaryContainer : 'text.disabled',
+                border: prev ? 'none' : `1px solid ${designTokens.cardBorder}`,
+                fontSize: 11,
+                lineHeight: '20px',
+              }}
+            >
+              {prev ? (
+                <>
+                  <Box component="span" sx={{ fontWeight: 600 }}>
+                    Vorige keer
+                  </Box>
+                  <span>
+                    {describePrevious(prev)}
+                    {shortDate(prev.date) && ` · ${shortDate(prev.date)}`}
+                  </span>
+                </>
+              ) : (
+                'Nog niet eerder gelogd'
+              )}
+            </Box>
+            {record && (
+              <Box
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  px: 1,
+                  borderRadius: '8px',
+                  bgcolor: newRecord ? designTokens.primary : designTokens.primaryContainer,
+                  color: newRecord ? designTokens.onPrimary : designTokens.onPrimaryContainer,
+                  fontSize: 11,
+                  lineHeight: '20px',
+                }}
+              >
+                <EmojiEventsRoundedIcon sx={{ fontSize: 14 }} aria-hidden />
                 <Box component="span" sx={{ fontWeight: 600 }}>
-                  Vorige keer
+                  {newRecord ? 'Nieuw PR' : 'PR'}
                 </Box>
                 <span>
-                  {describePrevious(prev)}
-                  {shortDate(prev.date) && ` · ${shortDate(prev.date)}`}
+                  {describeRecord(record)}
+                  {!newRecord && shortDate(record.date) && ` · ${shortDate(record.date)}`}
                 </span>
-              </>
-            ) : (
-              'Nog niet eerder gelogd'
+              </Box>
             )}
           </Box>
         </Box>
