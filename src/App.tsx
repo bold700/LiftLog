@@ -334,11 +334,11 @@ function AppContent() {
               // navigatiebalk) en de +-knop uit te komen als je helemaal naar onderen scrolt — met 10
               // (80px) kwam de laatste content (bijv. "Training afronden") er net onder vandaan.
               pb: { xs: 12, md: 4 },
-              paddingTop: {
-                xs: 'calc(24px + env(safe-area-inset-top, 0px))',
-                sm: 'calc(24px + env(safe-area-inset-top, 0px))',
-                md: 0,
-              },
+              // Geen eigen env(safe-area-inset-top) meer hier: deze inhoud staat al onder de vaste
+              // bovenbalk, die zelf al onder de statusbalk/Dynamic Island valt (padding op .mobile-shell,
+              // zie AppShell). Die veilige-zone-marge hier nóg eens optellen gaf een dubbele, te grote
+              // witte strook boven elke pagina zodra iOS écht een safe-area-waarde ging teruggeven.
+              paddingTop: { md: 0 },
               overflow: 'auto',
               scrollbarGutter: 'stable',
             }}
