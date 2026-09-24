@@ -23,10 +23,12 @@ import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
 import { useProfile } from '../context/ProfileContext';
 import { useI18n } from '../context/I18nContext';
+import { useViewAs } from '../context/ViewAsContext';
 import { LANGS, type Lang } from '../i18n';
 import { useAuth } from '../context/AuthContext';
 import { updateProfile } from '../services/profileService';
 import { uploadAvatar, deleteAvatar } from '../services/avatarService';
+import { updateMemberCredentials } from '../services/adminAccountService';
 import type { LeaderboardVisibility, Limitation } from '../types';
 import { PageLayout, HeaderActions } from './layout';
 import { designTokens } from '../theme/designTokens';
@@ -87,6 +89,7 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
   const profile = useProfile();
   const { t, lang, setLang } = useI18n();
   const auth = useAuth();
+  const { viewed } = useViewAs();
   const [displayName, setDisplayName] = useState('');
   const [leaderboardVisibility, setLeaderboardVisibility] = useState<LeaderboardVisibility>('named');
   const [heightCm, setHeightCm] = useState('');
@@ -116,10 +119,18 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
   const [goalProtein, setGoalProtein] = useState('');
   const [goalCarbs, setGoalCarbs] = useState('');
   const [goalFat, setGoalFat] = useState('');
-  const isPasswordAccount = auth?.user?.providerData?.some((pr) => pr.providerId === 'password') ?? false;
 
   const p = profile?.profile;
-  const uid = auth?.user?.uid ?? p?.userId;
+  /**
+   * "Bekijk als": Profiel toont en bewerkt dan het profiel van de gekozen sporter, niet dat van de
+   * ingelogde trainer — inclusief inloggegevens (via de server, zie updateMemberCredentials), zodat
+   * het voor de trainer volledig aanvoelt alsof hij als die sporter is ingelogd.
+   */
+  const viewedProfile = viewed.isOther ? profile?.allSporters.find((s) => s.userId === viewed.userId) ?? null : null;
+  const effective = viewed.isOther ? viewedProfile : p;
+  const effectiveRole = viewed.isOther ? 'sporter' : p?.role;
+  const uid = viewed.isOther ? viewed.userId : (auth?.user?.uid ?? p?.userId);
+  const isPasswordAccount = viewed.isOther ? true : (auth?.user?.providerData?.some((pr) => pr.providerId === 'password') ?? false);
 
   const handlePhotoSelected = useCallback(
     async (file: File | null) => {
@@ -166,24 +177,24 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
 
   /** Formulier terugzetten naar wat er is opgeslagen (bij laden en bij Annuleren). */
   const resetForm = useCallback(() => {
-    setDisplayName(p?.displayName ?? '');
-    setLeaderboardVisibility(p?.leaderboardVisibility ?? 'named');
-    setHeightCm(p?.heightCm != null ? String(p.heightCm) : '');
-    setBirthDate(p?.birthDate ?? '');
-    setGender(p?.gender ?? '');
-    setRestingHr(p?.restingHrBpm != null ? String(p.restingHrBpm) : '');
-    setLimitations(p?.limitations ?? []);
-    setEmailInput(auth?.user?.email ?? p?.email ?? '');
+    setDisplayName(effective?.displayName ?? '');
+    setLeaderboardVisibility(effective?.leaderboardVisibility ?? 'named');
+    setHeightCm(effective?.heightCm != null ? String(effective.heightCm) : '');
+    setBirthDate(effective?.birthDate ?? '');
+    setGender(effective?.gender ?? '');
+    setRestingHr(effective?.restingHrBpm != null ? String(effective.restingHrBpm) : '');
+    setLimitations(effective?.limitations ?? []);
+    setEmailInput((viewed.isOther ? effective?.email : auth?.user?.email ?? effective?.email) ?? '');
     setNewPassword('');
     setCurrentPassword('');
-    setLangChoice(lang);
+    setLangChoice(viewed.isOther ? (effective?.language as Lang) ?? lang : lang);
     const str = (n: number | null | undefined) => (n ? String(n) : '');
-    setGoalWeight(p?.weightGoalKg ? String(p.weightGoalKg).replace('.', ',') : '');
-    setGoalKcal(str(p?.nutritionGoal?.kcal));
-    setGoalProtein(str(p?.nutritionGoal?.protein));
-    setGoalCarbs(str(p?.nutritionGoal?.carbs));
-    setGoalFat(str(p?.nutritionGoal?.fat));
-  }, [p, auth?.user?.email, lang]);
+    setGoalWeight(effective?.weightGoalKg ? String(effective.weightGoalKg).replace('.', ',') : '');
+    setGoalKcal(str(effective?.nutritionGoal?.kcal));
+    setGoalProtein(str(effective?.nutritionGoal?.protein));
+    setGoalCarbs(str(effective?.nutritionGoal?.carbs));
+    setGoalFat(str(effective?.nutritionGoal?.fat));
+  }, [effective, viewed.isOther, auth?.user?.email, lang]);
 
   useEffect(() => {
     resetForm();
@@ -195,10 +206,14 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
     setMessage(null);
   }, [resetForm]);
 
-  const currentEmail = auth?.user?.email ?? p?.email ?? '';
+  const currentEmail = (viewed.isOther ? effective?.email : auth?.user?.email ?? effective?.email) ?? '';
   const emailChanged = isPasswordAccount && emailInput.trim().toLowerCase() !== currentEmail.toLowerCase();
-  /** E-mail of wachtwoord wijzigen vraagt om je huidige wachtwoord (Firebase wil je opnieuw herkennen). */
-  const needsCurrentPassword = emailChanged || newPassword.length > 0;
+  /**
+   * E-mail of wachtwoord wijzigen vraagt normaal om je huidige wachtwoord (Firebase wil je opnieuw
+   * herkennen). Bij "Bekijk als" loopt dit via de server met de rechten van de trainer/beheerder
+   * zelf — de sporter hoeft er niet voor open te staan, dus dat veld vervalt dan.
+   */
+  const needsCurrentPassword = !viewed.isOther && (emailChanged || newPassword.length > 0);
 
   const handleSave = useCallback(async () => {
     if (!uid || !profile || !auth) return;
@@ -216,18 +231,35 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
       setMessage({ type: 'error', text: 'Vul je huidige wachtwoord in om je e-mail of wachtwoord te wijzigen.' });
       return;
     }
+    if (viewed.isOther && (newPassword || emailChanged)) {
+      const naam = effective?.displayName?.trim() || effective?.email || 'deze sporter';
+      if (!window.confirm(`Je wijzigt hiermee de inloggegevens van ${naam}. Doorgaan?`)) return;
+    }
     setSaving(true);
     setMessage(null);
     const done: string[] = [];
     try {
-      // Eerst wat je huidige wachtwoord nodig heeft: klopt dat niet, dan is er nog niets half opgeslagen.
-      if (newPassword) {
-        await auth.changePassword(currentPassword, newPassword);
-        done.push('Wachtwoord gewijzigd.');
-      }
-      if (emailChanged) {
-        await auth.changeEmail(currentPassword, targetEmail);
-        done.push(`Bevestig je nieuwe e-mailadres via de link die naar ${targetEmail} is gestuurd; tot dan log je in met je oude adres.`);
+      if (viewed.isOther) {
+        // Bekijk als: rechtstreeks via de server (Admin SDK), zonder wachtwoord van de sporter zelf.
+        if (newPassword || emailChanged) {
+          if (!auth.user) throw new Error('Niet ingelogd.');
+          await updateMemberCredentials(auth.user, uid, {
+            email: emailChanged ? targetEmail : undefined,
+            password: newPassword || undefined,
+          });
+          if (newPassword) done.push('Wachtwoord gewijzigd.');
+          if (emailChanged) done.push('E-mailadres gewijzigd.');
+        }
+      } else {
+        // Eerst wat je huidige wachtwoord nodig heeft: klopt dat niet, dan is er nog niets half opgeslagen.
+        if (newPassword) {
+          await auth.changePassword(currentPassword, newPassword);
+          done.push('Wachtwoord gewijzigd.');
+        }
+        if (emailChanged) {
+          await auth.changeEmail(currentPassword, targetEmail);
+          done.push(`Bevestig je nieuwe e-mailadres via de link die naar ${targetEmail} is gestuurd; tot dan log je in met je oude adres.`);
+        }
       }
       const goalNums = [goalKcal, goalProtein, goalCarbs, goalFat].map((v) => numOrNull(v) ?? 0);
       await updateProfile(uid, {
@@ -242,8 +274,9 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
         nutritionGoal: goalNums.some((n) => n > 0)
           ? { kcal: goalNums[0], protein: goalNums[1], carbs: goalNums[2], fat: goalNums[3] }
           : null,
+        ...(viewed.isOther ? { language: langChoice } : {}),
       });
-      if (langChoice !== lang) await setLang(langChoice);
+      if (!viewed.isOther && langChoice !== lang) await setLang(langChoice);
       await profile.refreshProfile();
       setEditing(false);
       setNewPassword('');
@@ -260,17 +293,20 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
       setSaving(false);
     }
   }, [
-    uid, profile, auth, emailInput, emailChanged, newPassword, needsCurrentPassword, currentPassword,
+    uid, profile, auth, viewed.isOther, effective, emailInput, emailChanged, newPassword, needsCurrentPassword, currentPassword,
     displayName, leaderboardVisibility, heightCm, birthDate, gender, restingHr, limitations,
     goalWeight, goalKcal, goalProtein, goalCarbs, goalFat, langChoice, lang, setLang,
   ]);
 
-  const email = auth?.user?.email ?? p?.email ?? '';
+  const email = (viewed.isOther ? effective?.email : auth?.user?.email ?? effective?.email) ?? '';
   /** "maart 2025": wanneer het profiel is aangemaakt (Figma "Member since March 2025"). */
   const memberSince = (() => {
-    const d = p?.createdAt ? new Date(p.createdAt) : null;
+    const d = effective?.createdAt ? new Date(effective.createdAt) : null;
     return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString(lang === 'en' ? 'en-GB' : 'nl-NL', { month: 'long', year: 'numeric' }) : null;
   })();
+
+  /** Taal om te tonen op de niet-bewerkbare rij: van de bekeken sporter, of anders je eigen app-taal. */
+  const displayLang: Lang = viewed.isOther ? (effective?.language as Lang) ?? 'nl' : lang;
 
   // Hartslagzones live uit de formulierwaarden (leeftijd uit geboortedatum, rusthartslag), zodat je ze meteen ziet.
   const ageNow = ageOnDate(birthDate || null, todayIso());
@@ -358,14 +394,14 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
           type="button"
           disabled={uploadingPhoto}
           onClick={() => fileInputRef.current?.click()}
-          aria-label={p?.photoURL ? 'Foto wijzigen' : 'Foto toevoegen'}
+          aria-label={effective?.photoURL ? 'Foto wijzigen' : 'Foto toevoegen'}
           sx={{ all: 'unset', cursor: 'pointer', borderRadius: '50%', flexShrink: 0, position: 'relative', display: 'flex', '&:focus-visible': { outline: `2px solid ${designTokens.primary}`, outlineOffset: 2 } }}
         >
           <Box sx={{ display: { xs: 'flex', md: 'none' } }}>
-            <UserAvatar name={displayName || p?.displayName} photoURL={p?.photoURL} size={64} />
+            <UserAvatar name={displayName || effective?.displayName} photoURL={effective?.photoURL} size={64} />
           </Box>
           <Box sx={{ display: { xs: 'none', md: 'flex' } }}>
-            <UserAvatar name={displayName || p?.displayName} photoURL={p?.photoURL} size={84} />
+            <UserAvatar name={displayName || effective?.displayName} photoURL={effective?.photoURL} size={84} />
           </Box>
           <Box
             sx={{
@@ -388,11 +424,11 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
         </Box>
         <Box sx={{ minWidth: 0 }}>
           <Typography sx={{ fontSize: { xs: 22, md: 26 }, fontWeight: 500, lineHeight: 1.25 }} noWrap>
-            {displayName || p?.displayName || email}
+            {displayName || effective?.displayName || email}
           </Typography>
           <Typography sx={{ fontSize: { xs: 12, md: 13 }, color: 'text.secondary' }}>
             {memberSince ? `Lid sinds ${memberSince}` : ' '}
-            {p?.photoURL && (
+            {effective?.photoURL && (
               <Box
                 component="button"
                 type="button"
@@ -416,17 +452,17 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
         {/* Op een telefoon lossen de kolommen op (display: contents) en bepaalt `order` de volgorde
             zoals Figma: abonnement, boekingen, gegevens, doelen, ranglijst, account, dan de rest. */}
         <Box sx={columnSx}>
-          {uid && p?.role === 'sporter' && (
+          {uid && effectiveRole === 'sporter' && (
             <Box sx={{ order: { xs: 1, md: 0 } }}>
               <SubscriptionCard userId={uid} />
             </Box>
           )}
-          {uid && p?.role === 'sporter' && (
+          {uid && effectiveRole === 'sporter' && (
             <Box sx={{ order: { xs: 2, md: 0 } }}>
               <BookingsCard userId={uid} />
             </Box>
           )}
-          {uid && p?.role === 'sporter' && (
+          {uid && effectiveRole === 'sporter' && (
             <Box sx={{ order: { xs: 2, md: 0 } }}>
               <StandingBookingsCard userId={uid} />
             </Box>
@@ -584,11 +620,11 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
               </Box>
             ) : (
               <>
-                <FieldRow label="Streefgewicht">{p?.weightGoalKg ? `${String(p.weightGoalKg).replace('.', ',')} kg` : '–'}</FieldRow>
-                <FieldRow label="Calorieën per dag">{p?.nutritionGoal?.kcal ? `${p.nutritionGoal.kcal.toLocaleString('nl-NL')} kcal` : '–'}</FieldRow>
-                <FieldRow label="Eiwit">{p?.nutritionGoal?.protein ? `${p.nutritionGoal.protein} g` : '–'}</FieldRow>
-                <FieldRow label="Koolhydraten">{p?.nutritionGoal?.carbs ? `${p.nutritionGoal.carbs} g` : '–'}</FieldRow>
-                <FieldRow label="Vet">{p?.nutritionGoal?.fat ? `${p.nutritionGoal.fat} g` : '–'}</FieldRow>
+                <FieldRow label="Streefgewicht">{effective?.weightGoalKg ? `${String(effective.weightGoalKg).replace('.', ',')} kg` : '–'}</FieldRow>
+                <FieldRow label="Calorieën per dag">{effective?.nutritionGoal?.kcal ? `${effective.nutritionGoal.kcal.toLocaleString('nl-NL')} kcal` : '–'}</FieldRow>
+                <FieldRow label="Eiwit">{effective?.nutritionGoal?.protein ? `${effective.nutritionGoal.protein} g` : '–'}</FieldRow>
+                <FieldRow label="Koolhydraten">{effective?.nutritionGoal?.carbs ? `${effective.nutritionGoal.carbs} g` : '–'}</FieldRow>
+                <FieldRow label="Vet">{effective?.nutritionGoal?.fat ? `${effective.nutritionGoal.fat} g` : '–'}</FieldRow>
               </>
             )}
             <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: editing ? 1.5 : 1 }}>
@@ -620,7 +656,13 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
                   disabled={!isPasswordAccount}
-                  helperText={isPasswordAccount ? 'Na opslaan krijg je een bevestigingslink op het nieuwe adres.' : 'Beheerd via je aanbieder (Google, etc.).'}
+                  helperText={
+                    !isPasswordAccount
+                      ? 'Beheerd via je aanbieder (Google, etc.).'
+                      : viewed.isOther
+                        ? 'Wordt direct gewijzigd, zonder bevestigingsmail.'
+                        : 'Na opslaan krijg je een bevestigingslink op het nieuwe adres.'
+                  }
                   autoComplete="email"
                   inputProps={{ autoCapitalize: 'none', autoCorrect: 'off' }}
                   fullWidth
@@ -665,14 +707,15 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
                   </Box>
                 </FieldRow>
                 {isPasswordAccount && <FieldRow label="Wachtwoord">••••••••</FieldRow>}
-                <FieldRow label={t('lang.label')}>{t(`lang.${lang}`)}</FieldRow>
+                <FieldRow label={t('lang.label')}>{t(`lang.${displayLang}`)}</FieldRow>
                 {!isPasswordAccount && (
                   <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 0.5 }}>E-mail wordt beheerd via je aanbieder (Google, etc.).</Typography>
                 )}
               </>
             )}
-            {/* Uitloggen hoort bij het account (ontwerp: Account-kaart, "Sign out"); op desktop staat hij ook in de zijbalk. */}
-            {onLogout && (
+            {/* Uitloggen hoort bij het account (ontwerp: Account-kaart, "Sign out"); op desktop staat hij ook in de zijbalk.
+                Bij "Bekijk als" verborgen: hij logt altijd de trainer zelf uit, nooit de bekeken sporter. */}
+            {onLogout && !viewed.isOther && (
               <Box
                 component="button"
                 type="button"
@@ -703,7 +746,7 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
             </Box>
           )}
 
-          {uid && (p?.role === 'trainer' || p?.role === 'admin') && (
+          {uid && (effectiveRole === 'trainer' || effectiveRole === 'admin') && (
             <Box sx={{ order: { xs: 12, md: 0 } }}>
               <CalendarFeedCard userId={uid} kind="trainer" />
             </Box>
