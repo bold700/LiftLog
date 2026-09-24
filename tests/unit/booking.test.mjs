@@ -729,6 +729,155 @@ describe('betalingen (Mollie)', () => {
     const res = await post({ action: 'removePaymentKey', orgId: 'vanas', mode: 'test' }, 'trainer1');
     expect(res.statusCode).toBe(403);
   });
+
+  describe('zelf een abonnement kopen (Mollie-checkout)', () => {
+    const webhook = async (orgId, id) => {
+      const res = makeRawRes();
+      await handler({ method: 'POST', headers: {}, query: { mollieWebhook: orgId }, body: { id } }, res);
+      return res;
+    };
+
+    const mockMolliePayments = (paymentStatus = 'paid') => {
+      const realFetch = globalThis.fetch;
+      const calls = [];
+      globalThis.fetch = async (url, init) => {
+        calls.push({ url: String(url), init });
+        if (String(url) === 'https://api.mollie.com/v2/payments') {
+          return { ok: true, json: async () => ({ id: 'tr_test1', _links: { checkout: { href: 'https://mollie.test/checkout/tr_test1' } } }) };
+        }
+        if (String(url) === 'https://api.mollie.com/v2/payments/tr_test1') {
+          return { ok: true, json: async () => ({ id: 'tr_test1', status: paymentStatus }) };
+        }
+        return { ok: false, status: 404, json: async () => ({}) };
+      };
+      return {
+        calls,
+        restore: () => {
+          globalThis.fetch = realFetch;
+        },
+      };
+    };
+
+    beforeEach(() => {
+      store['orgs/vanas'] = { ...(store['orgs/vanas'] ?? {}), name: 'Van As', payments: { mode: 'test' } };
+      store['orgSecrets/vanas'] = { mollieTestKey: 'test_abcdefghij1234' };
+      store['plans/pl1'] = {
+        orgId: 'vanas',
+        name: 'Strippenkaart 10x',
+        price: 50,
+        period: 'once',
+        credits: 10,
+        validityMonths: null,
+        rollover: 'expire',
+        availableTo: 'all',
+        status: 'active',
+        vatRate: 9,
+      };
+    });
+
+    it('weigert zonder gekoppelde Mollie-sleutel', async () => {
+      delete store['orgSecrets/vanas'];
+      const res = await post({ action: 'purchasePlan', planId: 'pl1' });
+      expect(res.statusCode).toBe(409);
+    });
+
+    it('weigert een gratis plan (geen betaling nodig)', async () => {
+      store['plans/pl1'].price = 0;
+      const res = await post({ action: 'purchasePlan', planId: 'pl1' });
+      expect(res.statusCode).toBe(409);
+    });
+
+    it('weigert een plan van een andere studio', async () => {
+      store['plans/pl1'].orgId = 'studiob';
+      const res = await post({ action: 'purchasePlan', planId: 'pl1' });
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('weigert een alleen-op-uitnodiging-plan', async () => {
+      store['plans/pl1'].availableTo = 'invite';
+      const res = await post({ action: 'purchasePlan', planId: 'pl1' });
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('maakt een Mollie-betaling aan en bewaart een tussentijdse checkout-post', async () => {
+      const mollie = mockMolliePayments();
+      try {
+        const res = await post({ action: 'purchasePlan', planId: 'pl1' });
+        expect(res.statusCode).toBe(200);
+        expect(res.body.checkoutUrl).toBe('https://mollie.test/checkout/tr_test1');
+        expect(store['mollieCheckouts/tr_test1']).toMatchObject({ orgId: 'vanas', userId: 'sporter1', planId: 'pl1', status: 'pending' });
+        // De sleutel van de studio gaat mee, nooit iets van de sporter.
+        expect(mollie.calls[0].init.headers.Authorization).toBe('Bearer test_abcdefghij1234');
+      } finally {
+        mollie.restore();
+      }
+    });
+
+    it('beperkt het aantal checkout-pogingen per dag', async () => {
+      const mollie = mockMolliePayments();
+      try {
+        for (let i = 0; i < 20; i++) {
+          const res = await post({ action: 'purchasePlan', planId: 'pl1' });
+          expect(res.statusCode).toBe(200);
+        }
+        const res = await post({ action: 'purchasePlan', planId: 'pl1' });
+        expect(res.statusCode).toBe(429);
+      } finally {
+        mollie.restore();
+      }
+    });
+
+    it('kent na een geslaagde betaling credits toe, boekt de post betaald, en verwerkt een dubbele melding niet nog eens', async () => {
+      const mollie = mockMolliePayments('paid');
+      try {
+        await post({ action: 'purchasePlan', planId: 'pl1' });
+        const first = await webhook('vanas', 'tr_test1');
+        expect(first.statusCode).toBe(200);
+        expect(store['creditAccounts/vanas__sporter1'].balance).toBe(13); // 3 bestaand + 10 nieuw
+        expect(store['mollieCheckouts/tr_test1'].status).toBe('completed');
+        const chargeId = store['mollieCheckouts/tr_test1'].chargeId;
+        expect(store[`charges/${chargeId}`]).toMatchObject({ status: 'paid', paidBy: 'mollie', amount: 50, molliePaymentId: 'tr_test1' });
+        expect(store[`charges/${chargeId}`].invoiceNumber).toBeTruthy();
+
+        // Nogmaals dezelfde melding (Mollie kan dubbel melden): geen dubbele credits.
+        const second = await webhook('vanas', 'tr_test1');
+        expect(second.statusCode).toBe(200);
+        expect(store['creditAccounts/vanas__sporter1'].balance).toBe(13);
+      } finally {
+        mollie.restore();
+      }
+    });
+
+    it('doet niets bij een onbekend betaal-id', async () => {
+      const res = await webhook('vanas', 'tr_unknown');
+      expect(res.statusCode).toBe(200);
+    });
+
+    it('doet niets als de melding niet bij deze studio hoort', async () => {
+      const mollie = mockMolliePayments('paid');
+      try {
+        await post({ action: 'purchasePlan', planId: 'pl1' });
+        const res = await webhook('studiob', 'tr_test1');
+        expect(res.statusCode).toBe(200);
+        expect(store['mollieCheckouts/tr_test1'].status).toBe('pending');
+      } finally {
+        mollie.restore();
+      }
+    });
+
+    it('markeert een mislukte betaling zonder iets toe te kennen', async () => {
+      const mollie = mockMolliePayments('failed');
+      try {
+        await post({ action: 'purchasePlan', planId: 'pl1' });
+        const res = await webhook('vanas', 'tr_test1');
+        expect(res.statusCode).toBe(200);
+        expect(store['mollieCheckouts/tr_test1'].status).toBe('failed');
+        expect(store['creditAccounts/vanas__sporter1'].balance).toBe(3);
+      } finally {
+        mollie.restore();
+      }
+    });
+  });
 });
 
 describe('terugkerende lessen (cron)', () => {

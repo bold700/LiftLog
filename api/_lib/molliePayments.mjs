@@ -56,3 +56,51 @@ export function last4(apiKey) {
 export function secretFieldFor(mode) {
   return mode === 'live' ? 'mollieLiveKey' : 'mollieTestKey';
 }
+
+/**
+ * De sleutel die een studio nu actief gebruikt (`orgs/{orgId}.payments.mode` bepaalt test of
+ * live), of null als er voor die modus nog geen sleutel is gekoppeld.
+ */
+export async function getOrgMollieKey(db, orgId) {
+  const orgSnap = await db.collection('orgs').doc(orgId).get();
+  const mode = orgSnap.exists && orgSnap.data()?.payments?.mode === 'live' ? 'live' : 'test';
+  const secretSnap = await db.collection('orgSecrets').doc(orgId).get();
+  const apiKey = secretSnap.exists ? secretSnap.data()?.[secretFieldFor(mode)] : null;
+  return apiKey ? { mode, apiKey } : null;
+}
+
+/**
+ * Eenmalige betaling aanmaken. `redirectUrl` is waar de browser na afloop naartoe gaat,
+ * `webhookUrl` is waar Mollie de statuswijziging meldt (zie mollieWebhook in api/booking.mjs) —
+ * geeft de betaal-id en de checkout-URL terug waar de browser heen moet.
+ */
+export async function createMolliePayment({ apiKey, amount, description, redirectUrl, webhookUrl, fetchImpl = fetch }) {
+  const res = await fetchImpl('https://api.mollie.com/v2/payments', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      amount: { currency: 'EUR', value: (Math.round(Number(amount) * 100) / 100).toFixed(2) },
+      description,
+      redirectUrl,
+      webhookUrl,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.detail || `Mollie kon geen betaling aanmaken (${res.status}).`);
+  const checkoutUrl = data?._links?.checkout?.href;
+  if (!data?.id || !checkoutUrl) throw new Error('Mollie gaf geen betaal-URL terug.');
+  return { id: data.id, checkoutUrl };
+}
+
+/**
+ * Actuele status van een betaling. Wordt altijd aangeroepen om een webhook-melding te verifiëren
+ * — de melding zelf bevat verder niets vertrouwbaars, alleen het betaal-id.
+ */
+export async function getMolliePayment({ apiKey, paymentId, fetchImpl = fetch }) {
+  const res = await fetchImpl(`https://api.mollie.com/v2/payments/${encodeURIComponent(paymentId)}`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.detail || `Mollie kon de betaling niet ophalen (${res.status}).`);
+  return { id: data.id, status: data.status };
+}

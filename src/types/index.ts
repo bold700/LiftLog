@@ -600,6 +600,8 @@ export interface Charge {
   /** Laatste keer dat de factuur per mail is verstuurd, en aan welk adres. */
   invoiceSentAt: string | null;
   invoiceSentTo: string | null;
+  /** Alleen bij een zelf-aankoop via Mollie: het betaal-id, ter herkenning in Beheer. */
+  molliePaymentId?: string | null;
 }
 
 export type SchemaAudience = 'single' | 'multiple' | 'open' | 'group';
