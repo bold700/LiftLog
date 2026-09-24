@@ -33,6 +33,7 @@ import { designTokens } from '../theme/designTokens';
 import { PushNotificationsCard } from './PushNotificationsCard';
 import { UserAvatar } from './UserAvatar';
 import { AiChatConnectCard } from './AiChatConnectCard';
+import { CalendarFeedCard } from './CalendarFeedCard';
 import { SubscriptionCard } from './SubscriptionCard';
 import { BookingsCard } from './BookingsCard';
 import { StandingBookingsCard } from './StandingBookingsCard';
@@ -693,6 +694,12 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
           {uid && (
             <Box sx={{ order: { xs: 10, md: 0 } }}>
               <AiChatConnectCard userId={uid} />
+            </Box>
+          )}
+
+          {uid && (
+            <Box sx={{ order: { xs: 11, md: 0 } }}>
+              <CalendarFeedCard userId={uid} />
             </Box>
           )}
         </Box>

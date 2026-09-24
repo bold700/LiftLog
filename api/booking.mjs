@@ -38,6 +38,13 @@ import { applyCors } from './_lib/cors.mjs';
  * iedereen met een actieve "elke week"-inschrijving voor dat weekmoment in (plek/saldo toegestaan?
  * geboekt; vol? wachtlijst; geen saldo? die week overgeslagen — zie `lastOutcome` op het document).
  *
+ * GET /kalender/{token} (rewrite naar ?feed={token}): de kalenderfeed (.ics) van een lid, zonder
+ * inloggen — een agenda-app (Google Agenda/Outlook/Apple Agenda) haalt deze URL zelf periodiek op
+ * en kan niet inloggen. De sleutel staat, net als bij mcpKeys, alleen als SHA-256-hash in Firestore
+ * (`calendarFeedTokens`); de app maakt hem aan via het profiel (src/services/calendarFeedService.ts).
+ * Bevat alle lessen (PT, groep, SGT, kickbox — alles is een `classes`-document) waar dit lid voor
+ * geboekt staat of op de wachtlijst voor staat, vanaf vandaag.
+ *
  * Beveiliging:
  *  - Vereist een geldig Firebase ID-token (Bearer), behalve de cron hierboven: die controleert
  *    in plaats daarvan `Authorization: Bearer $CRON_SECRET` (Vercel stuurt dat automatisch mee
@@ -54,6 +61,7 @@ import { businessOf, dueDateOf, reserveInvoiceNumber, vatRateOf } from './_lib/i
 import { buildInvoicePdf, invoiceFileName } from './_lib/invoicePdf.mjs';
 import { logoToDataUrl } from './_lib/invoiceLogo.mjs';
 import { buildInvoiceEmail, mailConfigured, sendViaResend } from './_lib/invoiceEmail.mjs';
+import { hashFeedToken, buildIcsFeed } from './_lib/calendarFeed.mjs';
 import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey } from './_lib/molliePayments.mjs';
 import {
   classFieldUpdates,
@@ -113,7 +121,8 @@ export default async function handler(req, res) {
   if (applyCors(req, res)) return;
   const publicToken = req.method === 'GET' ? String(req.query?.invoice ?? '').trim() : '';
   const isCron = req.method === 'GET' && req.query?.cron === 'generateClasses';
-  if (req.method !== 'POST' && !publicToken && !isCron) return json(res, 405, { error: 'Method not allowed', build: BUILD });
+  const feedToken = req.method === 'GET' ? String(req.query?.feed ?? '').trim() : '';
+  if (req.method !== 'POST' && !publicToken && !isCron && !feedToken) return json(res, 405, { error: 'Method not allowed', build: BUILD });
 
   const admin = getAdmin();
   if (admin.error) {
@@ -123,6 +132,7 @@ export default async function handler(req, res) {
   const { auth, db } = admin;
 
   if (publicToken) return publicInvoice(res, db, publicToken);
+  if (feedToken) return calendarFeed(res, db, feedToken);
   if (isCron) return generateClasses(req, res, db);
 
   const authHeader = req.headers.authorization || req.headers.Authorization || '';
@@ -1088,6 +1098,59 @@ async function publicInvoice(res, db, token) {
   res.setHeader('Cache-Control', 'private, no-store');
   res.setHeader('X-Robots-Tag', 'noindex');
   res.end(Buffer.from(r.pdf));
+}
+
+/**
+ * GET /kalender/{token}: de .ics-kalenderfeed voor wie de link heeft. Geen inlog — een agenda-app
+ * haalt deze URL zelf periodiek op. De sleutel wordt gehasht en tegen `calendarFeedTokens`
+ * opgezocht (zelfde opzet als mcpKeys); alleen de hash staat in Firestore, nooit de sleutel zelf.
+ */
+async function calendarFeed(res, db, token) {
+  const plain = (status, text) => {
+    res.statusCode = status;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.end(text);
+  };
+  if (!/^[A-Za-z0-9_-]{20,}$/.test(token)) return plain(404, 'Kalenderfeed niet gevonden.');
+
+  const tokenSnap = await db.collection('calendarFeedTokens').doc(hashFeedToken(token)).get();
+  if (!tokenSnap.exists) return plain(404, 'Kalenderfeed niet gevonden of ingetrokken.');
+  const userId = String(tokenSnap.data()?.userId ?? '');
+  const profileSnap = userId ? await db.collection('profiles').doc(userId).get() : null;
+  if (!profileSnap?.exists) return plain(404, 'Kalenderfeed niet gevonden.');
+  const profile = profileSnap.data();
+  const orgIds = Array.isArray(profile.orgIds) && profile.orgIds.length ? profile.orgIds : [profile.orgId || 'vanas'];
+
+  const [bookingsSnap, classesSnaps] = await Promise.all([
+    db.collection('bookings').where('userId', '==', userId).get(),
+    Promise.all(orgIds.map((orgId) => db.collection('classes').where('orgId', '==', orgId).get())),
+  ]);
+  const bookingStatusByClass = new Map();
+  for (const d of bookingsSnap.docs) {
+    const b = d.data();
+    if (b.status === 'booked' || b.status === 'waitlist') bookingStatusByClass.set(b.classId, b.status);
+  }
+  const today = todayIso();
+  const classes = [];
+  for (const snap of classesSnaps) {
+    for (const d of snap.docs) {
+      const c = d.data();
+      const bookingStatus = bookingStatusByClass.get(d.id);
+      if (!bookingStatus || String(c.date ?? '') < today) continue;
+      classes.push({ id: d.id, title: String(c.title || 'Les'), date: c.date, startTime: c.startTime || '00:00', endTime: c.endTime || null, room: c.room || null, description: c.description || null, sessionKind: c.sessionKind, cancelledAt: c.cancelledAt || null, bookingStatus });
+    }
+  }
+  classes.sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
+
+  const name = String(profile.displayName || '').trim();
+  const ics = buildIcsFeed({ classes, calendarName: name ? `Mijn lessen — ${name}` : 'Mijn lessen' });
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+  res.setHeader('Content-Disposition', 'inline; filename="mijn-lessen.ics"');
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('X-Robots-Tag', 'noindex');
+  res.end(ics);
 }
 
 // --- Terugkerende lessen (Beheer → Lessoorten → "Terugkerend") -------------------------

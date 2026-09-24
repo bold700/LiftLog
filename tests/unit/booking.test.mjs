@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { classIdForOccurrence, occurrencesForSchedule } from '../../api/_lib/classSchedule.mjs';
+import { hashFeedToken } from '../../api/_lib/calendarFeed.mjs';
 
 /** Bevat na elke test de volledige inhoud van de nagebootste database. */
 let store;
@@ -155,6 +156,27 @@ const post = async (body, uid = 'sporter1') => {
   currentUid = uid;
   const res = makeRes();
   await handler({ method: 'POST', headers: { authorization: 'Bearer x' }, body }, res);
+  return res;
+};
+
+/** Voor niet-JSON GET-antwoorden (kalenderfeed, factuur): ruwe tekst i.p.v. JSON.parse. */
+function makeRawRes() {
+  return {
+    statusCode: 0,
+    headers: {},
+    body: null,
+    setHeader(name, value) {
+      this.headers[name] = value;
+    },
+    end(payload) {
+      this.body = payload;
+    },
+  };
+}
+
+const getFeed = async (token) => {
+  const res = makeRawRes();
+  await handler({ method: 'GET', headers: {}, query: { feed: token } }, res);
   return res;
 };
 
@@ -1083,5 +1105,67 @@ describe('vaste PT-momenten (privé-lessoort per lid)', () => {
     expect(store[`classTypes/${ctId}`]).toBeUndefined();
     expect(store[`standingBookings/${sbId}`]).toBeUndefined();
     expect(store['creditAccounts/vanas__sporter1'].balance).toBe(20);
+  });
+});
+
+describe('kalenderfeed', () => {
+  const token = 'a'.repeat(32);
+
+  beforeEach(() => {
+    store[`calendarFeedTokens/${hashFeedToken(token)}`] = { userId: 'sporter1' };
+    store['bookings/bk1'] = { orgId: 'vanas', classId: 'c1', userId: 'sporter1', status: 'booked', creditsSpent: 1 };
+  });
+
+  it('geeft de .ics-feed terug voor een geldige sleutel', async () => {
+    const res = await getFeed(token);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['Content-Type']).toMatch(/text\/calendar/);
+    expect(res.body).toContain('BEGIN:VCALENDAR');
+    expect(res.body).toContain('SUMMARY:Small Group');
+  });
+
+  it('toont alleen lessen waar dit lid zelf voor geboekt staat', async () => {
+    store['classes/c2'] = {
+      orgId: 'vanas', title: 'Andermans les', date: morgen(), startTime: '10:00',
+      trainerId: 'trainer1', capacity: 5, creditCost: 1, bookedCount: 1, waitlistCount: 0,
+    };
+    store['bookings/bk2'] = { orgId: 'vanas', classId: 'c2', userId: 'sporter2', status: 'booked', creditsSpent: 1 };
+
+    const res = await getFeed(token);
+    expect(res.body).toContain('SUMMARY:Small Group');
+    expect(res.body).not.toContain('Andermans les');
+  });
+
+  it('laat een les uit een andere studio niet zien, ook al staat er per ongeluk een boeking op', async () => {
+    store['classes/cB'] = {
+      orgId: 'studiob', title: 'Studio B les', date: morgen(), startTime: '10:00',
+      trainerId: 'trainerB', capacity: 5, creditCost: 1, bookedCount: 1, waitlistCount: 0,
+    };
+    store['bookings/bk3'] = { orgId: 'studiob', classId: 'cB', userId: 'sporter1', status: 'booked', creditsSpent: 1 };
+
+    const res = await getFeed(token);
+    expect(res.body).not.toContain('Studio B les');
+  });
+
+  it('laat een geannuleerde boeking niet zien', async () => {
+    store['bookings/bk1'].status = 'cancelled';
+    const res = await getFeed(token);
+    expect(res.body).not.toContain('BEGIN:VEVENT');
+  });
+
+  it('geeft 404 voor een onbekende sleutel', async () => {
+    const res = await getFeed('b'.repeat(32));
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('geeft 404 voor een ingetrokken sleutel', async () => {
+    delete store[`calendarFeedTokens/${hashFeedToken(token)}`];
+    const res = await getFeed(token);
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('geeft 404 voor een ongeldig gevormde sleutel, zonder Firestore te raadplegen', async () => {
+    const res = await getFeed('te-kort');
+    expect(res.statusCode).toBe(404);
   });
 });
