@@ -1,10 +1,12 @@
-// Foto-voortgang op de Metingen-pagina: per aanzicht de eerste foto naast de laatste.
-import { useMemo } from 'react';
-import { Box, Typography } from '@mui/material';
+// Foto-voortgang op de Metingen-pagina: per aanzicht de eerste foto naast de laatste, met een
+// "Vergelijken"-knop die desgewenst elk ander paar metingen naast elkaar zet (PhotoCompareDialog).
+import { useMemo, useState } from 'react';
+import { Box, Button, Typography } from '@mui/material';
 import { OutlineCard } from '../layout';
 import type { Measurement } from '../../services/measurementService';
-import { PHOTO_VIEWS } from '../../services/progressPhotoService';
+import { PHOTO_VIEWS, type PhotoView } from '../../services/progressPhotoService';
 import { PANEL_SX, PHOTO_IMG_SX } from './styles';
+import { PhotoCompareDialog } from './PhotoCompareDialog';
 
 interface PhotoProgressPanelProps {
   /** Metingen, oud → nieuw gesorteerd. */
@@ -12,6 +14,8 @@ interface PhotoProgressPanelProps {
 }
 
 export function PhotoProgressPanel({ items }: PhotoProgressPanelProps) {
+  const [compareView, setCompareView] = useState<PhotoView | null>(null);
+
   /** Per aanzicht: eerste en laatste foto (items zijn oud → nieuw gesorteerd). */
   const photoProgress = useMemo(
     () =>
@@ -34,9 +38,16 @@ export function PhotoProgressPanel({ items }: PhotoProgressPanelProps) {
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {photoProgress.map((p) => (
           <Box key={p.view}>
-            <Typography variant="body2" fontWeight={500} sx={{ mb: 0.75 }}>
-              {p.label}aanzicht
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
+              <Typography variant="body2" fontWeight={500}>
+                {p.label}aanzicht
+              </Typography>
+              {p.last != null && (
+                <Button size="small" onClick={() => setCompareView(p.view)} sx={{ textTransform: 'none', minWidth: 0, py: 0 }}>
+                  Vergelijken
+                </Button>
+              )}
+            </Box>
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 1 }}>
               {[
                 { m: p.first, tag: 'Eerste' },
@@ -87,6 +98,7 @@ export function PhotoProgressPanel({ items }: PhotoProgressPanelProps) {
           </Box>
         ))}
       </Box>
+      {compareView && <PhotoCompareDialog open onClose={() => setCompareView(null)} items={items} initialView={compareView} />}
     </OutlineCard>
   );
 }
