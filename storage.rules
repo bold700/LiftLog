@@ -1,8 +1,11 @@
 rules_version = '2';
 
 // Firebase Storage-regels voor LiftLog (project vanas-d1a25).
-// Let op: deze worden NIET door de Vercel-push gedeployed. Plakken in
-// Firebase Console → Storage → Rules, of: npm run deploy:storage (na firebase login).
+// Deze rollen automatisch uit via GitHub Actions bij een wijziging op main (zie
+// .github/workflows/ci.yml, job "Firestore- en storage-regels uitrollen"). Lukt dat niet
+// (403, ontbrekende IAM-rol), dan blijft het bij een waarschuwing in die run — zie
+// docs/ROLLEN-EN-RECHTEN.md. Los uitrollen kan ook: npm run deploy:storage (na firebase login),
+// of plakken in Firebase Console → Storage → Rules.
 service firebase.storage {
   match /b/{bucket}/o {
 
@@ -32,6 +35,22 @@ service firebase.storage {
       return firestore.get(/databases/(default)/documents/profiles/$(request.auth.uid)).data.orgId;
     }
 
+    // Voor cross-studio isolatie bij `progress` hieronder: welke studio's iemand meetelt, net als
+    // `myOrgs()`/`sameOrg()` in firestore.rules. Zonder dit zou een trainer van studio B de
+    // voortgangsfoto's van een sporter in studio A kunnen lezen zolang hij het pad kent — dat mag
+    // nooit, ook al is de foto op zich geen geheim binnen de eigen studio.
+    function defaultOrg() {
+      return 'vanas';
+    }
+    function orgIdsOf(profileData) {
+      return profileData.get('orgIds', [profileData.get('orgId', defaultOrg())]);
+    }
+    function isStaffInSameOrgAs(uid) {
+      return isTrainerOrAdmin()
+        && orgIdsOf(firestore.get(/databases/(default)/documents/profiles/$(request.auth.uid)).data)
+             .hasAny(orgIdsOf(firestore.get(/databases/(default)/documents/profiles/$(uid)).data));
+    }
+
     // Studiologo: publiek leesbaar (staat straks ook op de inlogpagina), alleen een beheerder van
     // díe studio schrijft. Een logo is klein; 2 MB is ruim.
     match /orgLogos/{orgId} {
@@ -53,11 +72,13 @@ service firebase.storage {
       allow write: if signedIn() && request.auth.uid == uid && isImageUnder(5 * 1024 * 1024);
     }
 
-    // Voortgangsfoto's bij metingen: alleen de sporter zelf en trainers/beheerders.
+    // Voortgangsfoto's bij metingen: alleen de sporter zelf en trainers/beheerders van diens eigen
+    // studio (isStaffInSameOrgAs, niet zomaar isTrainerOrAdmin() — anders zou elke trainer van elke
+    // studio deze kunnen lezen zolang hij het pad kent).
     match /progress/{uid}/{measurementId}/{view} {
-      allow read: if signedIn() && (request.auth.uid == uid || isTrainerOrAdmin());
+      allow read: if signedIn() && (request.auth.uid == uid || isStaffInSameOrgAs(uid));
       allow write: if signedIn()
-        && (request.auth.uid == uid || isTrainerOrAdmin())
+        && (request.auth.uid == uid || isStaffInSameOrgAs(uid))
         && (request.resource == null || isImageUnder(5 * 1024 * 1024));
     }
   }

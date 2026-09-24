@@ -19,6 +19,8 @@ const profiles = {
 let currentUid = 'trainerA';
 let sentPayloads = [];
 let deletedTokens = [];
+/** Tellerstand van de dagelijkse limiet per rateLimits-document, zodat we die echt kunnen uitproberen. */
+let rateLimitDocs = {};
 
 vi.mock('../../api/_lib/firebaseAdmin.mjs', () => ({
   getAdmin: () => ({
@@ -26,7 +28,11 @@ vi.mock('../../api/_lib/firebaseAdmin.mjs', () => ({
     db: {
       collection: (name) => ({
         doc: (id) => ({
-          get: async () => ({ exists: profiles[id] !== undefined, data: () => profiles[id] }),
+          id,
+          get: async () =>
+            name === 'rateLimits'
+              ? { exists: rateLimitDocs[id] !== undefined, data: () => rateLimitDocs[id] }
+              : { exists: profiles[id] !== undefined, data: () => profiles[id] },
           delete: async () => {
             deletedTokens.push(id);
           },
@@ -38,6 +44,13 @@ vi.mock('../../api/_lib/firebaseAdmin.mjs', () => ({
           }),
         }),
       }),
+      runTransaction: async (fn) =>
+        fn({
+          get: async (ref) => ref.get(),
+          set: (ref, value) => {
+            rateLimitDocs[ref.id] = value;
+          },
+        }),
     },
   }),
 }));
@@ -78,6 +91,7 @@ const post = async (body, { uid = 'trainerA', token = 'geldig' } = {}) => {
 beforeEach(() => {
   sentPayloads = [];
   deletedTokens = [];
+  rateLimitDocs = {};
 });
 
 describe('meldingen versturen', () => {
@@ -143,5 +157,17 @@ describe('meldingen versturen', () => {
   it('haalt regeleindes uit de voorvertoning', async () => {
     await post({ kind: 'message', recipientId: 'sporterA', preview: 'regel een\n\nregel twee' }, { uid: 'trainerA' });
     expect(sentPayloads[0].notification.body).toBe('regel een regel twee');
+  });
+
+  it('limiteert het aantal meldingen per dag, zodat deze route niet als spamkanaal te misbruiken is', async () => {
+    for (let i = 0; i < 200; i++) {
+      const res = await post({ kind: 'message', recipientId: 'sporterA' }, { uid: 'trainerA' });
+      expect(res.statusCode).toBe(200);
+    }
+    const res = await post({ kind: 'message', recipientId: 'sporterA' }, { uid: 'trainerA' });
+    expect(res.statusCode).toBe(429);
+    // Een andere afzender heeft een eigen teller.
+    const other = await post({ kind: 'message', recipientId: 'vreemdeA' }, { uid: 'adminA' });
+    expect(other.statusCode).toBe(200);
   });
 });

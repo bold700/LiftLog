@@ -20,9 +20,13 @@ import { applyCors } from './_lib/cors.mjs';
  */
 import { getAdmin } from './_lib/firebaseAdmin.mjs';
 import { orgIdOf } from './_lib/liftlogData.mjs';
+import { enforceRateLimit } from './_lib/requireUser.mjs';
 import { getMessaging } from 'firebase-admin/messaging';
 
 const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Ruim genoeg voor normaal gebruik (elk bericht/schema/check-in triggert er hooguit één); voorkomt spam. */
+const RATE_LIMIT_PER_DAY = 200;
 
 /** Alleen deze gebeurtenissen bestaan; de teksten staan hier, niet in de aanvraag. */
 const KINDS = {
@@ -80,6 +84,8 @@ export default async function handler(req, res) {
   } catch {
     return json(res, 401, { error: 'Sessie verlopen. Log opnieuw in.', build: BUILD });
   }
+
+  if (!(await enforceRateLimit(admin.db, res, uid, 'notify', RATE_LIMIT_PER_DAY, DAY_MS))) return;
 
   let body;
   try {
