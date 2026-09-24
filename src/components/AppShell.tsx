@@ -322,7 +322,11 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
           sx={{ position: 'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'background.default', pt: 'env(safe-area-inset-top, 0px)' }}
         >
           <MobileTopBar title={title} onNavigate={onNavigate} profileTabIndex={profileTabIndex} />
-          <Box className="mobile-scroll" sx={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehaviorY: 'contain' }}>
+          {/* Geen -webkit-overflow-scrolling: touch: dat is sinds iOS 13 niet meer nodig (overflow: auto
+              scrolt al met momentum) en kan juist zorgen dat het scrollen "vast" blijft zitten zodra je
+              een aanraking op een niet-scrollend broertje (bijv. de bovenbalk) begint — pas navigeren
+              naar een ander scherm (en dus een verse DOM) hielp dat weer los. */}
+          <Box className="mobile-scroll" sx={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', overscrollBehaviorY: 'contain' }}>
             {children}
           </Box>
           {floating}
