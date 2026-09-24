@@ -6,6 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#F2E4D3" />
     <meta name="description" content="VORM — trainingsschema's, voeding en voortgang voor personal trainers en boutique studio's" />
+    <!-- "Zet op beginscherm" (iOS): zonder deze tags kiest iOS zelf een statusbalkstijl voor de
+         standalone-app, en dat viel niet altijd samen met hoe onze CSS de veilige zone (env(safe-area-inset-top))
+         gebruikt — content kon dan over de statusbalk/Dynamic Island heen vallen. black-translucent
+         maakt expliciet dat de pagina edge-to-edge tekent en zelf de veilige zone aanhoudt, zoals de rest
+         van de app al doet. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="VORM" />
     <link rel="apple-touch-icon" sizes="180x180" href="/app-icon.svg" />
     <link rel="apple-touch-icon" sizes="192x192" href="/app-icon.svg" />
     <link rel="apple-touch-icon" sizes="512x512" href="/app-icon.svg" />
