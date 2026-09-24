@@ -1,8 +1,9 @@
 /**
- * Profiel-kaart: de eigen lessen (PT, groepslessen, SGT, kickbox — alles waar je voor geboekt
- * staat) als abonneerbare agenda in Google Agenda, Outlook of Apple Agenda.
- * De URL bevat een geheime sleutel; hij wordt getoond en op dit apparaat onthouden (niet elders
- * terug te halen — "vernieuwen" maakt een nieuwe URL en maakt de oude ongeldig).
+ * Profiel-kaart: lessen als abonneerbare agenda in Google Agenda, Outlook of Apple Agenda.
+ * Twee soorten (zie calendarFeedService.ts): 'sporter' (default) toont de eigen geboekte lessen,
+ * 'trainer' toont de lessen die je zelf geeft. De URL bevat een geheime sleutel; hij wordt getoond
+ * en op dit apparaat onthouden (niet elders terug te halen — "vernieuwen" maakt een nieuwe URL en
+ * maakt de oude van hetzelfde soort ongeldig).
  */
 import { useState } from 'react';
 import { Alert, Box, Button, Typography } from '@mui/material';
@@ -10,24 +11,44 @@ import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import { ContentCard } from './layout';
-import { createCalendarFeedUrl, getCachedCalendarFeedUrl } from '../services/calendarFeedService';
+import { createCalendarFeedUrl, getCachedCalendarFeedUrl, type CalendarFeedKind } from '../services/calendarFeedService';
 
 interface Props {
   userId: string;
+  kind?: CalendarFeedKind;
 }
 
-export function CalendarFeedCard({ userId }: Props) {
-  const [url, setUrl] = useState<string | null>(() => getCachedCalendarFeedUrl());
+const COPY = {
+  sporter: {
+    title: 'Lessen in je eigen agenda',
+    description:
+      'Maak een kalenderlink en abonneer je eigen agenda (Google Agenda, Outlook of Apple Agenda) erop. Elke les waar je voor ' +
+      'geboekt staat of op de wachtlijst voor staat — personal training, groepsles, small group of kickbox — verschijnt dan ' +
+      'automatisch, en blijft bijwerken als er iets verandert.',
+    confirmRegenerate: 'Een nieuwe link maken zet de huidige link uit — een agenda die daarop is geabonneerd, stopt met bijwerken. Doorgaan?',
+  },
+  trainer: {
+    title: 'Lessen die ik geef, in mijn agenda',
+    description:
+      'Maak een kalenderlink en abonneer je eigen agenda erop. Elke les die op jouw naam staat om te geven — personal training, ' +
+      'groepsles, small group of kickbox — verschijnt dan automatisch, inclusief aflastingen, en blijft bijwerken.',
+    confirmRegenerate: 'Een nieuwe link maken zet de huidige link uit — een agenda die daarop is geabonneerd, stopt met bijwerken. Doorgaan?',
+  },
+} as const;
+
+export function CalendarFeedCard({ userId, kind = 'sporter' }: Props) {
+  const copy = COPY[kind];
+  const [url, setUrl] = useState<string | null>(() => getCachedCalendarFeedUrl(kind));
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleCreate = async () => {
-    if (url && !window.confirm('Een nieuwe link maken zet de huidige link uit — een agenda die daarop is geabonneerd, stopt met bijwerken. Doorgaan?')) return;
+    if (url && !window.confirm(copy.confirmRegenerate)) return;
     setBusy(true);
     setError(null);
     try {
-      const created = await createCalendarFeedUrl(userId);
+      const created = await createCalendarFeedUrl(userId, kind);
       setUrl(created);
       setCopied(false);
     } catch (e) {
@@ -53,13 +74,11 @@ export function CalendarFeedCard({ userId }: Props) {
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
         <CalendarMonthRoundedIcon sx={{ color: 'text.secondary' }} />
         <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
-          Lessen in je eigen agenda
+          {copy.title}
         </Typography>
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Maak een kalenderlink en abonneer je eigen agenda (Google Agenda, Outlook of Apple Agenda) erop. Elke les waar je voor
-        geboekt staat of op de wachtlijst voor staat — personal training, groepsles, small group of kickbox — verschijnt dan
-        automatisch, en blijft bijwerken als er iets verandert.
+        {copy.description}
       </Typography>
 
       {error && (

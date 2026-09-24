@@ -350,7 +350,7 @@ export const en: Messages = {
     addFoodButton: 'Add food',
     previous: 'Previous',
     next: 'Next',
-    addFood: { search: 'Search', photo: 'Photo', barcode: 'Barcode' },
+    addFood: { photo: 'Photo', barcode: 'Barcode' },
     recognizingPhoto: 'Recognising photo…',
     lookingUpBarcode: 'Looking up barcode…',
     photoErrors: {

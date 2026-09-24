@@ -1104,6 +1104,9 @@ async function publicInvoice(res, db, token) {
  * GET /kalender/{token}: de .ics-kalenderfeed voor wie de link heeft. Geen inlog — een agenda-app
  * haalt deze URL zelf periodiek op. De sleutel wordt gehasht en tegen `calendarFeedTokens`
  * opgezocht (zelfde opzet als mcpKeys); alleen de hash staat in Firestore, nooit de sleutel zelf.
+ * Twee soorten token (`kind`, ontbreekt = 'sporter' voor tokens van vóór dit onderscheid):
+ * 'sporter' geeft de lessen waar het lid voor geboekt staat, 'trainer' geeft de lessen die diegene
+ * zelf geeft (classes.trainerId), zoals ook "Mijn dag" op de Lessen-pagina filtert.
  */
 async function calendarFeed(res, db, token) {
   const plain = (status, text) => {
@@ -1116,35 +1119,48 @@ async function calendarFeed(res, db, token) {
 
   const tokenSnap = await db.collection('calendarFeedTokens').doc(hashFeedToken(token)).get();
   if (!tokenSnap.exists) return plain(404, 'Kalenderfeed niet gevonden of ingetrokken.');
-  const userId = String(tokenSnap.data()?.userId ?? '');
+  const tokenData = tokenSnap.data() || {};
+  const userId = String(tokenData.userId ?? '');
+  const kind = tokenData.kind === 'trainer' ? 'trainer' : 'sporter';
   const profileSnap = userId ? await db.collection('profiles').doc(userId).get() : null;
   if (!profileSnap?.exists) return plain(404, 'Kalenderfeed niet gevonden.');
   const profile = profileSnap.data();
+  if (kind === 'trainer' && profile.role !== 'trainer' && profile.role !== 'admin') return plain(404, 'Kalenderfeed niet gevonden.');
   const orgIds = Array.isArray(profile.orgIds) && profile.orgIds.length ? profile.orgIds : [profile.orgId || 'vanas'];
 
-  const [bookingsSnap, classesSnaps] = await Promise.all([
-    db.collection('bookings').where('userId', '==', userId).get(),
-    Promise.all(orgIds.map((orgId) => db.collection('classes').where('orgId', '==', orgId).get())),
-  ]);
-  const bookingStatusByClass = new Map();
-  for (const d of bookingsSnap.docs) {
-    const b = d.data();
-    if (b.status === 'booked' || b.status === 'waitlist') bookingStatusByClass.set(b.classId, b.status);
-  }
+  const classesSnaps = await Promise.all(orgIds.map((orgId) => db.collection('classes').where('orgId', '==', orgId).get()));
   const today = todayIso();
   const classes = [];
-  for (const snap of classesSnaps) {
-    for (const d of snap.docs) {
-      const c = d.data();
-      const bookingStatus = bookingStatusByClass.get(d.id);
-      if (!bookingStatus || String(c.date ?? '') < today) continue;
-      classes.push({ id: d.id, title: String(c.title || 'Les'), date: c.date, startTime: c.startTime || '00:00', endTime: c.endTime || null, room: c.room || null, description: c.description || null, sessionKind: c.sessionKind, cancelledAt: c.cancelledAt || null, bookingStatus });
+  if (kind === 'trainer') {
+    for (const snap of classesSnaps) {
+      for (const d of snap.docs) {
+        const c = d.data();
+        if (c.trainerId !== userId || String(c.date ?? '') < today) continue;
+        classes.push({ id: d.id, title: String(c.title || 'Les'), date: c.date, startTime: c.startTime || '00:00', endTime: c.endTime || null, room: c.room || null, description: c.description || null, sessionKind: c.sessionKind, cancelledAt: c.cancelledAt || null, bookingStatus: 'booked' });
+      }
+    }
+  } else {
+    const bookingsSnap = await db.collection('bookings').where('userId', '==', userId).get();
+    const bookingStatusByClass = new Map();
+    for (const d of bookingsSnap.docs) {
+      const b = d.data();
+      if (b.status === 'booked' || b.status === 'waitlist') bookingStatusByClass.set(b.classId, b.status);
+    }
+    for (const snap of classesSnaps) {
+      for (const d of snap.docs) {
+        const c = d.data();
+        const bookingStatus = bookingStatusByClass.get(d.id);
+        if (!bookingStatus || String(c.date ?? '') < today) continue;
+        classes.push({ id: d.id, title: String(c.title || 'Les'), date: c.date, startTime: c.startTime || '00:00', endTime: c.endTime || null, room: c.room || null, description: c.description || null, sessionKind: c.sessionKind, cancelledAt: c.cancelledAt || null, bookingStatus });
+      }
     }
   }
   classes.sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
 
   const name = String(profile.displayName || '').trim();
-  const ics = buildIcsFeed({ classes, calendarName: name ? `Mijn lessen — ${name}` : 'Mijn lessen' });
+  const calendarName =
+    kind === 'trainer' ? (name ? `Lessen die ik geef — ${name}` : 'Lessen die ik geef') : name ? `Mijn lessen — ${name}` : 'Mijn lessen';
+  const ics = buildIcsFeed({ classes, calendarName });
   res.statusCode = 200;
   res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
   res.setHeader('Content-Disposition', 'inline; filename="mijn-lessen.ics"');

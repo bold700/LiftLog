@@ -1168,4 +1168,49 @@ describe('kalenderfeed', () => {
     const res = await getFeed('te-kort');
     expect(res.statusCode).toBe(404);
   });
+
+  describe('trainerfeed', () => {
+    const trainerToken = 't'.repeat(32);
+
+    beforeEach(() => {
+      store[`calendarFeedTokens/${hashFeedToken(trainerToken)}`] = { userId: 'trainer1', kind: 'trainer' };
+    });
+
+    it('toont lessen die de trainer zelf geeft, ongeacht boekingen', async () => {
+      const res = await getFeed(trainerToken);
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('SUMMARY:Small Group');
+    });
+
+    it('toont geen lessen van een andere trainer', async () => {
+      store['classes/c2'] = {
+        orgId: 'vanas', title: 'Les van collega', date: morgen(), startTime: '10:00',
+        trainerId: 'trainer2', capacity: 5, creditCost: 1, bookedCount: 0, waitlistCount: 0,
+      };
+      const res = await getFeed(trainerToken);
+      expect(res.body).not.toContain('Les van collega');
+    });
+
+    it('laat een afgelaste les zien als geannuleerd i.p.v. hem te verbergen', async () => {
+      store['classes/c1'].cancelledAt = '2026-09-06T10:00:00.000Z';
+      const res = await getFeed(trainerToken);
+      expect(res.body).toContain('SUMMARY:Small Group');
+      expect(res.body).toContain('STATUS:CANCELLED');
+    });
+
+    it('geeft 404 voor een trainerfeed-token op een sporter-profiel', async () => {
+      store[`calendarFeedTokens/${hashFeedToken(trainerToken)}`] = { userId: 'sporter1', kind: 'trainer' };
+      const res = await getFeed(trainerToken);
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('werkt ook voor een admin-profiel', async () => {
+      store['profiles/admin1'] = { userId: 'admin1', orgId: 'vanas', orgIds: ['vanas'], role: 'admin' };
+      store['classes/c1'].trainerId = 'admin1';
+      store[`calendarFeedTokens/${hashFeedToken(trainerToken)}`] = { userId: 'admin1', kind: 'trainer' };
+      const res = await getFeed(trainerToken);
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('SUMMARY:Small Group');
+    });
+  });
 });
