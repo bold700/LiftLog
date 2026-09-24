@@ -30,6 +30,16 @@ import { applyCors } from './_lib/cors.mjs';
  *   { action: 'mailStatus' }                           is versturen ingericht? (staf)
  *   { action: 'savePaymentKey', orgId, mode, apiKey }  Mollie-sleutel koppelen, geverifieerd (beheerder)
  *   { action: 'removePaymentKey', orgId, mode }        Mollie-sleutel loskoppelen (beheerder)
+ *   { action: 'purchasePlan', planId }                 sporter koopt zelf een betaald abonnement/strippenkaart
+ *                                                        (elk lid, voor zichzelf); geeft een Mollie-checkout-URL
+ *                                                        terug. Er wordt nog niets toegekend — dat gebeurt pas
+ *                                                        als de webhook hieronder een geslaagde betaling meldt.
+ *
+ * POST /mollie-webhook/{orgId} (rewrite naar ?mollieWebhook={orgId}): Mollie meldt hier elke
+ * statuswijziging van een betaling (form-encoded, alleen `id`). De melding zelf is niet
+ * vertrouwbaar; de status wordt altijd rechtstreeks bij Mollie opgevraagd met de sleutel van de
+ * studio. Bij "betaald": lidmaatschap/credits activeren (zelfde stappen als `assign`) en de
+ * factuur automatisch mailen. Geen Firebase-login — dit komt van Mollie's servers.
  *
  * GET /api/cron/generate-classes (rewrite naar ?cron=generateClasses): dagelijkse Vercel-cron die
  * lessen van een terugkerende lessoort op het rooster zet (zie api/_lib/classSchedule.mjs). Zit
@@ -62,7 +72,8 @@ import { buildInvoicePdf, invoiceFileName } from './_lib/invoicePdf.mjs';
 import { logoToDataUrl } from './_lib/invoiceLogo.mjs';
 import { buildInvoiceEmail, mailConfigured, sendViaResend } from './_lib/invoiceEmail.mjs';
 import { hashFeedToken, buildIcsFeed } from './_lib/calendarFeed.mjs';
-import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey } from './_lib/molliePayments.mjs';
+import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey, getOrgMollieKey, createMolliePayment, getMolliePayment } from './_lib/molliePayments.mjs';
+import { enforceRateLimit } from './_lib/requireUser.mjs';
 import {
   classFieldUpdates,
   classIdForOccurrence,
@@ -122,6 +133,7 @@ export default async function handler(req, res) {
   const publicToken = req.method === 'GET' ? String(req.query?.invoice ?? '').trim() : '';
   const isCron = req.method === 'GET' && req.query?.cron === 'generateClasses';
   const feedToken = req.method === 'GET' ? String(req.query?.feed ?? '').trim() : '';
+  const mollieWebhookOrgId = req.method === 'POST' ? String(req.query?.mollieWebhook ?? '').trim() : '';
   if (req.method !== 'POST' && !publicToken && !isCron && !feedToken) return json(res, 405, { error: 'Method not allowed', build: BUILD });
 
   const admin = getAdmin();
@@ -134,6 +146,7 @@ export default async function handler(req, res) {
   if (publicToken) return publicInvoice(res, db, publicToken);
   if (feedToken) return calendarFeed(res, db, feedToken);
   if (isCron) return generateClasses(req, res, db);
+  if (mollieWebhookOrgId) return mollieWebhook(req, res, db, mollieWebhookOrgId);
 
   const authHeader = req.headers.authorization || req.headers.Authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
@@ -212,6 +225,8 @@ export default async function handler(req, res) {
       case 'sendInvoice':
         if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan een factuur versturen.', build: BUILD });
         return await sendInvoice(res, db, myOrgs, String(body.chargeId ?? '').trim());
+      case 'purchasePlan':
+        return await purchasePlan(req, res, db, uid, myOrgs, body);
       default:
         return json(res, 400, { error: 'Onbekende actie.', build: BUILD });
     }
@@ -900,6 +915,127 @@ async function unassign(res, db, uid, myOrgs, body) {
 }
 
 /**
+ * Sporter koopt zelf een betaald abonnement of strippenkaart. Er wordt hier nog niets toegekend —
+ * dat gebeurt pas als de webhook (mollieWebhook, verderop) een geslaagde betaling meldt. Een
+ * `mollieCheckouts`-post (server-only) koppelt de Mollie-betaling aan wie wat koopt.
+ */
+async function purchasePlan(req, res, db, uid, myOrgs, body) {
+  // Elke aanroep maakt een echte Mollie-betaling aan en een Firestore-post; een limiet voorkomt
+  // misbruik (spam-aanroepen) zonder een sporter die een mislukte betaling gewoon overdoet te hinderen.
+  if (!(await enforceRateLimit(db, res, uid, 'purchasePlan', 20, 24 * 60 * 60 * 1000))) return;
+
+  const planId = String(body?.planId ?? '').trim();
+  if (!planId) return json(res, 400, { error: 'Geen abonnement opgegeven.', build: BUILD });
+
+  const planSnap = await db.collection('plans').doc(planId).get();
+  if (!planSnap.exists) return json(res, 404, { error: 'Abonnement niet gevonden.', build: BUILD });
+  const plan = { id: planSnap.id, ...planSnap.data() };
+  const orgId = orgIdOf(plan.orgId);
+  if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Dit abonnement hoort niet bij jouw studio.', build: BUILD });
+  if (plan.status !== 'active') return json(res, 409, { error: 'Dit abonnement is niet meer beschikbaar.', build: BUILD });
+  if (plan.availableTo === 'invite') return json(res, 403, { error: 'Dit abonnement is alleen op uitnodiging.', build: BUILD });
+  const price = Number(plan.price) || 0;
+  if (price <= 0) return json(res, 409, { error: 'Dit abonnement is gratis; vraag de studio om het voor je te activeren.', build: BUILD });
+
+  const mollie = await getOrgMollieKey(db, orgId);
+  if (!mollie) return json(res, 409, { error: 'Deze studio heeft nog geen betalingen ingesteld.', build: BUILD });
+
+  const orgSnap = await db.collection('orgs').doc(orgId).get();
+  const orgName = orgSnap.exists ? String(orgSnap.data()?.name || orgId) : orgId;
+  const origin = appOrigin(req);
+
+  let payment;
+  try {
+    payment = await createMolliePayment({
+      apiKey: mollie.apiKey,
+      amount: price,
+      description: `${plan.name} — ${orgName}`,
+      redirectUrl: `${origin}/?aankoop=${encodeURIComponent(planId)}#profiel`,
+      webhookUrl: `${origin}/mollie-webhook/${orgId}`,
+    });
+  } catch (e) {
+    console.error('[booking] Mollie-betaling aanmaken mislukt:', e);
+    return json(res, 502, { error: 'Betalen bij Mollie lukte nu niet. Probeer het zo nog eens.', build: BUILD });
+  }
+
+  const nowIso = new Date().toISOString();
+  await db.collection('mollieCheckouts').doc(payment.id).set({
+    orgId,
+    userId: uid,
+    planId,
+    mode: mollie.mode,
+    status: 'pending',
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  });
+
+  return json(res, 200, { checkoutUrl: payment.checkoutUrl, build: BUILD });
+}
+
+/**
+ * Een geslaagde zelf-aankoop verwerken: nieuw lidmaatschap (een lopend lidmaatschap stopt — zelfde
+ * regel als wanneer een trainer een abonnement toekent, zie `assign`), credits bijschrijven, en de
+ * post meteen als betaald boeken met een factuurnummer. Wordt aangeroepen vanuit mollieWebhook.
+ */
+async function settlePurchase(db, checkout, paymentId) {
+  const { orgId, userId, planId } = checkout;
+  const planSnap = await db.collection('plans').doc(planId).get();
+  if (!planSnap.exists) throw new Error('Abonnement bestaat niet meer.');
+  const plan = { id: planSnap.id, ...planSnap.data() };
+  const nowIso = new Date().toISOString();
+  const current = await activeMembership(db, orgId, userId);
+  const membership = newMembership({ id: newId('mb'), orgId, userId, plan, nowIso, byUserId: userId });
+  const credits = plan.credits == null ? 0 : Number(plan.credits) || 0;
+
+  const chargeId = await db.runTransaction(async (tx) => {
+    // Eerste lezing, en meteen de bewaking tegen dubbel verwerken: Mollie (of een trage tweede
+    // aanroep) kan dezelfde melding twee keer sturen. Alleen de transactie die "pending" nog ziet
+    // mag doorgaan; Firestore herhaalt een transactie zelf al bij een conflicterende schrijving,
+    // dus dit is ook onder gelijktijdige meldingen veilig.
+    const checkoutRef = db.collection('mollieCheckouts').doc(paymentId);
+    const checkoutSnap = await tx.get(checkoutRef);
+    if (!checkoutSnap.exists || checkoutSnap.data().status !== 'pending') return null;
+
+    const accountRef = db.collection('creditAccounts').doc(accountId(orgId, userId));
+    const aSnap = await tx.get(accountRef);
+    const saldo = Number(aSnap.exists ? aSnap.data().balance : 0) || 0;
+    const orgRef = db.collection('orgs').doc(orgId);
+    const orgSnap = await tx.get(orgRef);
+
+    if (current) tx.set(db.collection('memberships').doc(current.id), { status: 'cancelled', cancelledAt: nowIso, updatedAt: nowIso }, { merge: true });
+    tx.set(db.collection('memberships').doc(membership.id), membership);
+
+    const invoiceNumber = reserveInvoiceNumber(tx, orgRef, orgSnap, nowIso);
+    const charge = newCharge({ id: newId('ch'), orgId, userId, plan, membershipId: membership.id, periodStartIso: nowIso, nowIso, invoiceNumber });
+    tx.set(db.collection('charges').doc(charge.id), { ...charge, status: 'paid', paidAt: nowIso, paidBy: 'mollie', molliePaymentId: paymentId });
+
+    if (credits > 0) {
+      tx.set(accountRef, { orgId, userId, balance: saldo + credits, updatedAt: nowIso }, { merge: true });
+      tx.set(db.collection('creditLedger').doc(newId('cl')), {
+        orgId,
+        userId,
+        delta: credits,
+        reason: 'plan',
+        planId: plan.id,
+        note: `${plan.name} gekocht`,
+        byUserId: userId,
+        createdAt: nowIso,
+      });
+    }
+    tx.set(checkoutRef, { status: 'completed', chargeId: charge.id, completedAt: nowIso, updatedAt: nowIso }, { merge: true });
+    return charge.id;
+  });
+
+  if (!chargeId) return; // al verwerkt door een gelijktijdige melding; niets meer te doen
+
+  try {
+    await deliverInvoiceEmail(db, chargeId);
+  } catch (e) {
+    console.error('[booking] factuurmail na aankoop mislukt (aankoop blijft geldig):', e);
+  }
+}
+
+/**
  * Alle openstaande verlengingen en verlopen kaarten van een studio verwerken. Wordt aangeroepen
  * zodra staf Beheer opent; idempotent, dus vaker aanroepen kan geen kwaad.
  */
@@ -992,21 +1128,17 @@ async function invoice(res, db, uid, myOrgs, isStaff, chargeId) {
 }
 
 /**
- * Factuur per mail naar het lid, met de PDF als bijlage, via Resend. Alleen staf van de studio.
- * Op de post komt te staan wanneer en naar welk adres hij ging; opnieuw versturen mag altijd.
+ * Kern van 'factuur mailen', los van het HTTP-antwoord — ook gebruikt na een automatische
+ * Mollie-betaling (mollieWebhook). Geeft null terug als mail niet ingericht is of het lid geen
+ * e-mailadres heeft; de aanroeper beslist dan zelf wat daarmee te doen (foutmelding, of gewoon
+ * doorgaan — een aankoop mag nooit vastlopen op een niet-verstuurde factuurmail).
  */
-async function sendInvoice(res, db, myOrgs, chargeId) {
-  if (!chargeId) return json(res, 400, { error: 'Geen post opgegeven.', build: BUILD });
-  if (!mailConfigured()) return json(res, 409, { error: 'Mail is nog niet ingericht: zet RESEND_API_KEY en INVOICE_FROM_EMAIL in Vercel.', build: BUILD });
-  const peek = await db.collection('charges').doc(chargeId).get();
-  if (!peek.exists) return json(res, 404, { error: 'Post niet gevonden.', build: BUILD });
-  const orgId = orgIdOf(peek.data().orgId);
-  if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Deze post is niet van jouw studio.', build: BUILD });
-
+async function deliverInvoiceEmail(db, chargeId) {
+  if (!mailConfigured()) return null;
   const charge = await loadInvoiceCharge(db, chargeId);
   const r = await renderInvoice(db, charge);
   const to = r.member.email.trim();
-  if (!to) return json(res, 409, { error: 'Dit lid heeft geen e-mailadres.', build: BUILD });
+  if (!to) return null;
 
   const mail = buildInvoiceEmail({ lang: r.lang, business: r.business, charge, member: r.member, logoUrl: r.logoPrintUrl, brandColor: r.brandColor });
   const messageId = await sendViaResend({
@@ -1020,7 +1152,77 @@ async function sendInvoice(res, db, myOrgs, chargeId) {
   });
   const sentAt = new Date().toISOString();
   await db.collection('charges').doc(chargeId).set({ invoiceSentAt: sentAt, invoiceSentTo: to, invoiceMessageId: messageId, updatedAt: sentAt }, { merge: true });
-  return json(res, 200, { invoiceNumber: charge.invoiceNumber, sentTo: to, sentAt, build: BUILD });
+  return { invoiceNumber: charge.invoiceNumber, sentTo: to, sentAt };
+}
+
+/**
+ * Factuur per mail naar het lid, met de PDF als bijlage, via Resend. Alleen staf van de studio.
+ * Op de post komt te staan wanneer en naar welk adres hij ging; opnieuw versturen mag altijd.
+ */
+async function sendInvoice(res, db, myOrgs, chargeId) {
+  if (!chargeId) return json(res, 400, { error: 'Geen post opgegeven.', build: BUILD });
+  if (!mailConfigured()) return json(res, 409, { error: 'Mail is nog niet ingericht: zet RESEND_API_KEY en INVOICE_FROM_EMAIL in Vercel.', build: BUILD });
+  const peek = await db.collection('charges').doc(chargeId).get();
+  if (!peek.exists) return json(res, 404, { error: 'Post niet gevonden.', build: BUILD });
+  const orgId = orgIdOf(peek.data().orgId);
+  if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Deze post is niet van jouw studio.', build: BUILD });
+
+  const result = await deliverInvoiceEmail(db, chargeId);
+  if (!result) return json(res, 409, { error: 'Dit lid heeft geen e-mailadres.', build: BUILD });
+  return json(res, 200, { invoiceNumber: result.invoiceNumber, sentTo: result.sentTo, sentAt: result.sentAt, build: BUILD });
+}
+
+/**
+ * Mollie meldt hier elke statuswijziging van een betaling (form-encoded, alleen `id` — verder
+ * niets vertrouwbaars). De status wordt daarom altijd rechtstreeks bij Mollie opgevraagd, met de
+ * sleutel van de studio, vóórdat er iets gebeurt. Idempotent: een dubbele of te late melding voor
+ * een al verwerkte betaling doet niets. Antwoordt altijd snel; alleen bij een onverwachte fout
+ * krijgt Mollie een 500, zodat hij het vanzelf opnieuw probeert.
+ */
+async function mollieWebhook(req, res, db, orgId) {
+  const plain = (status, text) => {
+    res.statusCode = status;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.end(text);
+  };
+  let body;
+  try {
+    body = await readBody(req);
+  } catch {
+    return plain(200, 'ok');
+  }
+  const paymentId = String(body?.id ?? '').trim();
+  if (!paymentId) return plain(200, 'ok');
+
+  const checkoutRef = db.collection('mollieCheckouts').doc(paymentId);
+  const checkoutSnap = await checkoutRef.get();
+  if (!checkoutSnap.exists) return plain(200, 'ok');
+  const checkout = checkoutSnap.data();
+  if (checkout.orgId !== orgId) return plain(200, 'ok');
+  if (checkout.status !== 'pending') return plain(200, 'ok');
+
+  const mollie = await getOrgMollieKey(db, orgId);
+  if (!mollie) return plain(200, 'ok');
+
+  let payment;
+  try {
+    payment = await getMolliePayment({ apiKey: mollie.apiKey, paymentId });
+  } catch (e) {
+    console.error('[booking] Mollie-betaling ophalen mislukt:', e);
+    return plain(500, 'retry');
+  }
+
+  if (payment.status === 'paid') {
+    try {
+      await settlePurchase(db, checkout, paymentId);
+    } catch (e) {
+      console.error('[booking] aankoop verwerken mislukt:', e);
+      return plain(500, 'retry');
+    }
+  } else if (['failed', 'expired', 'canceled'].includes(payment.status)) {
+    await checkoutRef.set({ status: payment.status, updatedAt: new Date().toISOString() }, { merge: true });
+  }
+  return plain(200, 'ok');
 }
 
 /** Basis-URL van de app voor openbare links: uit de aanvraag, of vast via PUBLIC_APP_ORIGIN. */

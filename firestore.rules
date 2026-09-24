@@ -132,6 +132,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Koppeling tussen een Mollie-betaling en de aankoop die hij afrondt (welk lid, welk
+    // abonnement). Alleen de server (Admin SDK) leest en schrijft dit: aangemaakt door
+    // purchasePlan, bijgewerkt door mollieWebhook zodra Mollie de betaalstatus meldt.
+    match /mollieCheckouts/{paymentId} {
+      allow read, write: if false;
+    }
+
     // Profielen.
     // - Lezen: eigen profiel, en verder alleen binnen je eigen studio (je eigen sporters, of
     //   als trainer/beheerder de ledenlijst en ranglijst van je studio).

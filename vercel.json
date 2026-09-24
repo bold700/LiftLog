@@ -50,6 +50,10 @@
       "destination": "/api/booking?feed=:token"
     },
     {
+      "source": "/mollie-webhook/:orgId",
+      "destination": "/api/booking?mollieWebhook=:orgId"
+    },
+    {
       "source": "/api/cron/generate-classes",
       "destination": "/api/booking?cron=generateClasses"
     },

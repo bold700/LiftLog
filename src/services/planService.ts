@@ -134,3 +134,12 @@ export function unassignPlan(userId: string): Promise<{ stopped: boolean }> {
 export function renewDue(): Promise<{ memberships: number; steps: number }> {
   return callBooking({ action: 'renewDue', orgId: requireOrgId() });
 }
+
+/**
+ * Zelf een betaald abonnement of strippenkaart kopen. Geeft een Mollie-checkout-URL terug waar de
+ * browser naartoe moet; het abonnement/de credits worden pas geactiveerd zodra de betaling lukt
+ * (server-side, via de Mollie-webhook) — niet meteen na deze aanroep.
+ */
+export function purchasePlan(planId: string): Promise<{ checkoutUrl: string }> {
+  return callBooking({ action: 'purchasePlan', planId });
+}

@@ -159,6 +159,16 @@ await t('beheerder leest de Mollie-sleutel van zijn eigen studio → geweigerd',
 await t('beheerder overschrijft de Mollie-sleutel rechtstreeks → geweigerd', false, setDoc(doc(as('admin1'), 'orgSecrets/vanas'), { mollieTestKey: 'test_y' }));
 await t('beheerder verwijdert de Mollie-sleutel rechtstreeks → geweigerd', false, deleteDoc(doc(as('admin1'), 'orgSecrets/vanas')));
 await t('beheerder maakt een nieuw orgSecrets-document → geweigerd', false, setDoc(doc(as('admin1'), 'orgSecrets/nieuw'), { mollieTestKey: 'test_z' }));
+
+// mollieCheckouts: koppeling tussen een Mollie-betaling en de aankoop die hij afrondt. Alleen de
+// server (Admin SDK, purchasePlan/mollieWebhook) raakt dit aan.
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'mollieCheckouts/tr_test1'), { orgId: 'vanas', userId: 'sporter1', planId: 'pl1', status: 'pending' });
+});
+await t('sporter leest zijn eigen checkout-post → geweigerd', false, getDoc(doc(as('sporter1'), 'mollieCheckouts/tr_test1')));
+await t('beheerder leest een checkout-post van zijn studio → geweigerd', false, getDoc(doc(as('admin1'), 'mollieCheckouts/tr_test1')));
+await t('sporter maakt zelf een checkout-post aan → geweigerd', false, setDoc(doc(as('sporter1'), 'mollieCheckouts/tr_nieuw'), { orgId: 'vanas', userId: 'sporter1', planId: 'pl1', status: 'pending' }));
+
 await t('trainer studio B maakt workout in eigen studio → mag', true, setDoc(doc(as('trainerB'), 'workouts/wB2'), { orgId: 'studiob', trainerId: 'trainerB', name: 'ok' }));
 
 // De ledenlijst zoals de app hem opvraagt (profileService.getAllProfiles): een filter op lidmaatschap

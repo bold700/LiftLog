@@ -1,15 +1,16 @@
 /**
  * Abonnement op Profiel, naar het ontwerp: naam, hoeveel credits er nog over zijn als balk, en
  * wanneer het verlengt of tot wanneer de kaart geldig is. Alleen als er een lidmaatschap is.
- * Daaronder de eigen facturen, elk als PDF te downloaden.
+ * Daaronder een lijst met betaalde plannen om zelf te kopen (via Mollie), en de eigen facturen,
+ * elk als PDF te downloaden.
  */
 import { useEffect, useState } from 'react';
-import { Box, IconButton, Typography } from '@mui/material';
+import { Box, Button, IconButton, Typography } from '@mui/material';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import IosShareRoundedIcon from '@mui/icons-material/IosShareRounded';
 import { useI18n } from '../context/I18nContext';
 import { useNotify } from '../context/NotifyContext';
-import { getMyMembership, getPlans } from '../services/planService';
+import { getMyMembership, getPlans, purchasePlan } from '../services/planService';
 import { getCreditBalance } from '../services/classService';
 import { canShareFiles, downloadInvoicePdf, getMyCharges, shareInvoicePdf } from '../services/chargeService';
 import { useBranding } from '../context/BrandingContext';
@@ -118,6 +119,75 @@ export function CreditBalanceCard({ userId }: { userId: string }) {
   );
 }
 
+/** Plannen die een sporter zelf kan kopen: betaald, actief, en niet alleen-op-uitnodiging. */
+function PurchasePlansSection({ userId }: { userId: string }) {
+  const { t } = useI18n();
+  const notify = useNotify();
+  const [plans, setPlans] = useState<Plan[] | null>(null);
+  const [buying, setBuying] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void getPlans()
+      .then((list) => {
+        if (alive) setPlans(list.filter((p) => p.status === 'active' && p.availableTo !== 'invite' && p.price > 0));
+      })
+      .catch(() => {
+        if (alive) setPlans([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [userId]);
+
+  const periodLabel = (period: Plan['period']) =>
+    period === 'week' ? t('plans.perWeek') : period === 'fourWeeks' ? t('plans.per4Weeks') : period === 'month' ? t('plans.perMonth') : '';
+
+  const buy = async (plan: Plan) => {
+    if (!window.confirm(`Je koopt "${plan.name}" voor ${euro(plan.price)}. Je gaat naar Mollie om te betalen.`)) return;
+    setBuying(plan.id);
+    try {
+      const { checkoutUrl } = await purchasePlan(plan.id);
+      window.location.href = checkoutUrl;
+    } catch (e) {
+      notify.error('Kopen lukte niet.', e);
+      setBuying(null);
+    }
+  };
+
+  if (!plans || plans.length === 0) return null;
+
+  return (
+    <Box sx={{ p: 2, mb: 3, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground }}>
+      <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+        Abonnement of credits kopen
+      </Typography>
+      {plans.map((plan) => (
+        <Box
+          key={plan.id}
+          sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.75, borderTop: `1px solid ${designTokens.cardBackgroundHigh}` }}
+        >
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="body2" noWrap>
+              {plan.name}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+              {plan.credits == null ? 'Onbeperkt' : `${plan.credits} credits`}
+              {plan.period !== 'once' ? ` · ${periodLabel(plan.period)}` : ''}
+            </Typography>
+          </Box>
+          <Typography variant="body2" fontWeight={600} sx={{ flexShrink: 0 }}>
+            {euro(plan.price)}
+          </Typography>
+          <Button size="small" variant="outlined" disabled={buying === plan.id} onClick={() => void buy(plan)} sx={{ flexShrink: 0 }}>
+            {buying === plan.id ? 'Bezig…' : 'Kopen'}
+          </Button>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
 export function SubscriptionCard({ userId }: { userId: string }) {
   const { t, lang } = useI18n();
   const notify = useNotify();
@@ -125,6 +195,22 @@ export function SubscriptionCard({ userId }: { userId: string }) {
   const shareable = canShareFiles();
   const [charges, setCharges] = useState<Charge[]>([]);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [refreshSignal, setRefreshSignal] = useState(0);
+
+  // Terug van Mollie na een zelf-aankoop: de webhook verwerkt de betaling op de achtergrond, dus
+  // hier alleen een geruststellende melding en na een paar seconden de kaarten verversen.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('aankoop')) return;
+    notify.info('Bedankt! We verwerken je betaling — dit kan een paar seconden duren.');
+    params.delete('aankoop');
+    const rest = params.toString();
+    window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
+    const timer = setTimeout(() => setRefreshSignal((n) => n + 1), 3000);
+    return () => clearTimeout(timer);
+    // Alleen bij het eerste renderen na de redirect controleren.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -136,7 +222,7 @@ export function SubscriptionCard({ userId }: { userId: string }) {
     return () => {
       alive = false;
     };
-  }, [userId]);
+  }, [userId, refreshSignal]);
 
   const fmt = (iso: string) =>
     new Date(iso).toLocaleDateString(lang === 'en' ? 'en-GB' : 'nl-NL', {
@@ -207,7 +293,8 @@ export function SubscriptionCard({ userId }: { userId: string }) {
 
   return (
     <>
-      <CreditBalanceCard userId={userId} />
+      <CreditBalanceCard key={refreshSignal} userId={userId} />
+      <PurchasePlansSection userId={userId} />
       {invoices}
     </>
   );

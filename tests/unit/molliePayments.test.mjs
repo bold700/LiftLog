@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey } from '../../api/_lib/molliePayments.mjs';
+import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey, createMolliePayment, getMolliePayment } from '../../api/_lib/molliePayments.mjs';
 
 describe('mollie-sleutel: formaat', () => {
   it('accepteert een testsleutel in testmodus en een livesleutel in livemodus', () => {
@@ -76,5 +76,64 @@ describe('mollie-sleutel: verifiëren bij Mollie', () => {
     };
     const r = await verifyMollieKey('test_abcdefghij1234', fetchImpl);
     expect(r).toEqual({ ok: false, error: 'Mollie was niet te bereiken. Probeer het zo nog eens.' });
+  });
+});
+
+describe('eenmalige betaling aanmaken', () => {
+  it('stuurt bedrag, omschrijving en URLs mee, en geeft id + checkout-URL terug', async () => {
+    const calls = [];
+    const fetchImpl = async (url, init) => {
+      calls.push({ url, method: init.method, body: JSON.parse(init.body) });
+      return { ok: true, json: async () => ({ id: 'tr_abc', _links: { checkout: { href: 'https://mollie.com/checkout/tr_abc' } } }) };
+    };
+    const r = await createMolliePayment({
+      apiKey: 'test_abcdefghij1234',
+      amount: 49.5,
+      description: 'Strippenkaart — Van As',
+      redirectUrl: 'https://vorm.app/?aankoop=pl1',
+      webhookUrl: 'https://vorm.app/mollie-webhook/vanas',
+      fetchImpl,
+    });
+    expect(r).toEqual({ id: 'tr_abc', checkoutUrl: 'https://mollie.com/checkout/tr_abc' });
+    expect(calls[0].url).toBe('https://api.mollie.com/v2/payments');
+    expect(calls[0].method).toBe('POST');
+    expect(calls[0].body).toEqual({
+      amount: { currency: 'EUR', value: '49.50' },
+      description: 'Strippenkaart — Van As',
+      redirectUrl: 'https://vorm.app/?aankoop=pl1',
+      webhookUrl: 'https://vorm.app/mollie-webhook/vanas',
+    });
+  });
+
+  it('geeft de foutmelding van Mollie door als aanmaken mislukt', async () => {
+    const fetchImpl = async () => ({ ok: false, status: 422, json: async () => ({ detail: 'Ongeldig bedrag' }) });
+    await expect(createMolliePayment({ apiKey: 'test_x', amount: 10, description: '', redirectUrl: '', webhookUrl: '', fetchImpl })).rejects.toThrow(
+      'Ongeldig bedrag'
+    );
+  });
+
+  it('geeft een foutmelding als Mollie geen checkout-URL teruggeeft', async () => {
+    const fetchImpl = async () => ({ ok: true, json: async () => ({ id: 'tr_abc' }) });
+    await expect(createMolliePayment({ apiKey: 'test_x', amount: 10, description: '', redirectUrl: '', webhookUrl: '', fetchImpl })).rejects.toThrow(
+      'geen betaal-URL'
+    );
+  });
+});
+
+describe('betaling ophalen', () => {
+  it('geeft id en status terug', async () => {
+    const calls = [];
+    const fetchImpl = async (url, init) => {
+      calls.push({ url, auth: init.headers.Authorization });
+      return { ok: true, json: async () => ({ id: 'tr_abc', status: 'paid' }) };
+    };
+    const r = await getMolliePayment({ apiKey: 'test_abcdefghij1234', paymentId: 'tr_abc', fetchImpl });
+    expect(r).toEqual({ id: 'tr_abc', status: 'paid' });
+    expect(calls[0]).toEqual({ url: 'https://api.mollie.com/v2/payments/tr_abc', auth: 'Bearer test_abcdefghij1234' });
+  });
+
+  it('geeft de foutmelding van Mollie door als ophalen mislukt', async () => {
+    const fetchImpl = async () => ({ ok: false, status: 404, json: async () => ({ detail: 'Niet gevonden' }) });
+    await expect(getMolliePayment({ apiKey: 'test_x', paymentId: 'tr_missing', fetchImpl })).rejects.toThrow('Niet gevonden');
   });
 });
