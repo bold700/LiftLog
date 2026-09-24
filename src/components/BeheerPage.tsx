@@ -23,6 +23,7 @@ import {
   useTheme,
 } from '@mui/material';
 import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
+import UploadFileRoundedIcon from '@mui/icons-material/UploadFileRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useProfile } from '../context/ProfileContext';
@@ -60,6 +61,8 @@ import { assignPlan, getActiveMembershipsForOrg, getPlans, renewDue, unassignPla
 import { getCreditBalancesForOrg, grantCredits } from '../services/classService';
 import { NumberField } from './NumberField';
 import { designTokens } from '../theme/designTokens';
+import { EMAIL_RE, generatePassword } from '../utils/account';
+import { MemberImportDialog } from './beheer/MemberImportDialog';
 
 type Section = 'leden' | 'lessoorten' | 'abonnementen' | 'huisstijl' | 'facturatie';
 /** Beheer gebruikt de hele breedte van het hoofdvlak, zoals in het ontwerp; de andere pagina's blijven op 800. */
@@ -112,16 +115,6 @@ interface NewAccountState {
   password: string;
   role: 'sporter' | 'trainer' | 'admin';
   trainerId: string;
-}
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-/** Willekeurig, makkelijk over te typen tijdelijk wachtwoord (zonder verwarrende tekens). */
-function generatePassword(): string {
-  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const bytes = new Uint32Array(10);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => chars[b % chars.length]).join('');
 }
 
 export function BeheerPage() {
@@ -181,6 +174,8 @@ export function BeheerPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  const [importOpen, setImportOpen] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -211,7 +206,10 @@ export function BeheerPage() {
   }, [isTrainer, load]);
 
   const trainers = useMemo(() => profiles.filter((p) => p.role === 'trainer' || p.role === 'admin'), [profiles]);
-  const trainerOptions = useMemo(() => trainers.map((tr) => ({ userId: tr.userId, name: tr.displayName?.trim() || tr.email || tr.userId })), [trainers]);
+  const trainerOptions = useMemo(
+    () => trainers.map((tr) => ({ userId: tr.userId, email: tr.email, name: tr.displayName?.trim() || tr.email || tr.userId })),
+    [trainers]
+  );
   const nameOf = useCallback(
     (userId: string | null | undefined) => {
       if (!userId) return null;
@@ -226,6 +224,10 @@ export function BeheerPage() {
     return sortMembers(filterMembers(profiles, memberFilter, ctx), memberSort, ctx);
   }, [profiles, memberFilter, memberSort, credits, memberships, nameOf]);
   const memberPlans = useMemo(() => planOptions(memberships), [memberships]);
+  const existingEmails = useMemo(
+    () => new Set(profiles.map((p) => p.email?.trim().toLowerCase()).filter((e): e is string => !!e)),
+    [profiles]
+  );
 
   const openCreate = () => {
     setCreateError(null);
@@ -421,6 +423,15 @@ export function BeheerPage() {
           <Button variant="contained" disableElevation startIcon={<DownloadRoundedIcon />} onClick={() => setExportSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
             {t('billing.export')}
           </Button>
+        ) : section === 'leden' ? (
+          <>
+            <Button variant="contained" disableElevation startIcon={<PersonAddRoundedIcon />} onClick={openCreate} disabled={!auth} sx={{ flexShrink: 0 }}>
+              {t('admin.addAccount')}
+            </Button>
+            <Button variant="outlined" startIcon={<UploadFileRoundedIcon />} onClick={() => setImportOpen(true)} disabled={!auth} sx={{ flexShrink: 0 }}>
+              Leden importeren
+            </Button>
+          </>
         ) : (
           <Button variant="contained" disableElevation startIcon={<PersonAddRoundedIcon />} onClick={openCreate} disabled={!auth} sx={{ flexShrink: 0 }}>
             {t('admin.addAccount')}
@@ -770,6 +781,15 @@ export function BeheerPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <MemberImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        existingEmails={existingEmails}
+        trainers={trainerOptions}
+        defaultTrainerId={selfId}
+        onImported={load}
+      />
     </PageLayout>
     </Box>
   );
