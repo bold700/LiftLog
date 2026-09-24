@@ -608,14 +608,6 @@ export function NutritionPage() {
             <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
               {[
                 {
-                  key: 'search',
-                  label: t('nutrition.addFood.search'),
-                  icon: <SearchRoundedIcon sx={{ fontSize: 16, color: designTokens.onPrimary }} />,
-                  onClick: () => searchInputRef.current?.focus(),
-                  disabled: false,
-                  busy: false,
-                },
-                {
                   key: 'photo',
                   label: t('nutrition.addFood.photo'),
                   icon: <PhotoCameraRoundedIcon sx={{ fontSize: 16, color: designTokens.onPrimary }} />,

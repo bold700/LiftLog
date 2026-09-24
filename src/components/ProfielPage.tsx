@@ -702,6 +702,12 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
               <CalendarFeedCard userId={uid} />
             </Box>
           )}
+
+          {uid && (p?.role === 'trainer' || p?.role === 'admin') && (
+            <Box sx={{ order: { xs: 12, md: 0 } }}>
+              <CalendarFeedCard userId={uid} kind="trainer" />
+            </Box>
+          )}
         </Box>
       </Box>
 

@@ -352,7 +352,7 @@ export const nl = {
     addFoodButton: 'Voedsel toevoegen',
     previous: 'Vorige',
     next: 'Volgende',
-    addFood: { search: 'Zoeken', photo: 'Foto', barcode: 'Barcode' },
+    addFood: { photo: 'Foto', barcode: 'Barcode' },
     recognizingPhoto: 'Foto wordt herkend…',
     lookingUpBarcode: 'Barcode wordt opgezocht…',
     photoErrors: {
