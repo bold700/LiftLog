@@ -4,6 +4,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../context/ProfileContext';
+import { useViewAs } from '../context/ViewAsContext';
 import {
   getWorkoutsForUser,
   saveWorkoutToFirestore,
@@ -23,14 +24,20 @@ const TRAINER_ID_LOCAL = 'local_trainer';
 export function useWorkouts() {
   const auth = useAuth();
   const profile = useProfile();
+  const { viewed } = useViewAs();
   const [schemas, setSchemas] = useState<Schema[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // "Bekijk als": laat zien wat die sporter zelf zou zien (eigen/toegewezen/open), niet de
+  // trainersblik op iedereen — anders lijkt "bekijk als" niets te doen op dit scherm.
+  const targetUid = viewed.isOther ? viewed.userId : auth?.user?.uid;
+  const targetRole = viewed.isOther ? 'sporter' : profile?.role;
 
   const loadSchemas = useCallback(async () => {
     setLoading(true);
     try {
-      if (auth?.user?.uid && profile?.profile) {
-        const list = await getWorkoutsForUser(auth.user.uid, profile.role);
+      if (targetUid && profile?.profile) {
+        const list = await getWorkoutsForUser(targetUid, targetRole ?? 'sporter');
         setSchemas(list);
       } else {
         setSchemas(getSchemas());
@@ -40,7 +47,7 @@ export function useWorkouts() {
     } finally {
       setLoading(false);
     }
-  }, [auth?.user?.uid, profile?.profile?.role]);
+  }, [targetUid, targetRole, profile?.profile?.role]);
 
   useEffect(() => {
     loadSchemas();

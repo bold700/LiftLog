@@ -330,7 +330,10 @@ function AppContent() {
               flex: 1,
               // Desktop: de schil geeft al 40 opzij en de paginakop erboven; inhoud lijnt uit met de titel (Figma).
               p: { xs: 3, md: 0 },
-              pb: { xs: 10, md: 4 },
+              // 96px: ruimte genoeg om onder de zwevende werkbalk (top 92 + hoogte 64 = 156 boven de
+              // navigatiebalk) en de +-knop uit te komen als je helemaal naar onderen scrolt — met 10
+              // (80px) kwam de laatste content (bijv. "Training afronden") er net onder vandaan.
+              pb: { xs: 12, md: 4 },
               paddingTop: {
                 xs: 'calc(24px + env(safe-area-inset-top, 0px))',
                 sm: 'calc(24px + env(safe-area-inset-top, 0px))',
