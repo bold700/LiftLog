@@ -8,10 +8,16 @@ import { applyCors } from './_lib/cors.mjs';
  *                                       workout-aanvragen en het ranglijstdocument van die persoon.
  *                                       Daarna wordt de ranglijst automatisch nagelopen op documenten
  *                                       van accounts die al eerder zijn verwijderd.
+ *  - { action: 'updateCredentials', targetUid, email?, password? }
+ *                                       wijzigt het e-mailadres en/of wachtwoord van een sporter uit
+ *                                       eigen studio, direct en zonder diens huidige wachtwoord (voor
+ *                                       "Bekijk als" op Profiel: een trainer die het profiel van een
+ *                                       sporter volledig beheert, alsof hij zelf is ingelogd).
  *
  * Beveiliging:
  *  - Vereist een geldig Firebase ID-token in de Authorization-header (Bearer).
- *  - De beller moet in Firestore de rol 'admin' hebben.
+ *  - 'delete' vereist de rol 'admin'; 'updateCredentials' vereist 'trainer' of 'admin' én dat de
+ *    sporter in dezelfde studio zit.
  *
  * Vereist env-var FIREBASE_SERVICE_ACCOUNT: de JSON van een Firebase service-account
  * (als string). Zonder deze var geeft het endpoint een nette foutmelding.
@@ -95,6 +101,63 @@ export default async function handler(req, res) {
     } catch {
       return json(res, 500, { error: 'Login verwijderd, maar het opruimen van je gegevens mislukte.' });
     }
+  }
+
+  // Inloggegevens van een sporter wijzigen (Profiel → "Bekijk als"): een trainer of beheerder mag
+  // zonder het huidige wachtwoord van de sporter zelf diens e-mailadres en/of wachtwoord zetten,
+  // zolang het om een sporter in de eigen studio gaat. Anders dan de gewone flow (auth.changeEmail/
+  // changePassword) loopt dit via de Admin SDK: de sporter hoeft er niet apart voor in te loggen.
+  if (action === 'updateCredentials') {
+    const callerSnap = await db.collection('profiles').doc(callerUid).get();
+    const callerData = callerSnap.exists ? callerSnap.data() : null;
+    if (!callerData || (callerData.role !== 'trainer' && callerData.role !== 'admin')) {
+      return json(res, 403, { error: 'Alleen trainers en beheerders mogen accountgegevens van een sporter wijzigen.' });
+    }
+    const targetUid = String(body?.targetUid || '').trim();
+    if (!targetUid) return json(res, 400, { error: 'Ontbrekende targetUid.' });
+    if (targetUid === callerUid) return json(res, 400, { error: 'Gebruik je eigen profiel om je eigen gegevens te wijzigen.' });
+
+    const targetSnap = await db.collection('profiles').doc(targetUid).get();
+    if (!targetSnap.exists || targetSnap.data()?.role !== 'sporter') {
+      return json(res, 404, { error: 'Sporter niet gevonden.' });
+    }
+    const callerOrgIds = callerData.orgIds ?? [callerData.orgId].filter(Boolean);
+    const targetOrgIds = targetSnap.data()?.orgIds ?? [targetSnap.data()?.orgId].filter(Boolean);
+    if (!callerOrgIds.some((id) => targetOrgIds.includes(id))) {
+      return json(res, 403, { error: 'Deze sporter zit niet in jouw studio.' });
+    }
+
+    const email = typeof body?.email === 'string' ? body.email.trim() : undefined;
+    const password = typeof body?.password === 'string' ? body.password : undefined;
+    if (!email && !password) return json(res, 400, { error: 'Niets om te wijzigen.' });
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return json(res, 400, { error: 'Vul een geldig e-mailadres in.' });
+    }
+    if (password && password.length < 6) {
+      return json(res, 400, { error: 'Een nieuw wachtwoord moet minstens 6 tekens zijn.' });
+    }
+
+    try {
+      const update = {};
+      if (email) update.email = email;
+      if (password) update.password = password;
+      await auth.updateUser(targetUid, update);
+    } catch (e) {
+      const code = e?.code || '';
+      const msg =
+        code === 'auth/email-already-exists' ? 'Dit e-mailadres is al bij een ander account in gebruik.'
+        : code === 'auth/invalid-email' ? 'Ongeldig e-mailadres.'
+        : 'Wijzigen van accountgegevens mislukt.';
+      return json(res, 400, { error: msg });
+    }
+    if (email) {
+      try {
+        await db.collection('profiles').doc(targetUid).update({ email });
+      } catch {
+        // Login is al gewijzigd; het profiel loopt bij de volgende refreshProfile() vanzelf gelijk.
+      }
+    }
+    return json(res, 200, { ok: true });
   }
 
   // 3) Alle overige acties: alleen een beheerder.

@@ -35,3 +35,23 @@ export async function deleteOwnAccount(caller: User): Promise<void> {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string })?.error || 'Account verwijderen mislukt.');
 }
+
+/**
+ * Wijzigt e-mailadres en/of wachtwoord van een sporter, direct en zonder diens huidige wachtwoord.
+ * Voor Profiel → "Bekijk als": een trainer/beheerder die het profiel van een sporter volledig
+ * beheert, alsof hij zelf als die sporter is ingelogd. Server controleert rol en studio.
+ */
+export async function updateMemberCredentials(
+  caller: User,
+  targetUid: string,
+  updates: { email?: string; password?: string }
+): Promise<void> {
+  const token = await caller.getIdToken();
+  const res = await fetch(apiUrl('/api/admin-account'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ action: 'updateCredentials', targetUid, ...updates }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string })?.error || 'Wijzigen van accountgegevens mislukt.');
+}
