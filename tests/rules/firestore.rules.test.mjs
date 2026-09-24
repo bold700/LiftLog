@@ -381,6 +381,14 @@ await t('trainer leest de inschrijving → mag', true, getDoc(doc(as('trainer1')
 await t('inschrijving buiten de server om aanmaken → geweigerd', false, setDoc(doc(as('sporter2'), 'standingBookings/sbZelf'), { orgId: 'vanas', userId: 'sporter2', classTypeId: 'ct1', weekday: 4, startTime: '19:00', active: true }));
 await t('eigen inschrijving uitzetten buiten de server om → geweigerd', false, updateDoc(doc(as('sporter2'), 'standingBookings/sb1'), { active: false }));
 
+console.log('Kalenderfeed-koppelsleutels');
+await t('sporter maakt eigen kalenderfeed-sleutel → mag', true, setDoc(doc(as('sporter2'), 'calendarFeedTokens/hash1'), { userId: 'sporter2' }));
+await t('sporter maakt kalenderfeed-sleutel op naam van een ander → geweigerd', false, setDoc(doc(as('sporter2'), 'calendarFeedTokens/hash2'), { userId: 'sporter3' }));
+await t('sporter leest eigen kalenderfeed-sleutel → mag', true, getDoc(doc(as('sporter2'), 'calendarFeedTokens/hash1')));
+await t('andere sporter leest die kalenderfeed-sleutel → geweigerd', false, getDoc(doc(as('sporter3'), 'calendarFeedTokens/hash1')));
+await t('andere sporter verwijdert die kalenderfeed-sleutel → geweigerd', false, deleteDoc(doc(as('sporter3'), 'calendarFeedTokens/hash1')));
+await t('sporter verwijdert eigen kalenderfeed-sleutel → mag', true, deleteDoc(doc(as('sporter2'), 'calendarFeedTokens/hash1')));
+
 await env.cleanup();
 console.log(`\n${passed} geslaagd, ${failed} mislukt`);
 process.exit(failed ? 1 : 0);

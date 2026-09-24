@@ -182,6 +182,14 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
 
+    // Koppelsleutel voor de kalenderfeed (agenda-export naar Google/Outlook/Apple): zelfde opzet als
+    // mcpKeys hierboven. Een agenda-app kan niet inloggen als hij de feed-URL zelf ophaalt; de server
+    // (Admin SDK, api/booking.mjs) herkent het lid aan de hash in plaats daarvan.
+    match /calendarFeedTokens/{tokenId} {
+      allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
     // Workouts: alleen binnen de eigen studio, en daarbinnen alleen eigen of toegewezen schema's —
     // tenzij de studio `staffFullClientAccess` aan heeft staan (Beheer → Huisstijl), dan mag elke
     // trainer/beheerder in de studio meekijken (bijv. voor een dienst-overdracht).

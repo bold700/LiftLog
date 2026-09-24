@@ -46,6 +46,10 @@
       "destination": "/api/booking?invoice=:token"
     },
     {
+      "source": "/kalender/:token",
+      "destination": "/api/booking?feed=:token"
+    },
+    {
       "source": "/api/cron/generate-classes",
       "destination": "/api/booking?cron=generateClasses"
     },
