@@ -246,6 +246,16 @@ Wanneer er een melding gaat: een sporter die nieuw aan een schema wordt gekoppel
 schema"; een trainer krijgt "Check-in van …" als een sporter zelf een check-in invult (na een
 training of de wekelijkse). Versturen loopt via `api/notify.mjs`.
 
+Lesherinneringen: elke dag rond 18:00 (Vercel-cron `/api/cron/class-reminders`, 16:00 UTC; op het
+Hobby-plan ergens binnen dat uur) krijgt iedereen met een plek in een les van morgen één melding,
+bijv. "Morgen: HIIT om 9:00". Wachtlijst en afgelaste lessen niet. Per boeking wordt
+`reminderSentAt` gezet, zodat een tweede run niet nog eens stuurt. Code: `classReminders` in
+`api/booking.mjs`, regels in `api/_lib/classReminders.mjs`. Vereist `CRON_SECRET` (staat er al).
+
+Lukt aanmelden niet, dan toont de kaart Meldingen de technische foutcode. Bekende oorzaak: de
+Browser key in Google Cloud (APIs & Services → Credentials) moet o.a. **Firebase Installations
+API**, **FCM Registration API** en **Firebase Cloud Messaging API** toestaan.
+
 ---
 
 ## 8. Wie moet wat kunnen

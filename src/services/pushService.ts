@@ -57,7 +57,24 @@ async function storeToken(userId: string, token: string): Promise<void> {
  * Uitkomst van aanmelden. Iets anders dan `ok` legt de kaart in gewone taal uit, want "werkt niet"
  * helpt niemand: op een iPhone moet de app bijvoorbeeld eerst op het beginscherm staan.
  */
-export type PushEnableResult = 'ok' | 'denied' | 'unsupported' | 'ios-home-screen' | 'not-configured';
+export type PushEnableResult = 'ok' | 'denied' | 'unsupported' | 'ios-home-screen' | 'not-configured' | 'failed';
+
+/** Uitkomst plus, bij `failed`, de technische foutcode: die maakt een volgend probleem snel vindbaar. */
+export interface PushEnableOutcome {
+  status: PushEnableResult;
+  detail?: string;
+}
+
+/** Korte, leesbare foutcode uit een (Firebase-)fout, bijv. "installations/request-failed". */
+function describeError(e: unknown): string {
+  if (e && typeof e === 'object') {
+    const code = (e as { code?: unknown }).code;
+    const message = (e as { message?: unknown }).message;
+    const parts = [typeof code === 'string' ? code : '', typeof message === 'string' ? message : ''].filter(Boolean);
+    if (parts.length) return parts.join(' – ').slice(0, 200);
+  }
+  return String(e).slice(0, 200);
+}
 
 /** iPhone/iPad in Safari, maar niet vanaf het beginscherm geopend: daar laat Apple geen webpush toe. */
 export function needsHomeScreenForPush(): boolean {
@@ -74,8 +91,8 @@ export function needsHomeScreenForPush(): boolean {
 /**
  * Vraagt toestemming en meldt dit toestel aan voor meldingen.
  */
-export async function enablePush(userId: string): Promise<PushEnableResult> {
-  if (Capacitor.isNativePlatform()) return (await enableNativePush(userId)) ? 'ok' : 'denied';
+export async function enablePush(userId: string): Promise<PushEnableOutcome> {
+  if (Capacitor.isNativePlatform()) return { status: (await enableNativePush(userId)) ? 'ok' : 'denied' };
   return enableWebPush(userId);
 }
 
@@ -126,26 +143,28 @@ async function registerPushWorker(): Promise<ServiceWorkerRegistration> {
   return navigator.serviceWorker.register(`/firebase-messaging-sw.js?${params}`, { scope: PUSH_SW_SCOPE });
 }
 
-async function enableWebPush(userId: string): Promise<PushEnableResult> {
-  if (needsHomeScreenForPush()) return 'ios-home-screen';
-  if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) return 'unsupported';
+async function enableWebPush(userId: string): Promise<PushEnableOutcome> {
+  if (needsHomeScreenForPush()) return { status: 'ios-home-screen' };
+  if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) return { status: 'unsupported' };
   const vapidKey = (import.meta.env?.VITE_FIREBASE_VAPID_KEY as string | undefined)?.trim();
-  if (!vapidKey || !firebaseApp || !firebaseConfig?.messagingSenderId || !firebaseConfig.appId) return 'not-configured';
+  if (!vapidKey || !firebaseApp || !firebaseConfig?.messagingSenderId || !firebaseConfig.appId) return { status: 'not-configured' };
 
   const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
-  if (permission !== 'granted') return 'denied';
+  if (permission !== 'granted') return { status: 'denied' };
 
   try {
     const { getMessaging, getToken, isSupported } = await import('firebase/messaging');
-    if (!(await isSupported())) return 'unsupported';
+    if (!(await isSupported())) return { status: 'unsupported' };
     const registration = await registerPushWorker();
     const token = await getToken(getMessaging(firebaseApp), { vapidKey, serviceWorkerRegistration: registration });
-    if (!token) return 'unsupported';
+    if (!token) return { status: 'failed', detail: 'Geen token ontvangen van Firebase.' };
     await storeToken(userId, token);
-    return 'ok';
+    return { status: 'ok' };
   } catch (e) {
+    // Niet als "niet ondersteund" verbergen: een geblokkeerde API-sleutel of een verkeerde
+    // VAPID-sleutel ziet er dan precies zo uit als een oude browser.
     console.warn('[push] aanmelden mislukt', e);
-    return 'unsupported';
+    return { status: 'failed', detail: describeError(e) };
   }
 }
 

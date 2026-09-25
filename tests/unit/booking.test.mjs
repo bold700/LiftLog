@@ -8,6 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { classIdForOccurrence, occurrencesForSchedule } from '../../api/_lib/classSchedule.mjs';
 import { hashFeedToken } from '../../api/_lib/calendarFeed.mjs';
+import { amsterdamDate } from '../../api/_lib/classReminders.mjs';
 
 /** Bevat na elke test de volledige inhoud van de nagebootste database. */
 let store;
@@ -42,12 +43,12 @@ function makeDb() {
   function makeQuery(name, filters) {
     return {
       __isQuery: true,
-      where: (field, _op, value) => makeQuery(name, [...filters, [field, value]]),
+      where: (field, op, value) => makeQuery(name, [...filters, [field, op, value]]),
       get: async () => {
         const docs = [...data.entries()]
           .filter(([path]) => path.startsWith(`${name}/`))
           .map(([path, v]) => ({ id: path.slice(name.length + 1), ref: { __path: path }, data: () => v }))
-          .filter((d) => filters.every(([f, val]) => d.data()[f] === val));
+          .filter((d) => filters.every(([f, op, val]) => (op === 'in' ? val.includes(d.data()[f]) : d.data()[f] === val)));
         return { docs, empty: docs.length === 0 };
       },
     };
@@ -126,6 +127,17 @@ vi.mock('firebase-admin/firestore', () => ({
     serverTimestamp: () => ({ __serverTimestamp: true }),
     delete: () => ({ __delete: true }),
   },
+}));
+
+/** Verstuurde pushmeldingen (lesherinneringen), per aanroep van sendEachForMulticast. */
+let sentPushes = [];
+vi.mock('firebase-admin/messaging', () => ({
+  getMessaging: () => ({
+    sendEachForMulticast: async (payload) => {
+      sentPushes.push(payload);
+      return { successCount: payload.tokens.length, responses: payload.tokens.map(() => ({ success: true })) };
+    },
+  }),
 }));
 
 vi.mock('../../api/_lib/firebaseAdmin.mjs', () => ({
@@ -1361,5 +1373,68 @@ describe('kalenderfeed', () => {
       expect(res.statusCode).toBe(200);
       expect(res.body).toContain('SUMMARY:Small Group');
     });
+  });
+});
+
+describe('lesherinneringen (cron)', () => {
+  const runReminders = async (authHeader = 'Bearer test-secret') => {
+    const res = makeRes();
+    await handler({ method: 'GET', headers: authHeader ? { authorization: authHeader } : {}, query: { cron: 'classReminders' } }, res);
+    return res;
+  };
+
+  const ORIGINAL_SECRET = process.env.CRON_SECRET;
+  beforeEach(() => {
+    process.env.CRON_SECRET = 'test-secret';
+    sentPushes = [];
+    const tomorrow = amsterdamDate(new Date(), 1);
+    store['classes/c1'].date = tomorrow;
+    store['classes/c2'] = { orgId: 'vanas', title: 'Yoga', date: tomorrow, startTime: '18:30', capacity: 5, creditCost: 1 };
+    store['bookings/b1'] = { orgId: 'vanas', classId: 'c1', userId: 'sporter1', status: 'booked' };
+    store['bookings/b2'] = { orgId: 'vanas', classId: 'c1', userId: 'sporter2', status: 'waitlist' };
+    store['bookings/b3'] = { orgId: 'vanas', classId: 'c2', userId: 'sporter1', status: 'booked' };
+    store['pushTokens/tok_sporter1'] = { userId: 'sporter1', orgId: 'vanas', platform: 'web' };
+    store['pushTokens/tok_sporter2'] = { userId: 'sporter2', orgId: 'vanas', platform: 'web' };
+  });
+  afterEach(() => {
+    if (ORIGINAL_SECRET === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = ORIGINAL_SECRET;
+  });
+
+  it('weigert zonder het juiste geheim', async () => {
+    const res = await runReminders('Bearer fout');
+    expect(res.statusCode).toBe(401);
+    expect(sentPushes).toHaveLength(0);
+  });
+
+  it('stuurt één melding per persoon met een plek, niet naar de wachtlijst', async () => {
+    const res = await runReminders();
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ people: 1, devices: 1, failed: 0 });
+    expect(sentPushes).toHaveLength(1);
+    expect(sentPushes[0].tokens).toEqual(['tok_sporter1']);
+    expect(sentPushes[0].notification).toEqual({
+      title: 'Morgen 2 lessen',
+      body: 'Small Group 9:00 · Yoga 18:30. Kun je niet? Meld je op tijd af in de app.',
+    });
+    expect(store['bookings/b1'].reminderSentAt).toBeTruthy();
+    expect(store['bookings/b3'].reminderSentAt).toBeTruthy();
+    expect(store['bookings/b2'].reminderSentAt).toBeUndefined();
+  });
+
+  it('een tweede run op dezelfde dag stuurt niets opnieuw', async () => {
+    await runReminders();
+    sentPushes = [];
+    const res = await runReminders();
+    expect(res.body.people).toBe(0);
+    expect(sentPushes).toHaveLength(0);
+  });
+
+  it('een afgelaste les levert geen herinnering op', async () => {
+    store['classes/c1'].cancelledAt = '2026-09-25T10:00:00.000Z';
+    store['classes/c2'].cancelledAt = '2026-09-25T10:00:00.000Z';
+    const res = await runReminders();
+    expect(res.body.people).toBe(0);
+    expect(sentPushes).toHaveLength(0);
   });
 });

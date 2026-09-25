@@ -12,6 +12,7 @@ const PROBLEM_TEXT: Record<Exclude<PushEnableResult, 'ok'>, string> = {
   'ios-home-screen':
     'Op een iPhone werken meldingen alleen als de app op je beginscherm staat: tik in Safari op Deel en kies "Zet op beginscherm". Open de app daarna vanaf het beginscherm en zet meldingen hier aan.',
   'not-configured': 'Meldingen zijn voor de webversie nog niet ingesteld door de studio. Probeer het later opnieuw.',
+  failed: 'Aanmelden voor meldingen is mislukt. Probeer het later opnieuw; lukt het niet, stuur dan de melding hieronder door aan de studio.',
 };
 
 /**
@@ -26,6 +27,7 @@ export function PushNotificationsCard({ userId }: { userId: string }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<Exclude<PushEnableResult, 'ok'> | null>(null);
+  const [problemDetail, setProblemDetail] = useState<string | null>(null);
   const homeScreenFirst = needsHomeScreenForPush();
 
   useEffect(() => {
@@ -46,12 +48,16 @@ export function PushNotificationsCard({ userId }: { userId: string }) {
     async (next: boolean) => {
       setBusy(true);
       setProblem(null);
+      setProblemDetail(null);
       try {
         if (next) {
-          const result = await enablePush(userId);
-          setEnabled(result === 'ok');
-          if (result === 'ok') notify?.success('Meldingen staan aan op dit toestel.');
-          else setProblem(result);
+          const { status, detail } = await enablePush(userId);
+          setEnabled(status === 'ok');
+          if (status === 'ok') notify?.success('Meldingen staan aan op dit toestel.');
+          else {
+            setProblem(status);
+            setProblemDetail(detail ?? null);
+          }
         } else {
           await disablePush(userId);
           setEnabled(false);
@@ -75,7 +81,7 @@ export function PushNotificationsCard({ userId }: { userId: string }) {
         </Typography>
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-        Een seintje bij een nieuw schema, en voor trainers bij een check-in van een sporter. Geldt voor dit toestel.
+        Een seintje bij een nieuw schema, de avond voor een les die je hebt geboekt, en voor trainers bij een check-in van een sporter. Geldt voor dit toestel.
       </Typography>
 
       {loading ? (
@@ -90,6 +96,11 @@ export function PushNotificationsCard({ userId }: { userId: string }) {
       {(problem || (homeScreenFirst && !enabled)) && (
         <Alert severity="info" sx={{ mt: 1 }}>
           {PROBLEM_TEXT[problem ?? 'ios-home-screen']}
+          {problemDetail && (
+            <Typography component="div" variant="caption" sx={{ mt: 0.75, fontFamily: 'monospace', wordBreak: 'break-word' }}>
+              {problemDetail}
+            </Typography>
+          )}
         </Alert>
       )}
     </ContentCard>
