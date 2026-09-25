@@ -181,19 +181,6 @@ export async function getSportersByTrainerId(trainerId: string): Promise<Profile
   return all.filter((p) => p.trainerId === trainerId);
 }
 
-/** Alle sporters van de actieve studio (voor workout-toewijzing). */
-export async function getAllSporters(): Promise<Profile[]> {
-  const all = await getAllProfiles();
-  const list = all.filter((p) => p.role === 'sporter');
-  return list.sort((a, b) =>
-    (a.displayName || a.email || a.userId).localeCompare(
-      b.displayName || b.email || b.userId,
-      undefined,
-      { sensitivity: 'base' }
-    )
-  );
-}
-
 /**
  * Collega's: trainers en beheerders in dezelfde studio, jezelf niet meegerekend.
  *

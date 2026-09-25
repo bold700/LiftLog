@@ -24,7 +24,7 @@ export function NutritionInsights() {
   const profileCtx = useProfile();
   const { viewed } = useViewAs();
   // "Bekijk als": voeding en doel van de gekozen sporter, niet die van de trainer.
-  const viewedProfile = viewed.isOther ? profileCtx?.allSporters.find((s) => s.userId === viewed.userId) ?? null : profileCtx?.profile;
+  const viewedProfile = viewed.isOther ? (profileCtx?.members ?? []).find((s) => s.userId === viewed.userId) ?? null : profileCtx?.profile;
   const uid = viewed.isOther ? viewed.userId : profileCtx?.profile?.userId ?? '';
   const goal = viewedProfile?.nutritionGoal ?? null;
 

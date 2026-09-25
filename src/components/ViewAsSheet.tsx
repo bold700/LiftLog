@@ -1,8 +1,9 @@
 /**
- * Sporter kiezen om als te bekijken/loggen ("Bekijk als"), via het profielfoto-menu (AppShell).
+ * Iemand kiezen om als te bekijken/loggen ("Bekijk als"), via het profielfoto-menu (AppShell).
+ * Iedereen in de studio: eerst de sporters, daarna het team (trainers en beheerders).
  * Bottom sheet op de telefoon, dialoog op een groot scherm — allebei dezelfde lijst.
  */
-import { Dialog, Drawer, List, ListItemButton, ListItemAvatar, ListItemText, Typography, Box, useMediaQuery, useTheme } from '@mui/material';
+import { Dialog, Drawer, List, ListItemButton, ListItemAvatar, ListItemText, ListSubheader, Typography, Box, useMediaQuery, useTheme } from '@mui/material';
 import { UserAvatar } from './UserAvatar';
 import { designTokens } from '../theme/designTokens';
 import type { Profile } from '../types';
@@ -10,18 +11,26 @@ import type { Profile } from '../types';
 interface ViewAsSheetProps {
   open: boolean;
   onClose: () => void;
-  /** Sporters die je kunt kiezen. */
-  sporters: Profile[];
+  /** Iedereen in de studio behalve jezelf (sporters, trainers, beheerders). */
+  members: Profile[];
   /** Wie er nu bekeken wordt (voor het vinkje/highlight), '' = jezelf. */
   viewedUserId: string;
   ownName: string;
   ownPhotoURL?: string | null;
-  onPick: (sporter: Profile | null) => void;
+  onPick: (member: Profile | null) => void;
 }
 
-export function ViewAsSheet({ open, onClose, sporters, viewedUserId, ownName, ownPhotoURL, onPick }: ViewAsSheetProps) {
+const ROLE_LABEL: Record<string, string> = { trainer: 'Trainer', admin: 'Beheerder' };
+
+export function ViewAsSheet({ open, onClose, members, viewedUserId, ownName, ownPhotoURL, onPick }: ViewAsSheetProps) {
   const theme = useTheme();
   const wide = useMediaQuery(theme.breakpoints.up('md'));
+  const groups = [
+    { title: 'Sporters', people: members.filter((m) => m.role === 'sporter') },
+    { title: 'Team', people: members.filter((m) => m.role !== 'sporter') },
+  ];
+  // Kopjes alleen als er echt twee groepen zijn; anders is het gewoon één lijst.
+  const showHeaders = groups.every((g) => g.people.length > 0);
 
   const content = (
     <>
@@ -35,14 +44,26 @@ export function ViewAsSheet({ open, onClose, sporters, viewedUserId, ownName, ow
           </ListItemAvatar>
           <ListItemText primary={`${ownName} (mezelf)`} />
         </ListItemButton>
-        {sporters.map((s) => (
-          <ListItemButton key={s.userId} selected={s.userId === viewedUserId} onClick={() => onPick(s)}>
-            <ListItemAvatar>
-              <UserAvatar name={s.displayName} photoURL={s.photoURL} size={36} />
-            </ListItemAvatar>
-            <ListItemText primary={s.displayName?.trim() || s.email || s.userId} />
-          </ListItemButton>
-        ))}
+        {groups.map(
+          (g) =>
+            g.people.length > 0 && (
+              <Box key={g.title}>
+                {showHeaders && (
+                  <ListSubheader disableSticky sx={{ bgcolor: 'transparent', lineHeight: '32px', mt: 0.5 }}>
+                    {g.title}
+                  </ListSubheader>
+                )}
+                {g.people.map((m) => (
+                  <ListItemButton key={m.userId} selected={m.userId === viewedUserId} onClick={() => onPick(m)}>
+                    <ListItemAvatar>
+                      <UserAvatar name={m.displayName} photoURL={m.photoURL} size={36} />
+                    </ListItemAvatar>
+                    <ListItemText primary={m.displayName?.trim() || m.email || m.userId} secondary={ROLE_LABEL[m.role]} />
+                  </ListItemButton>
+                ))}
+              </Box>
+            )
+        )}
       </List>
     </>
   );
