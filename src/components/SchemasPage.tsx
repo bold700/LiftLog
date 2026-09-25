@@ -9,6 +9,7 @@ import {
   useTheme,
   Snackbar,
   CircularProgress,
+  Alert,
 } from '@mui/material';
 import { useWorkouts } from '../hooks/useWorkouts';
 import {
@@ -85,6 +86,7 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
   const {
     schemas,
     loading,
+    error: loadError,
     loadSchemas,
     getSchemaById,
     saveSchema,
@@ -702,9 +704,14 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
           visibleCount={visibleSchemas.length}
         />
 
+        {loadError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Workouts konden niet worden opgehaald: {loadError}
+          </Alert>
+        )}
         {loading ? (
           <Typography color="text.secondary">Workouts laden…</Typography>
-        ) : schemas.length === 0 ? (
+        ) : schemas.length === 0 && !loadError ? (
           <EmptyState>
             {canCreateWorkouts ? (
               'Nog geen workouts. Maak er een aan met de +-knop.'
