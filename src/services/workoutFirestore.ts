@@ -106,11 +106,17 @@ export async function getWorkoutsForUser(uid: string, role: ProfileRole): Promis
       where('audience', '==', 'open')
     ),
   ];
-  const snaps = await Promise.all(queries.map((q) => getDocs(q).catch(() => null)));
+  const results = await Promise.allSettled(queries.map((q) => getDocs(q)));
   const byId = new Map<string, Schema>();
-  for (const snap of snaps) {
-    if (!snap) continue;
-    for (const d of snap.docs) byId.set(d.id, toSchema(d.data(), d.id));
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue;
+    for (const d of result.value.docs) byId.set(d.id, toSchema(d.data(), d.id));
+  }
+  // Als alle drie opvragingen mislukken (bijv. geen rechten of geen verbinding) is dat een echte
+  // fout, geen "geen workouts": anders lijkt een sporter die zijn schema's niet mag lezen precies
+  // hetzelfde als een sporter die er simpelweg nog geen heeft.
+  if (byId.size === 0 && results.every((r) => r.status === 'rejected')) {
+    throw results[0].reason;
   }
   return Array.from(byId.values()).sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
 }

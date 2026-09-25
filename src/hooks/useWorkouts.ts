@@ -27,6 +27,8 @@ export function useWorkouts() {
   const { viewed } = useViewAs();
   const [schemas, setSchemas] = useState<Schema[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Gezet als het ophalen echt mislukte (rechten/verbinding) — anders lijkt dat hetzelfde als "geen workouts". */
+  const [error, setError] = useState<string | null>(null);
 
   // "Bekijk als": laat zien wat die sporter zelf zou zien (eigen/toegewezen/open), niet de
   // trainersblik op iedereen — anders lijkt "bekijk als" niets te doen op dit scherm.
@@ -35,6 +37,7 @@ export function useWorkouts() {
 
   const loadSchemas = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       if (targetUid && profile?.profile) {
         const list = await getWorkoutsForUser(targetUid, targetRole ?? 'sporter');
@@ -42,8 +45,9 @@ export function useWorkouts() {
       } else {
         setSchemas(getSchemas());
       }
-    } catch {
+    } catch (e) {
       setSchemas(getSchemas());
+      setError(e instanceof Error ? e.message : 'Workouts ophalen mislukt.');
     } finally {
       setLoading(false);
     }
@@ -109,6 +113,7 @@ export function useWorkouts() {
   return {
     schemas,
     loading,
+    error,
     loadSchemas,
     getSchemaById,
     saveSchema,
