@@ -18,6 +18,8 @@ import {
   deleteSchema as deleteSchemaStorage,
   createEmptySchema as createEmptySchemaStorage,
 } from '../utils/schemaStorage';
+import { notifyUser } from '../services/pushService';
+import { newlyAssignedIds } from '../utils/pushTargets';
 import type { Schema } from '../types';
 
 const TRAINER_ID_LOCAL = 'local_trainer';
@@ -76,7 +78,15 @@ export function useWorkouts() {
   const saveSchema = useCallback(
     async (schema: Schema) => {
       if (auth?.user?.uid) {
+        const previous = schemas.find((s) => s.id === schema.id) ?? null;
         await saveWorkoutToFirestore(schema);
+        // Wie nieuw aan dit schema hangt, krijgt een seintje. Pas na het opslaan, en zonder erop
+        // te wachten: een melding die niet aankomt mag het opslaan nooit tegenhouden.
+        if (profile?.isTrainer) {
+          for (const id of newlyAssignedIds(previous, schema, auth.user.uid)) {
+            void notifyUser('workout', id, schema.name?.trim() ? `"${schema.name.trim()}" staat voor je klaar.` : undefined);
+          }
+        }
         setSchemas((prev) => {
           const idx = prev.findIndex((s) => s.id === schema.id);
           const next = [...prev];
@@ -89,7 +99,7 @@ export function useWorkouts() {
         setSchemas(getSchemas());
       }
     },
-    [auth?.user?.uid]
+    [auth?.user?.uid, schemas, profile?.isTrainer]
   );
 
   const deleteSchema = useCallback(

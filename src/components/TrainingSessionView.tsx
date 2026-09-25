@@ -41,6 +41,8 @@ import { useProfile } from '../context/ProfileContext';
 import { useViewAs } from '../context/ViewAsContext';
 import { useNotify } from '../context/NotifyContext';
 import { saveCheckin } from '../services/checkinService';
+import { notifyUser } from '../services/pushService';
+import { checkinRecipient } from '../utils/pushTargets';
 import { LastHandoverNote } from './LastHandoverNote';
 import { CheckinDialog, type Feeling } from './CheckinDialog';
 import { designTokens } from '../theme/designTokens';
@@ -127,7 +129,7 @@ export const TrainingSessionView = ({
       }
       setCheckinSaving(true);
       try {
-        await saveCheckin({
+        const saved = await saveCheckin({
           // Logt de trainer voor een sporter, dan is de check-in van die sporter.
           userId: logTarget?.userId ?? me.userId,
           loggedBy: me.userId,
@@ -140,6 +142,9 @@ export const TrainingSessionView = ({
           handover: handover || null,
           date: new Date().toISOString(),
         });
+        // Vulde de sporter hem zelf in, dan krijgt de trainer een seintje.
+        const recipient = checkinRecipient(saved);
+        if (recipient) void notifyUser('checkin', recipient, day?.dayLabel ? `${day.dayLabel} afgerond` : undefined);
       } catch (err) {
         notify.error('Check-in opslaan mislukt. De training is wel afgerond.', err);
       } finally {

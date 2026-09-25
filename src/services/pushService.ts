@@ -7,14 +7,15 @@
  *
  * Werkt op twee manieren, afhankelijk van waar de app draait:
  *  - In de echte app (iOS/Android via Capacitor): het toestel levert het token aan.
- *  - In de browser (PWA): Firebase Cloud Messaging via een service worker.
+ *  - In de browser (PWA): Firebase Cloud Messaging via public/firebase-messaging-sw.js. Nodig:
+ *    VITE_FIREBASE_VAPID_KEY in Vercel, en op een iPhone moet de app op het beginscherm staan.
  *
  * Het token wordt opgeslagen in `pushTokens`, met het document-id gelijk aan het token zelf.
  * Zo kan hetzelfde toestel niet twee keer in de lijst komen.
  */
 import { Capacitor } from '@capacitor/core';
 import { deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, where, collection } from 'firebase/firestore';
-import { auth, db, isFirebaseConfigured } from '../firebase/config';
+import { auth, db, firebaseApp, firebaseConfig, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
 import { apiUrl } from '../utils/apiOrigin';
 
@@ -53,11 +54,28 @@ async function storeToken(userId: string, token: string): Promise<void> {
 }
 
 /**
- * Vraagt toestemming en meldt dit toestel aan voor meldingen.
- * Geeft `false` terug als de gebruiker weigert of als meldingen hier niet kunnen.
+ * Uitkomst van aanmelden. Iets anders dan `ok` legt de kaart in gewone taal uit, want "werkt niet"
+ * helpt niemand: op een iPhone moet de app bijvoorbeeld eerst op het beginscherm staan.
  */
-export async function enablePush(userId: string): Promise<boolean> {
-  if (Capacitor.isNativePlatform()) return enableNativePush(userId);
+export type PushEnableResult = 'ok' | 'denied' | 'unsupported' | 'ios-home-screen' | 'not-configured';
+
+/** iPhone/iPad in Safari, maar niet vanaf het beginscherm geopend: daar laat Apple geen webpush toe. */
+export function needsHomeScreenForPush(): boolean {
+  if (Capacitor.isNativePlatform() || typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  const iOS = /iPhone|iPad|iPod/.test(ua) || (ua.includes('Macintosh') && navigator.maxTouchPoints > 1);
+  if (!iOS) return false;
+  const standalone =
+    (typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)').matches) ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return !standalone;
+}
+
+/**
+ * Vraagt toestemming en meldt dit toestel aan voor meldingen.
+ */
+export async function enablePush(userId: string): Promise<PushEnableResult> {
+  if (Capacitor.isNativePlatform()) return (await enableNativePush(userId)) ? 'ok' : 'denied';
   return enableWebPush(userId);
 }
 
@@ -89,24 +107,45 @@ async function enableNativePush(userId: string): Promise<boolean> {
   return true;
 }
 
-async function enableWebPush(userId: string): Promise<boolean> {
+/** Scope van de push-worker: los van de pagina's, zodat hij nooit de app zelf bedient of cachet. */
+const PUSH_SW_SCOPE = '/firebase-cloud-messaging-push-scope';
+
+/**
+ * Registreert public/firebase-messaging-sw.js, met de Firebase-instellingen in de query-string
+ * (een service worker kan de build-variabelen niet lezen). Deze worker toont meldingen als de app
+ * dicht is; src/main.tsx laat hem daarom staan bij het opruimen van oude workers.
+ */
+async function registerPushWorker(): Promise<ServiceWorkerRegistration> {
+  const cfg = firebaseConfig;
+  const params = new URLSearchParams({
+    apiKey: cfg?.apiKey ?? '',
+    projectId: cfg?.projectId ?? '',
+    messagingSenderId: cfg?.messagingSenderId ?? '',
+    appId: cfg?.appId ?? '',
+  });
+  return navigator.serviceWorker.register(`/firebase-messaging-sw.js?${params}`, { scope: PUSH_SW_SCOPE });
+}
+
+async function enableWebPush(userId: string): Promise<PushEnableResult> {
+  if (needsHomeScreenForPush()) return 'ios-home-screen';
+  if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) return 'unsupported';
   const vapidKey = (import.meta.env?.VITE_FIREBASE_VAPID_KEY as string | undefined)?.trim();
-  if (!vapidKey) return false;
-  if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) return false;
+  if (!vapidKey || !firebaseApp || !firebaseConfig?.messagingSenderId || !firebaseConfig.appId) return 'not-configured';
 
   const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
-  if (permission !== 'granted') return false;
+  if (permission !== 'granted') return 'denied';
 
   try {
     const { getMessaging, getToken, isSupported } = await import('firebase/messaging');
-    if (!(await isSupported())) return false;
-    const registration = await navigator.serviceWorker.ready;
-    const token = await getToken(getMessaging(), { vapidKey, serviceWorkerRegistration: registration });
-    if (!token) return false;
+    if (!(await isSupported())) return 'unsupported';
+    const registration = await registerPushWorker();
+    const token = await getToken(getMessaging(firebaseApp), { vapidKey, serviceWorkerRegistration: registration });
+    if (!token) return 'unsupported';
     await storeToken(userId, token);
-    return true;
-  } catch {
-    return false;
+    return 'ok';
+  } catch (e) {
+    console.warn('[push] aanmelden mislukt', e);
+    return 'unsupported';
   }
 }
 
@@ -170,4 +209,36 @@ export async function notifyUser(kind: PushKind, recipientId: string, preview?: 
   } catch {
     /* melding overslaan is niet erg; de actie zelf is al gelukt */
   }
+}
+
+/**
+ * Meldingen terwijl de app open staat. Dan toont het toestel (web) er zelf geen, dus geven we
+ * de tekst door aan de app, die hem als melding onderin laat zien. Geeft een opruimfunctie terug.
+ */
+export function onForegroundPush(handler: (title: string, body: string) => void): () => void {
+  let stop: (() => void) | null = null;
+  let cancelled = false;
+  void (async () => {
+    try {
+      if (Capacitor.isNativePlatform()) {
+        const { PushNotifications } = await import('@capacitor/push-notifications');
+        const sub = await PushNotifications.addListener('pushNotificationReceived', (n) => handler(n.title ?? '', n.body ?? ''));
+        stop = () => void sub.remove();
+      } else {
+        if (typeof Notification === 'undefined' || Notification.permission !== 'granted' || !firebaseApp) return;
+        const { getMessaging, onMessage, isSupported } = await import('firebase/messaging');
+        if (!(await isSupported())) return;
+        stop = onMessage(getMessaging(firebaseApp), (payload) =>
+          handler(payload.notification?.title ?? '', payload.notification?.body ?? '')
+        );
+      }
+      if (cancelled) stop?.();
+    } catch {
+      /* geen meldingen op de voorgrond; de rest van de app werkt gewoon */
+    }
+  })();
+  return () => {
+    cancelled = true;
+    stop?.();
+  };
 }

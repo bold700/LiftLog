@@ -13,9 +13,12 @@ if (typeof document !== 'undefined') {
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   // Wacht tot DOM volledig geladen is
   window.addEventListener('load', () => {
-    // Unregister alle service workers
+    // Unregister alle service workers, behalve die voor pushmeldingen (public/firebase-messaging-sw.js):
+    // die cachet niets, en zonder hem komen er in de webapp geen meldingen binnen.
     navigator.serviceWorker.getRegistrations().then((registrations) => {
       registrations.forEach((registration) => {
+        const script = (registration.active ?? registration.waiting ?? registration.installing)?.scriptURL ?? '';
+        if (script.includes('/firebase-messaging-sw.js')) return;
         registration.unregister().then((success) => {
           console.log('Service worker unregistered:', success);
         });
