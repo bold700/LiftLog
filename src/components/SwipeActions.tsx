@@ -39,12 +39,25 @@ export function SwipeActions({ actions, open, onOpenChange, radius, style, child
   const suppressClick = useRef(false);
 
   const offset = drag ?? (open ? -tray : 0);
+  // De knoppen alleen tonen tijdens vegen of als de rij open staat. Anders schemert de rode
+  // Verwijderen-knop langs de afgeronde rand van de kaart (anti-aliasing), vooral op desktop.
+  // Bij sluiten pas verbergen als de kaart terug is geschoven (zelfde duur als de transform).
+  const revealed = open || drag != null;
 
   return (
     <Box style={style} sx={{ position: 'relative', borderRadius: `${radius}px`, overflow: 'hidden', minWidth: 0 }}>
       <Box
         aria-hidden={!open}
-        sx={{ position: 'absolute', top: 0, right: 0, bottom: 0, display: 'flex', width: tray }}
+        sx={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          display: 'flex',
+          width: tray,
+          visibility: revealed ? 'visible' : 'hidden',
+          transition: revealed ? 'visibility 0s' : 'visibility 0s linear 0.22s',
+        }}
       >
         {actions.map((a) => (
           <ButtonBase
@@ -105,6 +118,11 @@ export function SwipeActions({ actions, open, onOpenChange, radius, style, child
         }}
         sx={{
           position: 'relative',
+          // In een raster is de rij zo hoog als de hoogste kaart; laat de kaart die hoogte vullen.
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          '& > *': { flex: 1 },
           transform: `translateX(${offset}px)`,
           transition: drag == null ? 'transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)' : 'none',
           touchAction: 'pan-y',

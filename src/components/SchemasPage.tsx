@@ -11,6 +11,7 @@ import {
   CircularProgress,
   Alert,
 } from '@mui/material';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import { useWorkouts } from '../hooks/useWorkouts';
 import {
   getSortedDayIndices,
@@ -40,7 +41,7 @@ import { getMyPendingRequest } from '../services/workoutRequestService';
 import { useAddFromSchema } from '../context/AddFromSchemaContext';
 import { useProfile } from '../context/ProfileContext';
 import { useShowBackButton } from '../context/TopBarBackContext';
-import { PageLayout, EmptyState } from './layout';
+import { PageLayout, EmptyState, HeaderActions } from './layout';
 import { SchemaDeleteDialog } from './schemas/SchemaDeleteDialog';
 import { GroupSessionSetupDialog } from './schemas/GroupSessionSetupDialog';
 import { WorkoutRequestDialog } from './schemas/WorkoutRequestDialog';
@@ -682,7 +683,21 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
       <Box>
         {/* Boven de kaart staat al "Workouts" in de bovenbalk; die titel hoeft hier niet nog eens
             te staan. Bij een gekozen categorie (bijv. "Groepslessen") is de naam wel nieuwe
-            informatie. Aanmaken gaat via het +-menu. */}
+            informatie. Aanmaken: op desktop met "Nieuwe workout" rechts in de paginakop (Figma),
+            op de telefoon via het +-menu onder de duim. */}
+        {canCreateWorkouts && (
+          <HeaderActions>
+            <Button
+              variant="contained"
+              disableElevation
+              startIcon={<AddRoundedIcon />}
+              onClick={() => setOpenNewSchemaDialog(true)}
+              sx={{ display: { xs: 'none', md: 'inline-flex' }, borderRadius: '20px', textTransform: 'none', fontWeight: 500, height: 40, px: 2.5 }}
+            >
+              Nieuwe workout
+            </Button>
+          </HeaderActions>
+        )}
         {activeCategory && (
           <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
             {activeCategory}
