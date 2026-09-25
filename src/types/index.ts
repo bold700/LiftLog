@@ -333,8 +333,53 @@ export interface Org {
    * ruimtes eindigen door een typfout. Leeg = nog niets aangemaakt.
    */
   rooms: string[];
+  /**
+   * Automatische meldingen aan of uit (Beheer → Meldingen). Standaard staat alles aan: alleen een
+   * expliciete `false` zet een soort uit. De server leest dit voordat hij iets verstuurt.
+   */
+  notifications: OrgNotificationSettings;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Soorten automatische meldingen; zelfde lijst als NOTIFICATION_KINDS in api/_lib/notifications.mjs. */
+export type NotificationKind =
+  | 'workout'
+  | 'checkin'
+  | 'classReminder'
+  | 'classCancelled'
+  | 'waitlistPromoted'
+  | 'creditsLow'
+  | 'weeklyCheckin'
+  | 'inactive'
+  | 'birthday';
+
+export type OrgNotificationSettings = Partial<Record<NotificationKind, boolean>>;
+
+/** Naar wie een bericht van de studio gaat. `label` is alleen voor de geschiedenis ("HIIT za 26 sep"). */
+export interface BroadcastAudience {
+  type: 'member' | 'class' | 'classType' | 'all';
+  id: string | null;
+  label: string;
+}
+
+/** Een bericht dat een trainer of beheerder aan leden stuurt (Beheer → Meldingen). */
+export interface Broadcast {
+  id: string;
+  orgId: string;
+  title: string;
+  body: string;
+  audience: BroadcastAudience;
+  /** YYYY-MM-DD: gaat die avond mee met de avondronde. Null = meteen verstuurd. */
+  scheduledFor: string | null;
+  status: 'scheduled' | 'sending' | 'sent' | 'cancelled';
+  createdBy: string;
+  createdByName: string;
+  createdAt: string;
+  sentAt: string | null;
+  /** Aantal mensen dat het bericht kreeg (met minstens één apparaat), en het aantal apparaten. */
+  recipients: number | null;
+  devices: number | null;
 }
 
 /**

@@ -40,7 +40,7 @@
       "schedule": "0 3 * * *"
     },
     {
-      "path": "/api/cron/class-reminders",
+      "path": "/api/cron/evening",
       "schedule": "0 16 * * *"
     }
   ],
@@ -62,8 +62,8 @@
       "destination": "/api/booking?cron=generateClasses"
     },
     {
-      "source": "/api/cron/class-reminders",
-      "destination": "/api/booking?cron=classReminders"
+      "source": "/api/cron/evening",
+      "destination": "/api/booking?cron=evening"
     },
     {
       "source": "/api/mcp/:key",

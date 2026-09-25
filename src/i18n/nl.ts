@@ -41,6 +41,7 @@ export const nl = {
       subscriptions: 'Abonnementen',
       branding: 'Huisstijl',
       billing: 'Facturatie',
+      notifications: 'Meldingen',
     },
     addAccount: 'Account toevoegen',
     openRequests: {

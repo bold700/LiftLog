@@ -180,6 +180,17 @@ await t('sporter leest zijn eigen checkout-post → geweigerd', false, getDoc(do
 await t('beheerder leest een checkout-post van zijn studio → geweigerd', false, getDoc(doc(as('admin1'), 'mollieCheckouts/tr_test1')));
 await t('sporter maakt zelf een checkout-post aan → geweigerd', false, setDoc(doc(as('sporter1'), 'mollieCheckouts/tr_nieuw'), { orgId: 'vanas', userId: 'sporter1', planId: 'pl1', status: 'pending' }));
 
+// Meldingen (Beheer → Meldingen): de schakelaars staan op het studio-document, alleen de eigenaar
+// zet ze om. Berichten van de studio (broadcasts) lopen alleen via de server.
+await t('beheerder zet een automatische melding uit → mag', true, updateDoc(doc(as('admin1'), 'orgs/vanas'), { notifications: { birthday: false } }));
+await t('trainer zet een automatische melding uit → geweigerd', false, updateDoc(doc(as('trainer1'), 'orgs/vanas'), { notifications: { birthday: false } }));
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'broadcasts/bc1'), { orgId: 'vanas', title: 'Andere zaal', status: 'scheduled' });
+});
+await t('trainer leest een bericht van de studio rechtstreeks → geweigerd', false, getDoc(doc(as('trainer1'), 'broadcasts/bc1')));
+await t('beheerder plant rechtstreeks een bericht in → geweigerd', false, setDoc(doc(as('admin1'), 'broadcasts/bc2'), { orgId: 'vanas', title: 'x', status: 'scheduled' }));
+await t('sporter leest een bericht van de studio → geweigerd', false, getDoc(doc(as('sporter1'), 'broadcasts/bc1')));
+
 await t('trainer studio B maakt workout in eigen studio → mag', true, setDoc(doc(as('trainerB'), 'workouts/wB2'), { orgId: 'studiob', trainerId: 'trainerB', name: 'ok' }));
 
 // De ledenlijst zoals de app hem opvraagt (profileService.getAllProfiles): een filter op lidmaatschap

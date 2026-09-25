@@ -242,15 +242,25 @@ De code staat er; de configuratie bij Apple en Google niet. Eenmalig nodig:
    `public/firebase-messaging-sw.js` (alleen meldingen, geen cache). Op een iPhone werkt webpush
    alleen als de app op het beginscherm staat (iOS 16.4+).
 
-Wanneer er een melding gaat: een sporter die nieuw aan een schema wordt gekoppeld krijgt "Nieuw
-schema"; een trainer krijgt "Check-in van …" als een sporter zelf een check-in invult (na een
-training of de wekelijkse). Versturen loopt via `api/notify.mjs`.
+Welke meldingen er zijn staat in **Beheer → Meldingen**; de eigenaar zet daar per soort aan of uit
+(standaard alles aan, opgeslagen als `orgs/{orgId}.notifications`). Een trainer ziet die lijst
+alleen. Direct: nieuw schema, les geannuleerd door de studio, plek via de wachtlijst, credits
+bijna op (na een boeking met 1 of 0 over), en voor de trainer een ingevulde check-in. Losse
+meldingen vanuit de app lopen via `api/notify.mjs`; die bij boeken en afmelden via
+`api/booking.mjs`.
 
-Lesherinneringen: elke dag rond 18:00 (Vercel-cron `/api/cron/class-reminders`, 16:00 UTC; op het
-Hobby-plan ergens binnen dat uur) krijgt iedereen met een plek in een les van morgen één melding,
-bijv. "Morgen: HIIT om 9:00". Wachtlijst en afgelaste lessen niet. Per boeking wordt
-`reminderSentAt` gezet, zodat een tweede run niet nog eens stuurt. Code: `classReminders` in
-`api/booking.mjs`, regels in `api/_lib/classReminders.mjs`. Vereist `CRON_SECRET` (staat er al).
+Avondronde: elke dag rond 18:00 (Vercel-cron `/api/cron/evening`, 16:00 UTC; op het Hobby-plan
+ergens binnen dat uur). Daarin: lesherinneringen voor morgen (één melding per persoon, geen
+wachtlijst of afgelaste lessen; `reminderSentAt` per boeking voorkomt dubbel), berichten die voor
+vandaag gepland staan, verjaardagen, op zondag de wekelijkse check-in voor sporters met een
+trainer, en op maandag per trainer een overzicht van eigen sporters die 2 weken geen training
+logden en geen les volgden. Code: `runEveningNotifications` in `api/_lib/notifications.mjs`.
+Vereist `CRON_SECRET` (staat er al).
+
+Berichten van de studio: in Beheer → Meldingen stuurt een trainer of de eigenaar een bericht aan
+één lid, de deelnemers van een les, iedereen van een lessoort of de hele studio; meteen of op een
+dag vanaf morgen (dan in de avondronde). Opgeslagen in `broadcasts` (alleen de server, max 30 per
+dag per persoon). Een gepland bericht kun je intrekken.
 
 Lukt aanmelden niet, dan toont de kaart Meldingen de technische foutcode. Bekende oorzaak: de
 Browser key in Google Cloud (APIs & Services → Credentials) moet o.a. **Firebase Installations
