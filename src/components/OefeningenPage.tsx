@@ -413,7 +413,7 @@ export const OefeningenPage = () => {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: '3fr 2fr' },
+              gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 3fr) minmax(0, 2fr)' },
               gridTemplateAreas: { xs: '"max" "recent" "balance"', md: '"max recent" "balance recent"' },
               gridTemplateRows: { md: 'auto 1fr' },
               gap: { xs: 2.5, md: 2.5 },

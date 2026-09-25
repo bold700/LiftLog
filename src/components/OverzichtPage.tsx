@@ -122,7 +122,7 @@ export function OverzichtPage({ onOpenMuscles, onOpenLogs }: OverzichtPageProps)
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) minmax(0, 1fr)' },
           gap: 3,
           alignItems: 'start',
         }}

@@ -138,7 +138,7 @@ export function LeaderboardPage() {
       </ToggleButtonGroup>
 
       {/* Lijst links, uitleg rechts (Figma "Leaderboard"); op een telefoon staat de uitleg eronder. */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '9fr 5fr' }, gap: 2.5, alignItems: 'start' }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 9fr) minmax(0, 5fr)' }, gap: 2.5, alignItems: 'start' }}>
         <Box sx={{ minWidth: 0 }}>
           {loading ? (
             <Typography color="text.secondary">Laden…</Typography>

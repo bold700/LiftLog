@@ -448,7 +448,7 @@ export function MetingenPage({ openFormRequested, onConsumeOpenForm }: MetingenP
 
         {/* Figma "Body": links het laatste gewicht met de trend, rechts de samenstelling en de historie.
             Op mobiel onder elkaar in dezelfde volgorde. */}
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '13fr 15fr' }, gap: 2.5 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 13fr) minmax(0, 15fr)' }, gap: 2.5 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, minWidth: 0 }}>
             <LatestWeightCard items={items} goalWeight={goalWeight} />
             <PhotoProgressPanel items={items} />

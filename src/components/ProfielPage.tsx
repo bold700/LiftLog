@@ -448,7 +448,9 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
 
       {/* Twee kolommen op desktop (Figma "Profile"): links abonnement, boekingen en je gegevens;
           rechts doelen, ranglijst en account. Op een telefoon staat alles onder elkaar. */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '14fr 14fr' }, gap: { xs: 2, md: 2.5 }, alignItems: 'start' }}>
+      {/* minmax(0, …): anders rekt een lange regel met noWrap (bijv. een plannaam) de kolom op tot
+          voorbij de schermrand en kan de hele pagina horizontaal scrollen. */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 14fr) minmax(0, 14fr)' }, gap: { xs: 2, md: 2.5 }, alignItems: 'start' }}>
         {/* Op een telefoon lossen de kolommen op (display: contents) en bepaalt `order` de volgorde
             zoals Figma: abonnement, boekingen, gegevens, doelen, ranglijst, account, dan de rest. */}
         <Box sx={columnSx}>

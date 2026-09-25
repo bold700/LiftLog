@@ -216,7 +216,7 @@ export function BrandingSettings() {
   const shownName = orgName.trim() || savedOrgName;
 
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, alignItems: 'start' }}>
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) minmax(0, 1fr)' }, gap: 2, alignItems: 'start' }}>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
       <ContentCard>
         <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
