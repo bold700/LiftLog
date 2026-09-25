@@ -10,7 +10,7 @@ import { useAuth } from './AuthContext';
 import {
   getProfile,
   getSportersByTrainerId,
-  getAllSporters,
+  getAllProfiles,
   createProfile,
 } from '../services/profileService';
 import type { Profile, ProfileRole } from '../types';
@@ -31,6 +31,11 @@ type ProfileState = {
   sporters: Profile[];
   /** Alle sporters in het systeem (voor workout-toewijzing: elke trainer kan elke sporter toewijzen). */
   allSporters: Profile[];
+  /**
+   * Iedereen in de studio behalve jezelf: sporters, trainers en beheerders. Voor "Bekijk als",
+   * waar een beheerder ook bij een collega moet kunnen meekijken (alleen voor staf geladen).
+   */
+  members: Profile[];
   loading: boolean;
   error: string | null;
   /** Studio waarin je nu werkt. Voor de meeste mensen altijd dezelfde. */
@@ -45,11 +50,18 @@ type ProfileState = {
 
 const ProfileContext = createContext<ProfileState | null>(null);
 
+/** Op naam (of e-mail), hoofdletterongevoelig: dezelfde volgorde als de ledenlijst. */
+function sortByName(list: Profile[]): Profile[] {
+  const label = (p: Profile) => p.displayName || p.email || p.userId;
+  return [...list].sort((a, b) => label(a).localeCompare(label(b), undefined, { sensitivity: 'base' }));
+}
+
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [sporters, setSporters] = useState<Profile[]>([]);
   const [allSporters, setAllSporters] = useState<Profile[]>([]);
+  const [members, setMembers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
@@ -62,6 +74,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setProfile(null);
       setSporters([]);
       setAllSporters([]);
+      setMembers([]);
       setLoading(false);
       return;
     }
@@ -90,21 +103,26 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         // De ledenlijst apart afvangen: mislukt die, dan blijft het profiel (en dus de rol) staan.
         // Anders zag een beheerder de app als sporter zodra alleen de lijst werd geweigerd.
         try {
-          const [mySporters, all] = await Promise.all([
+          // Eén keer de hele studio ophalen: daaruit komen zowel de sporters als "Bekijk als".
+          const [mySporters, everyone] = await Promise.all([
             getSportersByTrainerId(auth.user.uid),
-            getAllSporters(),
+            getAllProfiles(),
           ]);
+          const others = sortByName(everyone.filter((m) => m.userId !== auth.user?.uid));
           setSporters(mySporters);
-          setAllSporters(all);
+          setAllSporters(sortByName(everyone.filter((m) => m.role === 'sporter')));
+          setMembers(others);
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           setError('Ledenlijst niet kunnen laden. ' + msg);
           setSporters([]);
           setAllSporters([]);
+          setMembers([]);
         }
       } else {
         setSporters([]);
         setAllSporters([]);
+        setMembers([]);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -115,6 +133,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setProfile(null);
       setSporters([]);
       setAllSporters([]);
+      setMembers([]);
     } finally {
       setLoading(false);
     }
@@ -159,6 +178,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setActiveOrgId(orgId);
       setSporters([]);
       setAllSporters([]);
+      setMembers([]);
       await refreshProfile();
     },
     [profile, refreshProfile]
@@ -176,6 +196,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     isAdmin,
     sporters,
     allSporters,
+    members,
     loading,
     error,
     activeOrgId,

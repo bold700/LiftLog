@@ -137,8 +137,8 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
   const viewingOther = viewed.isOther;
   /** Profiel van de sporter waar je meekijkt; nodig om `trainerId` op de log te laten staan. */
   const viewedProfile = useMemo(
-    () => (viewingOther ? profile?.allSporters?.find((p) => p.userId === viewed.userId) ?? null : null),
-    [viewingOther, profile?.allSporters, viewed.userId]
+    () => (viewingOther ? profile?.members?.find((p) => p.userId === viewed.userId) ?? null : null),
+    [viewingOther, profile?.members, viewed.userId]
   );
   const [allExercises, setAllExercises] = useState<Exercise[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);

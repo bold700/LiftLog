@@ -136,9 +136,10 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
    * ingelogde trainer — inclusief inloggegevens (via de server, zie updateMemberCredentials), zodat
    * het voor de trainer volledig aanvoelt alsof hij als die sporter is ingelogd.
    */
-  const viewedProfile = viewed.isOther ? profile?.allSporters.find((s) => s.userId === viewed.userId) ?? null : null;
+  const viewedProfile = viewed.isOther ? (profile?.members ?? []).find((s) => s.userId === viewed.userId) ?? null : null;
   const effective = viewed.isOther ? viewedProfile : p;
-  const effectiveRole = viewed.isOther ? 'sporter' : p?.role;
+  // Bij "Bekijk als" kan dat ook een collega (trainer/beheerder) zijn: die heeft geen abonnement-tab.
+  const effectiveRole = viewed.isOther ? (viewedProfile?.role ?? 'sporter') : p?.role;
   const uid = viewed.isOther ? viewed.userId : (auth?.user?.uid ?? p?.userId);
   const isPasswordAccount = viewed.isOther ? true : (auth?.user?.providerData?.some((pr) => pr.providerId === 'password') ?? false);
 

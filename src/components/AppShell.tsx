@@ -183,7 +183,7 @@ function ProfileMenuButton({
         <ViewAsSheet
           open={pickerOpen}
           onClose={() => setPickerOpen(false)}
-          sporters={profile?.allSporters ?? []}
+          members={profile?.members ?? []}
           viewedUserId={viewed.isOther ? viewed.userId : ''}
           ownName={me?.displayName || me?.email || 'Mijzelf'}
           ownPhotoURL={me?.photoURL}
