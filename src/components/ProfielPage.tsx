@@ -15,6 +15,10 @@ import {
   Typography,
   InputAdornment,
   CircularProgress,
+  Tab,
+  Tabs,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
@@ -82,7 +86,10 @@ function FieldRow({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-const columnSx = { display: { xs: 'contents', md: 'flex' }, flexDirection: 'column', gap: 2.5, minWidth: 0 } as const;
+const columnSx = { display: 'flex', flexDirection: 'column', gap: { xs: 2, md: 2.5 }, minWidth: 0 } as const;
+const gridSx = { display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) minmax(0, 1fr)' }, gap: { xs: 2, md: 2.5 }, alignItems: 'start' } as const;
+
+type ProfileTab = 'gegevens' | 'abonnement' | 'account' | 'koppelingen';
 const radioSx = { my: -0.25, '& .MuiFormControlLabel-label': { fontSize: 14 } } as const;
 
 export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
@@ -90,6 +97,9 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
   const { t, lang, setLang } = useI18n();
   const auth = useAuth();
   const { viewed } = useViewAs();
+  const theme = useTheme();
+  const wideTabs = useMediaQuery(theme.breakpoints.up('md'));
+  const [tab, setTab] = useState<ProfileTab>('gegevens');
   const [displayName, setDisplayName] = useState('');
   const [leaderboardVisibility, setLeaderboardVisibility] = useState<LeaderboardVisibility>('named');
   const [heightCm, setHeightCm] = useState('');
@@ -359,6 +369,288 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
     hidden: 'Verborgen',
   };
 
+
+  // Kaarten per tab. Het formulier (Wijzigen/Opslaan) omvat Gegevens en Account samen; wisselen
+  // van tab tijdens bewerken houdt je invoer vast, want alle velden leven in deze component.
+  const personalCard = (
+    <Box sx={{ ...sectionSx() }}>
+      <SectionTitle>Persoonlijke gegevens</SectionTitle>
+      {editing ? (
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, pt: 1 }}>
+          <TextField
+            label="Profielnaam"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="Bijv. Jan Jansen"
+            fullWidth
+            autoFocus
+            sx={{ gridColumn: { sm: '1 / -1' } }}
+          />
+          <TextField
+            label="Geboortedatum"
+            type="date"
+            value={birthDate}
+            onChange={(e) => setBirthDate(e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            fullWidth
+          />
+          <TextField
+            select
+            label="Geslacht"
+            value={gender || 'none'}
+            onChange={(e) => setGender(e.target.value === 'none' ? '' : (e.target.value as typeof gender))}
+            fullWidth
+          >
+            <MenuItem value="none">Niet opgegeven</MenuItem>
+            <MenuItem value="man">Man</MenuItem>
+            <MenuItem value="vrouw">Vrouw</MenuItem>
+            <MenuItem value="anders">Anders</MenuItem>
+          </TextField>
+          <NumberField
+            label="Lengte"
+            value={heightCm}
+            onChange={setHeightCm}
+            fullWidth
+            InputProps={{ endAdornment: <InputAdornment position="end">cm</InputAdornment> }}
+          />
+          <NumberField
+            label="Rusthartslag"
+            value={restingHr}
+            onChange={setRestingHr}
+            fullWidth
+            InputProps={{ endAdornment: <InputAdornment position="end">bpm</InputAdornment> }}
+          />
+        </Box>
+      ) : (
+        <>
+          <FieldRow label="Profielnaam">{displayName || '–'}</FieldRow>
+          <FieldRow label="Geboortedatum">{birthLabel}</FieldRow>
+          <FieldRow label="Geslacht">{gender ? genderLabel[gender] : '–'}</FieldRow>
+          <FieldRow label="Lengte">{heightCm ? `${heightCm} cm` : '–'}</FieldRow>
+          <FieldRow label="Rusthartslag">{restingHr ? `${restingHr} bpm` : '–'}</FieldRow>
+        </>
+      )}
+      <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: editing ? 1.5 : 1 }}>
+        Je naam staat in de app en op de ranglijst. Leeftijd en geslacht vullen de AI-routekaart alvast in.
+      </Typography>
+    </Box>
+  );
+
+  const heartRateCard = (
+    <Box sx={{ ...sectionSx() }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: 1, mb: 0.5 }}>
+        <SectionTitle>Hartslagzones</SectionTitle>
+        {hrZones && (
+          <Typography variant="caption" color="text.secondary">
+            max {hrZones.maxHr} bpm (220 − leeftijd){hrZones.restingHr != null ? ` · rust ${hrZones.restingHr} bpm` : ''}
+          </Typography>
+        )}
+      </Box>
+      {hrZones ? (
+        <>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+            {hrZones.method === 'karvonen'
+              ? 'Berekend met de hartslagreserve (Karvonen): rust + (max − rust) × percentage.'
+              : 'Berekend als percentage van de maximale hartslag. Vul je rusthartslag in voor zones op maat (Karvonen).'}
+          </Typography>
+          <Box sx={{ overflowX: 'auto' }}>
+            <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+              <Box component="thead">
+                <Box component="tr" sx={{ textAlign: 'left', color: 'text.secondary', fontSize: 12 }}>
+                  <Box component="th" sx={{ py: 0.5, pr: 1, fontWeight: 500 }}>Zone</Box>
+                  <Box component="th" sx={{ py: 0.5, pr: 1, fontWeight: 500 }}>bpm</Box>
+                  <Box component="th" sx={{ py: 0.5, fontWeight: 500 }}>Waarvoor</Box>
+                </Box>
+              </Box>
+              <Box component="tbody">
+                {hrZones.zones.map((z) => (
+                  <Box component="tr" key={z.zone} sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
+                    <Box component="td" sx={{ py: 0.75, pr: 1.5, whiteSpace: 'nowrap', verticalAlign: 'top' }}>
+                      <Box component="span" sx={{ fontWeight: 500 }}>Z{z.zone}</Box>{' '}
+                      <Box component="span" sx={{ color: 'text.secondary' }}>{z.name}</Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        {Math.round(z.low * 100)}–{Math.round(z.high * 100)}%
+                      </Typography>
+                    </Box>
+                    <Box component="td" sx={{ py: 0.75, pr: 1, whiteSpace: 'nowrap', verticalAlign: 'top', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+                      {z.lowBpm}–{z.highBpm}
+                    </Box>
+                    <Box component="td" sx={{ py: 0.75, verticalAlign: 'top', fontSize: 12, color: 'text.secondary' }}>
+                      {z.purpose}
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+            De 220-formule wijkt per persoon tot zo'n 10 bpm af. Een gemeten maximum uit een test is nauwkeuriger.
+          </Typography>
+        </>
+      ) : (
+        <Typography variant="body2" color="text.secondary">
+          Vul je geboortedatum in om je hartslagzones te zien. Met rusthartslag worden ze op maat berekend.
+        </Typography>
+      )}
+    </Box>
+  );
+
+  const limitationsCard = (
+    <Box sx={{ ...sectionSx() }}>
+      <LimitationsEditor value={limitations} onChange={setLimitations} disabled={saving || !editing} />
+    </Box>
+  );
+
+  const goalsCard = (
+    <Box sx={{ ...sectionSx() }}>
+      <SectionTitle>Doelen</SectionTitle>
+      {editing ? (
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr' }, gap: 2, pt: 1 }}>
+          <NumberField
+            label="Streefgewicht"
+            decimal
+            value={goalWeight}
+            onChange={setGoalWeight}
+            fullWidth
+            InputProps={{ endAdornment: <InputAdornment position="end">kg</InputAdornment> }}
+          />
+          <NumberField
+            label="Calorieën per dag"
+            value={goalKcal}
+            onChange={setGoalKcal}
+            fullWidth
+            InputProps={{ endAdornment: <InputAdornment position="end">kcal</InputAdornment> }}
+          />
+          <NumberField label="Eiwit" value={goalProtein} onChange={setGoalProtein} fullWidth InputProps={{ endAdornment: <InputAdornment position="end">g</InputAdornment> }} />
+          <NumberField label="Koolhydraten" value={goalCarbs} onChange={setGoalCarbs} fullWidth InputProps={{ endAdornment: <InputAdornment position="end">g</InputAdornment> }} />
+          <NumberField label="Vet" value={goalFat} onChange={setGoalFat} fullWidth InputProps={{ endAdornment: <InputAdornment position="end">g</InputAdornment> }} />
+        </Box>
+      ) : (
+        <>
+          <FieldRow label="Streefgewicht">{effective?.weightGoalKg ? `${String(effective.weightGoalKg).replace('.', ',')} kg` : '–'}</FieldRow>
+          <FieldRow label="Calorieën per dag">{effective?.nutritionGoal?.kcal ? `${effective.nutritionGoal.kcal.toLocaleString('nl-NL')} kcal` : '–'}</FieldRow>
+          <FieldRow label="Eiwit">{effective?.nutritionGoal?.protein ? `${effective.nutritionGoal.protein} g` : '–'}</FieldRow>
+          <FieldRow label="Koolhydraten">{effective?.nutritionGoal?.carbs ? `${effective.nutritionGoal.carbs} g` : '–'}</FieldRow>
+          <FieldRow label="Vet">{effective?.nutritionGoal?.fat ? `${effective.nutritionGoal.fat} g` : '–'}</FieldRow>
+        </>
+      )}
+      <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: editing ? 1.5 : 1 }}>
+        Dezelfde doelen als bij Metingen (gewicht) en Voeding (calorieën en macro's).
+      </Typography>
+    </Box>
+  );
+
+  const leaderboardCard = (
+    <Box sx={{ ...sectionSx() }}>
+      <SectionTitle id="ranglijst-titel">Ranglijst</SectionTitle>
+      {editing ? (
+        <RadioGroup aria-labelledby="ranglijst-titel" value={leaderboardVisibility} onChange={(e) => setLeaderboardVisibility(e.target.value as LeaderboardVisibility)}>
+          <FormControlLabel value="named" control={<Radio size="small" />} label="Met mijn profielnaam" sx={radioSx} />
+          <FormControlLabel value="anonymous" control={<Radio size="small" />} label="Anoniem" sx={radioSx} />
+          <FormControlLabel value="hidden" control={<Radio size="small" />} label="Verborgen" sx={radioSx} />
+        </RadioGroup>
+      ) : (
+        <FieldRow label="Zichtbaarheid">{visibilityLabel[leaderboardVisibility]}</FieldRow>
+      )}
+      <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 0.5 }}>Alleen totalen worden gedeeld; je logs blijven privé.</Typography>
+    </Box>
+  );
+
+  const accountCard = (
+    <Box sx={{ ...sectionSx() }}>
+      <SectionTitle>Account</SectionTitle>
+      {editing ? (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1, pb: 1 }}>
+          <TextField
+            label="E-mail"
+            type="email"
+            value={emailInput}
+            onChange={(e) => setEmailInput(e.target.value)}
+            disabled={!isPasswordAccount}
+            helperText={
+              !isPasswordAccount
+                ? 'Beheerd via je aanbieder (Google, etc.).'
+                : viewed.isOther
+                  ? 'Wordt direct gewijzigd, zonder bevestigingsmail.'
+                  : 'Na opslaan krijg je een bevestigingslink op het nieuwe adres.'
+            }
+            autoComplete="email"
+            inputProps={{ autoCapitalize: 'none', autoCorrect: 'off' }}
+            fullWidth
+          />
+          {isPasswordAccount && (
+            <TextField
+              label="Nieuw wachtwoord"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              helperText="Leeg laten als je het niet wilt wijzigen. Minstens 6 tekens."
+              autoComplete="new-password"
+              fullWidth
+            />
+          )}
+          {needsCurrentPassword && (
+            <TextField
+              label="Huidig wachtwoord"
+              type="password"
+              required
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              helperText="Nodig om je e-mail of wachtwoord te wijzigen."
+              autoComplete="current-password"
+              fullWidth
+            />
+          )}
+          {/* Taal: op het profiel, zodat elk apparaat dezelfde keuze laat zien. */}
+          <TextField select label={t('lang.label')} value={langChoice} onChange={(e) => setLangChoice(e.target.value as Lang)} fullWidth>
+            {LANGS.map((l) => (
+              <MenuItem key={l} value={l}>
+                {t(`lang.${l}`)}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Box>
+      ) : (
+        <>
+          <FieldRow label="E-mail">
+            <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', maxWidth: 240 }} title={email}>
+              {email}
+            </Box>
+          </FieldRow>
+          {isPasswordAccount && <FieldRow label="Wachtwoord">••••••••</FieldRow>}
+          <FieldRow label={t('lang.label')}>{t(`lang.${displayLang}`)}</FieldRow>
+          {!isPasswordAccount && (
+            <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 0.5 }}>E-mail wordt beheerd via je aanbieder (Google, etc.).</Typography>
+          )}
+        </>
+      )}
+      {/* Uitloggen hoort bij het account (ontwerp: Account-kaart, "Sign out"); op desktop staat hij ook in de zijbalk.
+          Bij "Bekijk als" verborgen: hij logt altijd de trainer zelf uit, nooit de bekeken sporter. */}
+      {onLogout && !viewed.isOther && (
+        <Box
+          component="button"
+          type="button"
+          onClick={onLogout}
+          sx={{ all: 'unset', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 1, minHeight: 34, fontSize: 14, mt: 0.5, '&:hover': { textDecoration: 'underline' } }}
+        >
+          <LogoutRoundedIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+          {t('nav.signOut')}
+        </Box>
+      )}
+    </Box>
+  );
+
+  const isSporterProfile = !!uid && effectiveRole === 'sporter';
+  const tabs: { value: ProfileTab; label: string }[] = [
+    { value: 'gegevens', label: 'Gegevens' },
+    ...(isSporterProfile ? [{ value: 'abonnement' as const, label: 'Abonnement' }] : []),
+    { value: 'account', label: 'Account' },
+    { value: 'koppelingen', label: 'Koppelingen' },
+  ];
+  // Een trainer heeft geen abonnement-tab; val terug op Gegevens als die tab wegvalt (bijv. na "Bekijk als").
+  const activeTab: ProfileTab = tabs.some((x) => x.value === tab) ? tab : 'gegevens';
+  // "Wijzigen" hoort bij de tabs met invulvelden; tijdens bewerken blijven Annuleren/Opslaan altijd staan.
+  const showEditActions = editing || activeTab === 'gegevens' || activeTab === 'account';
   return (
     <PageLayout maxWidth="none">
       {message && (
@@ -374,7 +666,7 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
 
       {/* Desktop: rechts in de paginakop eerst "Wijzigen"; tijdens bewerken "Annuleren" en "Wijzigingen opslaan". */}
       <HeaderActions>
-        <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1 }}>{editActions}</Box>
+        {showEditActions && <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1 }}>{editActions}</Box>}
       </HeaderActions>
 
       {/* Wie je bent: grote avatar (tik om de foto te wijzigen), naam en sinds wanneer je lid bent. */}
@@ -444,317 +736,61 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
       </Box>
 
       {/* Telefoon: Wijzigen (en tijdens bewerken Annuleren/Opslaan) direct onder je naam; op desktop in de paginakop. */}
-      <Box sx={{ display: { xs: 'flex', md: 'none' }, gap: 1, mb: 2 }}>{editActions}</Box>
+      {showEditActions && <Box sx={{ display: { xs: 'flex', md: 'none' }, gap: 1, mb: 2 }}>{editActions}</Box>}
 
-      {/* Twee kolommen op desktop (Figma "Profile"): links abonnement, boekingen en je gegevens;
-          rechts doelen, ranglijst en account. Op een telefoon staat alles onder elkaar. */}
-      {/* minmax(0, …): anders rekt een lange regel met noWrap (bijv. een plannaam) de kolom op tot
-          voorbij de schermrand en kan de hele pagina horizontaal scrollen. */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 14fr) minmax(0, 14fr)' }, gap: { xs: 2, md: 2.5 }, alignItems: 'start' }}>
-        {/* Op een telefoon lossen de kolommen op (display: contents) en bepaalt `order` de volgorde
-            zoals Figma: abonnement, boekingen, gegevens, doelen, ranglijst, account, dan de rest. */}
-        <Box sx={columnSx}>
-          {uid && effectiveRole === 'sporter' && (
-            <Box sx={{ order: { xs: 1, md: 0 } }}>
-              <SubscriptionCard userId={uid} />
-            </Box>
-          )}
-          {uid && effectiveRole === 'sporter' && (
-            <Box sx={{ order: { xs: 2, md: 0 } }}>
-              <BookingsCard userId={uid} />
-            </Box>
-          )}
-          {uid && effectiveRole === 'sporter' && (
-            <Box sx={{ order: { xs: 2, md: 0 } }}>
-              <StandingBookingsCard userId={uid} />
-            </Box>
-          )}
+      {/* Tabs zoals bij Beheer, over de volle breedte. Per tab twee kolommen op desktop, onder elkaar op
+          de telefoon. minmax(0, …): anders rekt een lange regel met noWrap (bijv. een plannaam) de kolom
+          op tot voorbij de schermrand en kan de hele pagina horizontaal scrollen. */}
+      <Tabs
+        value={activeTab}
+        onChange={(_, v: ProfileTab) => setTab(v)}
+        aria-label="Profiel"
+        variant={wideTabs ? 'fullWidth' : 'scrollable'}
+        scrollButtons={false}
+        sx={{ minHeight: 44, mb: 2.5, borderBottom: '1px solid', borderColor: 'divider', '& .MuiTab-root': { minHeight: 44, textTransform: 'none', fontWeight: 600, px: 2 } }}
+      >
+        {tabs.map((x) => (
+          <Tab key={x.value} value={x.value} label={x.label} />
+        ))}
+      </Tabs>
 
-          <Box sx={{ ...sectionSx(), order: { xs: 3, md: 0 } }}>
-            <SectionTitle>Persoonlijke gegevens</SectionTitle>
-            {editing ? (
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, pt: 1 }}>
-                <TextField
-                  label="Profielnaam"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Bijv. Jan Jansen"
-                  fullWidth
-                  autoFocus
-                  sx={{ gridColumn: { sm: '1 / -1' } }}
-                />
-                <TextField
-                  label="Geboortedatum"
-                  type="date"
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  fullWidth
-                />
-                <TextField
-                  select
-                  label="Geslacht"
-                  value={gender || 'none'}
-                  onChange={(e) => setGender(e.target.value === 'none' ? '' : (e.target.value as typeof gender))}
-                  fullWidth
-                >
-                  <MenuItem value="none">Niet opgegeven</MenuItem>
-                  <MenuItem value="man">Man</MenuItem>
-                  <MenuItem value="vrouw">Vrouw</MenuItem>
-                  <MenuItem value="anders">Anders</MenuItem>
-                </TextField>
-                <NumberField
-                  label="Lengte"
-                  value={heightCm}
-                  onChange={setHeightCm}
-                  fullWidth
-                  InputProps={{ endAdornment: <InputAdornment position="end">cm</InputAdornment> }}
-                />
-                <NumberField
-                  label="Rusthartslag"
-                  value={restingHr}
-                  onChange={setRestingHr}
-                  fullWidth
-                  InputProps={{ endAdornment: <InputAdornment position="end">bpm</InputAdornment> }}
-                />
-              </Box>
-            ) : (
-              <>
-                <FieldRow label="Profielnaam">{displayName || '–'}</FieldRow>
-                <FieldRow label="Geboortedatum">{birthLabel}</FieldRow>
-                <FieldRow label="Geslacht">{gender ? genderLabel[gender] : '–'}</FieldRow>
-                <FieldRow label="Lengte">{heightCm ? `${heightCm} cm` : '–'}</FieldRow>
-                <FieldRow label="Rusthartslag">{restingHr ? `${restingHr} bpm` : '–'}</FieldRow>
-              </>
-            )}
-            <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: editing ? 1.5 : 1 }}>
-              Je naam staat in de app en op de ranglijst. Leeftijd en geslacht vullen de AI-routekaart alvast in.
-            </Typography>
+      {activeTab === 'gegevens' && (
+        <Box sx={gridSx}>
+          <Box sx={columnSx}>
+            {personalCard}
+            {heartRateCard}
           </Box>
-
-          {/* Hartslagzones: uit leeftijd + rusthartslag, zelfde formule als de routekaart */}
-          <Box sx={{ ...sectionSx(), order: { xs: 7, md: 0 } }}>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: 1, mb: 0.5 }}>
-              <SectionTitle>Hartslagzones</SectionTitle>
-              {hrZones && (
-                <Typography variant="caption" color="text.secondary">
-                  max {hrZones.maxHr} bpm (220 − leeftijd){hrZones.restingHr != null ? ` · rust ${hrZones.restingHr} bpm` : ''}
-                </Typography>
-              )}
-            </Box>
-            {hrZones ? (
-              <>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-                  {hrZones.method === 'karvonen'
-                    ? 'Berekend met de hartslagreserve (Karvonen): rust + (max − rust) × percentage.'
-                    : 'Berekend als percentage van de maximale hartslag. Vul je rusthartslag in voor zones op maat (Karvonen).'}
-                </Typography>
-                <Box sx={{ overflowX: 'auto' }}>
-                  <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                    <Box component="thead">
-                      <Box component="tr" sx={{ textAlign: 'left', color: 'text.secondary', fontSize: 12 }}>
-                        <Box component="th" sx={{ py: 0.5, pr: 1, fontWeight: 500 }}>Zone</Box>
-                        <Box component="th" sx={{ py: 0.5, pr: 1, fontWeight: 500 }}>bpm</Box>
-                        <Box component="th" sx={{ py: 0.5, fontWeight: 500 }}>Waarvoor</Box>
-                      </Box>
-                    </Box>
-                    <Box component="tbody">
-                      {hrZones.zones.map((z) => (
-                        <Box component="tr" key={z.zone} sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
-                          <Box component="td" sx={{ py: 0.75, pr: 1.5, whiteSpace: 'nowrap', verticalAlign: 'top' }}>
-                            <Box component="span" sx={{ fontWeight: 500 }}>Z{z.zone}</Box>{' '}
-                            <Box component="span" sx={{ color: 'text.secondary' }}>{z.name}</Box>
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                              {Math.round(z.low * 100)}–{Math.round(z.high * 100)}%
-                            </Typography>
-                          </Box>
-                          <Box component="td" sx={{ py: 0.75, pr: 1, whiteSpace: 'nowrap', verticalAlign: 'top', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
-                            {z.lowBpm}–{z.highBpm}
-                          </Box>
-                          <Box component="td" sx={{ py: 0.75, verticalAlign: 'top', fontSize: 12, color: 'text.secondary' }}>
-                            {z.purpose}
-                          </Box>
-                        </Box>
-                      ))}
-                    </Box>
-                  </Box>
-                </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                  De 220-formule wijkt per persoon tot zo'n 10 bpm af. Een gemeten maximum uit een test is nauwkeuriger.
-                </Typography>
-              </>
-            ) : (
-              <Typography variant="body2" color="text.secondary">
-                Vul je geboortedatum in om je hartslagzones te zien. Met rusthartslag worden ze op maat berekend.
-              </Typography>
-            )}
-          </Box>
-
-          <Box sx={{ ...sectionSx(), order: { xs: 8, md: 0 } }}>
-            <LimitationsEditor value={limitations} onChange={setLimitations} disabled={saving || !editing} />
+          <Box sx={columnSx}>
+            {goalsCard}
+            {limitationsCard}
           </Box>
         </Box>
+      )}
 
-        <Box sx={columnSx}>
-          {/* Doelen: wat er op Metingen en Voeding is ingesteld, op één plek (Figma "Goals"). */}
-          <Box sx={{ ...sectionSx(), order: { xs: 4, md: 0 } }}>
-            <SectionTitle>Doelen</SectionTitle>
-            {editing ? (
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr' }, gap: 2, pt: 1 }}>
-                <NumberField
-                  label="Streefgewicht"
-                  decimal
-                  value={goalWeight}
-                  onChange={setGoalWeight}
-                  fullWidth
-                  InputProps={{ endAdornment: <InputAdornment position="end">kg</InputAdornment> }}
-                />
-                <NumberField
-                  label="Calorieën per dag"
-                  value={goalKcal}
-                  onChange={setGoalKcal}
-                  fullWidth
-                  InputProps={{ endAdornment: <InputAdornment position="end">kcal</InputAdornment> }}
-                />
-                <NumberField label="Eiwit" value={goalProtein} onChange={setGoalProtein} fullWidth InputProps={{ endAdornment: <InputAdornment position="end">g</InputAdornment> }} />
-                <NumberField label="Koolhydraten" value={goalCarbs} onChange={setGoalCarbs} fullWidth InputProps={{ endAdornment: <InputAdornment position="end">g</InputAdornment> }} />
-                <NumberField label="Vet" value={goalFat} onChange={setGoalFat} fullWidth InputProps={{ endAdornment: <InputAdornment position="end">g</InputAdornment> }} />
-              </Box>
-            ) : (
-              <>
-                <FieldRow label="Streefgewicht">{effective?.weightGoalKg ? `${String(effective.weightGoalKg).replace('.', ',')} kg` : '–'}</FieldRow>
-                <FieldRow label="Calorieën per dag">{effective?.nutritionGoal?.kcal ? `${effective.nutritionGoal.kcal.toLocaleString('nl-NL')} kcal` : '–'}</FieldRow>
-                <FieldRow label="Eiwit">{effective?.nutritionGoal?.protein ? `${effective.nutritionGoal.protein} g` : '–'}</FieldRow>
-                <FieldRow label="Koolhydraten">{effective?.nutritionGoal?.carbs ? `${effective.nutritionGoal.carbs} g` : '–'}</FieldRow>
-                <FieldRow label="Vet">{effective?.nutritionGoal?.fat ? `${effective.nutritionGoal.fat} g` : '–'}</FieldRow>
-              </>
-            )}
-            <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: editing ? 1.5 : 1 }}>
-              Dezelfde doelen als bij Metingen (gewicht) en Voeding (calorieën en macro's).
-            </Typography>
-          </Box>
-
-          <Box sx={{ ...sectionSx(), order: { xs: 5, md: 0 } }}>
-            <SectionTitle id="ranglijst-titel">Ranglijst</SectionTitle>
-            {editing ? (
-              <RadioGroup aria-labelledby="ranglijst-titel" value={leaderboardVisibility} onChange={(e) => setLeaderboardVisibility(e.target.value as LeaderboardVisibility)}>
-                <FormControlLabel value="named" control={<Radio size="small" />} label="Met mijn profielnaam" sx={radioSx} />
-                <FormControlLabel value="anonymous" control={<Radio size="small" />} label="Anoniem" sx={radioSx} />
-                <FormControlLabel value="hidden" control={<Radio size="small" />} label="Verborgen" sx={radioSx} />
-              </RadioGroup>
-            ) : (
-              <FieldRow label="Zichtbaarheid">{visibilityLabel[leaderboardVisibility]}</FieldRow>
-            )}
-            <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 0.5 }}>Alleen totalen worden gedeeld; je logs blijven privé.</Typography>
-          </Box>
-
-          <Box sx={{ ...sectionSx(), order: { xs: 6, md: 0 } }}>
-            <SectionTitle>Account</SectionTitle>
-            {editing ? (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1, pb: 1 }}>
-                <TextField
-                  label="E-mail"
-                  type="email"
-                  value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  disabled={!isPasswordAccount}
-                  helperText={
-                    !isPasswordAccount
-                      ? 'Beheerd via je aanbieder (Google, etc.).'
-                      : viewed.isOther
-                        ? 'Wordt direct gewijzigd, zonder bevestigingsmail.'
-                        : 'Na opslaan krijg je een bevestigingslink op het nieuwe adres.'
-                  }
-                  autoComplete="email"
-                  inputProps={{ autoCapitalize: 'none', autoCorrect: 'off' }}
-                  fullWidth
-                />
-                {isPasswordAccount && (
-                  <TextField
-                    label="Nieuw wachtwoord"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    helperText="Leeg laten als je het niet wilt wijzigen. Minstens 6 tekens."
-                    autoComplete="new-password"
-                    fullWidth
-                  />
-                )}
-                {needsCurrentPassword && (
-                  <TextField
-                    label="Huidig wachtwoord"
-                    type="password"
-                    required
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    helperText="Nodig om je e-mail of wachtwoord te wijzigen."
-                    autoComplete="current-password"
-                    fullWidth
-                  />
-                )}
-                {/* Taal: op het profiel, zodat elk apparaat dezelfde keuze laat zien. */}
-                <TextField select label={t('lang.label')} value={langChoice} onChange={(e) => setLangChoice(e.target.value as Lang)} fullWidth>
-                  {LANGS.map((l) => (
-                    <MenuItem key={l} value={l}>
-                      {t(`lang.${l}`)}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Box>
-            ) : (
-              <>
-                <FieldRow label="E-mail">
-                  <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', maxWidth: 240 }} title={email}>
-                    {email}
-                  </Box>
-                </FieldRow>
-                {isPasswordAccount && <FieldRow label="Wachtwoord">••••••••</FieldRow>}
-                <FieldRow label={t('lang.label')}>{t(`lang.${displayLang}`)}</FieldRow>
-                {!isPasswordAccount && (
-                  <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 0.5 }}>E-mail wordt beheerd via je aanbieder (Google, etc.).</Typography>
-                )}
-              </>
-            )}
-            {/* Uitloggen hoort bij het account (ontwerp: Account-kaart, "Sign out"); op desktop staat hij ook in de zijbalk.
-                Bij "Bekijk als" verborgen: hij logt altijd de trainer zelf uit, nooit de bekeken sporter. */}
-            {onLogout && !viewed.isOther && (
-              <Box
-                component="button"
-                type="button"
-                onClick={onLogout}
-                sx={{ all: 'unset', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 1, minHeight: 34, fontSize: 14, mt: 0.5, '&:hover': { textDecoration: 'underline' } }}
-              >
-                <LogoutRoundedIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-                {t('nav.signOut')}
-              </Box>
-            )}
-          </Box>
-
-          {uid && (
-            <Box sx={{ order: { xs: 9, md: 0 } }}>
-              <PushNotificationsCard userId={uid} />
-            </Box>
-          )}
-
-          {uid && (
-            <Box sx={{ order: { xs: 10, md: 0 } }}>
-              <AiChatConnectCard userId={uid} />
-            </Box>
-          )}
-
-          {uid && (
-            <Box sx={{ order: { xs: 11, md: 0 } }}>
-              <CalendarFeedCard userId={uid} />
-            </Box>
-          )}
-
-          {uid && (effectiveRole === 'trainer' || effectiveRole === 'admin') && (
-            <Box sx={{ order: { xs: 12, md: 0 } }}>
-              <CalendarFeedCard userId={uid} kind="trainer" />
-            </Box>
-          )}
+      {activeTab === 'abonnement' && isSporterProfile && (
+        // Kaarten los in het raster: een kaart die niets toont (bijv. geen abonnementen in de studio) laat zo geen gat achter.
+        <Box sx={gridSx}>
+          <SubscriptionCard userId={uid} />
+          <BookingsCard userId={uid} />
+          <StandingBookingsCard userId={uid} />
         </Box>
-      </Box>
+      )}
+
+      {activeTab === 'account' && (
+        <Box sx={gridSx}>
+          <Box sx={columnSx}>{accountCard}</Box>
+          <Box sx={columnSx}>{leaderboardCard}</Box>
+        </Box>
+      )}
+
+      {activeTab === 'koppelingen' && uid && (
+        <Box sx={gridSx}>
+          <PushNotificationsCard userId={uid} />
+          <AiChatConnectCard userId={uid} />
+          <CalendarFeedCard userId={uid} />
+          {(effectiveRole === 'trainer' || effectiveRole === 'admin') && <CalendarFeedCard userId={uid} kind="trainer" />}
+        </Box>
+      )}
 
       {/* Telefoon: na een lang formulier ook onderaan opslaan, zonder terug te scrollen. */}
       {editing && <Box sx={{ display: { xs: 'flex', md: 'none' }, gap: 1, mt: 2.5 }}>{editActions}</Box>}
