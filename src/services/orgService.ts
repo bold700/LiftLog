@@ -8,7 +8,7 @@ import { doc, getDoc, setDoc, serverTimestamp, type Timestamp } from 'firebase/f
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
 import { callBooking } from './classService';
-import type { Org, OrgBookingPolicy, OrgBranding, OrgBusiness, OrgPaymentsStatus } from '../types';
+import type { NotificationKind, Org, OrgBookingPolicy, OrgBranding, OrgBusiness, OrgNotificationSettings, OrgPaymentsStatus } from '../types';
 
 const COLLECTION = 'orgs';
 
@@ -30,6 +30,7 @@ function toOrg(data: Record<string, unknown>, id: string): Org {
     business: toBusiness(data.business),
     payments: toPaymentsStatus(data.payments),
     bookingPolicy: toBookingPolicy(data.bookingPolicy),
+    notifications: toNotificationSettings(data.notifications),
     createdAt: ts(data.createdAt),
     updatedAt: ts(data.updatedAt),
   };
@@ -154,6 +155,37 @@ export async function saveOrgRooms(orgId: string, rooms: string[]): Promise<void
   if (!id) throw new Error('Studio-id ontbreekt');
   const clean = Array.from(new Set(rooms.map((r) => r.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
   await setDoc(doc(db, COLLECTION, id), { rooms: clean, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+const NOTIFICATION_KINDS: NotificationKind[] = [
+  'workout',
+  'checkin',
+  'classReminder',
+  'classCancelled',
+  'waitlistPromoted',
+  'creditsLow',
+  'weeklyCheckin',
+  'inactive',
+  'birthday',
+];
+
+/** Alleen bekende soorten met een echte boolean; de rest (en alles wat ontbreekt) telt als "aan". */
+export function toNotificationSettings(raw: unknown): OrgNotificationSettings {
+  if (!raw || typeof raw !== 'object') return {};
+  const out: OrgNotificationSettings = {};
+  for (const kind of NOTIFICATION_KINDS) {
+    const v = (raw as Record<string, unknown>)[kind];
+    if (typeof v === 'boolean') out[kind] = v;
+  }
+  return out;
+}
+
+/** Eén soort automatische melding aan of uit zetten (Beheer → Meldingen). Alleen een beheerder mag dit (Firestore-regels). */
+export async function saveOrgNotification(orgId: string, kind: NotificationKind, enabled: boolean): Promise<void> {
+  if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
+  const id = orgId.trim();
+  if (!id) throw new Error('Studio-id ontbreekt');
+  await setDoc(doc(db, COLLECTION, id), { notifications: { [kind]: enabled }, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 /** Bedrijfsgegevens opslaan (Beheer → Huisstijl). Alleen een beheerder mag dit (Firestore-regels). */

@@ -39,6 +39,7 @@ export const en: Messages = {
       subscriptions: 'Subscriptions',
       branding: 'Branding',
       billing: 'Billing',
+      notifications: 'Notifications',
     },
     addAccount: 'Add account',
     openRequests: {

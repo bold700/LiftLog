@@ -22,6 +22,7 @@ import { getAdmin } from './_lib/firebaseAdmin.mjs';
 import { orgIdOf } from './_lib/liftlogData.mjs';
 import { enforceRateLimit } from './_lib/requireUser.mjs';
 import { sendPushToUser } from './_lib/pushSend.mjs';
+import { orgNotificationEnabled } from './_lib/notifications.mjs';
 
 const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -126,6 +127,10 @@ export default async function handler(req, res) {
   const sender = pick(senderSnap, uid);
   const recipient = pick(recipientSnap, recipientId);
   if (!mayNotify(sender, recipient, String(body.kind))) return json(res, 403, { error: 'Geen toestemming.', build: BUILD });
+  // De studio kan deze soort melding uitzetten (Beheer → Meldingen); dan stil niets versturen.
+  if (!(await orgNotificationEnabled(admin.db, recipient.orgId, String(body.kind)))) {
+    return json(res, 200, { sent: 0, disabled: true, build: BUILD });
+  }
 
   const senderName = String(sender.displayName || sender.email || 'je trainer');
   // De voorvertoning komt van de afzender, dus knippen en als platte tekst behandelen.

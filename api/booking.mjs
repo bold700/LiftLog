@@ -41,9 +41,9 @@ import { applyCors } from './_lib/cors.mjs';
  * studio. Bij "betaald": lidmaatschap/credits activeren (zelfde stappen als `assign`) en de
  * factuur automatisch mailen. Geen Firebase-login — dit komt van Mollie's servers.
  *
- * GET /api/cron/class-reminders (rewrite naar ?cron=classReminders): dagelijkse Vercel-cron rond
- * 18:00 die iedereen met een plek in een les van morgen één pushmelding stuurt (zie
- * api/_lib/classReminders.mjs). Zelfde CRON_SECRET-controle als hieronder.
+ * GET /api/cron/evening (rewrite naar ?cron=evening): dagelijkse Vercel-cron rond 18:00, de
+ * avondronde van meldingen (lesherinneringen, geplande berichten, check-in, inactief, verjaardag; zie
+ * api/_lib/notifications.mjs). Zelfde CRON_SECRET-controle als hieronder.
  *
  * GET /api/cron/generate-classes (rewrite naar ?cron=generateClasses): dagelijkse Vercel-cron die
  * lessen van een terugkerende lessoort op het rooster zet (zie api/_lib/classSchedule.mjs). Zit
@@ -78,8 +78,17 @@ import { buildInvoiceEmail, mailConfigured, sendViaResend } from './_lib/invoice
 import { hashFeedToken, buildIcsFeed } from './_lib/calendarFeed.mjs';
 import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey, getOrgMollieKey, createMolliePayment, getMolliePayment } from './_lib/molliePayments.mjs';
 import { enforceRateLimit } from './_lib/requireUser.mjs';
-import { amsterdamDate, buildClassReminders } from './_lib/classReminders.mjs';
+import { amsterdamDate } from './_lib/classReminders.mjs';
 import { sendPushToUser } from './_lib/pushSend.mjs';
+import {
+  creditsLowAfterBooking,
+  deliverBroadcast,
+  messages as pushMessages,
+  notificationEnabled,
+  orgNotificationEnabled,
+  runEveningNotifications,
+  validateBroadcast,
+} from './_lib/notifications.mjs';
 import {
   classFieldUpdates,
   classIdForOccurrence,
@@ -138,7 +147,7 @@ export default async function handler(req, res) {
   if (applyCors(req, res)) return;
   const publicToken = req.method === 'GET' ? String(req.query?.invoice ?? '').trim() : '';
   const cronName = req.method === 'GET' ? String(req.query?.cron ?? '') : '';
-  const isCron = cronName === 'generateClasses' || cronName === 'classReminders';
+  const isCron = cronName === 'generateClasses' || cronName === 'evening' || cronName === 'classReminders';
   const feedToken = req.method === 'GET' ? String(req.query?.feed ?? '').trim() : '';
   const mollieWebhookOrgId = req.method === 'POST' ? String(req.query?.mollieWebhook ?? '').trim() : '';
   if (req.method !== 'POST' && !publicToken && !isCron && !feedToken) return json(res, 405, { error: 'Method not allowed', build: BUILD });
@@ -153,7 +162,8 @@ export default async function handler(req, res) {
   if (publicToken) return publicInvoice(res, db, publicToken);
   if (feedToken) return calendarFeed(res, db, feedToken);
   if (cronName === 'generateClasses') return generateClasses(req, res, db);
-  if (cronName === 'classReminders') return classReminders(req, res, db);
+  // 'classReminders' is de oude naam van de avondronde; blijft werken tot de cron is omgezet.
+  if (cronName === 'evening' || cronName === 'classReminders') return eveningRun(req, res, db);
   if (mollieWebhookOrgId) return mollieWebhook(req, res, db, mollieWebhookOrgId);
 
   const authHeader = req.headers.authorization || req.headers.Authorization || '';
@@ -235,6 +245,15 @@ export default async function handler(req, res) {
         return await sendInvoice(res, db, myOrgs, String(body.chargeId ?? '').trim());
       case 'purchasePlan':
         return await purchasePlan(req, res, db, uid, myOrgs, body);
+      case 'sendBroadcast':
+        if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan berichten sturen.', build: BUILD });
+        return await sendBroadcast(res, db, uid, meData, myOrgs, body);
+      case 'listBroadcasts':
+        if (!isStaff) return json(res, 403, { error: 'Alleen staf.', build: BUILD });
+        return await listBroadcasts(res, db, myOrgs, body);
+      case 'cancelBroadcast':
+        if (!isStaff) return json(res, 403, { error: 'Alleen staf.', build: BUILD });
+        return await cancelBroadcast(res, db, myOrgs, String(body.broadcastId ?? '').trim());
       default:
         return json(res, 400, { error: 'Onbekende actie.', build: BUILD });
     }
@@ -400,10 +419,22 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
       bookingId,
       status: onWaitlist ? 'waitlist' : 'booked',
       balance: onWaitlist ? balance : balance - cost,
+      notice: { orgId, cost: onWaitlist ? 0 : cost },
     };
   });
 
-  return json(res, 200, { ...result, build: BUILD });
+  const { notice, ...answer } = result;
+  // Bijna door de credits heen: een seintje, zodat iemand op tijd bijkoopt.
+  if (notice && creditsLowAfterBooking(notice.cost, answer.balance)) {
+    try {
+      if (await orgNotificationEnabled(db, notice.orgId, 'creditsLow')) {
+        await sendPushToUser(db, beneficiaryUid, { ...pushMessages.creditsLow(answer.balance), data: { kind: 'creditsLow' } });
+      }
+    } catch (e) {
+      console.error('[booking] melding credits bijna op mislukt', e);
+    }
+  }
+  return json(res, 200, { ...answer, build: BUILD });
 }
 
 /**
@@ -413,8 +444,35 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
  */
 async function cancel(res, db, uid, myOrgs, isStaff, bookingId) {
   if (!bookingId) return json(res, 400, { error: 'Geen reservering opgegeven.', build: BUILD });
-  const result = await cancelBookingCore(db, uid, myOrgs, isStaff, bookingId);
+  const { notice, ...result } = await cancelBookingCore(db, uid, myOrgs, isStaff, bookingId);
+  await notifyAfterCancel(db, uid, notice, result);
   return json(res, 200, { ...result, build: BUILD });
+}
+
+/**
+ * Meldingen na afmelden: de studio meldde iemand anders af ("Les geannuleerd"), en/of iemand van
+ * de wachtlijst kreeg de plek. Nooit laten mislukken: de afmelding zelf is al gelukt.
+ */
+async function notifyAfterCancel(db, uid, notice, result) {
+  if (!notice) return;
+  try {
+    const orgSnap = await db.collection('orgs').doc(notice.orgId).get();
+    const org = orgSnap.exists ? orgSnap.data() : null;
+    if (notice.bookingUserId !== uid && notificationEnabled(org, 'classCancelled')) {
+      await sendPushToUser(db, notice.bookingUserId, {
+        ...pushMessages.bookingCancelledByStudio(notice.cls, result.refunded),
+        data: { kind: 'classCancelled' },
+      });
+    }
+    if (result.promotedUserId && notificationEnabled(org, 'waitlistPromoted')) {
+      await sendPushToUser(db, result.promotedUserId, {
+        ...pushMessages.waitlistPromoted(notice.cls, notice.promotedCost),
+        data: { kind: 'waitlistPromoted' },
+      });
+    }
+  } catch (e) {
+    console.error('[booking] melding na afmelden mislukt', e);
+  }
 }
 
 /** Het eigenlijke afmelden, ook gebruikt bij het stoppen of pauzeren van een vaste les. */
@@ -519,7 +577,18 @@ async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
     });
     if (emptied) tx.set(classRef, { cancelledAt: now, autoCancelled: true }, { merge: true });
 
-    return { cancelled: true, refunded: refund, promotedUserId: promoted ? String(promoted.data.userId) : null };
+    return {
+      cancelled: true,
+      refunded: refund,
+      promotedUserId: promoted ? String(promoted.data.userId) : null,
+      // Alleen voor de meldingen hierna; gaat niet mee in het antwoord.
+      notice: {
+        orgId,
+        bookingUserId: String(booking.userId),
+        cls: cls ? { title: cls.title, date: cls.date, startTime: cls.startTime } : null,
+        promotedCost: promoted ? Number(cls?.creditCost ?? 1) || 0 : 0,
+      },
+    };
   });
 }
 
@@ -1412,43 +1481,89 @@ function cronAuthorized(req, res) {
 }
 
 /**
- * Dagelijkse cron (rond 18:00): iedereen met een plek in een les van morgen krijgt één pushmelding
- * ("Morgen: HIIT om 9:00"). Welke tekst naar wie gaat staat in api/_lib/classReminders.mjs (puur,
- * met tests); hier alleen lezen, versturen en per boeking onthouden dat hij verstuurd is, zodat een
- * tweede run van de taak niet nog eens piept.
+ * Dagelijkse cron (rond 18:00): de avondronde van meldingen — lesherinneringen voor morgen,
+ * geplande berichten van de studio, op zondag de wekelijkse check-in, op maandag "2 weken niet
+ * getraind" voor trainers, en verjaardagen. Alles staat in api/_lib/notifications.mjs.
  */
-async function classReminders(req, res, db) {
+async function eveningRun(req, res, db) {
   if (!cronAuthorized(req, res)) return;
+  const report = await runEveningNotifications(db);
+  return json(res, 200, { ...report, build: BUILD });
+}
 
-  const date = amsterdamDate(new Date(), 1);
-  const classesSnap = await db.collection('classes').where('date', '==', date).get();
-  const classes = classesSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
-  const classIds = classes.filter((c) => !c.cancelledAt).map((c) => c.id);
+// --- Berichten van de studio (Beheer → Meldingen) -----------------------------------------
 
-  const bookings = [];
-  // `in` accepteert maximaal 30 waarden per query.
-  for (let i = 0; i < classIds.length; i += 30) {
-    const snap = await db.collection('bookings').where('classId', 'in', classIds.slice(i, i + 30)).get();
-    for (const d of snap.docs) bookings.push({ ...d.data(), id: d.id });
-  }
+const BROADCASTS_PER_DAY = 30;
 
-  const reminders = buildClassReminders(classes, bookings);
-  let sent = 0;
-  let failed = 0;
-  for (const r of reminders) {
-    try {
-      sent += await sendPushToUser(db, r.userId, { title: r.title, body: r.body, data: { kind: 'classReminder', date } });
-      const now = new Date().toISOString();
-      const batch = db.batch();
-      for (const id of r.bookingIds) batch.set(db.collection('bookings').doc(id), { reminderSentAt: now }, { merge: true });
-      await batch.commit();
-    } catch (e) {
-      failed++;
-      console.error('[classReminders] versturen mislukt voor', r.userId, e);
-    }
-  }
+/**
+ * Een bericht naar leden sturen: meteen, of op een gekozen dag in de avondronde. De doelgroep
+ * wordt pas bij het versturen bepaald, zodat een gepland bericht ook wie er later bijkwam bereikt.
+ */
+async function sendBroadcast(res, db, uid, me, myOrgs, body) {
+  const orgId = orgIdOf(body?.orgId);
+  if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Niet jouw studio.', build: BUILD });
 
-  return json(res, 200, { date, classes: classIds.length, people: reminders.length, devices: sent, failed, build: BUILD });
+  const input = {
+    title: String(body?.title ?? '').replace(/\s+/g, ' ').trim(),
+    body: String(body?.body ?? '').trim(),
+    audience: {
+      type: String(body?.audience?.type ?? ''),
+      id: body?.audience?.id ? String(body.audience.id) : null,
+      label: String(body?.audience?.label ?? '').slice(0, 80),
+    },
+    scheduledFor: body?.scheduledFor ? String(body.scheduledFor) : null,
+  };
+  const today = amsterdamDate(new Date(), 0);
+  const problem = validateBroadcast(input, amsterdamDate(new Date(), 1));
+  if (problem) return json(res, 400, { error: problem, build: BUILD });
+
+  if (!(await enforceRateLimit(db, res, uid, 'broadcast', BROADCASTS_PER_DAY, 24 * 60 * 60 * 1000))) return;
+
+  const id = newId('bc');
+  const ref = db.collection('broadcasts').doc(id);
+  const doc = {
+    id,
+    orgId,
+    title: input.title,
+    body: input.body,
+    audience: input.audience,
+    scheduledFor: input.scheduledFor,
+    status: input.scheduledFor ? 'scheduled' : 'sending',
+    createdBy: uid,
+    createdByName: String(me?.displayName || me?.email || ''),
+    createdAt: new Date().toISOString(),
+    sentAt: null,
+    recipients: null,
+    devices: null,
+  };
+  await ref.set(doc);
+  if (input.scheduledFor) return json(res, 200, { broadcast: doc, build: BUILD });
+
+  const result = await deliverBroadcast(db, id, doc, today);
+  return json(res, 200, { broadcast: { ...doc, ...result }, build: BUILD });
+}
+
+/** De laatste berichten van een studio, nieuwste eerst. */
+async function listBroadcasts(res, db, myOrgs, body) {
+  const orgId = orgIdOf(body?.orgId);
+  if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Niet jouw studio.', build: BUILD });
+  const snap = await db.collection('broadcasts').where('orgId', '==', orgId).get();
+  const list = snap.docs
+    .map((d) => ({ ...d.data(), id: d.id }))
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+    .slice(0, 50);
+  return json(res, 200, { broadcasts: list, build: BUILD });
+}
+
+/** Een gepland bericht intrekken, zolang het nog niet verstuurd is. */
+async function cancelBroadcast(res, db, myOrgs, broadcastId) {
+  if (!broadcastId) return json(res, 400, { error: 'Geen bericht opgegeven.', build: BUILD });
+  const ref = db.collection('broadcasts').doc(broadcastId);
+  const snap = await ref.get();
+  if (!snap.exists || !myOrgs.includes(orgIdOf(snap.data().orgId))) return json(res, 404, { error: 'Bericht niet gevonden.', build: BUILD });
+  if (snap.data().status !== 'scheduled') return json(res, 400, { error: 'Dit bericht is al verstuurd.', build: BUILD });
+  await ref.set({ status: 'cancelled', cancelledAt: new Date().toISOString() }, { merge: true });
+  return json(res, 200, { cancelled: true, build: BUILD });
 }
 
 async function generateClasses(req, res, db) {

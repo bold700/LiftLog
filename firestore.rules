@@ -344,6 +344,12 @@ service cloud.firestore {
     // toestel niet twee keer in de lijst komt. Alleen je eigen tokens; niemand mag de lijst van
     // een ander lezen (dat zou verraden op welke toestellen iemand de app heeft staan).
     // De server (Admin SDK) leest ze om een melding te kunnen versturen.
+    // Berichten van de studio (Beheer → Meldingen). Alleen via de server (api/booking.mjs:
+    // sendBroadcast/listBroadcasts): die bepaalt de doelgroep en controleert de studio.
+    match /broadcasts/{broadcastId} {
+      allow read, write: if false;
+    }
+
     match /pushTokens/{token} {
       allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow create: if isSignedIn()

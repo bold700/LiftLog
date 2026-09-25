@@ -48,7 +48,16 @@ function makeDb() {
         const docs = [...data.entries()]
           .filter(([path]) => path.startsWith(`${name}/`))
           .map(([path, v]) => ({ id: path.slice(name.length + 1), ref: { __path: path }, data: () => v }))
-          .filter((d) => filters.every(([f, op, val]) => (op === 'in' ? val.includes(d.data()[f]) : d.data()[f] === val)));
+          .filter((d) =>
+            filters.every(([f, op, val]) => {
+              const v = d.data()[f];
+              if (op === 'in') return val.includes(v);
+              if (op === 'array-contains') return Array.isArray(v) && v.includes(val);
+              if (op === '>=') return v >= val;
+              if (op === '<=') return v <= val;
+              return v === val;
+            })
+          );
         return { docs, empty: docs.length === 0 };
       },
     };
@@ -1379,7 +1388,7 @@ describe('kalenderfeed', () => {
 describe('lesherinneringen (cron)', () => {
   const runReminders = async (authHeader = 'Bearer test-secret') => {
     const res = makeRes();
-    await handler({ method: 'GET', headers: authHeader ? { authorization: authHeader } : {}, query: { cron: 'classReminders' } }, res);
+    await handler({ method: 'GET', headers: authHeader ? { authorization: authHeader } : {}, query: { cron: 'evening' } }, res);
     return res;
   };
 
@@ -1410,7 +1419,7 @@ describe('lesherinneringen (cron)', () => {
   it('stuurt één melding per persoon met een plek, niet naar de wachtlijst', async () => {
     const res = await runReminders();
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatchObject({ people: 1, devices: 1, failed: 0 });
+    expect(res.body.classReminders).toEqual({ people: 1, devices: 1 });
     expect(sentPushes).toHaveLength(1);
     expect(sentPushes[0].tokens).toEqual(['tok_sporter1']);
     expect(sentPushes[0].notification).toEqual({
@@ -1426,7 +1435,7 @@ describe('lesherinneringen (cron)', () => {
     await runReminders();
     sentPushes = [];
     const res = await runReminders();
-    expect(res.body.people).toBe(0);
+    expect(res.body.classReminders.people).toBe(0);
     expect(sentPushes).toHaveLength(0);
   });
 
@@ -1434,7 +1443,138 @@ describe('lesherinneringen (cron)', () => {
     store['classes/c1'].cancelledAt = '2026-09-25T10:00:00.000Z';
     store['classes/c2'].cancelledAt = '2026-09-25T10:00:00.000Z';
     const res = await runReminders();
-    expect(res.body.people).toBe(0);
+    expect(res.body.classReminders.people).toBe(0);
     expect(sentPushes).toHaveLength(0);
+  });
+});
+
+describe('meldingen bij boeken en afmelden', () => {
+  beforeEach(() => {
+    sentPushes = [];
+    store['pushTokens/tok_sporter1'] = { userId: 'sporter1', orgId: 'vanas' };
+    store['pushTokens/tok_sporter2'] = { userId: 'sporter2', orgId: 'vanas' };
+  });
+  const titlesFor = (token) => sentPushes.filter((p) => p.tokens.includes(token)).map((p) => p.notification.title);
+
+  it('staf meldt een sporter af: die krijgt "Les geannuleerd", de wachtlijst krijgt de plek', async () => {
+    const booked = await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    await post({ action: 'book', classId: 'c1' }, 'sporter2'); // vol → wachtlijst
+    sentPushes = [];
+    const res = await post({ action: 'cancel', bookingId: booked.body.bookingId }, 'trainer1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.notice).toBeUndefined();
+    expect(titlesFor('tok_sporter1')).toEqual(['Les geannuleerd']);
+    expect(titlesFor('tok_sporter2')).toEqual(['Je hebt een plek!']);
+    expect(sentPushes.find((p) => p.tokens.includes('tok_sporter1')).notification.body).toContain('Je credit staat weer op je saldo.');
+  });
+
+  it('wie zichzelf afmeldt, krijgt geen "Les geannuleerd"', async () => {
+    const booked = await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    sentPushes = [];
+    await post({ action: 'cancel', bookingId: booked.body.bookingId }, 'sporter1');
+    expect(titlesFor('tok_sporter1')).toEqual([]);
+  });
+
+  it('staat de melding uit bij de studio, dan gaat hij niet', async () => {
+    store['orgs/vanas'] = { name: 'Van As', notifications: { classCancelled: false, waitlistPromoted: false } };
+    const booked = await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    await post({ action: 'book', classId: 'c1' }, 'sporter2');
+    sentPushes = [];
+    await post({ action: 'cancel', bookingId: booked.body.bookingId }, 'trainer1');
+    expect(sentPushes).toHaveLength(0);
+  });
+
+  it('bij 1 credit over na het boeken: seintje om bij te kopen', async () => {
+    store['creditAccounts/vanas__sporter1'].balance = 2;
+    const res = await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    expect(res.body.balance).toBe(1);
+    expect(titlesFor('tok_sporter1')).toEqual(['Nog 1 credit over']);
+  });
+
+  it('met genoeg credits over: geen seintje', async () => {
+    await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    expect(titlesFor('tok_sporter1')).toEqual([]);
+  });
+});
+
+describe('berichten van de studio', () => {
+  const ORIGINAL_SECRET = process.env.CRON_SECRET;
+  beforeEach(() => {
+    sentPushes = [];
+    process.env.CRON_SECRET = 'test-secret';
+    store['profiles/sporter1'].orgIds = ['vanas'];
+    store['pushTokens/tok_sporter1'] = { userId: 'sporter1', orgId: 'vanas' };
+    store['pushTokens/tok_sporter2'] = { userId: 'sporter2', orgId: 'vanas' };
+    store['pushTokens/tok_trainer1'] = { userId: 'trainer1', orgId: 'vanas' };
+    store['pushTokens/tok_sporterB'] = { userId: 'sporterB', orgId: 'studiob' };
+  });
+  afterEach(() => {
+    if (ORIGINAL_SECRET === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = ORIGINAL_SECRET;
+  });
+  const base = { action: 'sendBroadcast', orgId: 'vanas', title: 'Andere zaal', body: 'De les van morgen is in zaal 2.' };
+
+  it('een sporter mag geen bericht sturen', async () => {
+    const res = await post({ ...base, audience: { type: 'all' } }, 'sporter1');
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('naar iedereen: alle leden van de eigen studio, niet jezelf en niet een andere studio', async () => {
+    const res = await post({ ...base, audience: { type: 'all' } }, 'trainer1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.broadcast).toMatchObject({ status: 'sent', recipients: 2, devices: 2 });
+    const tokens = sentPushes.flatMap((p) => p.tokens).sort();
+    expect(tokens).toEqual(['tok_sporter1', 'tok_sporter2']);
+    expect(sentPushes[0].notification).toEqual({ title: 'Andere zaal', body: 'De les van morgen is in zaal 2.' });
+  });
+
+  it('naar de deelnemers van een les: ingeschreven en wachtlijst', async () => {
+    await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    await post({ action: 'book', classId: 'c1' }, 'sporter2');
+    sentPushes = [];
+    const res = await post({ ...base, audience: { type: 'class', id: 'c1', label: 'Small Group' } }, 'trainer1');
+    expect(res.body.broadcast.recipients).toBe(2);
+  });
+
+  it('gepland bericht gaat niet meteen, wel in de avondronde van die dag', async () => {
+    const tomorrow = amsterdamDate(new Date(), 1);
+    const res = await post({ ...base, audience: { type: 'member', id: 'sporter2' }, scheduledFor: tomorrow }, 'trainer1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.broadcast.status).toBe('scheduled');
+    expect(sentPushes).toHaveLength(0);
+
+    // Doen alsof het nu die dag is: het bericht op vandaag zetten en de avondronde draaien.
+    const id = res.body.broadcast.id;
+    store[`broadcasts/${id}`].scheduledFor = amsterdamDate(new Date(), 0);
+    const cron = makeRes();
+    await handler({ method: 'GET', headers: { authorization: 'Bearer test-secret' }, query: { cron: 'evening' } }, cron);
+    expect(cron.body.broadcasts).toEqual({ sent: 1 });
+    expect(sentPushes.flatMap((p) => p.tokens)).toEqual(['tok_sporter2']);
+    expect(store[`broadcasts/${id}`]).toMatchObject({ status: 'sent', recipients: 1 });
+  });
+
+  it('een ingetrokken gepland bericht gaat niet meer', async () => {
+    const res = await post({ ...base, audience: { type: 'all' }, scheduledFor: amsterdamDate(new Date(), 1) }, 'trainer1');
+    const id = res.body.broadcast.id;
+    const cancel = await post({ action: 'cancelBroadcast', broadcastId: id }, 'trainer1');
+    expect(cancel.statusCode).toBe(200);
+    store[`broadcasts/${id}`].scheduledFor = amsterdamDate(new Date(), 0);
+    const cron = makeRes();
+    await handler({ method: 'GET', headers: { authorization: 'Bearer test-secret' }, query: { cron: 'evening' } }, cron);
+    expect(cron.body.broadcasts).toEqual({ sent: 0 });
+    expect(sentPushes).toHaveLength(0);
+  });
+
+  it('een datum van vandaag of eerder wordt geweigerd', async () => {
+    const res = await post({ ...base, audience: { type: 'all' }, scheduledFor: amsterdamDate(new Date(), 0) }, 'trainer1');
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('de lijst toont alleen berichten van de eigen studio, nieuwste eerst', async () => {
+    store['broadcasts/oud'] = { orgId: 'vanas', title: 'Oud', createdAt: '2026-01-01T00:00:00.000Z', status: 'sent' };
+    store['broadcasts/ander'] = { orgId: 'studiob', title: 'Andere studio', createdAt: '2026-09-01T00:00:00.000Z', status: 'sent' };
+    await post({ ...base, audience: { type: 'all' } }, 'trainer1');
+    const res = await post({ action: 'listBroadcasts', orgId: 'vanas' }, 'trainer1');
+    expect(res.body.broadcasts.map((b) => b.title)).toEqual(['Andere zaal', 'Oud']);
   });
 });

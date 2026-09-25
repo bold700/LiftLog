@@ -56,6 +56,7 @@ import {
 import { ClassTypesPanel } from './beheer/ClassTypesPanel';
 import { SubscriptionsPanel } from './beheer/SubscriptionsPanel';
 import { BillingPanel } from './beheer/BillingPanel';
+import { NotificationsPanel } from './beheer/NotificationsPanel';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import { assignPlan, getActiveMembershipsForOrg, getPlans, renewDue, unassignPlan } from '../services/planService';
 import { getCreditBalancesForOrg, grantCredits } from '../services/classService';
@@ -64,7 +65,7 @@ import { designTokens } from '../theme/designTokens';
 import { EMAIL_RE, generatePassword } from '../utils/account';
 import { MemberImportDialog } from './beheer/MemberImportDialog';
 
-type Section = 'leden' | 'lessoorten' | 'abonnementen' | 'huisstijl' | 'facturatie';
+type Section = 'leden' | 'lessoorten' | 'abonnementen' | 'huisstijl' | 'facturatie' | 'meldingen';
 /** Beheer gebruikt de hele breedte van het hoofdvlak, zoals in het ontwerp; de andere pagina's blijven op 800. */
 const ADMIN_MAX_WIDTH = 'none';
 
@@ -127,7 +128,7 @@ export function BeheerPage() {
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const { t } = useI18n();
   // Beheer heeft tabs naar het ontwerp; Lessoorten en Abonnementen komen er in latere stappen bij.
-  const [section, setSectionState] = useState<Section>(() => {
+  const [storedSection, setSectionState] = useState<Section>(() => {
     try {
       const v = localStorage.getItem(SECTION_STORAGE_KEY);
       return v && (SECTIONS as string[]).includes(v) ? (v as Section) : 'leden';
@@ -144,6 +145,9 @@ export function BeheerPage() {
       /* privémodus */
     }
   }, []);
+  // Een trainer ziet alleen Leden en Meldingen; een onthouden tab van de beheerder valt terug op Leden.
+  const sections = isAdmin ? SECTIONS : STAFF_SECTIONS;
+  const section: Section = sections.includes(storedSection) ? storedSection : 'leden';
   // Kop-knop op Lessoorten: elke klik telt op, het paneel opent dan een lege lessoort.
   const [newTypeSignal, setNewTypeSignal] = useState(0);
 
@@ -423,7 +427,7 @@ export function BeheerPage() {
           <Button variant="contained" disableElevation startIcon={<DownloadRoundedIcon />} onClick={() => setExportSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
             {t('billing.export')}
           </Button>
-        ) : section === 'leden' ? (
+        ) : section === 'meldingen' ? null : section === 'leden' ? (
           <>
             <Button variant="contained" disableElevation startIcon={<PersonAddRoundedIcon />} onClick={openCreate} disabled={!auth} sx={{ flexShrink: 0 }}>
               {t('admin.addAccount')}
@@ -439,11 +443,11 @@ export function BeheerPage() {
         )}
       </Box>
       </HeaderActions>
-      {isAdmin && <SectionTabs value={section} onChange={setSection} />}
+      <SectionTabs sections={sections} value={section} onChange={setSection} />
     </>
   );
 
-  if (isAdmin && section !== 'leden') {
+  if (section !== 'leden') {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
         <PageLayout maxWidth={ADMIN_MAX_WIDTH}>
@@ -454,6 +458,8 @@ export function BeheerPage() {
             <ClassTypesPanel staff={trainers} createSignal={newTypeSignal} />
           ) : section === 'abonnementen' ? (
             <SubscriptionsPanel memberships={memberships} credits={credits} createSignal={newPlanSignal} onChanged={load} />
+          ) : section === 'meldingen' ? (
+            <NotificationsPanel canEditSettings={isAdmin} />
           ) : section === 'facturatie' ? (
             <BillingPanel profiles={profiles} memberships={memberships} plans={plans} selfId={selfId} exportSignal={exportSignal} />
           ) : (
@@ -795,18 +801,21 @@ export function BeheerPage() {
   );
 }
 
-const SECTIONS: Section[] = ['leden', 'lessoorten', 'abonnementen', 'huisstijl', 'facturatie'];
+const SECTIONS: Section[] = ['leden', 'lessoorten', 'abonnementen', 'meldingen', 'huisstijl', 'facturatie'];
+/** Wat een trainer ziet: de leden, en berichten sturen. De rest is aan de eigenaar. */
+const STAFF_SECTIONS: Section[] = ['leden', 'meldingen'];
 const SECTION_STORAGE_KEY = 'vorm.beheer.section';
-const SECTION_KEY: Record<Section, 'members' | 'classTypes' | 'subscriptions' | 'branding' | 'billing'> = {
+const SECTION_KEY: Record<Section, 'members' | 'classTypes' | 'subscriptions' | 'branding' | 'billing' | 'notifications'> = {
   leden: 'members',
   lessoorten: 'classTypes',
   abonnementen: 'subscriptions',
   huisstijl: 'branding',
   facturatie: 'billing',
+  meldingen: 'notifications',
 };
 
-/** De vijf tabs uit het ontwerp — alleen zichtbaar voor de eigenaar; een trainer ziet direct de leden. */
-function SectionTabs({ value, onChange }: { value: Section; onChange: (v: Section) => void }) {
+/** De tabs uit het ontwerp. De eigenaar ziet ze allemaal; een trainer alleen Leden en Meldingen. */
+function SectionTabs({ sections, value, onChange }: { sections: Section[]; value: Section; onChange: (v: Section) => void }) {
   const { t } = useI18n();
   const theme = useTheme();
   const wide = useMediaQuery(theme.breakpoints.up('md'));
@@ -820,7 +829,7 @@ function SectionTabs({ value, onChange }: { value: Section; onChange: (v: Sectio
       allowScrollButtonsMobile
       sx={{ minHeight: 44, mb: 2, borderBottom: '1px solid', borderColor: 'divider', '& .MuiTab-root': { minHeight: 44, textTransform: 'none', fontWeight: 600, px: 2 } }}
     >
-      {SECTIONS.map((sec) => (
+      {sections.map((sec) => (
         <Tab key={sec} value={sec} label={t(`admin.tabs.${SECTION_KEY[sec]}`)} />
       ))}
     </Tabs>
