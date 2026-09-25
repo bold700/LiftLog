@@ -12,6 +12,8 @@ import { Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Te
 import { NumberField } from './NumberField';
 import { useNotify } from '../context/NotifyContext';
 import { saveCheckin } from '../services/checkinService';
+import { notifyUser } from '../services/pushService';
+import { checkinRecipient } from '../utils/pushTargets';
 import { emptyMeasurementFields, newMeasurementId, saveMeasurement } from '../services/measurementService';
 import { FEELING_LABELS } from '../utils/trainingFeedback';
 import type { Profile } from '../types';
@@ -64,7 +66,7 @@ export function WeeklyCheckinDialog({
         .filter(Boolean)
         .join('\n');
 
-      await saveCheckin({
+      const saved = await saveCheckin({
         userId: me.userId,
         loggedBy: me.userId,
         trainerId: me.trainerId ?? null,
@@ -76,6 +78,8 @@ export function WeeklyCheckinDialog({
         handover: null,
         date: new Date().toISOString(),
       });
+      const recipient = checkinRecipient(saved);
+      if (recipient) void notifyUser('checkin', recipient, 'Wekelijkse check-in ingevuld');
 
       notify?.success('Check-in opgeslagen');
       setWeight('');

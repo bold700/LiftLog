@@ -19,6 +19,7 @@ import { AddPage } from './components/AddPage';
 import { SchemasPage } from './components/SchemasPage';
 import { LoadingBlock } from './components/layout/LoadingBlock';
 import { NotifyProvider } from './context/NotifyContext';
+import { ForegroundPushListener } from './components/ForegroundPushListener';
 
 // Minder vaak gebruikte tabbladen pas laden als ze opengaan (kleinere eerste download).
 const BeheerPage = lazy(() => import('./components/BeheerPage').then((m) => ({ default: m.BeheerPage })));
@@ -422,6 +423,7 @@ function AuthedApp() {
       <ViewAsProvider>
       <VerificationGate>
       <LeaderboardAutoSync />
+      <ForegroundPushListener />
       <AppContent />
       </VerificationGate>
       </ViewAsProvider>

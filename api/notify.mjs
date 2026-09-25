@@ -56,10 +56,15 @@ async function readBody(req) {
 }
 
 /** Mag deze afzender de ontvanger een melding sturen? */
-function mayNotify(sender, recipient) {
+function mayNotify(sender, recipient, kind) {
   if (orgIdOf(sender.orgId) !== orgIdOf(recipient.orgId)) return false;
   if (sender.role === 'admin') return true;
-  if (sender.role === 'trainer') return recipient.trainerId === sender.userId || recipient.userId === sender.userId;
+  if (sender.role === 'trainer') {
+    // Elke trainer mag een schema aan elke sporter in de studio toewijzen; dan hoort de melding
+    // daarover ook te mogen. Voor al het andere blijft het bij de eigen sporters.
+    if (kind === 'workout' && recipient.role === 'sporter') return true;
+    return recipient.trainerId === sender.userId || recipient.userId === sender.userId;
+  }
   // Sporter: alleen naar de eigen trainer.
   return sender.trainerId != null && recipient.userId === sender.trainerId;
 }
@@ -120,7 +125,7 @@ export default async function handler(req, res) {
   };
   const sender = pick(senderSnap, uid);
   const recipient = pick(recipientSnap, recipientId);
-  if (!mayNotify(sender, recipient)) return json(res, 403, { error: 'Geen toestemming.', build: BUILD });
+  if (!mayNotify(sender, recipient, String(body.kind))) return json(res, 403, { error: 'Geen toestemming.', build: BUILD });
 
   // Toestellen van de ontvanger ophalen.
   const tokensSnap = await admin.db.collection('pushTokens').where('userId', '==', recipientId).get();

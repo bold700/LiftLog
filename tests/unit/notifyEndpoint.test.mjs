@@ -119,6 +119,20 @@ describe('meldingen versturen', () => {
     expect(sentPayloads).toHaveLength(0);
   });
 
+  it('een nieuw schema mag een trainer aan elke sporter in de studio melden', async () => {
+    // Elke trainer kan een schema aan elke sporter toewijzen; de melding daarover hoort erbij.
+    const res = await post({ kind: 'workout', recipientId: 'vreemdeA' }, { uid: 'trainerA' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.sent).toBe(1);
+    expect(sentPayloads[0].notification.title).toBe('Nieuw schema');
+  });
+
+  it('een nieuw schema melden gaat nog steeds niet over de studiogrens heen', async () => {
+    const res = await post({ kind: 'workout', recipientId: 'sporterB' }, { uid: 'trainerA' });
+    expect(res.statusCode).toBe(403);
+    expect(sentPayloads).toHaveLength(0);
+  });
+
   it('sporter meldt alleen aan de eigen trainer', async () => {
     const ok = await post({ kind: 'checkin', recipientId: 'trainerA' }, { uid: 'sporterA' });
     expect(ok.statusCode).toBe(200);

@@ -3,7 +3,16 @@ import { Box, Typography, Switch, FormControlLabel, CircularProgress, Alert } fr
 import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded';
 import { ContentCard } from './layout';
 import { useNotify } from '../context/NotifyContext';
-import { enablePush, disablePush, isPushEnabled } from '../services/pushService';
+import { enablePush, disablePush, isPushEnabled, needsHomeScreenForPush, type PushEnableResult } from '../services/pushService';
+
+/** Uitleg per reden dat aanmelden niet lukte, in gewone taal. */
+const PROBLEM_TEXT: Record<Exclude<PushEnableResult, 'ok'>, string> = {
+  denied: 'Meldingen zijn geblokkeerd. Zet ze aan in de instellingen van je telefoon of browser en probeer het opnieuw.',
+  unsupported: 'Deze browser ondersteunt geen meldingen. Probeer Chrome, Edge of Safari (vanaf het beginscherm).',
+  'ios-home-screen':
+    'Op een iPhone werken meldingen alleen als de app op je beginscherm staat: tik in Safari op Deel en kies "Zet op beginscherm". Open de app daarna vanaf het beginscherm en zet meldingen hier aan.',
+  'not-configured': 'Meldingen zijn voor de webversie nog niet ingesteld door de studio. Probeer het later opnieuw.',
+};
 
 /**
  * Meldingen aan- of uitzetten voor dit toestel.
@@ -16,7 +25,8 @@ export function PushNotificationsCard({ userId }: { userId: string }) {
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [denied, setDenied] = useState(false);
+  const [problem, setProblem] = useState<Exclude<PushEnableResult, 'ok'> | null>(null);
+  const homeScreenFirst = needsHomeScreenForPush();
 
   useEffect(() => {
     let cancelled = false;
@@ -35,13 +45,13 @@ export function PushNotificationsCard({ userId }: { userId: string }) {
   const toggle = useCallback(
     async (next: boolean) => {
       setBusy(true);
-      setDenied(false);
+      setProblem(null);
       try {
         if (next) {
-          const ok = await enablePush(userId);
-          setEnabled(ok);
-          if (ok) notify?.success('Meldingen staan aan op dit toestel.');
-          else setDenied(true);
+          const result = await enablePush(userId);
+          setEnabled(result === 'ok');
+          if (result === 'ok') notify?.success('Meldingen staan aan op dit toestel.');
+          else setProblem(result);
         } else {
           await disablePush(userId);
           setEnabled(false);
@@ -65,7 +75,7 @@ export function PushNotificationsCard({ userId }: { userId: string }) {
         </Typography>
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-        Een seintje bij een nieuw schema, een bericht van je trainer of een check-in. Geldt voor dit toestel.
+        Een seintje bij een nieuw schema, en voor trainers bij een check-in van een sporter. Geldt voor dit toestel.
       </Typography>
 
       {loading ? (
@@ -77,10 +87,9 @@ export function PushNotificationsCard({ userId }: { userId: string }) {
         />
       )}
 
-      {denied && (
+      {(problem || (homeScreenFirst && !enabled)) && (
         <Alert severity="info" sx={{ mt: 1 }}>
-          Meldingen zijn geblokkeerd of nog niet beschikbaar op dit toestel. Zet ze aan in de instellingen van je
-          telefoon of browser en probeer het opnieuw.
+          {PROBLEM_TEXT[problem ?? 'ios-home-screen']}
         </Alert>
       )}
     </ContentCard>

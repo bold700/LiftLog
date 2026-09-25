@@ -235,9 +235,16 @@ De code staat er; de configuratie bij Apple en Google niet. Eenmalig nodig:
 1. **iOS:** een APNs-authenticatiesleutel (`.p8`) aanmaken in het Apple Developer-portaal en
    uploaden in Firebase → Project settings → Cloud Messaging.
 2. **Android:** `google-services.json` in de Android-map (staat er meestal al via Capacitor).
-3. **Web (optioneel):** een VAPID-sleutel in Firebase → Cloud Messaging → Web Push certificates,
-   en die als `VITE_FIREBASE_VAPID_KEY` in Vercel zetten. Zonder die sleutel meldt de webversie
-   zich netjes niet aan; er gaat niets stuk.
+3. **Web (webapp/PWA):** een VAPID-sleutel in Firebase → Project settings → Cloud Messaging →
+   Web Push certificates → *Generate key pair*, en die als `VITE_FIREBASE_VAPID_KEY` in Vercel
+   zetten (alle omgevingen), daarna opnieuw deployen. Zonder die sleutel legt de kaart Meldingen
+   uit dat het nog niet is ingesteld; er gaat niets stuk. Ontvangen gaat via
+   `public/firebase-messaging-sw.js` (alleen meldingen, geen cache). Op een iPhone werkt webpush
+   alleen als de app op het beginscherm staat (iOS 16.4+).
+
+Wanneer er een melding gaat: een sporter die nieuw aan een schema wordt gekoppeld krijgt "Nieuw
+schema"; een trainer krijgt "Check-in van …" als een sporter zelf een check-in invult (na een
+training of de wekelijkse). Versturen loopt via `api/notify.mjs`.
 
 ---
 
