@@ -187,20 +187,19 @@ export function NutritionInsights() {
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
               Verdeling calorieën
             </Typography>
-            <Box sx={{ display: 'flex', height: 14, borderRadius: 1, overflow: 'hidden', mb: 1 }}>
+            {/* Zelfde balk als "Trainingsbalans" bij Oefeningen: losse afgeronde delen met een kiertje,
+                de labels erboven (links, midden, rechts) in dezelfde volgorde als de delen. */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, mb: 0.625 }}>
               {macroBar.map((m) => (
-                <Box key={m.key} sx={{ width: `${m.pct}%`, bgcolor: m.color }} />
+                <Typography key={m.key} variant="caption">{`${m.label} ${m.pct}%`}</Typography>
               ))}
             </Box>
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              {macroBar.map((m) => (
-                <Box key={m.key} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Box sx={{ width: 10, height: 10, borderRadius: '2px', bgcolor: m.color }} />
-                  <Typography variant="caption" color="text.secondary">
-                    {m.label} {m.pct}%
-                  </Typography>
-                </Box>
-              ))}
+            <Box sx={{ display: 'flex', gap: '3px', height: 8 }}>
+              {macroBar
+                .filter((m) => m.pct > 0)
+                .map((m) => (
+                  <Box key={m.key} sx={{ flex: `${m.pct} 1 0`, minWidth: 0, bgcolor: m.color, borderRadius: 1 }} />
+                ))}
             </Box>
           </CardContent>
         </Card>

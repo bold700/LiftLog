@@ -133,7 +133,7 @@ export function LatestWeightCard({ items, goalWeight }: LatestWeightCardProps) {
       )}
       {weightPoints.length >= 2 && (
         <Box sx={{ mt: 2 }}>
-          <TrendChart points={weightPoints} unit="kg" dots={false} />
+          <TrendChart points={weightPoints} unit="kg" goal={goalWeight} />
         </Box>
       )}
       {skinPoints.length >= 2 && (
@@ -141,7 +141,7 @@ export function LatestWeightCard({ items, goalWeight }: LatestWeightCardProps) {
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
             Som huidplooien (mm)
           </Typography>
-          <TrendChart points={skinPoints} unit="mm" dots={false} />
+          <TrendChart points={skinPoints} unit="mm" />
         </Box>
       )}
     </Box>

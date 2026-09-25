@@ -1,6 +1,8 @@
-// Lijngrafiek (inline SVG) voor de trends op de Metingen-pagina: gewicht en som huidplooien.
-import { useEffect, useRef, useState } from 'react';
-import { Box } from '@mui/material';
+// Lijngrafiek voor de trends op de Metingen-pagina: gewicht en som huidplooien. Met assen (waarde links,
+// datum onder), rasterlijnen en een stip per meting, zodat je de waarden kunt aflezen; hover/tik toont
+// de exacte meting. Zelfde bibliotheek (recharts) als de progressiegrafiek bij Oefeningen.
+import { Box, useTheme } from '@mui/material';
+import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 export interface TrendPoint {
   id: string;
@@ -8,42 +10,97 @@ export interface TrendPoint {
   value: number;
 }
 
-/** Lijngrafiek (viewBox = echte pixelbreedte, geen vervorming). Optionele stippellijn voor een doel. */
-export function TrendChart({ points, unit, goal, dots = true }: { points: TrendPoint[]; unit: string; goal?: number | null; dots?: boolean }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [width, setWidth] = useState(320);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width;
-      if (w && w > 0) setWidth(Math.round(w));
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const pts = points.slice(-20);
-  const CH = 130;
-  const pad = 14;
-  const values = pts.map((p) => p.value);
-  const min = Math.min(...values, goal ?? Infinity);
-  const max = Math.max(...values, goal ?? -Infinity);
-  const range = max - min || 1;
-  const cx = (i: number) => (pts.length > 1 ? (i * (width - 2 * pad)) / (pts.length - 1) : (width - 2 * pad) / 2) + pad;
-  const cy = (v: number) => CH - pad - ((v - min) / range) * (CH - 2 * pad);
-  const line = pts.map((p, i) => `${cx(i)},${cy(p.value)}`).join(' ');
+/** "2026-09-23" als lokale middag (geen tijdzonesprong naar de vorige dag); volledige ISO-tijd zoals hij is. */
+function toTime(date: string): number {
+  return new Date(/^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date}T12:00:00` : date).getTime();
+}
+
+const num = (v: number) => v.toLocaleString('nl-NL', { maximumFractionDigits: 1 });
+const DAY = new Intl.DateTimeFormat('nl-NL', { day: 'numeric', month: 'short' });
+const FULL = new Intl.DateTimeFormat('nl-NL', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+
+/** Ronde, gelijke stappen voor de waarde-as (1, 2, 5, 10 …), met wat ruimte boven en onder de lijn. */
+function niceTicks(values: number[]): number[] {
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const pad = Math.max(0.5, (max - min) * 0.1);
+  const lo = min - pad;
+  const hi = max + pad;
+  const raw = (hi - lo) / 4;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 5, 10].map((f) => f * mag).find((s) => s >= raw) ?? 10 * mag;
+  const ticks: number[] = [];
+  for (let v = Math.floor(lo / step) * step; v <= Math.ceil(hi / step) * step + step / 2; v += step) {
+    ticks.push(Math.round(v * 100) / 100);
+  }
+  return ticks;
+}
+
+export function TrendChart({ points, unit, goal }: { points: TrendPoint[]; unit: string; goal?: number | null }) {
+  const theme = useTheme();
+  const data = points
+    .map((p) => ({ ...p, t: toTime(p.date) }))
+    .filter((p) => Number.isFinite(p.t))
+    .sort((a, b) => a.t - b.t)
+    .slice(-20);
+  if (data.length === 0) return null;
+
+  const yTicks = niceTicks([...data.map((d) => d.value), ...(goal != null ? [goal] : [])]);
+  const axisText = { fontSize: 11, fill: theme.palette.text.secondary };
+
   return (
-    <Box ref={ref} sx={{ width: '100%', color: 'primary.main' }}>
-      <svg viewBox={`0 0 ${width} ${CH}`} style={{ display: 'block', height: CH, width: '100%' }}>
-        {goal != null && <line x1={0} y1={cy(goal)} x2={width} y2={cy(goal)} stroke="#9e9e9e" strokeWidth={1} strokeDasharray="4 4" />}
-        <polyline points={line} fill="none" stroke="currentColor" strokeWidth={dots ? 2 : 2.5} strokeLinejoin="round" strokeLinecap="round" />
-        {pts.map((p, i) => (
-          // Zonder stippen (Figma "Body") blijft een onzichtbaar trefvlak over voor de tooltip.
-          <circle key={p.id} cx={cx(i)} cy={cy(p.value)} r={dots ? 3 : 6} fill={dots ? 'currentColor' : 'transparent'}>
-            <title>{`${p.date}: ${p.value} ${unit}`}</title>
-          </circle>
-        ))}
-      </svg>
+    <Box sx={{ width: '100%', height: { xs: 190, md: 230 } }}>
+      <ResponsiveContainer>
+        <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+          <CartesianGrid vertical={false} stroke={theme.palette.divider} />
+          <XAxis
+            dataKey="t"
+            type="number"
+            scale="time"
+            domain={['dataMin', 'dataMax']}
+            ticks={data.map((d) => d.t)}
+            interval="preserveStartEnd"
+            minTickGap={28}
+            tickFormatter={(t: number) => DAY.format(t).replace('.', '')}
+            tick={axisText}
+            tickLine={false}
+            axisLine={{ stroke: theme.palette.divider }}
+            padding={{ left: 8, right: 8 }}
+          />
+          <YAxis
+            domain={[yTicks[0], yTicks[yTicks.length - 1]]}
+            ticks={yTicks}
+            tickFormatter={(v: number) => `${num(v)} ${unit}`}
+            tick={axisText}
+            tickLine={false}
+            axisLine={false}
+            width={52}
+          />
+          <Tooltip
+            formatter={(v: number) => [`${num(v)} ${unit}`, '']}
+            separator=""
+            labelFormatter={(t: number) => FULL.format(t)}
+            contentStyle={{ borderRadius: 8, border: `1px solid ${theme.palette.divider}`, fontSize: 13 }}
+          />
+          {goal != null && (
+            <ReferenceLine
+              y={goal}
+              stroke={theme.palette.text.disabled}
+              strokeDasharray="4 4"
+              label={{ value: `Doel ${num(goal)} ${unit}`, position: 'insideTopRight', fontSize: 11, fill: theme.palette.text.secondary }}
+            />
+          )}
+          <Line
+            type="linear"
+            dataKey="value"
+            stroke={theme.palette.primary.main}
+            strokeWidth={2.5}
+            dot={{ r: 3.5, fill: theme.palette.primary.main, strokeWidth: 0 }}
+            activeDot={{ r: 5.5 }}
+            isAnimationActive={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
     </Box>
   );
 }
