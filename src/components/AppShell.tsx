@@ -112,7 +112,8 @@ function ProfileMenuButton({
       startIcon={avatarWithBadge}
       sx={{ alignSelf: 'flex-start', maxWidth: '100%', minWidth: 0, mx: 1, mb: 0.5, color: 'text.primary', textTransform: 'none' }}
     >
-      <Box sx={{ minWidth: 0 }}>
+      {/* Button centreert tekst standaard; naam en "Bekijkt als …" horen links onder elkaar. */}
+      <Box sx={{ minWidth: 0, textAlign: 'left' }}>
         <Typography variant="body2" fontWeight={600} noWrap component="span" sx={{ display: 'block' }}>
           {name}
         </Typography>
