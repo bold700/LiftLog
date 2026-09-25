@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Box, Typography } from '@mui/material';
-import { getAllExercises } from '../utils/storage';
+import { useMemo } from 'react';
+import { Alert, Box, Typography } from '@mui/material';
+import { useViewedExercises } from '../hooks/useViewedExercises';
 import { getExerciseMuscleMapping } from '../utils/muscleMappingResolver';
 import { countMuscleSessions } from '../utils/muscleSessions';
 import { MuscleFrequencyBody, GREEN_TINTS } from './MuscleFrequencyBody';
@@ -14,28 +14,21 @@ const cardSx = () => ({
 
 /** Figma "Insights · Muscles": links het lichaam met legenda, rechts "Meest getraind" als balken. */
 export const SpiergroepenPage = () => {
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  useEffect(() => {
-    const refresh = () => setRefreshKey((k) => k + 1);
-    window.addEventListener('storage', refresh);
-    window.addEventListener('workoutUpdated', refresh);
-    return () => {
-      window.removeEventListener('storage', refresh);
-      window.removeEventListener('workoutUpdated', refresh);
-    };
-  }, []);
+  const { exercises, error } = useViewedExercises();
 
   const muscles = useMemo(
-    () => countMuscleSessions(getAllExercises(), (name) => getExerciseMuscleMapping(name)?.primary ?? []),
-    // refreshKey: opnieuw tellen zodra er iets gelogd is.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [refreshKey]
+    () => countMuscleSessions(exercises, (name) => getExerciseMuscleMapping(name)?.primary ?? []),
+    [exercises]
   );
   const max = muscles[0]?.sessions ?? 0;
 
   return (
     <PageLayout maxWidth="none">
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
       <Box
         sx={{
           display: 'grid',
@@ -44,7 +37,7 @@ export const SpiergroepenPage = () => {
         }}
       >
         <Box sx={{ ...cardSx(), p: { xs: 2, md: 3 }, minWidth: 0 }}>
-          <MuscleFrequencyBody size="calc(50% - 12px)" aspectRatio="1 / 1.8" />
+          <MuscleFrequencyBody size="calc(50% - 12px)" aspectRatio="1 / 1.8" exercises={exercises} />
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mt: 2 }} aria-label="Legenda: van minder naar meer getraind">
             <Typography variant="caption" color="text.secondary">
               Minder

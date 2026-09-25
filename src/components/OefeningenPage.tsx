@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
+  Alert,
   Button,
   Typography,
   Box,
@@ -19,7 +20,11 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { Line, LineChart, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { getAllExercisesByName, getExerciseNames, updateExercise, deleteExercise, getAllExercises } from '../utils/storage';
+import { updateExercise, deleteExercise } from '../utils/storage';
+import { saveExerciseLog, deleteExerciseLog } from '../services/logService';
+import { useViewedExercises } from '../hooks/useViewedExercises';
+import { useViewAs } from '../context/ViewAsContext';
+import { useProfile } from '../context/ProfileContext';
 import { Exercise } from '../types';
 import { findExerciseMetadata } from '../data/exerciseMetadata';
 import { getExerciseMuscleMapping } from '../utils/muscleMappingResolver';
@@ -80,8 +85,15 @@ export const OefeningenPage = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
-  const [exerciseNames, setExerciseNames] = useState<string[]>([]);
-  const [allExercises, setAllExercises] = useState<Exercise[]>([]);
+  // Bij "Bekijk als" de logs van de sporter (uit Firestore), anders je eigen (lokaal). Nieuwste eerst.
+  const { exercises: allExercises, loading, error: loadError, viewingOther, reload } = useViewedExercises();
+  const { viewed } = useViewAs();
+  const profile = useProfile();
+  /** Profiel van de sporter waar je meekijkt; nodig om `trainerId` op de log te laten staan. */
+  const viewedProfile = useMemo(
+    () => (viewingOther ? profile?.allSporters?.find((p) => p.userId === viewed.userId) ?? null : null),
+    [viewingOther, profile?.allSporters, viewed.userId]
+  );
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [menuExerciseId, setMenuExerciseId] = useState<string | null>(null);
   const [openEditDialog, setOpenEditDialog] = useState(false);
@@ -101,26 +113,31 @@ export const OefeningenPage = () => {
   const editNotesFieldRef = useRef<HTMLInputElement | null>(null);
   const editButtonsContainerRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    setExerciseNames(getExerciseNames());
-    loadAllExercises();
-    // Figma opent met een oefening gekozen: neem de laatst gelogde.
-    const latest = [...getAllExercises()]
-      .filter((ex) => ex.name?.trim())
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-    if (latest?.name) setSelectedExercise(latest.name);
-  }, []);
+  const exerciseNames = useMemo(
+    () => Array.from(new Set(allExercises.map((ex) => ex.name).filter((n): n is string => !!n))).sort(),
+    [allExercises]
+  );
 
-  const loadAllExercises = () => {
-    const exercises = getAllExercises();
-    setAllExercises(exercises);
-  };
+  /** Alle logs van de gekozen oefening (naam zonder hoofdlettergevoeligheid), oudste eerst. */
+  const selectedLogs = useMemo(() => {
+    if (!selectedExercise) return [];
+    const key = selectedExercise.toLowerCase();
+    return allExercises
+      .filter((ex) => ex.name?.toLowerCase() === key)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [allExercises, selectedExercise]);
+
+  // Figma opent met een oefening gekozen: neem de laatst gelogde. Ook opnieuw kiezen als de gekozen
+  // oefening verdwijnt (verwijderd, of je kijkt nu bij iemand anders mee die hem nooit deed).
+  useEffect(() => {
+    if (selectedExercise && exerciseNames.includes(selectedExercise)) return;
+    const latest = allExercises.find((ex) => ex.name?.trim());
+    setSelectedExercise(latest?.name ?? null);
+  }, [allExercises, exerciseNames, selectedExercise]);
 
   const progress = useMemo(
-    () => (selectedExercise ? computeExerciseProgress(getAllExercisesByName(selectedExercise)) : null),
-    // allExercises.length: opnieuw na bewerken/verwijderen.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedExercise, allExercises.length]
+    () => (selectedExercise ? computeExerciseProgress(selectedLogs) : null),
+    [selectedExercise, selectedLogs]
   );
 
   const balance = useMemo(
@@ -133,16 +150,7 @@ export const OefeningenPage = () => {
   );
 
   // Laatste 3 sessies
-  const lastThreeSessions = useMemo(() => {
-    if (!selectedExercise) return [];
-    
-    const exercises = getAllExercisesByName(selectedExercise);
-    const sortedExercises = [...exercises].sort((a, b) => 
-      new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-    
-    return sortedExercises.slice(0, 3);
-  }, [selectedExercise, allExercises.length]);
+  const lastThreeSessions = useMemo(() => [...selectedLogs].reverse().slice(0, 3), [selectedLogs]);
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, exerciseId: string) => {
     setMenuAnchorEl(event.currentTarget);
@@ -176,13 +184,33 @@ export const OefeningenPage = () => {
       return;
     }
 
-    updateExercise(editingExercise.id, {
-      name: exerciseName.trim(),
-      weight: parseFloat(weight),
-      sets: sets ? parseInt(sets) : undefined,
-      reps: reps ? parseInt(reps) : undefined,
-      notes: notes.trim() || undefined,
-    });
+    if (viewingOther) {
+      // Namens de sporter: de log blijft van hem (`userId`), `loggedBy` houdt vast dat jij het deed.
+      await saveExerciseLog({
+        id: editingExercise.id,
+        userId: viewed.userId,
+        loggedBy: profile?.profile?.userId ?? '',
+        trainerId: viewedProfile?.trainerId ?? null,
+        exerciseName: exerciseName.trim(),
+        exerciseId: exerciseName.trim(),
+        weight: parseFloat(weight),
+        sets: sets ? parseInt(sets) : null,
+        reps: reps ? parseInt(reps) : null,
+        notes: notes.trim() || null,
+        effort: editingExercise.effort ?? null,
+        date: editingExercise.date,
+        schemaId: editingExercise.schemaId ?? null,
+        schemaDayIndex: editingExercise.schemaDayIndex ?? null,
+      });
+    } else {
+      updateExercise(editingExercise.id, {
+        name: exerciseName.trim(),
+        weight: parseFloat(weight),
+        sets: sets ? parseInt(sets) : undefined,
+        reps: reps ? parseInt(reps) : undefined,
+        notes: notes.trim() || undefined,
+      });
+    }
 
     setOpenEditDialog(false);
     setEditingExercise(null);
@@ -191,21 +219,9 @@ export const OefeningenPage = () => {
     setSets('');
     setReps('');
     setNotes('');
-    
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
-    const exercises = getAllExercises();
-    setAllExercises(exercises);
-    
-    const loggedNames = getExerciseNames();
-    setExerciseNames(loggedNames);
-    
-    if (selectedExercise && loggedNames.includes(selectedExercise)) {
-      const current = selectedExercise;
-      setSelectedExercise(null);
-      setTimeout(() => setSelectedExercise(current), 0);
-    }
-  }, [editingExercise, exerciseName, weight, sets, reps, notes, selectedExercise]);
+
+    await reload();
+  }, [editingExercise, exerciseName, weight, sets, reps, notes, viewingOther, viewed.userId, viewedProfile?.trainerId, profile?.profile?.userId, reload]);
 
   const handleCloseEditDialog = useCallback(() => {
     setOpenEditDialog(false);
@@ -220,27 +236,17 @@ export const OefeningenPage = () => {
   const handleConfirmDelete = useCallback(async () => {
     if (!deletingExerciseId) return;
 
-    deleteExercise(deletingExerciseId);
-    
+    if (viewingOther) {
+      await deleteExerciseLog(deletingExerciseId);
+    } else {
+      deleteExercise(deletingExerciseId);
+    }
+
     setOpenDeleteDialog(false);
     setDeletingExerciseId(null);
-    
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
-    const exercises = getAllExercises();
-    setAllExercises(exercises);
-    
-    const loggedNames = getExerciseNames();
-    setExerciseNames(loggedNames);
-    
-    if (selectedExercise && !loggedNames.includes(selectedExercise)) {
-      setSelectedExercise(null);
-    } else if (selectedExercise) {
-      const current = selectedExercise;
-      setSelectedExercise(null);
-      setTimeout(() => setSelectedExercise(current), 0);
-    }
-  }, [deletingExerciseId, selectedExercise]);
+
+    await reload();
+  }, [deletingExerciseId, viewingOther, reload]);
 
   const handleCloseDeleteDialog = useCallback(() => {
     setOpenDeleteDialog(false);
@@ -346,16 +352,6 @@ export const OefeningenPage = () => {
     };
   }, [openDeleteDialog, handleCloseDeleteDialog, handleConfirmDelete]);
 
-  // Update exerciseNames wanneer exercises veranderen
-  useEffect(() => {
-    const loggedNames = getExerciseNames();
-    setExerciseNames(loggedNames);
-    
-    if (selectedExercise && !loggedNames.includes(selectedExercise)) {
-      setSelectedExercise(null);
-    }
-  }, [allExercises.length, selectedExercise]);
-
   const delta = progress && progress.previous != null ? progress.latest - progress.previous : null;
   const balanceRows = [balance.pushPull, balance.upperLower, balance.compoundIsolation].filter(
     (b): b is BalancePair => b != null
@@ -363,10 +359,17 @@ export const OefeningenPage = () => {
 
   return (
     <PageLayout maxWidth="none">
+      {loadError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {loadError}
+        </Alert>
+      )}
       {exerciseNames.length === 0 ? (
-        <ContentCard>
-          <EmptyState>Nog geen oefeningen gelogd. Log er een om je progressie te zien.</EmptyState>
-        </ContentCard>
+        loading || loadError ? null : (
+          <ContentCard>
+            <EmptyState>Nog geen oefeningen gelogd. Log er een om je progressie te zien.</EmptyState>
+          </ContentCard>
+        )
       ) : (
         <>
           {/* Keuzebalk (Figma "Picker"): gekozen oefening met "Wijzig"; wijzigen opent de zoeklijst. */}

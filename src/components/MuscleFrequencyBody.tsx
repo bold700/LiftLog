@@ -4,6 +4,7 @@ import { getAllExercises } from '../utils/storage';
 import { getExerciseMuscleMapping } from '../utils/muscleMappingResolver';
 import { normalizeMuscleName } from '../utils/muscleNames';
 import { isWithinLastDays } from '../utils/insightsOverview';
+import type { Exercise } from '../types';
 
 // Import Level SVG bestanden - Level 1 (lichtste) tot Level 5 (donkerste)
 // Voorkant levels vanuit front levels folder
@@ -263,9 +264,11 @@ interface MuscleFrequencyBodyProps {
   size?: number | string;
   /** Verhouding breedte/hoogte van elk figuur. Staand (bijv. '1 / 1.8') snijdt de lege zijkanten van de tekening weg. */
   aspectRatio?: string;
+  /** Welke oefeningen meetellen (bijv. van de sporter bij "Bekijk als"); zonder = je eigen lokale logs. */
+  exercises?: Exercise[];
 }
 
-export const MuscleFrequencyBody = ({ sinceDays, size = 350, aspectRatio = '1 / 1' }: MuscleFrequencyBodyProps = {}) => {
+export const MuscleFrequencyBody = ({ sinceDays, size = 350, aspectRatio = '1 / 1', exercises: exercisesProp }: MuscleFrequencyBodyProps = {}) => {
   // De tekeningen zijn 620×714 met veel ruimte naast het lichaam: in een staand vlak vullen we op hoogte.
   const fit = aspectRatio === '1 / 1' ? 'contain' : 'cover';
   // State om component te forceren om te re-renderen bij updates
@@ -292,7 +295,7 @@ export const MuscleFrequencyBody = ({ sinceDays, size = 350, aspectRatio = '1 / 
 
   const { frontFrequencies, backFrequencies, frontSvgMap, backSvgMap } = useMemo(() => {
     const now = new Date();
-    const exercises = getAllExercises().filter(
+    const exercises = (exercisesProp ?? getAllExercises()).filter(
       (ex) => sinceDays == null || isWithinLastDays(ex.date, sinceDays, now)
     );
 
@@ -394,7 +397,7 @@ export const MuscleFrequencyBody = ({ sinceDays, size = 350, aspectRatio = '1 / 
       frontSvgMap: frontSvgMapping,
       backSvgMap: backSvgMapping
     };
-  }, [refreshKey, sinceDays]);
+  }, [refreshKey, sinceDays, exercisesProp]);
 
   // Combineer alle frequenties voor ranking
   const allFrequencies = { ...frontFrequencies, ...backFrequencies };

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box, Typography, Card, CardContent, CircularProgress } from '@mui/material';
 import { PageLayout, ContentCard } from './layout';
 import { useProfile } from '../context/ProfileContext';
+import { useViewAs } from '../context/ViewAsContext';
 import { getNutritionLogsForUser, type NutritionLog } from '../services/nutritionService';
 import { getMeasurementsForUser, latestWeight } from '../services/measurementService';
 
@@ -21,8 +22,11 @@ function lastNDays(n: number): string[] {
 
 export function NutritionInsights() {
   const profileCtx = useProfile();
-  const uid = profileCtx?.profile?.userId ?? '';
-  const goal = profileCtx?.profile?.nutritionGoal ?? null;
+  const { viewed } = useViewAs();
+  // "Bekijk als": voeding en doel van de gekozen sporter, niet die van de trainer.
+  const viewedProfile = viewed.isOther ? profileCtx?.allSporters.find((s) => s.userId === viewed.userId) ?? null : profileCtx?.profile;
+  const uid = viewed.isOther ? viewed.userId : profileCtx?.profile?.userId ?? '';
+  const goal = viewedProfile?.nutritionGoal ?? null;
 
   const [logs, setLogs] = useState<NutritionLog[]>([]);
   const [weightKg, setWeightKg] = useState<number | null>(null);

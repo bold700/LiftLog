@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Button, Typography } from '@mui/material';
-import { getAllExercises } from '../utils/storage';
+import { Alert, Box, Button, Typography } from '@mui/material';
 import { getCompletions } from '../utils/dayCompletionStorage';
 import { useWorkouts } from '../hooks/useWorkouts';
+import { useViewedExercises } from '../hooks/useViewedExercises';
 import {
   OVERVIEW_PERIOD_DAYS,
   computeOverviewStats,
@@ -73,37 +73,38 @@ export interface OverzichtPageProps {
 
 export function OverzichtPage({ onOpenMuscles, onOpenLogs }: OverzichtPageProps) {
   const { schemas } = useWorkouts();
+  const { exercises, error, viewingOther } = useViewedExercises();
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const refresh = () => setRefreshKey((k) => k + 1);
-    window.addEventListener('storage', refresh);
-    window.addEventListener('workoutUpdated', refresh);
     window.addEventListener('dayCompletionUpdated', refresh);
-    return () => {
-      window.removeEventListener('storage', refresh);
-      window.removeEventListener('workoutUpdated', refresh);
-      window.removeEventListener('dayCompletionUpdated', refresh);
-    };
+    return () => window.removeEventListener('dayCompletionUpdated', refresh);
   }, []);
 
   const data = useMemo(() => {
     const now = new Date();
-    const exercises = getAllExercises();
+    // Afgevinkte dagen staan alleen op dit toestel; bij "Bekijk als" tellen alleen de logs van de sporter.
+    const completions = viewingOther ? [] : getCompletions();
     return {
       stats: computeOverviewStats(exercises, now),
-      plan: computePlanCompletion(exercises, schemas, getCompletions(), now),
+      plan: computePlanCompletion(exercises, schemas, completions, now),
       recent: getRecentLogs(exercises, 5, now),
       hasRecentMuscles: exercises.some((ex) => ex.name && isWithinLastDays(ex.date, OVERVIEW_PERIOD_DAYS, now)),
     };
-    // refreshKey: opnieuw uitrekenen zodra er iets gelogd of aangevinkt is.
+    // refreshKey: opnieuw uitrekenen zodra er een dag is afgevinkt.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [schemas, refreshKey]);
+  }, [exercises, schemas, viewingOther, refreshKey]);
 
   const { stats, plan, recent } = data;
 
   return (
     <PageLayout maxWidth="none">
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
       <Box
         sx={{
           display: 'grid',
@@ -133,7 +134,7 @@ export function OverzichtPage({ onOpenMuscles, onOpenLogs }: OverzichtPageProps)
             <Typography variant="subtitle2" sx={{ fontWeight: 500, mb: 1 }}>
               Afgelopen {OVERVIEW_PERIOD_DAYS} dagen
             </Typography>
-            <MuscleFrequencyBody sinceDays={OVERVIEW_PERIOD_DAYS} size="calc(50% - 12px)" />
+            <MuscleFrequencyBody sinceDays={OVERVIEW_PERIOD_DAYS} size="calc(50% - 12px)" exercises={exercises} />
             {!data.hasRecentMuscles && (
               <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 1 }}>
                 Nog niets gelogd in de afgelopen {OVERVIEW_PERIOD_DAYS} dagen.
