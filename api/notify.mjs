@@ -21,7 +21,7 @@ import { applyCors } from './_lib/cors.mjs';
 import { getAdmin } from './_lib/firebaseAdmin.mjs';
 import { orgIdOf } from './_lib/liftlogData.mjs';
 import { enforceRateLimit } from './_lib/requireUser.mjs';
-import { getMessaging } from 'firebase-admin/messaging';
+import { sendPushToUser } from './_lib/pushSend.mjs';
 
 const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -127,31 +127,17 @@ export default async function handler(req, res) {
   const recipient = pick(recipientSnap, recipientId);
   if (!mayNotify(sender, recipient, String(body.kind))) return json(res, 403, { error: 'Geen toestemming.', build: BUILD });
 
-  // Toestellen van de ontvanger ophalen.
-  const tokensSnap = await admin.db.collection('pushTokens').where('userId', '==', recipientId).get();
-  const tokens = tokensSnap.docs.map((d) => d.id).filter(Boolean);
-  if (tokens.length === 0) return json(res, 200, { sent: 0, build: BUILD });
-
   const senderName = String(sender.displayName || sender.email || 'je trainer');
   // De voorvertoning komt van de afzender, dus knippen en als platte tekst behandelen.
   const preview = typeof body.preview === 'string' ? body.preview.replace(/\s+/g, ' ').trim().slice(0, 120) : '';
 
   try {
-    const result = await getMessaging().sendEachForMulticast({
-      tokens: tokens.slice(0, 500),
-      notification: { title: kind.title(senderName), body: kind.body(preview) },
+    const sent = await sendPushToUser(admin.db, recipientId, {
+      title: kind.title(senderName),
+      body: kind.body(preview),
       data: { kind: String(body.kind), from: uid },
     });
-
-    // Tokens die niet meer bestaan meteen opruimen, anders blijft de lijst groeien.
-    const dead = [];
-    result.responses.forEach((r, i) => {
-      const code = r.error?.code ?? '';
-      if (code.includes('registration-token-not-registered') || code.includes('invalid-argument')) dead.push(tokens[i]);
-    });
-    await Promise.all(dead.map((t) => admin.db.collection('pushTokens').doc(t).delete().catch(() => {})));
-
-    return json(res, 200, { sent: result.successCount, build: BUILD });
+    return json(res, 200, { sent, build: BUILD });
   } catch (e) {
     console.error('[notify] versturen mislukt:', e);
     // Een mislukte melding mag de actie eromheen (bericht versturen) nooit laten falen.

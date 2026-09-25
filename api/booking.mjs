@@ -41,6 +41,10 @@ import { applyCors } from './_lib/cors.mjs';
  * studio. Bij "betaald": lidmaatschap/credits activeren (zelfde stappen als `assign`) en de
  * factuur automatisch mailen. Geen Firebase-login — dit komt van Mollie's servers.
  *
+ * GET /api/cron/class-reminders (rewrite naar ?cron=classReminders): dagelijkse Vercel-cron rond
+ * 18:00 die iedereen met een plek in een les van morgen één pushmelding stuurt (zie
+ * api/_lib/classReminders.mjs). Zelfde CRON_SECRET-controle als hieronder.
+ *
  * GET /api/cron/generate-classes (rewrite naar ?cron=generateClasses): dagelijkse Vercel-cron die
  * lessen van een terugkerende lessoort op het rooster zet (zie api/_lib/classSchedule.mjs). Zit
  * bewust in dit endpoint in plaats van een eigen bestand: het Hobby-plan van Vercel staat maximaal
@@ -74,6 +78,8 @@ import { buildInvoiceEmail, mailConfigured, sendViaResend } from './_lib/invoice
 import { hashFeedToken, buildIcsFeed } from './_lib/calendarFeed.mjs';
 import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey, getOrgMollieKey, createMolliePayment, getMolliePayment } from './_lib/molliePayments.mjs';
 import { enforceRateLimit } from './_lib/requireUser.mjs';
+import { amsterdamDate, buildClassReminders } from './_lib/classReminders.mjs';
+import { sendPushToUser } from './_lib/pushSend.mjs';
 import {
   classFieldUpdates,
   classIdForOccurrence,
@@ -131,7 +137,8 @@ function classStartsAt(data) {
 export default async function handler(req, res) {
   if (applyCors(req, res)) return;
   const publicToken = req.method === 'GET' ? String(req.query?.invoice ?? '').trim() : '';
-  const isCron = req.method === 'GET' && req.query?.cron === 'generateClasses';
+  const cronName = req.method === 'GET' ? String(req.query?.cron ?? '') : '';
+  const isCron = cronName === 'generateClasses' || cronName === 'classReminders';
   const feedToken = req.method === 'GET' ? String(req.query?.feed ?? '').trim() : '';
   const mollieWebhookOrgId = req.method === 'POST' ? String(req.query?.mollieWebhook ?? '').trim() : '';
   if (req.method !== 'POST' && !publicToken && !isCron && !feedToken) return json(res, 405, { error: 'Method not allowed', build: BUILD });
@@ -145,7 +152,8 @@ export default async function handler(req, res) {
 
   if (publicToken) return publicInvoice(res, db, publicToken);
   if (feedToken) return calendarFeed(res, db, feedToken);
-  if (isCron) return generateClasses(req, res, db);
+  if (cronName === 'generateClasses') return generateClasses(req, res, db);
+  if (cronName === 'classReminders') return classReminders(req, res, db);
   if (mollieWebhookOrgId) return mollieWebhook(req, res, db, mollieWebhookOrgId);
 
   const authHeader = req.headers.authorization || req.headers.Authorization || '';
@@ -1385,11 +1393,66 @@ const WEEKS_AHEAD = 8;
  * Dagelijkse cron: zet voor elke lessoort met een `schedule` de ontbrekende lessen op het rooster.
  * Rekenkant in api/_lib/classSchedule.mjs (puur, met tests); hier alleen het lezen/schrijven.
  */
-async function generateClasses(req, res, db) {
+/**
+ * Mag deze aanroep een cron-taak starten? Vercel stuurt `Authorization: Bearer $CRON_SECRET` mee.
+ * Geeft `true` terug, of stuurt zelf de foutreactie en geeft `false`.
+ */
+function cronAuthorized(req, res) {
   const secret = process.env.CRON_SECRET;
-  if (!secret) return json(res, 500, { error: 'CRON_SECRET ontbreekt in de serveromgeving.', build: BUILD });
+  if (!secret) {
+    json(res, 500, { error: 'CRON_SECRET ontbreekt in de serveromgeving.', build: BUILD });
+    return false;
+  }
   const authHeader = req.headers.authorization || req.headers.Authorization || '';
-  if (authHeader !== `Bearer ${secret}`) return json(res, 401, { error: 'Niet geautoriseerd.', build: BUILD });
+  if (authHeader !== `Bearer ${secret}`) {
+    json(res, 401, { error: 'Niet geautoriseerd.', build: BUILD });
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Dagelijkse cron (rond 18:00): iedereen met een plek in een les van morgen krijgt één pushmelding
+ * ("Morgen: HIIT om 9:00"). Welke tekst naar wie gaat staat in api/_lib/classReminders.mjs (puur,
+ * met tests); hier alleen lezen, versturen en per boeking onthouden dat hij verstuurd is, zodat een
+ * tweede run van de taak niet nog eens piept.
+ */
+async function classReminders(req, res, db) {
+  if (!cronAuthorized(req, res)) return;
+
+  const date = amsterdamDate(new Date(), 1);
+  const classesSnap = await db.collection('classes').where('date', '==', date).get();
+  const classes = classesSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
+  const classIds = classes.filter((c) => !c.cancelledAt).map((c) => c.id);
+
+  const bookings = [];
+  // `in` accepteert maximaal 30 waarden per query.
+  for (let i = 0; i < classIds.length; i += 30) {
+    const snap = await db.collection('bookings').where('classId', 'in', classIds.slice(i, i + 30)).get();
+    for (const d of snap.docs) bookings.push({ ...d.data(), id: d.id });
+  }
+
+  const reminders = buildClassReminders(classes, bookings);
+  let sent = 0;
+  let failed = 0;
+  for (const r of reminders) {
+    try {
+      sent += await sendPushToUser(db, r.userId, { title: r.title, body: r.body, data: { kind: 'classReminder', date } });
+      const now = new Date().toISOString();
+      const batch = db.batch();
+      for (const id of r.bookingIds) batch.set(db.collection('bookings').doc(id), { reminderSentAt: now }, { merge: true });
+      await batch.commit();
+    } catch (e) {
+      failed++;
+      console.error('[classReminders] versturen mislukt voor', r.userId, e);
+    }
+  }
+
+  return json(res, 200, { date, classes: classIds.length, people: reminders.length, devices: sent, failed, build: BUILD });
+}
+
+async function generateClasses(req, res, db) {
+  if (!cronAuthorized(req, res)) return;
 
   const typesSnap = await db.collection('classTypes').get();
   const totals = { created: 0, autoBooked: 0, autoWaitlisted: 0, autoSkippedNoCredits: 0 };
