@@ -121,6 +121,42 @@ export async function getWorkoutsForUser(uid: string, role: ProfileRole): Promis
   return Array.from(byId.values()).sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
 }
 
+/**
+ * "Bekijk als": wat ziet sporter `targetUid`, opgevraagd door een trainer/beheerder (`viewerUid`).
+ *
+ * De opvraging loopt met de rechten van de trainer, niet van de sporter. Een lijstvraag als
+ * "clientId == sporter" weigert Firestore dan in zijn geheel (de regels kunnen niet garanderen dat
+ * de trainer élk resultaat mag lezen). Daarom vragen we binnen de studio op wat de trainer zeker mag
+ * zien — zijn eigen workouts en de open workouts, plus die van de sporter als de studio
+ * "elkaars cliënten zien" aan heeft — en filteren daarna op wat de sporter zelf zou zien.
+ */
+export async function getWorkoutsViewedAs(targetUid: string, viewerUid: string): Promise<Schema[]> {
+  if (!isFirebaseConfigured() || !db) return [];
+  const orgId = requireOrgId();
+  const workouts = collection(db, COLLECTION);
+  const queries = [
+    query(workouts, where('orgId', '==', orgId), where('trainerId', '==', viewerUid)),
+    query(workouts, where('orgId', '==', orgId), where('audience', '==', 'open')),
+    query(workouts, where('orgId', '==', orgId), where('clientId', '==', targetUid)),
+    query(workouts, where('orgId', '==', orgId), where('participantIds', 'array-contains', targetUid)),
+  ];
+  const results = await Promise.allSettled(queries.map((q) => getDocs(q)));
+  if (results.every((r) => r.status === 'rejected')) {
+    throw (results[0] as PromiseRejectedResult).reason;
+  }
+  const byId = new Map<string, Schema>();
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue;
+    for (const d of result.value.docs) {
+      const s = toSchema(d.data(), d.id);
+      const visible =
+        s.audience === 'open' || s.clientId === targetUid || (s.participantIds ?? []).includes(targetUid);
+      if (visible) byId.set(d.id, s);
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
+}
+
 export async function saveWorkoutToFirestore(schema: Schema): Promise<void> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
   const ref = doc(db, COLLECTION, schema.id);

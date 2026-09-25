@@ -61,11 +61,14 @@ function ProfileMenuButton({
   onNavigate,
   profileTabIndex,
   showName,
+  onLogout,
 }: {
   onNavigate: (tabIndex: number) => void;
   profileTabIndex: number;
   /** Toont naam naast de avatar, in dezelfde stijl/uitlijning als de andere zijbalk-items; zonder is het alleen de cirkel (bovenbalk). */
   showName?: boolean;
+  /** Uitloggen in het menu: op de telefoon anders alleen via Profiel, en daar niet tijdens "Bekijk als". */
+  onLogout?: () => void;
 }) {
   const { t } = useI18n();
   const profile = useProfile();
@@ -160,6 +163,20 @@ function ProfileMenuButton({
             {viewed.isOther ? t('viewAs.viewingAs', { name: viewed.name }) : t('viewAs.menuLabel')}
           </MenuItem>
         )}
+        {onLogout && <Divider />}
+        {onLogout && (
+          <MenuItem
+            onClick={() => {
+              setMenuAnchor(null);
+              onLogout();
+            }}
+          >
+            <ListItemIcon>
+              <LogoutRoundedIcon fontSize="small" />
+            </ListItemIcon>
+            {t('nav.signOut')}
+          </MenuItem>
+        )}
       </Menu>
       {mayViewOthers && (
         <ViewAsSheet
@@ -190,7 +207,17 @@ function ShellTitle({ fallback }: { fallback: string }) {
  * niet "sticky" te zijn — position: sticky in een geneste scrollcontainer + env(safe-area-inset-top)
  * bleek op een echt toestel (Dynamic Island) de balk over de statusbalk te laten vallen.
  */
-function MobileTopBar({ title, onNavigate, profileTabIndex }: { title: string; onNavigate: (tabIndex: number) => void; profileTabIndex?: number }) {
+function MobileTopBar({
+  title,
+  onNavigate,
+  profileTabIndex,
+  onLogout,
+}: {
+  title: string;
+  onNavigate: (tabIndex: number) => void;
+  profileTabIndex?: number;
+  onLogout: () => void;
+}) {
   const { t } = useI18n();
   const showBack = useTopBarBackVisible();
   return (
@@ -215,7 +242,7 @@ function MobileTopBar({ title, onNavigate, profileTabIndex }: { title: string; o
       <Typography component="h1" variant="h6" sx={{ fontWeight: 600, flex: 1, minWidth: 0 }} noWrap>
         <ShellTitle fallback={title} />
       </Typography>
-      {profileTabIndex != null && <ProfileMenuButton onNavigate={onNavigate} profileTabIndex={profileTabIndex} />}
+      {profileTabIndex != null && <ProfileMenuButton onNavigate={onNavigate} profileTabIndex={profileTabIndex} onLogout={onLogout} />}
     </Box>
   );
 }
@@ -321,7 +348,7 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
           className="mobile-shell"
           sx={{ position: 'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: 'background.default', pt: 'env(safe-area-inset-top, 0px)' }}
         >
-          <MobileTopBar title={title} onNavigate={onNavigate} profileTabIndex={profileTabIndex} />
+          <MobileTopBar title={title} onNavigate={onNavigate} profileTabIndex={profileTabIndex} onLogout={onLogout} />
           {/* Geen -webkit-overflow-scrolling: touch: dat is sinds iOS 13 niet meer nodig (overflow: auto
               scrolt al met momentum) en kan juist zorgen dat het scrollen "vast" blijft zitten zodra je
               een aanraking op een niet-scrollend broertje (bijv. de bovenbalk) begint — pas navigeren

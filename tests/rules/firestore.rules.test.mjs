@@ -42,6 +42,8 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(db, 'checkins/cB1'), { orgId: 'studiob', userId: 'sporterB', loggedBy: 'sporterB', trainerId: 'trainerB', feeling: 4 });
   await setDoc(doc(db, 'workouts/wB1'), { orgId: 'studiob', trainerId: 'trainerB', clientId: 'sporterB', name: 'B-schema' });
   await setDoc(doc(db, 'workouts/wOpenA'), { trainerId: 'trainer1', clientId: null, audience: 'open', name: 'Open A' });
+  // Workout van de beheerder voor sporter1: trainer1 mag hem niet lezen (geen eigen workout, geen staffFullClientAccess).
+  await setDoc(doc(db, 'workouts/wAdminBas'), { orgId: 'vanas', trainerId: 'admin1', clientId: 'sporter1', name: 'Van beheerder' });
   await setDoc(doc(db, 'leaderboardPublic/sporterB'), { orgId: 'studiob', userId: 'sporterB', displayLabel: 'Nora', visibility: 'named', photoURL: '' });
   await setDoc(doc(db, 'measurements/mA1'), { userId: 'sporter2', loggedBy: 'sporter2', weightKg: 80 });
 });
@@ -110,6 +112,15 @@ await t('trainer verwijdert workout van collega → geweigerd', false, deleteDoc
 await t('trainer studio B verwijdert workout studio A → geweigerd', false, deleteDoc(doc(as('trainerB'), 'workouts/w2')));
 await t('trainer leest workout van collega mét staffFullClientAccess aan → mag', true, getDoc(doc(as('trainerC2'), 'workouts/wC1')));
 await t('sporter (geen staf) leest workout van ander ondanks staffFullClientAccess → geweigerd', false, getDoc(doc(as('sporter1'), 'workouts/wC1')));
+
+// Lijstvragen zoals de app ze stelt. "Bekijk als" loopt met de rechten van de trainer: een vraag op
+// alleen clientId wordt dan in zijn geheel geweigerd (zo bleef de lijst leeg), een vraag binnen de
+// eigen rechten (studio + eigen workouts, of studio + open) mag wél.
+const workoutsWhere = (uid, ...filters) => getDocs(query(collection(as(uid), 'workouts'), ...filters));
+await t('sporter vraagt eigen toegewezen workouts op (clientId) → mag', true, workoutsWhere('sporter1', where('clientId', '==', 'sporter1')));
+await t('trainer vraagt als sporter op clientId (oude "bekijk als") → geweigerd', false, workoutsWhere('trainer1', where('clientId', '==', 'sporter1')));
+await t('trainer vraagt eigen workouts in studio op ("bekijk als") → mag', true, workoutsWhere('trainer1', where('orgId', '==', 'vanas'), where('trainerId', '==', 'trainer1')));
+await t('trainer vraagt open workouts in studio op ("bekijk als") → mag', true, workoutsWhere('trainer1', where('orgId', '==', 'vanas'), where('audience', '==', 'open')));
 
 console.log('Studio-isolatie (multi-tenant)');
 // Lezen over de studiogrens heen mag nooit, ook niet als trainer of beheerder.

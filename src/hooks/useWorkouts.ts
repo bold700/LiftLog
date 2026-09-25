@@ -7,6 +7,7 @@ import { useProfile } from '../context/ProfileContext';
 import { useViewAs } from '../context/ViewAsContext';
 import {
   getWorkoutsForUser,
+  getWorkoutsViewedAs,
   saveWorkoutToFirestore,
   deleteWorkoutFromFirestore,
 } from '../services/workoutFirestore';
@@ -32,15 +33,20 @@ export function useWorkouts() {
 
   // "Bekijk als": laat zien wat die sporter zelf zou zien (eigen/toegewezen/open), niet de
   // trainersblik op iedereen — anders lijkt "bekijk als" niets te doen op dit scherm.
-  const targetUid = viewed.isOther ? viewed.userId : auth?.user?.uid;
+  const viewerUid = auth?.user?.uid;
+  const targetUid = viewed.isOther ? viewed.userId : viewerUid;
   const targetRole = viewed.isOther ? 'sporter' : profile?.role;
+  const viewingOther = viewed.isOther;
 
   const loadSchemas = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       if (targetUid && profile?.profile) {
-        const list = await getWorkoutsForUser(targetUid, targetRole ?? 'sporter');
+        const list =
+          viewingOther && viewerUid
+            ? await getWorkoutsViewedAs(targetUid, viewerUid)
+            : await getWorkoutsForUser(targetUid, targetRole ?? 'sporter');
         setSchemas(list);
       } else {
         setSchemas(getSchemas());
@@ -51,7 +57,7 @@ export function useWorkouts() {
     } finally {
       setLoading(false);
     }
-  }, [targetUid, targetRole, profile?.profile?.role]);
+  }, [targetUid, targetRole, viewingOther, viewerUid, profile?.profile?.role]);
 
   useEffect(() => {
     loadSchemas();
