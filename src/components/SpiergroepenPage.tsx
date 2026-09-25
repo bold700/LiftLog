@@ -39,7 +39,7 @@ export const SpiergroepenPage = () => {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: '5fr 3fr' },
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 5fr) minmax(0, 3fr)' },
           gap: { xs: 2, md: 2.5 },
         }}
       >

@@ -587,7 +587,7 @@ export function NutritionPage() {
         {/* Dagweergave (Figma "Nutrition"): links de samenvatting, rechts zoeken/loggen en het
             dag-overzicht per maaltijd — op mobiel gewoon onder elkaar. */}
         {period === 'day' && (
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(280px, 380px) minmax(0, 1fr)' }, gap: { xs: 2, md: 3 }, alignItems: 'start' }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(280px, 380px) minmax(0, 1fr)' }, gap: { xs: 2, md: 3 }, alignItems: 'start' }}>
             <Box sx={{ minWidth: 0 }}>{summaryCard}</Box>
             <Box sx={{ minWidth: 0 }}>
             <input

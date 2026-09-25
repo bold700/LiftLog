@@ -168,7 +168,7 @@ function PurchasePlansSection({ userId }: { userId: string }) {
           sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.75, borderTop: `1px solid ${designTokens.cardBackgroundHigh}` }}
         >
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="body2" noWrap>
+            <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
               {plan.name}
             </Typography>
             <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
