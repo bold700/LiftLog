@@ -159,7 +159,7 @@ function PurchasePlansSection({ userId }: { userId: string }) {
 
   return (
     <Box sx={{ p: 2, mb: 3, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground }}>
-      <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+      <Typography component="h2" sx={{ fontSize: 14, fontWeight: 500, lineHeight: '20px', mb: 1 }}>
         Abonnement of credits kopen
       </Typography>
       {plans.map((plan) => (
@@ -252,7 +252,7 @@ export function SubscriptionCard({ userId }: { userId: string }) {
         bgcolor: designTokens.cardBackground,
       }}
     >
-      <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+      <Typography component="h2" sx={{ fontSize: 14, fontWeight: 500, lineHeight: '20px', mb: 1 }}>
         {t('billing.myInvoices')}
       </Typography>
       {charges.map((c) => (

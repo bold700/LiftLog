@@ -91,7 +91,7 @@ export function AiChatConnectCard({ userId }: Props) {
     <ContentCard>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
         <SmartToyRoundedIcon sx={{ color: 'text.secondary' }} />
-        <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600 }}>
+        <Typography component="h2" sx={{ fontSize: 14, fontWeight: 500, lineHeight: '20px' }}>
           Koppel met ChatGPT, Claude of Gemini
         </Typography>
       </Box>

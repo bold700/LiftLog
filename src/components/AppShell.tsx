@@ -80,7 +80,7 @@ function ProfileMenuButton({
 
   const ariaLabel = viewed.isOther ? `${t('nav.profile')} · ${t('viewAs.viewingAs', { name: viewed.name })}` : t('nav.profile');
   const name = viewed.isOther ? viewed.name : me?.displayName || me?.email || t('nav.profile');
-  const avatarSize = showName ? 20 : 32;
+  const avatarSize = showName ? 26 : 32;
   const avatarWithBadge = (
     <Box sx={{ position: 'relative', display: 'flex', flexShrink: 0 }}>
       <UserAvatar name={viewed.isOther ? viewed.name : me?.displayName} photoURL={viewed.isOther ? viewed.photoURL : me?.photoURL} size={avatarSize} />

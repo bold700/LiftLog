@@ -40,7 +40,7 @@ export const NOTIFICATION_KIND_INFO: NotificationKindInfo[] = [
   {
     kind: 'creditsLow',
     label: 'Credits bijna op',
-    description: 'Na een boeking waarbij nog 1 of 0 credits over zijn.',
+    description: 'Als iemand na een boeking nog 1 credit of minder over heeft.',
     to: 'Sporter',
     when: 'Direct na boeken',
   },

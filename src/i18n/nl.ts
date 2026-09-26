@@ -85,8 +85,8 @@ export const nl = {
       admin: 'Beheerder',
     },
     creditsLeft: {
-      one: '1 over',
-      other: '{count} over',
+      one: '1 credit over',
+      other: '{count} credits over',
     },
     onlyStaff: 'Alleen trainers en beheerders kunnen profielen beheren.',
     search: 'Zoek op naam of e-mail',
@@ -145,12 +145,14 @@ export const nl = {
     rooms: {
       title: 'Ruimtes',
       help: 'De ruimtes van je studio. Bij een lessoort of losse les kies je er een uit deze lijst.',
-      placeholder: 'Naam van de ruimte',
+      placeholder: 'Bijv. Zaal 1',
       add: 'Toevoegen',
       empty: 'Nog geen ruimtes toegevoegd.',
       remove: 'Ruimte verwijderen',
       adminOnly: 'Alleen een beheerder kan ruimtes toevoegen of verwijderen.',
       duplicate: 'Die ruimte bestaat al.',
+      removed: 'Ruimte "{name}" verwijderd.',
+      newLabel: 'Nieuwe ruimte',
     },
     schedule: {
       title: 'Terugkerend',
@@ -344,6 +346,7 @@ export const nl = {
     cancel: 'Annuleren',
     saving: 'Bezig…',
     retry: 'Opnieuw proberen',
+    close: 'Sluiten',
     none: '—',
   },
   nutrition: {
@@ -364,7 +367,7 @@ export const nl = {
     macros: { protein: 'Eiwit', carbs: 'Koolhydraten', fat: 'Vet' },
     macroAbbr: { protein: 'E', carbs: 'K', fat: 'V' },
     kcalPerDay: 'kcal per dag',
-    addFoodButton: 'Voedsel toevoegen',
+    addFoodButton: 'Voeding toevoegen',
     previous: 'Vorige',
     next: 'Volgende',
     addFood: { photo: 'Foto', barcode: 'Barcode' },
@@ -376,7 +379,7 @@ export const nl = {
       barcodeFailed: 'Opzoeken van de barcode mislukte.',
       recognitionFailed: 'Herkenning mislukt.',
     },
-    searchPlaceholder: "Zoek een product, bijv. 'magere kwark'",
+    searchPlaceholder: 'Zoek een product',
     searchNotes: {
       unreachableWithResults: 'De productendatabase is even niet bereikbaar; je ziet alleen de basisproducten.',
       unreachableNoResults: 'De productendatabase is even niet bereikbaar. Probeer het zo nog eens, of voeg het product handmatig toe.',
@@ -390,6 +393,7 @@ export const nl = {
     edit: 'Bewerken',
     delete: 'Verwijderen',
     deleteFailed: 'Voedingslog verwijderen mislukt. Probeer het opnieuw.',
+    deleted: '{name} verwijderd.',
     loadFailed: 'Voedingslogs laden mislukt. Controleer je verbinding.',
     meals: { ontbijt: 'Ontbijt', lunch: 'Lunch', diner: 'Diner', tussendoor: 'Tussendoor' },
     recognized: {

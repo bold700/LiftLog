@@ -164,7 +164,7 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
   return (
     <Box sx={embedded ? {} : { p: 2, mb: 3, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-        <Typography variant="subtitle2" fontWeight={600}>
+        <Typography component="h2" sx={{ fontSize: 14, fontWeight: 500, lineHeight: '20px' }}>
           Vaste lessen
         </Typography>
         <Box sx={{ display: 'flex', gap: 0.5 }}>

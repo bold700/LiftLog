@@ -83,8 +83,8 @@ export const en: Messages = {
       admin: 'Manager',
     },
     creditsLeft: {
-      one: '1 left',
-      other: '{count} left',
+      one: '1 credit left',
+      other: '{count} credits left',
     },
     onlyStaff: 'Only trainers and managers can manage profiles.',
     search: 'Search by name or email',
@@ -143,12 +143,14 @@ export const en: Messages = {
     rooms: {
       title: 'Rooms',
       help: 'Your studio\'s rooms. A class type or one-off class picks one from this list.',
-      placeholder: 'Room name',
+      placeholder: 'E.g. Studio 1',
       add: 'Add',
       empty: 'No rooms added yet.',
       remove: 'Delete room',
       adminOnly: 'Only an admin can add or remove rooms.',
       duplicate: 'That room already exists.',
+      removed: 'Room "{name}" deleted.',
+      newLabel: 'New room',
     },
     schedule: {
       title: 'Recurring',
@@ -342,6 +344,7 @@ export const en: Messages = {
     cancel: 'Cancel',
     saving: 'Saving…',
     retry: 'Try again',
+    close: 'Close',
     none: '—',
   },
   nutrition: {
@@ -374,7 +377,7 @@ export const en: Messages = {
       barcodeFailed: 'Looking up the barcode failed.',
       recognitionFailed: 'Recognition failed.',
     },
-    searchPlaceholder: "Search a product, e.g. 'low-fat quark'",
+    searchPlaceholder: 'Search a product',
     searchNotes: {
       unreachableWithResults: "The product database isn't reachable right now; you're only seeing the basic products.",
       unreachableNoResults: "The product database isn't reachable right now. Try again shortly, or add the product manually.",
@@ -388,6 +391,7 @@ export const en: Messages = {
     edit: 'Edit',
     delete: 'Delete',
     deleteFailed: 'Could not delete the food log. Please try again.',
+    deleted: '{name} deleted.',
     loadFailed: 'Could not load food logs. Check your connection.',
     meals: { ontbijt: 'Breakfast', lunch: 'Lunch', diner: 'Dinner', tussendoor: 'Snack' },
     recognized: {
