@@ -22,6 +22,13 @@ const config: CapacitorConfig = {
       iosSpinnerStyle: 'small',
       spinnerColor: '#999999'
     },
+    // Live updates (src/native/liveUpdate.ts): wij bepalen zelf wanneer er een nieuwe web-versie
+    // komt, vanaf onze eigen server. Geen Capgo-cloud, geen statistieken naar buiten.
+    CapacitorUpdater: {
+      autoUpdate: false,
+      statsUrl: '',
+      appReadyTimeout: 15000,
+    },
     StatusBar: {
       style: 'dark',
       backgroundColor: '#F2E4D3'

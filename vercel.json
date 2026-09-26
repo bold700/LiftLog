@@ -44,6 +44,19 @@
       "schedule": "0 16 * * *"
     }
   ],
+  "headers": [
+    {
+      "source": "/app-update/manifest.json",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" }
+      ]
+    },
+    {
+      "source": "/app-update/(.*).zip",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    }
+  ],
   "rewrites": [
     {
       "source": "/f/:token",

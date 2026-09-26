@@ -8,6 +8,12 @@ Deze lijst is wat daarvoor eenmalig geregeld moet worden. Vink af wat klaar is.
 - Naam in de winkels: **VORM**
 - De oude apps ("Van As Personal Training Logs") blijven staan tot VORM live is (stap F).
 
+**Live updates.** Een gewone wijziging hoeft niet langs de winkels: bij elke Vercel-deploy komt er
+een pakketje van de web-app op `/app-update/` (`scripts/app-update-bundle.mjs`), en de apps halen dat
+zelf op en schakelen over zodra ze naar de achtergrond gaan (`src/native/liveUpdate.ts`). Alleen als er
+een native onderdeel bijkomt (een nieuwe Capacitor-plug-in) is een nieuwe versie in de winkels nodig;
+tot die er is, slaan de apps de live update over.
+
 ---
 
 ## A. Apple: ontwikkelaarsaccount voor BOLD700
