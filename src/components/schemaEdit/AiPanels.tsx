@@ -24,6 +24,17 @@ const AI_PANEL_SHELL_SX = {
   border: '1px solid rgba(0,0,0,0.08)',
 } as const;
 
+/** Waarschuwing als een sporter van dit schema geen toestemming gaf voor gezondheidsgegevens. */
+function NoHealthDataNote({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <Alert severity="warning" sx={{ mb: 1.5 }}>
+      Deze sporter heeft geen toestemming gegeven voor gezondheidsgegevens. Noem in de casus geen blessures, hartslag, gewicht of
+      andere gezondheidsinformatie: wat je hier typt, gaat naar de AI-dienst.
+    </Alert>
+  );
+}
+
 export interface AiFormule7WizardProps {
   ai: AiSchemaGeneration;
 }
@@ -65,6 +76,7 @@ export function AiFormule7Wizard({ ai }: AiFormule7WizardProps) {
 
               {aiWizardStep === 0 && (
                 <Box>
+                  <NoHealthDataNote show={ai.noHealthData} />
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                     Beschrijf cliënt, doel, activiteit/belastbaarheid, route (G/U/S/…), frequentie per week,
                     duur sessie, rust- en max-hartslag, beperkingen en materiaal. Minimaal 10 tekens.
@@ -215,6 +227,7 @@ export function AiGenerationPanel({ ai, isFormule7Template }: AiGenerationPanelP
                   ? 'Beschrijf de casus, of vul hieronder de routekaart zelf in. De AI vult routekaart én trainingsdagen.'
                   : 'Beschrijf doel, niveau, aantal dagen, beschikbare apparatuur en eventuele blessures.'}
               </Typography>
+              <NoHealthDataNote show={ai.noHealthData} />
               <TextField
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}

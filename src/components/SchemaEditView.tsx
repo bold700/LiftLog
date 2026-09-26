@@ -91,7 +91,10 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
   }, []);
   // De AI volgt het formulier zoals het nu aan of uit staat, niet zoals het schema was opgeslagen.
   const aiSchema = useMemo(() => ({ ...schema, isFormule7Template: isF7 }), [schema, isF7]);
-  const ai = useAiSchemaGeneration({ schema: aiSchema, onApplyGenerated: applyAiGenerated });
+  // Zei een sporter van dit schema nee tegen gezondheidsgegevens? Dan gaan die ook niet naar de AI.
+  const assignedIds = audience === 'single' ? (clientId ? [clientId] : []) : audience === 'open' ? [] : participantIds;
+  const noHealthData = assignOptions.some((p) => assignedIds.includes(p.userId) && p.healthConsent?.given === false);
+  const ai = useAiSchemaGeneration({ schema: aiSchema, onApplyGenerated: applyAiGenerated, noHealthData });
   const { aiEditorUnlocked } = ai;
 
   // Sync naam, clientId en datums wanneer schema wijzigt

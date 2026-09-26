@@ -34,14 +34,22 @@ export type AiRationale = {
 export interface UseAiSchemaGenerationArgs {
   schema: Schema;
   onApplyGenerated: (result: AiGeneratedResult) => void;
+  /**
+   * Een sporter van dit schema zei nee tegen gezondheidsgegevens: dan vraagt de AI niet naar
+   * rusthartslag of blessures, want wat hier wordt ingevuld gaat naar de AI-dienst.
+   */
+  noHealthData?: boolean;
 }
+
+/** Vervolgvragen die om gezondheidsgegevens vragen (ids uit api/generate-workout.mjs). */
+const HEALTH_QUESTION_IDS = new Set(['restingHr', 'limitations']);
 
 function initialEditorUnlocked(schema: Schema): boolean {
   if (!schema.isFormule7Template || schema.formule7AssistMode !== 'ai') return true;
   return schemaHasMeaningfulF7Content(schema);
 }
 
-export function useAiSchemaGeneration({ schema, onApplyGenerated }: UseAiSchemaGenerationArgs) {
+export function useAiSchemaGeneration({ schema, onApplyGenerated, noHealthData = false }: UseAiSchemaGenerationArgs) {
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiQuestionsLoading, setAiQuestionsLoading] = useState(false);
@@ -73,6 +81,7 @@ export function useAiSchemaGeneration({ schema, onApplyGenerated }: UseAiSchemaG
       const answersText =
         mode === 'formule7'
           ? aiQuestions
+              .filter((q) => !noHealthData || !HEALTH_QUESTION_IDS.has(q.id))
               .map((q) => {
                 const answer = aiAnswers[q.id]?.trim() ?? '';
                 return answer ? `${q.question}\nAntwoord: ${answer}` : '';
@@ -109,7 +118,7 @@ export function useAiSchemaGeneration({ schema, onApplyGenerated }: UseAiSchemaG
     } finally {
       setAiGenerating(false);
     }
-  }, [aiPrompt, aiGenerating, schema.isFormule7Template, aiQuestions, aiAnswers, onApplyGenerated]);
+  }, [aiPrompt, aiGenerating, schema.isFormule7Template, aiQuestions, aiAnswers, onApplyGenerated, noHealthData]);
 
   const handleGetFollowUpQuestions = useCallback(async (): Promise<boolean> => {
     const text = aiPrompt.trim();
@@ -118,7 +127,7 @@ export function useAiSchemaGeneration({ schema, onApplyGenerated }: UseAiSchemaG
     setAiError(null);
     try {
       const questions = await getFormule7FollowUpQuestions(text, aiAnswers);
-      setAiQuestions(questions);
+      setAiQuestions(noHealthData ? questions.filter((q) => !HEALTH_QUESTION_IDS.has(q.id)) : questions);
       return true;
     } catch (error) {
       setAiError(
@@ -128,9 +137,10 @@ export function useAiSchemaGeneration({ schema, onApplyGenerated }: UseAiSchemaG
     } finally {
       setAiQuestionsLoading(false);
     }
-  }, [aiPrompt, aiQuestionsLoading, aiAnswers]);
+  }, [aiPrompt, aiQuestionsLoading, aiAnswers, noHealthData]);
 
   return {
+    noHealthData,
     aiPrompt,
     setAiPrompt,
     aiGenerating,

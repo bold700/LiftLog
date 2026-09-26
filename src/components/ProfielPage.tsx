@@ -141,6 +141,8 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
   const effective = viewed.isOther ? viewedProfile : p;
   // Bij "Bekijk als" kan dat ook een collega (trainer/beheerder) zijn: die heeft geen abonnement-tab.
   const effectiveRole = viewed.isOther ? (viewedProfile?.role ?? 'sporter') : p?.role;
+  // Nee gezegd tegen gezondheidsgegevens: dan ook geen rusthartslag en blessures invullen (zie firestore.rules).
+  const healthRefused = effective?.healthConsent?.given === false;
   const uid = viewed.isOther ? viewed.userId : (auth?.user?.uid ?? p?.userId);
   const isPasswordAccount = viewed.isOther ? true : (auth?.user?.providerData?.some((pr) => pr.providerId === 'password') ?? false);
 
@@ -415,13 +417,15 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
             fullWidth
             InputProps={{ endAdornment: <InputAdornment position="end">cm</InputAdornment> }}
           />
-          <NumberField
-            label="Rusthartslag"
-            value={restingHr}
-            onChange={setRestingHr}
-            fullWidth
-            InputProps={{ endAdornment: <InputAdornment position="end">bpm</InputAdornment> }}
-          />
+          {!healthRefused && (
+            <NumberField
+              label="Rusthartslag"
+              value={restingHr}
+              onChange={setRestingHr}
+              fullWidth
+              InputProps={{ endAdornment: <InputAdornment position="end">bpm</InputAdornment> }}
+            />
+          )}
         </Box>
       ) : (
         <>
@@ -429,7 +433,7 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
           <FieldRow label="Geboortedatum">{birthLabel}</FieldRow>
           <FieldRow label="Geslacht">{gender ? genderLabel[gender] : '–'}</FieldRow>
           <FieldRow label="Lengte">{heightCm ? `${heightCm} cm` : '–'}</FieldRow>
-          <FieldRow label="Rusthartslag">{restingHr ? `${restingHr} bpm` : '–'}</FieldRow>
+          {!healthRefused && <FieldRow label="Rusthartslag">{restingHr ? `${restingHr} bpm` : '–'}</FieldRow>}
         </>
       )}
       <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: editing ? 1.5 : 1 }}>
@@ -499,7 +503,13 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
 
   const limitationsCard = (
     <Box sx={{ ...sectionSx() }}>
-      <LimitationsEditor value={limitations} onChange={setLimitations} disabled={saving || !editing} />
+      {healthRefused ? (
+        <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
+          Blessures en beperkingen worden niet bijgehouden: er is geen toestemming voor gezondheidsgegevens.
+        </Typography>
+      ) : (
+        <LimitationsEditor value={limitations} onChange={setLimitations} disabled={saving || !editing} />
+      )}
     </Box>
   );
 

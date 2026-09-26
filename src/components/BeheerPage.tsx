@@ -80,6 +80,8 @@ interface EditState {
   weightGoalKg: string;
   leaderboardVisibility: LeaderboardVisibility;
   limitations: Limitation[];
+  /** Nee gezegd tegen gezondheidsgegevens: geen rusthartslag en blessures invullen. */
+  healthRefused: boolean;
   /** Actief abonnement (planId), '' = geen. */
   planId: string;
 }
@@ -96,6 +98,7 @@ function toEditState(p: Profile, planId = ''): EditState {
     weightGoalKg: p.weightGoalKg != null ? String(p.weightGoalKg) : '',
     leaderboardVisibility: p.leaderboardVisibility ?? 'named',
     limitations: p.limitations ?? [],
+    healthRefused: p.healthConsent?.given === false,
     planId,
   };
 }
@@ -627,7 +630,9 @@ export function BeheerPage() {
                 <MenuItem value="anders">Anders</MenuItem>
               </TextField>
               <NumberField label="Lengte (cm)" size="small" fullWidth value={edit.heightCm} onChange={(v) => setEdit({ ...edit, heightCm: v })} />
-              <NumberField label="Rusthartslag (bpm)" size="small" fullWidth value={edit.restingHr} onChange={(v) => setEdit({ ...edit, restingHr: v })} />
+              {!edit.healthRefused && (
+                <NumberField label="Rusthartslag (bpm)" size="small" fullWidth value={edit.restingHr} onChange={(v) => setEdit({ ...edit, restingHr: v })} />
+              )}
               <NumberField label="Doelgewicht (kg)" decimal size="small" fullWidth value={edit.weightGoalKg} onChange={(v) => setEdit({ ...edit, weightGoalKg: v })} />
               <TextField select label="Ranglijst" size="small" fullWidth value={edit.leaderboardVisibility} onChange={(e) => setEdit({ ...edit, leaderboardVisibility: e.target.value as LeaderboardVisibility })}>
                 <MenuItem value="named">Met naam</MenuItem>
@@ -639,11 +644,17 @@ export function BeheerPage() {
               Geboortedatum en geslacht zijn nodig voor het vetpercentage uit huidplooien; lengte voor BMI; rusthartslag voor hartslagzones op maat.
             </Typography>
             <Box sx={{ mt: 2 }}>
-              <LimitationsEditor
-                value={edit.limitations}
-                onChange={(limitations) => setEdit({ ...edit, limitations })}
-                disabled={saving}
-              />
+              {edit.healthRefused ? (
+                <Typography variant="caption" color="text.secondary">
+                  Dit lid heeft geen toestemming gegeven voor gezondheidsgegevens: rusthartslag en blessures worden niet bijgehouden.
+                </Typography>
+              ) : (
+                <LimitationsEditor
+                  value={edit.limitations}
+                  onChange={(limitations) => setEdit({ ...edit, limitations })}
+                  disabled={saving}
+                />
+              )}
             </Box>
 
             <HeartRateZonesTable

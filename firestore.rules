@@ -116,6 +116,25 @@ service cloud.firestore {
     function touchesHealthConsent() {
       return request.resource.data.diff(resource.data).affectedKeys().hasAny(['healthConsent']);
     }
+    /**
+     * Wie nee zei tegen gezondheidsgegevens, krijgt er ook geen nieuwe bij: geen rusthartslag of
+     * blessures op het profiel, en geen metingen (zie /measurements). Alleen wat verandert telt, zodat
+     * een oud profiel zonder opgeruimde velden nog wel een naam of taal kan wijzigen.
+     */
+    function addsHealthDataWithoutConsent() {
+      let d = request.resource.data;
+      let c = d.get('healthConsent', null);
+      let changed = d.diff(resource.data).affectedKeys();
+      return c != null && c.get('given', true) == false
+        && ((changed.hasAny(['restingHrBpm']) && d.get('restingHrBpm', null) != null)
+            || (changed.hasAny(['limitations']) && d.get('limitations', null) != null && d.limitations.size() > 0));
+    }
+    /** Heeft deze persoon nee gezegd tegen gezondheidsgegevens? */
+    function refusedHealthData(uid) {
+      let path = /databases/$(database)/documents/profiles/$(uid);
+      let c = exists(path) ? get(path).data.get('healthConsent', null) : null;
+      return c != null && c.get('given', true) == false;
+    }
     /** Zelfs een beheerder mag `platformAdmin` niet vanuit de app zetten of wijzigen. */
     function touchesPlatformAdmin() {
       return request.resource.data.diff(resource.data).affectedKeys().hasAny(['platformAdmin']);
@@ -177,6 +196,7 @@ service cloud.firestore {
       // `writesMyOrg()` controleert de thuisstudio en `orgIds` moet zijn eigen studio bevatten.
       allow update: if isSignedIn()
         && !touchesPlatformAdmin()
+        && !addsHealthDataWithoutConsent()
         && ((isAdmin() && sameOrg() && writesMyOrg()
              && request.resource.data.get('orgIds', [myOrg()]).hasAny(myOrgs())
              && (request.auth.uid == userId || !touchesHealthConsent()))
@@ -265,12 +285,14 @@ service cloud.firestore {
                 && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin())));
       allow create: if isSignedIn()
         && writesMyOrg()
+        && !refusedHealthData(request.resource.data.userId)
         && (request.resource.data.userId == request.auth.uid
             || (isTrainerOrAdmin() && request.resource.data.loggedBy == request.auth.uid));
       // `writesMyOrg()` staat er ook bij update: zonder dat kan iemand het `orgId` van een
       // bestaand document naar een andere studio schrijven en het daarmee overhevelen.
       allow update: if isSignedIn()
         && writesMyOrg()
+        && !refusedHealthData(resource.data.userId)
         && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
       allow delete: if isSignedIn()
         && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
@@ -286,12 +308,14 @@ service cloud.firestore {
                 && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin())));
       allow create: if isSignedIn()
         && writesMyOrg()
+        && !refusedHealthData(request.resource.data.userId)
         && (request.resource.data.userId == request.auth.uid
             || (isTrainerOrAdmin() && request.resource.data.loggedBy == request.auth.uid));
       // `writesMyOrg()` staat er ook bij update: zonder dat kan iemand het `orgId` van een
       // bestaand document naar een andere studio schrijven en het daarmee overhevelen.
       allow update: if isSignedIn()
         && writesMyOrg()
+        && !refusedHealthData(resource.data.userId)
         && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
       allow delete: if isSignedIn()
         && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
@@ -305,12 +329,14 @@ service cloud.firestore {
                 && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin())));
       allow create: if isSignedIn()
         && writesMyOrg()
+        && !refusedHealthData(request.resource.data.userId)
         && (request.resource.data.userId == request.auth.uid
             || (isTrainerOrAdmin() && request.resource.data.loggedBy == request.auth.uid));
       // `writesMyOrg()` staat er ook bij update: zonder dat kan iemand het `orgId` van een
       // bestaand document naar een andere studio schrijven en het daarmee overhevelen.
       allow update: if isSignedIn()
         && writesMyOrg()
+        && !refusedHealthData(resource.data.userId)
         && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
       allow delete: if isSignedIn()
         && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
@@ -324,12 +350,14 @@ service cloud.firestore {
                 && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin())));
       allow create: if isSignedIn()
         && writesMyOrg()
+        && !refusedHealthData(request.resource.data.userId)
         && (request.resource.data.userId == request.auth.uid
             || (isTrainerOrAdmin() && request.resource.data.loggedBy == request.auth.uid));
       // `writesMyOrg()` staat er ook bij update: zonder dat kan iemand het `orgId` van een
       // bestaand document naar een andere studio schrijven en het daarmee overhevelen.
       allow update: if isSignedIn()
         && writesMyOrg()
+        && !refusedHealthData(resource.data.userId)
         && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
       allow delete: if isSignedIn()
         && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
@@ -344,6 +372,7 @@ service cloud.firestore {
         && request.resource.data.userId == request.auth.uid;
       allow update: if isSignedIn()
         && writesMyOrg()
+        && !refusedHealthData(resource.data.userId)
         && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
       allow delete: if isSignedIn()
         && (resource.data.userId == request.auth.uid || isStaffInSameOrg());

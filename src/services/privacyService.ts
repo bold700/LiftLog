@@ -12,8 +12,11 @@ import { deleteAllProgressPhotos } from './progressPhotoService';
 import { deleteAvatar } from './avatarService';
 import { withdrawHealthConsentOnServer } from './adminAccountService';
 
-/** Versie van de toestemmingstekst; verhoog als de tekst wezenlijk verandert (dan wordt opnieuw gevraagd). */
-export const HEALTH_CONSENT_VERSION = 1;
+/**
+ * Versie van de toestemmingstekst; verhoog als de tekst wezenlijk verandert (dan wordt opnieuw gevraagd).
+ * Moet gelijk zijn aan die in api/admin-account.mjs. v2: de AI-dienst (OpenAI) wordt genoemd, voor schema's en bodyscan-foto's.
+ */
+export const HEALTH_CONSENT_VERSION = 2;
 
 export async function recordHealthConsent(uid: string, given: boolean): Promise<void> {
   await updateProfile(uid, { healthConsent: { given, at: new Date().toISOString(), version: HEALTH_CONSENT_VERSION } });

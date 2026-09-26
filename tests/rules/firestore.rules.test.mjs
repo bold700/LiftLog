@@ -74,6 +74,16 @@ await t('sporter geeft zelf toestemming voor gezondheidsgegevens → mag', true,
 await t('trainer zet toestemming namens sporter → geweigerd', false, updateDoc(doc(as('trainer1'), 'profiles/sporter1'), { healthConsent: { ...consent, given: false } }));
 await t('beheerder zet toestemming namens sporter → geweigerd', false, updateDoc(doc(as('admin1'), 'profiles/sporter1'), { healthConsent: { ...consent, given: false } }));
 await t('beheerder zet eigen toestemming → mag', true, updateDoc(doc(as('admin1'), 'profiles/admin1'), { healthConsent: consent }));
+// Nee gezegd: dan ook geen nieuwe gezondheidsgegevens, van niemand.
+await updateDoc(doc(as('sporter3'), 'profiles/sporter3'), { healthConsent: { ...consent, given: false } });
+await t('trainer zet rusthartslag bij sporter zonder toestemming → geweigerd', false, updateDoc(doc(as('trainer1'), 'profiles/sporter3'), { restingHrBpm: 60 }));
+await t('trainer zet blessure bij sporter zonder toestemming → geweigerd', false, updateDoc(doc(as('trainer1'), 'profiles/sporter3'), { limitations: [{ area: 'knee' }] }));
+await t('sporter zonder toestemming wijzigt eigen naam → mag', true, updateDoc(doc(as('sporter3'), 'profiles/sporter3'), { displayName: 'Eva B' }));
+await t('trainer maakt meting voor sporter zonder toestemming → geweigerd', false, setDoc(doc(as('trainer1'), 'measurements/mNoConsent1'), { userId: 'sporter3', loggedBy: 'trainer1', weightKg: 70 }));
+await t('sporter zonder toestemming maakt eigen meting → geweigerd', false, setDoc(doc(as('sporter3'), 'measurements/mNoConsent2'), { userId: 'sporter3', loggedBy: 'sporter3', weightKg: 70 }));
+await t('sporter met toestemming maakt eigen meting → mag', true, setDoc(doc(as('sporter1'), 'measurements/mConsent1'), { userId: 'sporter1', loggedBy: 'sporter1', weightKg: 80 }));
+await t('sporter geeft alsnog toestemming → mag', true, updateDoc(doc(as('sporter3'), 'profiles/sporter3'), { healthConsent: consent }));
+await t('daarna eigen meting maken → mag', true, setDoc(doc(as('sporter3'), 'measurements/mNoConsent3'), { userId: 'sporter3', loggedBy: 'sporter3', weightKg: 70 }));
 await t('trainer wijzigt profiel van andere trainer → geweigerd', false, updateDoc(doc(as('trainer1'), 'profiles/admin1'), { displayName: 'x' }));
 await t('trainer leest sporterprofiel → mag', true, getDoc(doc(as('trainer1'), 'profiles/sporter2')));
 await t('admin maakt sporter trainer → mag', true, updateDoc(doc(as('admin1'), 'profiles/sporter1'), { role: 'trainer', trainerId: null }));
