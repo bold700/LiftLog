@@ -308,13 +308,41 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
 
   const remove = async () => {
     if (!draft) return;
+    const removed = types.find((c) => c.id === draft.id) ?? null;
     setSaving(true);
     try {
       await deleteClassType(draft.id);
       // Daarna de geplande lessen zonder inschrijvingen van het rooster, anders blijven ze als
       // "spooklessen" staan zonder lessoort.
       const pruned = await pruneStaleClasses().catch(() => null);
-      notify.success(t('classTypes.deleted'));
+      if (removed) {
+        // Terugzetten: de lessoort opnieuw opslaan en het rooster opnieuw vullen (de weekmomenten
+        // komen dan vanzelf terug; lessen met inschrijvingen waren al blijven staan).
+        notify.undo(t('classTypes.deletedNamed', { name: removed.name }), async () => {
+          try {
+            await saveClassType({
+              id: removed.id,
+              name: removed.name,
+              capacity: removed.capacity,
+              creditCost: removed.creditCost,
+              defaultTrainerId: removed.defaultTrainerId,
+              schemaId: removed.schemaId,
+              schedule: removed.schedule,
+              room: removed.room,
+              sessionKind: removed.sessionKind,
+              description: removed.description,
+              createdAt: removed.createdAt,
+            });
+            await generateClassOccurrencesNow(removed.id).catch(() => null);
+            notify.success(t('classTypes.restored', { name: removed.name }));
+          } catch (e) {
+            notify.error(t('classTypes.saveFailed'), e);
+          }
+          await load();
+        });
+      } else {
+        notify.success(t('classTypes.deleted'));
+      }
       warnStaleKept(pruned?.staleWithBookings);
       setConfirmDelete(false);
       setDraft(null);

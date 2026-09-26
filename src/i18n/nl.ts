@@ -127,6 +127,8 @@ export const nl = {
     deleteConfirm: 'Lessoort "{name}" verwijderen? Lessen die er al mee gemaakt zijn blijven staan.',
     saved: 'Lessoort opgeslagen.',
     deleted: 'Lessoort verwijderd.',
+    deletedNamed: 'Lessoort "{name}" verwijderd.',
+    restored: 'Lessoort "{name}" teruggezet.',
     saveFailed: 'Opslaan mislukt.',
     nameRequired: 'Vul een naam in.',
     classType: 'Lessoort',
