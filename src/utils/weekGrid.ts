@@ -31,6 +31,8 @@ export interface Placed<T> {
   lane: number;
   /** Aantal kolommen in die groep; de breedte is 1/lanes. */
   lanes: number;
+  /** Volgnummer van de groep overlappende lessen op deze dag (0-gebaseerd). */
+  group: number;
 }
 
 /**
@@ -41,7 +43,7 @@ export function layoutDay<T extends Timed>(items: T[]): Placed<T>[] {
   const sorted = items
     .map((item) => {
       const [startMin, endMin] = span(item);
-      return { item, startMin, endMin, lane: 0, lanes: 1 };
+      return { item, startMin, endMin, lane: 0, lanes: 1, group: 0 };
     })
     .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
 
@@ -49,8 +51,13 @@ export function layoutDay<T extends Timed>(items: T[]): Placed<T>[] {
   let group: Placed<T>[] = [];
   let laneEnds: number[] = [];
   let groupEnd = -1;
+  let groupIndex = 0;
   const flush = () => {
-    for (const p of group) p.lanes = laneEnds.length;
+    for (const p of group) {
+      p.lanes = laneEnds.length;
+      p.group = groupIndex;
+    }
+    groupIndex++;
     out.push(...group);
     group = [];
     laneEnds = [];

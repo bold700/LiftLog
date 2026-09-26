@@ -80,7 +80,7 @@ import { buildInvoiceEmail, mailConfigured, sendViaResend } from './_lib/invoice
 import { hashFeedToken, buildIcsFeed } from './_lib/calendarFeed.mjs';
 import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey, getOrgMollieKey, createMolliePayment, getMolliePayment } from './_lib/molliePayments.mjs';
 import { enforceRateLimit } from './_lib/requireUser.mjs';
-import { amsterdamDate } from './_lib/classReminders.mjs';
+import { amsterdamDate, amsterdamDateTime } from './_lib/classReminders.mjs';
 import { sendPushToUser } from './_lib/pushSend.mjs';
 import {
   creditsLowAfterBooking,
@@ -139,10 +139,7 @@ const accountId = (orgId, userId) => `${orgId}__${userId}`;
 
 /** Wanneer begint deze les? Datum en tijd staan los opgeslagen zodat ze leesbaar blijven. */
 function classStartsAt(data) {
-  const date = String(data.date ?? '');
-  const time = String(data.startTime ?? '00:00');
-  const parsed = new Date(`${date}T${time}:00`);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  return amsterdamDateTime(data.date, data.startTime ?? '00:00');
 }
 
 export default async function handler(req, res) {

@@ -424,14 +424,15 @@ export const OefeningenPage = () => {
             }}
           >
             <Box sx={{ gridArea: 'max', ...cardSx(), p: { xs: 2, md: 3 }, minWidth: 0 }}>
+              {/* Groot getal en verschil gaan over hetzelfde: je laatste sessie. Het record staat eronder. */}
               <Typography variant="body2" color="text.secondary">
-                Max gewicht
+                Laatste sessie
               </Typography>
               {progress ? (
                 <>
                   <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 1 }}>
                     <Typography sx={{ fontSize: { xs: 36, md: 45 }, lineHeight: 1.15, fontWeight: 500 }}>
-                      {String(progress.max).replace('.', ',')}
+                      {String(progress.latest).replace('.', ',')}
                     </Typography>
                     <Typography variant="body1" color="text.secondary" sx={{ flex: 1 }}>
                       kg
@@ -446,11 +447,12 @@ export const OefeningenPage = () => {
                       </Typography>
                     )}
                   </Box>
-                  {progress.previous != null && (
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                      Tegenover je vorige sessie, {kg(progress.previous)}
-                    </Typography>
-                  )}
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                    {progress.previous != null ? `Tegenover je vorige sessie, ${kg(progress.previous)} · ` : ''}
+                    {progress.sessions.length > 1 && progress.latest > Math.max(...progress.sessions.slice(0, -1).map((x) => x.weight))
+                      ? 'Nieuw record'
+                      : `Record ${kg(progress.max)}`}
+                  </Typography>
                   {progress.sessions.length > 1 && (
                     <Box sx={{ width: '100%', height: { xs: 110, md: 160 }, mt: 2 }}>
                       <ResponsiveContainer>

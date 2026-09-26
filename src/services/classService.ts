@@ -17,6 +17,23 @@ const ACCOUNTS = 'creditAccounts';
 const STANDING_BOOKINGS = 'standingBookings';
 
 /** Vaste kleur per sessiesoort, voor de legenda en kleurstip op het rooster (los van de huisstijl). */
+/**
+ * Is deze les al begonnen? Datum en begintijd staan in Nederlandse tijd; de app draait op de telefoon
+ * of computer van iemand hier, dus die klok is goed genoeg. Een begonnen les kun je niet meer reserveren.
+ */
+export function classHasStarted(cls: Pick<StudioClass, 'date' | 'startTime'>, now: number = Date.now()): boolean {
+  const start = new Date(`${cls.date}T${cls.startTime || '00:00'}:00`).getTime();
+  return Number.isFinite(start) && start <= now;
+}
+
+/** Is deze les voorbij? Zonder eindtijd duurt een les een uur (zoals in het weekrooster). */
+export function classHasEnded(cls: Pick<StudioClass, 'date' | 'startTime' | 'endTime'>, now: number = Date.now()): boolean {
+  const end = cls.endTime
+    ? new Date(`${cls.date}T${cls.endTime}:00`).getTime()
+    : new Date(`${cls.date}T${cls.startTime || '00:00'}:00`).getTime() + 60 * 60_000;
+  return Number.isFinite(end) && end <= now;
+}
+
 export const SESSION_KIND_COLORS: Record<SessionKind, string> = {
   '1on1': '#4E8AC7',
   duo: '#8B6FCB',

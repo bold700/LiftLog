@@ -140,6 +140,7 @@ import BodyBackSvg from '../assets/body/Body Back.svg';
 import BodyFrontSvg from '../assets/body/Body Front.svg'; // Gebruikt als base voor voorkant body outline
 import { BodyLayerImg } from './BodyLayerImg';
 import { levelForFrequency } from '../utils/muscleLevel';
+import { dayKey } from '../utils/muscleSessions';
 
 // Groentinten - level 1 (lichtste) tot level 5 (donkerste); in de donkere modus omgedraaid.
 export { GREEN_TINTS } from '../theme/muscleTints';
@@ -289,10 +290,21 @@ export const MuscleFrequencyBody = ({ sinceDays, size = 350, aspectRatio = '1 / 
     const frontFreq: Record<string, number> = {};
     const backFreq: Record<string, number> = {};
     
-    // Tel frequenties van primary muscles per oefening
+    // Tel per spiergroep het aantal trainingsdágen, net als de lijst "Meest getraind" (countMuscleSessions):
+    // twee borstoefeningen op één dag is één keer borst getraind.
+    const seen = new Set<string>();
+    let day = '';
+    const bump = (freq: Record<string, number>, muscle: string) => {
+      const key = `${freq === frontFreq ? 'v' : 'a'}|${muscle}|${day}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      freq[muscle] = (freq[muscle] || 0) + 1;
+    };
+
     exercises.forEach(exercise => {
       // Sla oefeningen zonder naam over (alleen notities)
       if (!exercise.name) return;
+      day = (exercise.date && dayKey(exercise.date)) || exercise.id;
       
       // Handmatige mapping of dataset-fallback (target + secondaryMuscles)
       const mapping = getExerciseMuscleMapping(exercise.name);
@@ -302,39 +314,39 @@ export const MuscleFrequencyBody = ({ sinceDays, size = 350, aspectRatio = '1 / 
           // Bepaal of spier voorkant, achterkant, of beide is
           if (muscle.includes('Body Back')) {
             // Achterkant spier
-            backFreq[muscle] = (backFreq[muscle] || 0) + 1;
+            bump(backFreq, muscle);
           } else if (muscle.includes('Triceps')) {
             // Triceps zijn aan de achterkant
             const backMuscle = muscle.replace('Triceps', 'Body Back Tricpes');
-            backFreq[backMuscle] = (backFreq[backMuscle] || 0) + 1;
+            bump(backFreq, backMuscle);
           } else if (muscle.includes('Shoulders')) {
             // Schouders zijn zichtbaar op beide kanten
-            frontFreq[muscle] = (frontFreq[muscle] || 0) + 1;
+            bump(frontFreq, muscle);
             const backMuscle = muscle.replace('Shoulders', 'Body Back Shoulders');
-            backFreq[backMuscle] = (backFreq[backMuscle] || 0) + 1;
+            bump(backFreq, backMuscle);
           } else if (muscle.includes('Traps')) {
             // Traps zijn zichtbaar op beide kanten
-            frontFreq[muscle] = (frontFreq[muscle] || 0) + 1;
+            bump(frontFreq, muscle);
             const backMuscle = muscle.replace('Traps', 'Body Back Traps');
-            backFreq[backMuscle] = (backFreq[backMuscle] || 0) + 1;
+            bump(backFreq, backMuscle);
           } else if (muscle.includes('Obliques')) {
             // Obliques zijn zichtbaar op beide kanten
-            frontFreq[muscle] = (frontFreq[muscle] || 0) + 1;
+            bump(frontFreq, muscle);
             const backMuscle = muscle.replace('Obliques', 'Body Back Obliques');
-            backFreq[backMuscle] = (backFreq[backMuscle] || 0) + 1;
+            bump(backFreq, backMuscle);
           } else if (muscle.includes('Quads')) {
             // Quads zijn zichtbaar op beide kanten
-            frontFreq[muscle] = (frontFreq[muscle] || 0) + 1;
+            bump(frontFreq, muscle);
             const backMuscle = muscle.replace('Quads', 'Body Back Quads');
-            backFreq[backMuscle] = (backFreq[backMuscle] || 0) + 1;
+            bump(backFreq, backMuscle);
           } else if (muscle.includes('Calves')) {
             // Calves zijn zichtbaar op beide kanten
-            frontFreq[muscle] = (frontFreq[muscle] || 0) + 1;
+            bump(frontFreq, muscle);
             const backMuscle = muscle.replace('Calves', 'Body Back Calves');
-            backFreq[backMuscle] = (backFreq[backMuscle] || 0) + 1;
+            bump(backFreq, backMuscle);
           } else {
             // Voorkant spier (Chest, Biceps, Abs, etc.)
-            frontFreq[muscle] = (frontFreq[muscle] || 0) + 1;
+            bump(frontFreq, muscle);
           }
         });
       }

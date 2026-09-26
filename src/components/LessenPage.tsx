@@ -39,13 +39,15 @@ import {
   SESSION_KIND_COLORS,
   type StudioClass,
   type Booking,
+  classHasStarted,
+  classHasEnded,
 } from '../services/classService';
 import { getOrg } from '../services/orgService';
 import { getColleagues } from '../services/profileService';
 import { designTokens } from '../theme/designTokens';
 import { segmentedToggleSx, filterPillSx } from '../theme/segmentedToggle';
 import { FilterGroup, FilterSheet } from './FilterSheet';
-import { addWeeks } from '../utils/format';
+import { addWeeks, todayIso } from '../utils/format';
 import { WeekTimeGrid } from './lessen/WeekTimeGrid';
 import type { Profile, SessionKind, StandingBooking } from '../types';
 
@@ -56,9 +58,9 @@ const SESSION_KIND_KEYS: SessionKind[] = ['1on1', 'duo', 'group', 'concept'];
 const SESSION_KIND_LABELS: Record<SessionKind, string> = { '1on1': '1-op-1', duo: 'Duo PT', group: 'Groep', concept: 'Concept' };
 const WEEKDAY_SHORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
 
-type ViewMode = 'week' | 'day' | 'makeups';
+type ViewMode = 'week' | 'day';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = todayIso;
 
 const dayLabel = (date: string) =>
   new Date(`${date}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -313,7 +315,7 @@ export function LessenPage() {
     (cls: StudioClass, mine: Booking | undefined) => {
       if (cls.cancelledAt) return;
       if (isStaff) setParticipantsClass(cls);
-      else if (!mine) setConfirmClass(cls);
+      else if (!mine && !classHasStarted(cls)) setConfirmClass(cls);
     },
     [isStaff]
   );
@@ -325,7 +327,8 @@ export function LessenPage() {
   const handleBlockClick = useCallback(
     (cls: StudioClass) => {
       const mine = myBookingByClass.get(cls.id);
-      if (cls.cancelledAt || (!isStaff && mine)) {
+      // Een begonnen les kun je niet meer reserveren of afmelden: dan alleen naar die dag.
+      if (cls.cancelledAt || (!isStaff && (mine || classHasStarted(cls)))) {
         setSelectedDate(cls.date);
         setViewMode('day');
         return;
@@ -341,11 +344,12 @@ export function LessenPage() {
     const mine = myBookingByClass.get(cls.id);
     const full = cls.bookedCount >= cls.capacity;
     const busy = busyId === cls.id;
+    const started = classHasStarted(cls);
     return (
       <Box
         key={cls.id}
         role="button"
-        tabIndex={cls.cancelledAt ? -1 : 0}
+        tabIndex={cls.cancelledAt || (started && !isStaff) ? -1 : 0}
         onClick={() => handleRowClick(cls, mine)}
         sx={{
           border: `1px solid ${designTokens.cardBorder}`,
@@ -356,8 +360,8 @@ export function LessenPage() {
           display: 'flex',
           gap: 2,
           alignItems: 'flex-start',
-          opacity: cls.cancelledAt ? 0.6 : 1,
-          cursor: cls.cancelledAt ? 'default' : 'pointer',
+          opacity: cls.cancelledAt || started ? 0.6 : 1,
+          cursor: cls.cancelledAt || (started && !isStaff) ? 'default' : 'pointer',
         }}
       >
         <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: SESSION_KIND_COLORS[cls.sessionKind], mt: 0.75, flexShrink: 0 }} />
@@ -380,6 +384,7 @@ export function LessenPage() {
             {cls.waitlistCount > 0 && <Chip size="small" variant="outlined" label={`${cls.waitlistCount} op wachtlijst`} />}
             {cls.creditCost !== 1 && <Chip size="small" variant="outlined" label={`${cls.creditCost} credits`} />}
             {cls.cancelledAt && <Chip size="small" color="error" label="Afgelast" />}
+            {!cls.cancelledAt && started && <Chip size="small" label={classHasEnded(cls) ? 'Afgelopen' : 'Bezig'} sx={{ bgcolor: designTokens.cardBackgroundHigh, color: 'text.secondary' }} />}
             {/* Kleuren volgen het ontwerp: wachtlijst is neutraal (Surface Container High), geboekt is Tertiary Container. */}
             {mine?.status === 'waitlist' && <Chip size="small" label="Op wachtlijst" sx={{ bgcolor: designTokens.cardBackgroundHigh, color: 'text.secondary' }} />}
             {mine?.status === 'booked' && <Chip size="small" label="Ingeschreven" sx={{ bgcolor: designTokens.tertiaryContainer, color: designTokens.onTertiaryContainer }} />}
@@ -388,6 +393,7 @@ export function LessenPage() {
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0, alignItems: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
           {!cls.cancelledAt &&
+            !started &&
             (mine ? (
               <Button size="small" variant="outlined" disabled={busy} onClick={() => void handleCancel(mine)}>
                 Afmelden
@@ -433,7 +439,7 @@ export function LessenPage() {
   return (
     <PageLayout maxWidth="none">
       {/* Figma "Schedule": weergave, ruimtes en legenda op één regel. Op de telefoon blijft alleen
-          Week/Dag/Inhaallessen staan; de rest zit achter de filterknop in een bottom sheet. */}
+          Week/Dag staan; de rest zit achter de filterknop in een bottom sheet. */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, rowGap: 1, mb: 2 }}>
         {isStaff && (
           <ToggleButtonGroup
@@ -458,7 +464,6 @@ export function LessenPage() {
         >
           <ToggleButton value="week">Week</ToggleButton>
           <ToggleButton value="day">Dag</ToggleButton>
-          <ToggleButton value="makeups">Inhaallessen</ToggleButton>
         </ToggleButtonGroup>
         {roomOptions.length > 0 && (
           <Box role="group" aria-label="Ruimte" sx={{ display: { xs: 'none', md: 'flex' }, gap: 1, flexWrap: 'wrap' }}>
@@ -468,34 +473,32 @@ export function LessenPage() {
             ))}
           </Box>
         )}
-        {viewMode !== 'makeups' && <Box sx={{ display: { xs: 'none', md: 'flex' }, ml: 'auto' }}>{legend}</Box>}
-        {(isStaff || roomOptions.length > 0 || viewMode !== 'makeups') && (
-          <Box sx={{ display: { xs: 'flex', md: 'none' }, ml: 'auto' }}>
-            <FilterSheet
-              activeCount={(myDayOnly ? 1 : 0) + (roomFilter ? 1 : 0)}
-              onReset={() => {
-                setMyDayOnly(false);
-                setRoomFilter('');
-              }}
-            >
-              {isStaff && (
-                <FilterGroup label="Laten zien">
-                  <Chip label="Hele rooster" onClick={() => setMyDayOnly(false)} sx={filterPillSx(!myDayOnly)} />
-                  <Chip label="Mijn dag" onClick={() => setMyDayOnly(true)} sx={filterPillSx(myDayOnly)} />
-                </FilterGroup>
-              )}
-              {roomOptions.length > 0 && (
-                <FilterGroup label="Ruimte">
-                  <Chip label="Alle ruimtes" onClick={() => setRoomFilter('')} sx={filterPillSx(roomFilter === '')} />
-                  {roomOptions.map((r) => (
-                    <Chip key={r} label={r} onClick={() => setRoomFilter(r)} sx={filterPillSx(roomFilter === r)} />
-                  ))}
-                </FilterGroup>
-              )}
-              {viewMode !== 'makeups' && <FilterGroup label="Legenda">{legend}</FilterGroup>}
-            </FilterSheet>
-          </Box>
-        )}
+        <Box sx={{ display: { xs: 'none', md: 'flex' }, ml: 'auto' }}>{legend}</Box>
+        <Box sx={{ display: { xs: 'flex', md: 'none' }, ml: 'auto' }}>
+          <FilterSheet
+            activeCount={(myDayOnly ? 1 : 0) + (roomFilter ? 1 : 0)}
+            onReset={() => {
+              setMyDayOnly(false);
+              setRoomFilter('');
+            }}
+          >
+            {isStaff && (
+              <FilterGroup label="Laten zien">
+                <Chip label="Hele rooster" onClick={() => setMyDayOnly(false)} sx={filterPillSx(!myDayOnly)} />
+                <Chip label="Mijn dag" onClick={() => setMyDayOnly(true)} sx={filterPillSx(myDayOnly)} />
+              </FilterGroup>
+            )}
+            {roomOptions.length > 0 && (
+              <FilterGroup label="Ruimte">
+                <Chip label="Alle ruimtes" onClick={() => setRoomFilter('')} sx={filterPillSx(roomFilter === '')} />
+                {roomOptions.map((r) => (
+                  <Chip key={r} label={r} onClick={() => setRoomFilter(r)} sx={filterPillSx(roomFilter === r)} />
+                ))}
+              </FilterGroup>
+            )}
+            <FilterGroup label="Legenda">{legend}</FilterGroup>
+          </FilterSheet>
+        </Box>
       </Box>
 
       {/* Creditsaldo prominent bovenaan het rooster, zoals in het Figma-ontwerp ("8 credits left"). */}
@@ -505,10 +508,6 @@ export function LessenPage() {
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress size={24} />
         </Box>
-      ) : viewMode === 'makeups' ? (
-        <ContentCard>
-          <EmptyState>Inhaallessen komen in een volgende stap: gemiste sessies als tegoed, in te plannen in een vrij gat.</EmptyState>
-        </ContentCard>
       ) : viewMode === 'day' ? (
         <>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 2 }}>

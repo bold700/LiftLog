@@ -173,6 +173,7 @@ export const en: Messages = {
   plans: {
     newPlan: 'New plan',
     empty: 'No plans yet. Create one, then assign it to members.',
+    loadFailed: 'Could not load plans. Your plans are still there; please try again.',
     pickToEdit: 'Pick a plan on the left to edit it.',
     kpi: {
       members: 'Active members',
@@ -221,6 +222,10 @@ export const en: Messages = {
     members: { one: '1 member', other: '{count} members' },
     delete: 'Delete',
     deleteConfirm: 'Delete plan "{name}"? Members on it keep their credits; their membership stops renewing.',
+    deleteMembers: {
+      one: 'Note: 1 member is on this plan right now. That membership stops at the next renewal. Want to move them instead? Do that first under Members.',
+      other: 'Note: {count} members are on this plan right now. Their membership stops at the next renewal. Want to move them instead? Do that first under Members.',
+    },
     saved: 'Plan saved.',
     deleted: 'Plan deleted.',
     failed: 'Could not save.',
@@ -238,6 +243,7 @@ export const en: Messages = {
   billing: {
     export: 'Export CSV',
     empty: 'No charges yet. They appear once you assign a plan to a member.',
+    loadFailed: 'Could not load charges. Nothing was lost; please try again.',
     pickToView: 'Pick a charge on the left.',
     kpi: { open: 'Open', paidMonth: 'Paid this month', paidShort: 'Paid', overdue: 'Overdue', monthly: 'Monthly recurring' },
     filter: { open: 'Open', paid: 'Paid', all: 'All' },
@@ -334,6 +340,7 @@ export const en: Messages = {
     save: 'Save',
     cancel: 'Cancel',
     saving: 'Saving…',
+    retry: 'Try again',
     none: '—',
   },
   nutrition: {
@@ -345,8 +352,8 @@ export const en: Messages = {
     until: 'Up to',
     summary: {
       day: 'Today',
-      weekAvg: 'Average per day (7 days)',
-      monthAvg: 'Average per day (30 days)',
+      weekAvg: { one: 'Average over 1 logged day (of 7)', other: 'Average per logged day ({count} of 7)' },
+      monthAvg: { one: 'Average over 1 logged day (of 30)', other: 'Average per logged day ({count} of 30)' },
       ofKcal: 'of {kcal} kcal',
       kcal: 'kcal',
       ofGrams: 'of {grams} g',

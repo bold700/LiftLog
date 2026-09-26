@@ -12,11 +12,16 @@ import {
   measurementSource,
   measurementWhen,
   type MeasurementSource,
+  weightTone,
+  type DeltaTone,
 } from '../../utils/bodySummary';
 import { designTokens } from '../../theme/designTokens';
 import { TrendChart, type TrendPoint } from './TrendChart';
 
 const nl = (n: number) => String(n).replace('.', ',');
+
+/** Goed nieuws in de hoofdkleur, slecht nieuws in rood, de rest neutraal. */
+const TONE_COLOR: Record<DeltaTone, string> = { good: 'primary.main', bad: 'error.main', neutral: 'text.secondary' };
 
 const cardSx = () => ({
   backgroundColor: designTokens.cardBackground,
@@ -112,7 +117,14 @@ export function LatestWeightCard({ items, goalWeight }: LatestWeightCardProps) {
           kg
         </Typography>
         {latest.deltaKg != null && latest.deltaKg !== 0 && (
-          <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main', textAlign: 'right' }}>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 600,
+              textAlign: 'right',
+              color: TONE_COLOR[weightTone(latest.weightKg, latest.weightKg - latest.deltaKg, goalWeight)],
+            }}
+          >
             {latest.deltaKg > 0 ? '+' : '−'}
             {nl(Math.abs(latest.deltaKg))} kg
             <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>
@@ -184,7 +196,7 @@ export function CompositionCard({ items, heightCm, onViewScan }: CompositionCard
               </Typography>
               <Typography
                 variant="caption"
-                sx={{ width: 46, color: 'primary.main', fontWeight: 500, display: { xs: 'none', md: 'block' } }}
+                sx={{ width: 46, color: TONE_COLOR[r.tone], fontWeight: 500, display: { xs: 'none', md: 'block' } }}
               >
                 {r.delta ?? ''}
               </Typography>

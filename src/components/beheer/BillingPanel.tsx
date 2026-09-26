@@ -5,7 +5,7 @@
  * en een dialoog. Betalen gebeurt buiten de app; dit is het overzicht en de afvinklijst.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useI18n } from '../../context/I18nContext';
 import { useNotify } from '../../context/NotifyContext';
 import { chargesToCsv, downloadInvoicePdf, getChargesForOrg, getInvoiceLink, getMailStatus, isOverdue, markChargePaid, reopenCharge, saveChargeNote, sendInvoiceEmail, vatSplit, writeOffCharge } from '../../services/chargeService';
@@ -35,6 +35,8 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
 
   const [charges, setCharges] = useState<Charge[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Ophalen mislukt: dan géén "nog geen posten", want die zijn er misschien wel. */
+  const [loadFailed, setLoadFailed] = useState(false);
   const [filter, setFilter] = useState<Filter>('open');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -54,7 +56,9 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
     setLoading(true);
     try {
       setCharges(await getChargesForOrg());
+      setLoadFailed(false);
     } catch (e) {
+      setLoadFailed(true);
       notify.error(t('billing.failed'), e);
     } finally {
       setLoading(false);
@@ -184,7 +188,19 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
 
   const list = (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1, minWidth: 0 }}>
-      {!loading && visible.length === 0 && (
+      {!loading && loadFailed && (
+        <Alert
+          severity="error"
+          action={
+            <Button color="inherit" size="small" onClick={() => void load()}>
+              {t('common.retry')}
+            </Button>
+          }
+        >
+          {t('billing.loadFailed')}
+        </Alert>
+      )}
+      {!loading && !loadFailed && visible.length === 0 && (
         <Box sx={{ p: 3, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground }}>
           <Typography color="text.secondary">{t('billing.empty')}</Typography>
         </Box>

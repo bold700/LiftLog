@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Typography } from '@mui/material';
-import { SESSION_KIND_COLORS, type StudioClass, type Booking } from '../../services/classService';
+import { Box, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { SESSION_KIND_COLORS, classHasStarted, type StudioClass, type Booking } from '../../services/classService';
 import { designTokens } from '../../theme/designTokens';
-import { hourRange, layoutDay } from '../../utils/weekGrid';
+import { hourRange, layoutDay, type Placed } from '../../utils/weekGrid';
 
 const WEEKDAY_LETTER = ['Z', 'M', 'D', 'W', 'D', 'V', 'Z'];
 const WEEKDAY_SHORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
@@ -44,6 +44,9 @@ function useNowMinutes(): number {
  */
 export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames, today, onOpenClass, onSelectDay }: Props) {
   const nowMin = useNowMinutes();
+  const theme = useTheme();
+  // Op de telefoon is een dagkolom ~40px: lessen die tegelijk vallen passen niet naast elkaar.
+  const compact = useMediaQuery(theme.breakpoints.down('md'));
   const weekClasses = useMemo(() => days.flatMap((d) => classesByDate.get(d) ?? []), [days, classesByDate]);
   const [startHour, endHour] = useMemo(() => hourRange(weekClasses), [weekClasses]);
   const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i);
@@ -142,6 +145,13 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
         </Box>
         {days.map((d) => {
           const placed = layoutDay(classesByDate.get(d) ?? []);
+          // Telefoon: een groep lessen die tegelijk vallen wordt één blok "3 lessen" dat naar die dag gaat.
+          const stacks: Placed<StudioClass>[][] = [];
+          for (const p of placed) {
+            if (!compact || p.lanes === 1) continue;
+            (stacks[p.group] ??= []).push(p);
+          }
+          const singles = placed.filter((p) => !compact || p.lanes === 1);
           return (
             <Box
               key={d}
@@ -154,11 +164,52 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
                 minWidth: 0,
               }}
             >
-              {placed.map(({ item: cls, startMin, endMin, lane, lanes }) => {
+              {stacks.map((group) => {
+                if (!group?.length) return null;
+                const startMin = Math.min(...group.map((p) => p.startMin));
+                const endMin = Math.max(...group.map((p) => p.endMin));
+                const top = (startMin - startHour * 60) * pxPerMin;
+                const height = Math.max((endMin - startMin) * pxPerMin - 2, 18);
+                const first = group.reduce((a, b) => (b.startMin < a.startMin ? b : a)).item;
+                return (
+                  <Box
+                    key={`stack-${first.id}`}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${group.length} lessen vanaf ${first.startTime}, bekijk de dag`}
+                    onClick={() => onSelectDay(d)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onSelectDay(d);
+                      }
+                    }}
+                    sx={{
+                      position: 'absolute',
+                      top: top + 1,
+                      height,
+                      left: 2,
+                      right: 2,
+                      borderRadius: 1,
+                      px: 0.5,
+                      py: 0.25,
+                      overflow: 'hidden',
+                      cursor: 'pointer',
+                      bgcolor: designTokens.secondaryContainer,
+                      color: designTokens.onSecondaryContainer,
+                    }}
+                  >
+                    <Typography sx={{ fontSize: 10, fontWeight: 700, lineHeight: '13px' }}>{group.length}</Typography>
+                    <Typography sx={{ fontSize: 10, lineHeight: '13px' }}>lessen</Typography>
+                  </Box>
+                );
+              })}
+              {singles.map(({ item: cls, startMin, endMin, lane, lanes }) => {
                 const mine = bookingByClass.get(cls.id);
                 const full = cls.bookedCount >= cls.capacity;
                 const booked = mine?.status === 'booked';
-                const muted = !!cls.cancelledAt || (full && !mine) || mine?.status === 'waitlist';
+                const started = classHasStarted(cls);
+                const muted = !!cls.cancelledAt || started || (full && !mine) || mine?.status === 'waitlist';
                 const top = (startMin - startHour * 60) * pxPerMin;
                 const height = Math.max((endMin - startMin) * pxPerMin - 2, 18);
                 const short = height < 40;
@@ -203,12 +254,11 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
                         fontSize: { xs: 10, md: 12 },
                         fontWeight: 600,
                         lineHeight: { xs: '13px', md: '16px' },
-                        overflowWrap: 'anywhere',
-                        display: '-webkit-box',
-                        WebkitBoxOrient: 'vertical',
-                        WebkitLineClamp: oneLine ? 1 : 3,
                         overflow: 'hidden',
-                        ...(oneLine && { display: 'block', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }),
+                        // Nooit midden in een woord afbreken ("Kettl / ebell"): op de telefoon één regel met puntjes.
+                        ...(oneLine || compact
+                          ? { display: 'block', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }
+                          : { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 3, overflowWrap: 'break-word' }),
                       }}
                     >
                       {cls.title}
@@ -228,7 +278,11 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
                       >
                         {cls.cancelledAt
                           ? 'Afgelast'
-                          : booked
+                          : started
+                            ? d < today || nowMin >= endMin
+                              ? 'Afgelopen'
+                              : 'Bezig'
+                            : booked
                             ? 'Ingeschreven'
                             : mine?.status === 'waitlist'
                               ? 'Op wachtlijst'

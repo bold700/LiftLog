@@ -40,13 +40,18 @@ export const NavigationBar = ({ value, onChange, tabs }: NavigationBarProps) => 
     const navBar = navBarRef.current as any;
     if (!navBar) return;
     
-    // Force immediate update of activeIndex
-    navBar.activeIndex = value;
-    
+    // value -1: de pagina staat niet in de balk (Beheer, Assistent), dan is geen tab actief. De
+    // component zelf kent geen "geen tab" (activeIndex -1 geeft een fout), dus zetten we de tabs zelf.
+    const sync = () => {
+      if (value >= 0) navBar.activeIndex = value;
+      navBar.querySelectorAll('md-navigation-tab').forEach((tab: Element, i: number) => {
+        (tab as Element & { active: boolean }).active = i === value;
+      });
+    };
+    sync();
+
     // Force style update using requestAnimationFrame to ensure it happens after render
-    requestAnimationFrame(() => {
-      navBar.activeIndex = value;
-    });
+    requestAnimationFrame(sync);
   }, [value]);
 
   useEffect(() => {
@@ -90,7 +95,7 @@ export const NavigationBar = ({ value, onChange, tabs }: NavigationBarProps) => 
     // @ts-ignore - Material Web Components are web components
     <md-navigation-bar
       ref={navBarRef}
-      activeIndex={value}
+      activeIndex={value >= 0 ? value : undefined}
       // Geen position: fixed: de balk is het onderste kind van de schil (AppShell), die zelf één
       // scherm hoog is en van binnen scrolt.
       style={{
