@@ -22,7 +22,6 @@ import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
 import { PageLayout, ContentCard, EmptyState } from './layout';
-import { CreditBalanceCard } from './SubscriptionCard';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
 import {
@@ -34,6 +33,7 @@ import {
   bookClass,
   cancelBooking,
   cancelClass,
+  createClass,
   deleteClass,
   restoreClass,
   SESSION_KIND_COLORS,
@@ -313,6 +313,18 @@ export function LessenPage() {
         if (cls.classTypeId) await cancelClass(cls.id);
         else await deleteClass(cls.id);
         await load();
+        // Per ongeluk op de verkeerde les getikt: meteen terug te zetten (afgelast → herstellen,
+        // losse les → opnieuw aanmaken met dezelfde gegevens).
+        notify.undo(cls.classTypeId ? `${cls.title} afgelast.` : `${cls.title} verwijderd.`, async () => {
+          try {
+            if (cls.classTypeId) await restoreClass(cls.id);
+            else await createClass(cls);
+            notify.success('Les teruggezet.');
+          } catch (e) {
+            notify.error(e instanceof Error ? e.message : 'Les terugzetten mislukt');
+          }
+          await load();
+        });
       } catch (e) {
         notify?.error(e instanceof Error ? e.message : 'Les verwijderen mislukt');
       } finally {
@@ -343,7 +355,8 @@ export function LessenPage() {
     (cls: StudioClass, mine: Booking | undefined) => {
       if (cls.cancelledAt) return;
       if (isStaff) setParticipantsClass(cls);
-      else if (!mine && !classHasStarted(cls)) setConfirmClass(cls);
+      // Een begonnen of voorbije les opent alleen de lesinformatie (zonder reserveren).
+      else if (!mine || classHasStarted(cls)) setConfirmClass(cls);
     },
     [isStaff]
   );
@@ -355,8 +368,9 @@ export function LessenPage() {
   const handleBlockClick = useCallback(
     (cls: StudioClass) => {
       const mine = myBookingByClass.get(cls.id);
-      // Een begonnen les kun je niet meer reserveren of afmelden: dan alleen naar die dag.
-      if (cls.cancelledAt || (!isStaff && (mine || classHasStarted(cls)))) {
+      // Eigen les (afmelden) of afgelaste les: naar die dag, daar staan Afmelden en Herstellen.
+      // Een voorbije les opent gewoon de lesinformatie; eerst sprong je dan onverwacht naar de dagweergave.
+      if (cls.cancelledAt || (!isStaff && mine && !classHasStarted(cls))) {
         setSelectedDate(cls.date);
         setViewMode('day');
         return;
@@ -377,7 +391,7 @@ export function LessenPage() {
       <Box
         key={cls.id}
         role="button"
-        tabIndex={cls.cancelledAt || (started && !isStaff) ? -1 : 0}
+        tabIndex={cls.cancelledAt || (mine && !started && !isStaff) ? -1 : 0}
         onClick={() => handleRowClick(cls, mine)}
         sx={{
           border: `1px solid ${designTokens.cardBorder}`,
@@ -389,7 +403,7 @@ export function LessenPage() {
           gap: 2,
           alignItems: 'flex-start',
           opacity: cls.cancelledAt || started ? 0.6 : 1,
-          cursor: cls.cancelledAt || (started && !isStaff) ? 'default' : 'pointer',
+          cursor: cls.cancelledAt || (mine && !started && !isStaff) ? 'default' : 'pointer',
         }}
       >
         <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: SESSION_KIND_COLORS[cls.sessionKind], mt: 0.75, flexShrink: 0 }} />
@@ -438,7 +452,8 @@ export function LessenPage() {
               <GroupRoundedIcon fontSize="small" />
             </IconButton>
           )}
-          {isStaff && !cls.cancelledAt && (
+          {/* Een begonnen of voorbije les blijft staan: dat is de geschiedenis (wie was er, wat is er gegeven). */}
+          {isStaff && !cls.cancelledAt && !started && (
             <IconButton size="small" onClick={() => setCancelConfirmClass(cls)} disabled={busy} aria-label="Les verwijderen">
               <DeleteOutlineRoundedIcon fontSize="small" />
             </IconButton>
@@ -534,9 +549,7 @@ export function LessenPage() {
         </Box>
       </Box>
 
-      {/* Creditsaldo prominent bovenaan het rooster, zoals in het Figma-ontwerp ("8 credits left"). */}
-      <CreditBalanceCard userId={me.userId} />
-
+      {/* Het creditsaldo staat compact onder je naam (zijbalk / avatarmenu), niet meer als grote kaart boven het rooster. */}
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress size={24} />
@@ -676,6 +689,7 @@ export function LessenPage() {
         isStaff={isStaff}
         freeCancelHours={freeCancelHours}
         busy={confirmClass != null && busyId === confirmClass.id}
+        myStatus={confirmClass ? myBookingByClass.get(confirmClass.id)?.status : undefined}
         alreadyWeekly={
           confirmClass?.classTypeId
             ? activeStandingKeys.has(standingKey(confirmClass.classTypeId, weekdayOf(confirmClass.date), confirmClass.startTime))
@@ -759,6 +773,7 @@ function BookConfirmDialog({
   freeCancelHours,
   busy,
   alreadyWeekly,
+  myStatus,
   onClose,
   onConfirm,
 }: {
@@ -769,6 +784,8 @@ function BookConfirmDialog({
   freeCancelHours: number;
   busy: boolean;
   alreadyWeekly: boolean;
+  /** Jouw boeking voor deze les, als je er een hebt (voor een voorbije les: "Je was ingeschreven"). */
+  myStatus?: Booking['status'];
   onClose: () => void;
   onConfirm: (weekly: boolean) => void;
 }) {
@@ -782,6 +799,8 @@ function BookConfirmDialog({
   const full = cls.bookedCount >= cls.capacity;
   // Staf reserveert altijd gratis (server bypasst de credit-kosten), ongeacht het saldo.
   const cost = isStaff ? 0 : cls.creditCost;
+  // Begonnen of voorbij: alleen informatie, niet meer te reserveren.
+  const started = classHasStarted(cls);
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="xs">
@@ -792,12 +811,23 @@ function BookConfirmDialog({
           {cls.endTime ? `–${cls.endTime}` : ''}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          {[trainerName, cls.room, spotsLabel(cls)].filter(Boolean).join(' · ')}
+          {[trainerName, cls.room, started ? `${cls.bookedCount} ${cls.bookedCount === 1 ? 'deelnemer' : 'deelnemers'}` : spotsLabel(cls)]
+            .filter(Boolean)
+            .join(' · ')}
         </Typography>
 
         {cls.description && <Typography variant="body2">{cls.description}</Typography>}
 
-        {!full && (
+        {started && (
+          <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+            <Chip size="small" label={classHasEnded(cls) ? 'Afgelopen' : 'Bezig'} sx={{ bgcolor: designTokens.cardBackgroundHigh, color: 'text.secondary' }} />
+            {myStatus === 'booked' && (
+              <Chip size="small" label={classHasEnded(cls) ? 'Je was ingeschreven' : 'Ingeschreven'} sx={{ bgcolor: designTokens.tertiaryContainer, color: designTokens.onTertiaryContainer }} />
+            )}
+          </Box>
+        )}
+
+        {!full && !started && (
           <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: designTokens.cardBackgroundHigh, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
             <Typography variant="body2" fontWeight={600}>
               {cost === 0 ? (isStaff ? 'Gratis (staf)' : 'Gratis') : cost === 1 ? 'Kost 1 credit' : `Kost ${cost} credits`}
@@ -808,11 +838,13 @@ function BookConfirmDialog({
           </Box>
         )}
 
-        <Typography variant="caption" color="text.secondary">
-          Gratis afmelden tot {freeCancelHours} uur van tevoren. Daarna kost het je de credit.
-        </Typography>
+        {!started && (
+          <Typography variant="caption" color="text.secondary">
+            Gratis afmelden tot {freeCancelHours} uur van tevoren. Daarna kost het je de credit.
+          </Typography>
+        )}
 
-        {cls.classTypeId && (
+        {cls.classTypeId && !started && (
           <FormControlLabel
             control={<Checkbox size="small" checked={weekly} onChange={(e) => setWeekly(e.target.checked)} />}
             label="Elke week inschrijven"
@@ -823,9 +855,11 @@ function BookConfirmDialog({
         <Button onClick={onClose} disabled={busy}>
           Sluiten
         </Button>
+        {!started && (
         <Button variant="contained" disableElevation disabled={busy} onClick={() => onConfirm(weekly)}>
           {full ? 'Wachtlijst' : cost === 0 ? 'Reserveren' : `Reserveren · ${cost} credit${cost > 1 ? 's' : ''}`}
         </Button>
+        )}
       </DialogActions>
     </Dialog>
   );

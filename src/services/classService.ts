@@ -324,8 +324,13 @@ export async function callBooking<T>(body: Record<string, unknown>): Promise<T> 
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string })?.error || 'Er ging iets mis.');
+  // Boeken, afmelden en vaste lessen kunnen het saldo veranderen: laat het saldo in de zijbalk opnieuw laden.
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(CREDITS_CHANGED_EVENT));
   return data as T;
 }
+
+/** Event na elke boekingsactie; `useCreditSummary` luistert ernaar. */
+export const CREDITS_CHANGED_EVENT = 'liftlog:credits-changed';
 
 /**
  * Reserveren. Zit de les vol, dan kom je op de wachtlijst en gaat er (nog) geen credit af.

@@ -24,6 +24,7 @@ import { ViewAsSheet } from './ViewAsSheet';
 import { useI18n } from '../context/I18nContext';
 import { useProfile } from '../context/ProfileContext';
 import { useViewAs } from '../context/ViewAsContext';
+import { useCreditSummary } from '../hooks/useCreditSummary';
 import { TopBarBackProvider, useTopBarBackVisible } from '../context/TopBarBackContext';
 import { PageTitleProvider, usePageTitleOverride } from '../context/PageTitleContext';
 import { designTokens } from '../theme/designTokens';
@@ -78,6 +79,12 @@ function ProfileMenuButton({
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  // Creditsaldo als tweede regel onder je naam ("9 van 10 credits · Strippenkaart"); niet tijdens "Bekijk als".
+  const credits = useCreditSummary(viewed.isOther ? null : me?.userId);
+  const creditsLine = credits
+    ? `${credits.total == null ? t('plans.unlimitedLeft') : t('plans.creditsOf', { left: credits.balance, total: credits.total })} · ${credits.planName}`
+    : null;
+
   const ariaLabel = viewed.isOther ? `${t('nav.profile')} · ${t('viewAs.viewingAs', { name: viewed.name })}` : t('nav.profile');
   const name = viewed.isOther ? viewed.name : me?.displayName || me?.email || t('nav.profile');
   const avatarSize = showName ? 26 : 32;
@@ -123,6 +130,11 @@ function ProfileMenuButton({
             {t('viewAs.viewingAs', { name: viewed.name })}
           </Typography>
         )}
+        {creditsLine && (
+          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', lineHeight: '16px' }}>
+            {creditsLine}
+          </Typography>
+        )}
       </Box>
     </Button>
   ) : (
@@ -141,6 +153,18 @@ function ProfileMenuButton({
     <>
       {avatarButton}
       <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
+        {/* Telefoon: geen ruimte naast de avatar, dus naam en saldo bovenin het menu. */}
+        {!showName && creditsLine && (
+          <Box sx={{ px: 2, pt: 0.5, pb: 1, maxWidth: 260 }}>
+            <Typography variant="body2" fontWeight={600} noWrap>
+              {name}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+              {creditsLine}
+            </Typography>
+          </Box>
+        )}
+        {!showName && creditsLine && <Divider />}
         <MenuItem
           onClick={() => {
             setMenuAnchor(null);

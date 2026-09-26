@@ -152,6 +152,7 @@ export const nl = {
       adminOnly: 'Alleen een beheerder kan ruimtes toevoegen of verwijderen.',
       duplicate: 'Die ruimte bestaat al.',
       removed: 'Ruimte "{name}" verwijderd.',
+      restored: 'Ruimte "{name}" teruggezet.',
       newLabel: 'Nieuwe ruimte',
     },
     schedule: {
@@ -243,6 +244,7 @@ export const nl = {
     renews: 'Verlengt {date} · {period}',
     validUntil: 'Geldig tot {date}',
     leftOf: '{left} van {total} over',
+    creditsOf: '{left} van {total} credits',
     unlimitedLeft: 'Onbeperkt',
   },
   billing: {
