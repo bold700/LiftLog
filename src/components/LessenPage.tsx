@@ -41,6 +41,9 @@ import {
   type Booking,
   classHasStarted,
   classHasEnded,
+  spotOpenFor,
+  cancelIsFree,
+  getWaitlistPositions,
 } from '../services/classService';
 import { getOrg } from '../services/orgService';
 import { getColleagues } from '../services/profileService';
@@ -102,8 +105,9 @@ function weekRangeLabel(weekStrip: string[]): string {
 const standingKey = (classTypeId: string, weekday: number, startTime: string) => `${classTypeId}_${weekday}_${startTime}`;
 
 /** Bezetting op één manier, overal: hoeveel plekken er nog vrij zijn ("3/8" las als "3 vrij"). */
-function spotsLabel(cls: Pick<StudioClass, 'bookedCount' | 'capacity'>): string {
-  const free = Math.max(0, cls.capacity - cls.bookedCount);
+/** Vrije plekken zoals deze persoon ze ziet: een plek die nog even voor de wachtlijst is, telt voor een ander als vol. */
+function spotsLabel(cls: StudioClass, onWaitlist = false): string {
+  const free = spotOpenFor(cls, onWaitlist) ? Math.max(0, cls.capacity - cls.bookedCount) : 0;
   if (free === 0) return 'Vol';
   return `${free} ${free === 1 ? 'plek' : 'plekken'} vrij`;
 }
@@ -134,6 +138,10 @@ export function LessenPage() {
   const [cancelConfirmClass, setCancelConfirmClass] = useState<StudioClass | null>(null);
   const [participantsClass, setParticipantsClass] = useState<StudioClass | null>(null);
   const [freeCancelHours, setFreeCancelHours] = useState(DEFAULT_FREE_CANCEL_HOURS);
+  /** Positie op de wachtlijst per les (alleen je eigen plek, niet wie er voor of na je staat). */
+  const [waitlistPositions, setWaitlistPositions] = useState<Record<string, number>>({});
+  /** Afmelden binnen het late venster: eerst waarschuwen dat de credit vervalt. */
+  const [lateCancel, setLateCancel] = useState<Booking | null>(null);
   /**
    * Naam per trainerId, voor de trainernaam op de rij en in de reserveer-dialoog (Figma toont
    * "Kenny" onder de lestitel). Alleen voor staf: een sporter mag niet elk trainerprofiel lezen
@@ -166,6 +174,7 @@ export function LessenPage() {
       setBookings(mine);
       setCredits(balance);
       setStandingBookings(standing);
+      setWaitlistPositions(mine.some((b) => b.status === 'waitlist') ? await getWaitlistPositions().catch(() => ({})) : {});
       if (me.role === 'trainer' || me.role === 'admin') {
         const colleagues = await getColleagues(me.userId).catch(() => []);
         const names: Record<string, string> = { [me.userId]: me.displayName?.trim() || me.email || me.userId };
@@ -267,7 +276,7 @@ export function LessenPage() {
         const result = await bookClass(cls.id, weekly);
         notify?.success(
           result.status === 'waitlist'
-            ? 'De les is vol. Je staat op de wachtlijst en betaalt pas als je doorschuift.'
+            ? 'Je staat op de wachtlijst. Komt er een plek vrij, dan krijg je een melding en kun je je aanmelden.'
             : 'Je staat ingeschreven.'
         );
         setConfirmClass(null);
@@ -297,6 +306,19 @@ export function LessenPage() {
       }
     },
     [notify, load]
+  );
+
+  /** Afmelden, maar eerst waarschuwen als de credit dan vervalt (te laat, en buiten de bedenktijd). */
+  const requestCancel = useCallback(
+    (booking: Booking) => {
+      const cls = classes.find((c) => c.id === booking.classId);
+      if (booking.status === 'booked' && cls && !cancelIsFree(cls, booking, freeCancelHours)) {
+        setLateCancel(booking);
+        return;
+      }
+      void handleCancel(booking);
+    },
+    [classes, freeCancelHours, handleCancel]
   );
 
   const handleDelete = useCallback(
@@ -356,7 +378,7 @@ export function LessenPage() {
       if (cls.cancelledAt) return;
       if (isStaff) setParticipantsClass(cls);
       // Een begonnen of voorbije les opent alleen de lesinformatie (zonder reserveren).
-      else if (!mine || classHasStarted(cls)) setConfirmClass(cls);
+      else if (!mine || classHasStarted(cls) || (mine.status === 'waitlist' && spotOpenFor(cls, true))) setConfirmClass(cls);
     },
     [isStaff]
   );
@@ -370,7 +392,8 @@ export function LessenPage() {
       const mine = myBookingByClass.get(cls.id);
       // Eigen les (afmelden) of afgelaste les: naar die dag, daar staan Afmelden en Herstellen.
       // Een voorbije les opent gewoon de lesinformatie; eerst sprong je dan onverwacht naar de dagweergave.
-      if (cls.cancelledAt || (!isStaff && mine && !classHasStarted(cls))) {
+      const claimable = mine?.status === 'waitlist' && spotOpenFor(cls, true);
+      if (cls.cancelledAt || (!isStaff && mine && !classHasStarted(cls) && !claimable)) {
         setSelectedDate(cls.date);
         setViewMode('day');
         return;
@@ -384,7 +407,11 @@ export function LessenPage() {
 
   const renderClassRow = (cls: StudioClass) => {
     const mine = myBookingByClass.get(cls.id);
-    const full = cls.bookedCount >= cls.capacity;
+    const onWaitlist = mine?.status === 'waitlist';
+    const full = !spotOpenFor(cls, onWaitlist);
+    // Op de wachtlijst en er is een plek vrij: nu aanmelden (wie het eerst is).
+    const canClaim = onWaitlist && !full;
+    const position = onWaitlist ? waitlistPositions[cls.id] : undefined;
     const busy = busyId === cls.id;
     const started = classHasStarted(cls);
     return (
@@ -420,17 +447,26 @@ export function LessenPage() {
             {cls.room ? ` · ${cls.room}` : ''}
           </Typography>
           <Box sx={{ display: 'flex', gap: 0.75, mt: 1, flexWrap: 'wrap' }}>
+{!canClaim && (
             <Chip
               size="small"
-              label={spotsLabel(cls)}
+              label={spotsLabel(cls, onWaitlist)}
               sx={full ? { bgcolor: designTokens.cardBackgroundHigh, color: 'text.secondary' } : undefined}
             />
+            )}
             {cls.waitlistCount > 0 && <Chip size="small" variant="outlined" label={`${cls.waitlistCount} op wachtlijst`} />}
             {cls.creditCost !== 1 && <Chip size="small" variant="outlined" label={`${cls.creditCost} credits`} />}
             {cls.cancelledAt && <Chip size="small" color="error" label="Afgelast" />}
             {!cls.cancelledAt && started && <Chip size="small" label={classHasEnded(cls) ? 'Afgelopen' : 'Bezig'} sx={{ bgcolor: designTokens.cardBackgroundHigh, color: 'text.secondary' }} />}
             {/* Kleuren volgen het ontwerp: wachtlijst is neutraal (Surface Container High), geboekt is Tertiary Container. */}
-            {mine?.status === 'waitlist' && <Chip size="small" label="Op wachtlijst" sx={{ bgcolor: designTokens.cardBackgroundHigh, color: 'text.secondary' }} />}
+            {onWaitlist && !canClaim && (
+              <Chip
+                size="small"
+                label={position ? `Op wachtlijst · ${position}e` : 'Op wachtlijst'}
+                sx={{ bgcolor: designTokens.cardBackgroundHigh, color: 'text.secondary' }}
+              />
+            )}
+            {canClaim && <Chip size="small" label="Plek vrij voor jou" sx={{ bgcolor: designTokens.tertiaryContainer, color: designTokens.onTertiaryContainer, fontWeight: 600 }} />}
             {mine?.status === 'booked' && <Chip size="small" label="Ingeschreven" sx={{ bgcolor: designTokens.tertiaryContainer, color: designTokens.onTertiaryContainer }} />}
           </Box>
         </Box>
@@ -439,9 +475,16 @@ export function LessenPage() {
           {!cls.cancelledAt &&
             !started &&
             (mine ? (
-              <Button size="small" variant="outlined" disabled={busy} onClick={() => void handleCancel(mine)}>
-                Afmelden
-              </Button>
+              <>
+                {canClaim && (
+                  <Button size="small" variant="contained" disableElevation disabled={busy} onClick={() => setConfirmClass(cls)}>
+                    Aanmelden
+                  </Button>
+                )}
+                <Button size="small" variant="outlined" disabled={busy} onClick={() => requestCancel(mine)}>
+                  {onWaitlist ? 'Van wachtlijst' : 'Afmelden'}
+                </Button>
+              </>
             ) : (
               <Button size="small" variant="contained" disableElevation disabled={busy} onClick={() => setConfirmClass(cls)}>
                 {full ? 'Wachtlijst' : 'Reserveren'}
@@ -682,6 +725,33 @@ export function LessenPage() {
         </>
       )}
 
+      <Dialog open={!!lateCancel} onClose={() => setLateCancel(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Credit vervalt</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 1.5 }}>
+            Je meldt je binnen {freeCancelHours} uur voor de les af. Je krijgt je credit daarom niet terug.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Afmelden is wel fijn: wie op de wachtlijst staat krijgt meteen een melding en kan je plek nemen.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLateCancel(null)}>Terug</Button>
+          <Button
+            color="error"
+            variant="contained"
+            disableElevation
+            onClick={() => {
+              const b = lateCancel;
+              setLateCancel(null);
+              if (b) void handleCancel(b);
+            }}
+          >
+            Toch afmelden
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <BookConfirmDialog
         cls={confirmClass}
         trainerName={confirmClass ? trainerNames[confirmClass.trainerId] : undefined}
@@ -796,7 +866,9 @@ function BookConfirmDialog({
   }, [cls?.id, alreadyWeekly]);
 
   if (!cls) return null;
-  const full = cls.bookedCount >= cls.capacity;
+  // Een vrije plek die nog even voor de wachtlijst is, telt voor wie er niet op staat als vol.
+  const full = !spotOpenFor(cls, myStatus === 'waitlist');
+  const claim = myStatus === 'waitlist' && !full;
   // Staf reserveert altijd gratis (server bypasst de credit-kosten), ongeacht het saldo.
   const cost = isStaff ? 0 : cls.creditCost;
   // Begonnen of voorbij: alleen informatie, niet meer te reserveren.
@@ -811,7 +883,7 @@ function BookConfirmDialog({
           {cls.endTime ? `–${cls.endTime}` : ''}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          {[trainerName, cls.room, started ? `${cls.bookedCount} ${cls.bookedCount === 1 ? 'deelnemer' : 'deelnemers'}` : spotsLabel(cls)]
+          {[trainerName, cls.room, started ? `${cls.bookedCount} ${cls.bookedCount === 1 ? 'deelnemer' : 'deelnemers'}` : spotsLabel(cls, myStatus === 'waitlist')]
             .filter(Boolean)
             .join(' · ')}
         </Typography>
@@ -840,7 +912,9 @@ function BookConfirmDialog({
 
         {!started && (
           <Typography variant="caption" color="text.secondary">
-            Gratis afmelden tot {freeCancelHours} uur van tevoren. Daarna kost het je de credit.
+            {full
+              ? 'De les is vol. Op de wachtlijst krijg je een melding zodra er een plek vrijkomt; wie zich dan het eerst aanmeldt, heeft de plek. Er gaat pas een credit af als je je aanmeldt.'
+              : `Gratis afmelden tot ${freeCancelHours} uur van tevoren, of binnen een uur na het boeken. Daarna kost het je de credit.`}
           </Typography>
         )}
 
@@ -857,7 +931,9 @@ function BookConfirmDialog({
         </Button>
         {!started && (
         <Button variant="contained" disableElevation disabled={busy} onClick={() => onConfirm(weekly)}>
-          {full ? 'Wachtlijst' : cost === 0 ? 'Reserveren' : `Reserveren · ${cost} credit${cost > 1 ? 's' : ''}`}
+          {full
+            ? 'Op de wachtlijst'
+            : `${claim ? 'Aanmelden' : 'Reserveren'}${cost === 0 ? '' : ` · ${cost} credit${cost > 1 ? 's' : ''}`}`}
         </Button>
         )}
       </DialogActions>

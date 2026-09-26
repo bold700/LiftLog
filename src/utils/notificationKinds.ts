@@ -32,8 +32,8 @@ export const NOTIFICATION_KIND_INFO: NotificationKindInfo[] = [
   },
   {
     kind: 'waitlistPromoted',
-    label: 'Plek via de wachtlijst',
-    description: 'Iemand meldt zich af en de eerste op de wachtlijst schuift door.',
+    label: 'Plek vrij voor de wachtlijst',
+    description: 'Iemand meldt zich af: iedereen op de wachtlijst krijgt een melding en kan zich aanmelden (wie het eerst is).',
     to: 'Sporter',
     when: 'Direct',
   },

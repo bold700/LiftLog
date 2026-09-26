@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Box, Typography, useMediaQuery, useTheme } from '@mui/material';
-import { SESSION_KIND_COLORS, classHasStarted, type StudioClass, type Booking } from '../../services/classService';
+import { SESSION_KIND_COLORS, classHasStarted, spotOpenFor, type StudioClass, type Booking } from '../../services/classService';
 import { designTokens } from '../../theme/designTokens';
 import { hourRange, layoutDay, type Placed } from '../../utils/weekGrid';
 
@@ -202,10 +202,13 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
               })}
               {singles.map(({ item: cls, startMin, endMin, lane, lanes }) => {
                 const mine = bookingByClass.get(cls.id);
-                const full = cls.bookedCount >= cls.capacity;
+                const onWaitlist = mine?.status === 'waitlist';
+                // Een plek die nog even voor de wachtlijst is, telt voor een ander als vol.
+                const full = !spotOpenFor(cls, onWaitlist);
+                const canClaim = onWaitlist && !full;
                 const booked = mine?.status === 'booked';
                 const started = classHasStarted(cls);
-                const muted = !!cls.cancelledAt || started || (full && !mine) || mine?.status === 'waitlist';
+                const muted = !!cls.cancelledAt || started || (full && !mine) || (onWaitlist && !canClaim);
                 const top = (startMin - startHour * 60) * pxPerMin;
                 const height = Math.max((endMin - startMin) * pxPerMin - 2, 18);
                 const short = height < 40;
@@ -280,7 +283,9 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
                               : 'Bezig'
                             : booked
                             ? 'Ingeschreven'
-                            : mine?.status === 'waitlist'
+                            : canClaim
+                              ? 'Plek vrij voor jou'
+                              : onWaitlist
                               ? 'Op wachtlijst'
                               : full
                                 ? 'Vol'

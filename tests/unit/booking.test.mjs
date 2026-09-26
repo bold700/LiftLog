@@ -346,11 +346,17 @@ describe('afmelden', () => {
     expect(store['classes/c1'].bookedCount).toBe(0);
   });
 
+  /** Boeking die al langer dan de bedenktijd van een uur bestaat. */
+  const ageBooking = (bookingId, minutes = 90) => {
+    store[`bookings/${bookingId}`].createdAt = new Date(Date.now() - minutes * 60_000).toISOString();
+  };
+
   it('houdt de credit in als het te laat is', async () => {
     // Les over twee uur: binnen de annuleertermijn van twaalf uur.
     Object.assign(store['classes/c1'], amsterdamWallClock(new Date(Date.now() + 2 * 3_600_000)));
 
     const booked = await post({ action: 'book', classId: 'c1' });
+    ageBooking(booked.body.bookingId);
     const res = await post({ action: 'cancel', bookingId: booked.body.bookingId });
 
     expect(res.body.refunded).toBe(false);
@@ -359,30 +365,103 @@ describe('afmelden', () => {
     expect(store['classes/c1'].bookedCount).toBe(0);
   });
 
-  it('laat de eerste van de wachtlijst doorschuiven en schrijft dan pas zijn credit af', async () => {
+  it('geeft binnen een uur na het boeken altijd de credit terug (bedenktijd), ook als het te laat is', async () => {
+    Object.assign(store['classes/c1'], amsterdamWallClock(new Date(Date.now() + 2 * 3_600_000)));
+    const booked = await post({ action: 'book', classId: 'c1' });
+    ageBooking(booked.body.bookingId, 30);
+    const res = await post({ action: 'cancel', bookingId: booked.body.bookingId });
+    expect(res.body.refunded).toBe(true);
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(3);
+  });
+
+  it('niemand schuift automatisch door: de plek komt vrij en is een uur voor de wachtlijst', async () => {
     const eerste = await post({ action: 'book', classId: 'c1' }, 'sporter1');
     await post({ action: 'book', classId: 'c1' }, 'sporter2');
 
     await post({ action: 'cancel', bookingId: eerste.body.bookingId }, 'sporter1');
 
-    const bookings = Object.entries(store).filter(([k]) => k.startsWith('bookings/'));
-    const doorgeschoven = bookings.find(([, b]) => b.userId === 'sporter2');
-    expect(doorgeschoven[1].status).toBe('booked');
+    const wachtend = Object.values(store).find((v) => v.classId === 'c1' && v.userId === 'sporter2');
+    expect(wachtend.status).toBe('waitlist');
+    expect(store['creditAccounts/vanas__sporter2'].balance).toBe(3);
+    expect(store['classes/c1'].bookedCount).toBe(0);
+    expect(store['classes/c1'].waitlistCount).toBe(1);
+    expect(Date.parse(store['classes/c1'].waitlistPriorityUntil)).toBeGreaterThan(Date.now() + 50 * 60_000);
+  });
+
+  it('wie op de wachtlijst staat meldt zich aan voor de vrije plek; de credit gaat er dan af', async () => {
+    const eerste = await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    await post({ action: 'book', classId: 'c1' }, 'sporter2');
+    await post({ action: 'cancel', bookingId: eerste.body.bookingId }, 'sporter1');
+
+    const res = await post({ action: 'book', classId: 'c1' }, 'sporter2');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.status).toBe('booked');
     expect(store['creditAccounts/vanas__sporter2'].balance).toBe(2);
     expect(store['classes/c1'].bookedCount).toBe(1);
     expect(store['classes/c1'].waitlistCount).toBe(0);
+    expect(store['classes/c1'].waitlistPriorityUntil).toBeNull();
+    const mine = Object.values(store).filter((v) => v.classId === 'c1' && v.userId === 'sporter2' && v.status);
+    expect(mine).toHaveLength(1);
+    expect(mine[0].claimedAt).toBeTruthy();
   });
 
-  it('laat de plek vrij als de wachtlijst geen saldo heeft', async () => {
+  it('tijdens de voorrang komt iemand die niet op de wachtlijst stond zelf op de wachtlijst', async () => {
+    store['profiles/sporter3'] = { userId: 'sporter3', orgId: 'vanas', orgIds: ['vanas'], role: 'sporter' };
+    store['creditAccounts/vanas__sporter3'] = { orgId: 'vanas', userId: 'sporter3', balance: 3 };
     const eerste = await post({ action: 'book', classId: 'c1' }, 'sporter1');
     await post({ action: 'book', classId: 'c1' }, 'sporter2');
-    store['creditAccounts/vanas__sporter2'].balance = 0;
-
     await post({ action: 'cancel', bookingId: eerste.body.bookingId }, 'sporter1');
 
+    const res = await post({ action: 'book', classId: 'c1' }, 'sporter3');
+    expect(res.body.status).toBe('waitlist');
     expect(store['classes/c1'].bookedCount).toBe(0);
-    const bookings = Object.values(store).filter((v) => v.classId === 'c1' && v.userId === 'sporter2');
-    expect(bookings[0].status).toBe('waitlist');
+  });
+
+  it('na de voorrang is de vrije plek voor iedereen', async () => {
+    store['profiles/sporter3'] = { userId: 'sporter3', orgId: 'vanas', orgIds: ['vanas'], role: 'sporter' };
+    store['creditAccounts/vanas__sporter3'] = { orgId: 'vanas', userId: 'sporter3', balance: 3 };
+    const eerste = await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    await post({ action: 'book', classId: 'c1' }, 'sporter2');
+    await post({ action: 'cancel', bookingId: eerste.body.bookingId }, 'sporter1');
+    store['classes/c1'].waitlistPriorityUntil = new Date(Date.now() - 60_000).toISOString();
+
+    const res = await post({ action: 'book', classId: 'c1' }, 'sporter3');
+    expect(res.body.status).toBe('booked');
+  });
+
+  it('aanmelden vanaf de wachtlijst zonder saldo wordt geweigerd; je blijft op de wachtlijst', async () => {
+    const eerste = await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    await post({ action: 'book', classId: 'c1' }, 'sporter2');
+    await post({ action: 'cancel', bookingId: eerste.body.bookingId }, 'sporter1');
+    store['creditAccounts/vanas__sporter2'].balance = 0;
+
+    const res = await post({ action: 'book', classId: 'c1' }, 'sporter2');
+    expect(res.statusCode).toBe(409);
+    expect(res.body.error).toMatch(/geen credits/i);
+    const wachtend = Object.values(store).find((v) => v.classId === 'c1' && v.userId === 'sporter2');
+    expect(wachtend.status).toBe('waitlist');
+  });
+
+  it('nog eens "boeken" terwijl je op de wachtlijst staat en de les vol is: nette melding', async () => {
+    await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    await post({ action: 'book', classId: 'c1' }, 'sporter2');
+    const res = await post({ action: 'book', classId: 'c1' }, 'sporter2');
+    expect(res.statusCode).toBe(409);
+    expect(res.body.error).toMatch(/al op de wachtlijst/i);
+  });
+
+  it('geeft je plek op de wachtlijst, niet wie er voor je staat', async () => {
+    store['profiles/sporter3'] = { userId: 'sporter3', orgId: 'vanas', orgIds: ['vanas'], role: 'sporter' };
+    store['creditAccounts/vanas__sporter3'] = { orgId: 'vanas', userId: 'sporter3', balance: 3 };
+    await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    const a = await post({ action: 'book', classId: 'c1' }, 'sporter2');
+    const b = await post({ action: 'book', classId: 'c1' }, 'sporter3');
+    store[`bookings/${a.body.bookingId}`].createdAt = '2026-09-26T10:00:00.000Z';
+    store[`bookings/${b.body.bookingId}`].createdAt = '2026-09-26T11:00:00.000Z';
+
+    const res = await post({ action: 'waitlistPositions' }, 'sporter3');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.positions).toEqual({ c1: 2 });
   });
 
   it('laat een sporter niet de reservering van een ander afzeggen', async () => {
@@ -397,6 +476,15 @@ describe('afmelden', () => {
     const booked = await post({ action: 'book', classId: 'c1' }, 'sporter1');
     const res = await post({ action: 'cancel', bookingId: booked.body.bookingId }, 'trainer1');
     expect(res.statusCode).toBe(200);
+  });
+
+  it('0 uur bij de studio betekent tot de start gratis, niet de standaard 12 uur', async () => {
+    store['orgs/vanas'] = { bookingPolicy: { freeCancelHours: 0 } };
+    Object.assign(store['classes/c1'], amsterdamWallClock(new Date(Date.now() + 2 * 3_600_000)));
+    const booked = await post({ action: 'book', classId: 'c1' });
+    ageBooking(booked.body.bookingId);
+    const res = await post({ action: 'cancel', bookingId: booked.body.bookingId });
+    expect(res.body.refunded).toBe(true);
   });
 
   it('gebruikt de eigen annuleertermijn van de studio in plaats van de standaard 12 uur', async () => {
@@ -1457,7 +1545,7 @@ describe('meldingen bij boeken en afmelden', () => {
   });
   const titlesFor = (token) => sentPushes.filter((p) => p.tokens.includes(token)).map((p) => p.notification.title);
 
-  it('staf meldt een sporter af: die krijgt "Les geannuleerd", de wachtlijst krijgt de plek', async () => {
+  it('staf meldt een sporter af: die krijgt "Les geannuleerd", de wachtlijst hoort dat er een plek vrij is', async () => {
     const booked = await post({ action: 'book', classId: 'c1' }, 'sporter1');
     await post({ action: 'book', classId: 'c1' }, 'sporter2'); // vol → wachtlijst
     sentPushes = [];
@@ -1465,7 +1553,7 @@ describe('meldingen bij boeken en afmelden', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.notice).toBeUndefined();
     expect(titlesFor('tok_sporter1')).toEqual(['Les geannuleerd']);
-    expect(titlesFor('tok_sporter2')).toEqual(['Je hebt een plek!']);
+    expect(titlesFor('tok_sporter2')).toEqual(['Plek vrij!']);
     expect(sentPushes.find((p) => p.tokens.includes('tok_sporter1')).notification.body).toContain('Je credit staat weer op je saldo.');
   });
 
