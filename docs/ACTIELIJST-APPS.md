@@ -41,8 +41,10 @@ Als het account is goedgekeurd:
 
 ## B. Google Play: account voor BOLD700
 
-- [ ] Controleren of er een **Play Console-account op naam van BOLD700** (organisatie) is;
-      zo niet, aanmaken op <https://play.google.com/console> (€ 25 eenmalig, met het D-U-N-S-nummer).
+- [x] **Play Console-account op naam van BOLD700** (organisatie) bestaat al; daar staat ook de
+      huidige app "Van As Personal Training Logs" (`com.vanas.liftlog`).
+- De melding over **Android-ontwikkelaarsverificatie** (vóór 30 september 2026) vraagt niets: alle
+  Play-apps zijn al geregistreerd, en we verspreiden niets buiten Google Play.
 - [ ] **App aanmaken**: Alle apps → App maken → naam **VORM**, standaardtaal Nederlands, App, Gratis.
 - [ ] **Uploadsleutel maken** op de Mac (Terminal), en het wachtwoord in je wachtwoordkluis bewaren:
 
