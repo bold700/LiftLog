@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   // Houd dit gelijk aan Android applicationId / iOS bundle id
-  appId: 'com.vanas.liftlog',
+  appId: 'com.bold700.vorm',
   appName: 'VORM',
   webDir: 'dist',
   server: {

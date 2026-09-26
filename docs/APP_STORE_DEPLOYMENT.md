@@ -1,5 +1,10 @@
 # VORM - App Store & Play Store Deployment Guide
 
+> **Let op (sept. 2026):** de apps worden nu gebouwd en geüpload door de bouwstap in GitHub
+> (`.github/workflows/native.yml`), onder de accounts van BOLD700 met app-ID `com.bold700.vorm`.
+> Wat daarvoor eenmalig geregeld moet worden staat in [ACTIELIJST-APPS.md](ACTIELIJST-APPS.md).
+> Deze handleiding blijft voor wie toch lokaal met Xcode of Android Studio wil bouwen.
+
 Deze guide helpt je om de VORM app te publiceren in de Apple App Store en Google Play Store.
 
 ## 📋 Vereisten
@@ -79,7 +84,7 @@ open ios/App/App.xcworkspace
 3. **Ga naar "Signing & Capabilities" tab**
 4. **Vink "Automatically manage signing" aan**
 5. **Selecteer je Team** (je Apple Developer account)
-6. **Bundle Identifier**: `com.vanas.liftlog` (moet uniek zijn)
+6. **Bundle Identifier**: `com.bold700.vorm` (moet uniek zijn)
 
 ### 2.5 App Icon & Splash Screen
 
@@ -145,7 +150,7 @@ De splash screen is al geconfigureerd in `capacitor.config.ts`. Je kunt de splas
    - **Platform**: iOS
    - **Name**: VORM
    - **Primary Language**: Nederlands
-   - **Bundle ID**: com.vanas.liftlog
+   - **Bundle ID**: com.bold700.vorm
    - **SKU**: liftlog-001 (unieke identifier)
    - **User Access**: Full Access
 5. Klik **"Create"**
@@ -225,13 +230,13 @@ Of handmatig:
 
 1. **Open `android/app/build.gradle`**
 2. Controleer:
-   - `applicationId`: "com.vanas.liftlog"
+   - `applicationId`: "com.bold700.vorm"
    - `versionCode`: 1 (verhoog bij elke update)
    - `versionName`: "1.0.0"
 
 3. **Open `android/app/src/main/AndroidManifest.xml`**
 4. Controleer:
-   - Package name: "com.vanas.liftlog"
+   - Package name: "com.bold700.vorm"
    - App name: "VORM"
    - Permissions (indien nodig)
 
@@ -488,7 +493,7 @@ De splash screen is al geconfigureerd. Pas aan in:
 - **Oplossing**: Zorg dat je Apple Developer account is gekoppeld in Xcode > Preferences > Accounts
 
 **Probleem**: "Bundle identifier already exists"
-- **Oplossing**: Kies een unieke bundle identifier (bijv. com.vanas.liftlog.app)
+- **Oplossing**: Kies een unieke bundle identifier (bijv. com.bold700.vorm.app)
 
 **Probleem**: CocoaPods installatie faalt
 - **Oplossing**: Update CocoaPods: `sudo gem install cocoapods`

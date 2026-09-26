@@ -1,4 +1,4 @@
-package com.vanas.liftlog;
+package com.bold700.vorm;
 
 import com.getcapacitor.BridgeActivity;
 
