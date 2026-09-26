@@ -14,6 +14,39 @@ export function amsterdamDate(now, offsetDays = 0) {
   return shifted.toISOString().slice(0, 10);
 }
 
+const AMS_PARTS = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Europe/Amsterdam',
+  hourCycle: 'h23',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+});
+
+/** Hoeveel ms de Nederlandse klok op moment `ms` voorloopt op UTC (1 uur in de winter, 2 in de zomer). */
+function amsterdamOffsetMs(ms) {
+  const p = Object.fromEntries(AMS_PARTS.formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+  return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - ms;
+}
+
+/**
+ * Het moment waarop een les begint: datum (YYYY-MM-DD) en tijd (HH:MM) zijn Nederlandse tijd.
+ * `new Date("2026-09-26T07:00:00")` zou op de server (UTC) 07:00 UTC zijn, dus 09:00 hier.
+ * @returns {Date|null}
+ */
+export function amsterdamDateTime(date, time = '00:00') {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date ?? ''));
+  const t = /^(\d{1,2}):(\d{2})/.exec(String(time ?? '00:00'));
+  if (!m || !t) return null;
+  const wall = Date.UTC(+m[1], +m[2] - 1, +m[3], +t[1], +t[2]);
+  // Twee keer: rond de wisseling van zomer- naar wintertijd hangt de verschuiving van het moment zelf af.
+  let ms = wall - amsterdamOffsetMs(wall);
+  ms = wall - amsterdamOffsetMs(ms);
+  return new Date(ms);
+}
+
 /** "09:00" → "9:00": zo schrijf je een tijd in een bericht. */
 function shortTime(hhmm) {
   const [h, m] = String(hhmm || '').split(':');

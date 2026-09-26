@@ -45,6 +45,7 @@ import { DeleteSessionDialog } from './logs/DeleteSessionDialog';
 import '@material/web/button/filled-button.js';
 import '@material/web/button/text-button.js';
 import '@material/web/icon/icon.js';
+import { todayIso } from '../utils/format';
 
 /** `short` staat op de pil, zodat de drie filters op een telefoon op één regel passen. */
 const PERIOD_OPTIONS: { label: string; short: string; days: number | null }[] = [
@@ -160,7 +161,7 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
   const [sessionLogs, setSessionLogs] = useState<TrainingSessionLog[]>(() => getSessionLogs());
   const [openSessionLogDialog, setOpenSessionLogDialog] = useState<'add' | 'edit' | null>(null);
   const [editingSessionLog, setEditingSessionLog] = useState<TrainingSessionLog | null>(null);
-  const [sessionLogDate, setSessionLogDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [sessionLogDate, setSessionLogDate] = useState(() => todayIso());
   const [sessionLogSchemaId, setSessionLogSchemaId] = useState<string>('');
   const [sessionLogDayIndex, setSessionLogDayIndex] = useState<number>(0);
   const [sessionLogNotes, setSessionLogNotes] = useState('');
@@ -344,7 +345,7 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
 
   const openAddSessionLog = useCallback(() => {
     setEditingSessionLog(null);
-    setSessionLogDate(new Date().toISOString().split('T')[0]);
+    setSessionLogDate(todayIso());
     setSessionLogSchemaId(schemas[0]?.id ?? '');
     setSessionLogDayIndex(0);
     setSessionLogNotes('');

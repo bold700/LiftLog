@@ -59,8 +59,15 @@ export function NutritionInsights() {
       d.carbs += l.carbs;
       d.fat += l.fat;
     }
-    const loggedDates = Object.keys(byDay);
+    // Vandaag is nog niet om: halverwege de dag zou die het gemiddelde omlaag trekken en "niet op
+    // koers" geven. Vandaag telt pas mee als er verder nog niets is gelogd, en dan zeggen we dat erbij.
+    const today = isoDay(new Date());
+    const allDates = Object.keys(byDay);
+    const fullDays = allDates.filter((d) => d !== today);
+    const onlyToday = fullDays.length === 0 && allDates.length > 0;
+    const loggedDates = onlyToday ? allDates : fullDays;
     const nLogged = loggedDates.length;
+    const todayLogged = allDates.includes(today);
     const sum = loggedDates.reduce(
       (a, k) => ({
         kcal: a.kcal + byDay[k].kcal,
@@ -104,7 +111,7 @@ export function NutritionInsights() {
     const trend = days14.map((d) => ({ date: d, kcal: byDay[d]?.kcal ?? 0 }));
     const maxKcal = Math.max(1, ...trend.map((t) => t.kcal), goal?.kcal ?? 0);
 
-    return { nLogged, avg, split, onTarget, trend, maxKcal };
+    return { nLogged, onlyToday, todayLogged, avg, split, onTarget, trend, maxKcal };
   }, [logs, goal]);
 
   if (loading) {
@@ -127,7 +134,7 @@ export function NutritionInsights() {
             Voedingspatroon
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Nog geen voeding gelogd in de laatste 30 dagen. Log je voeding via Menu → Voeding om hier inzichten te zien.
+            Nog geen voeding gelogd in de laatste 30 dagen. Log je voeding bij Voeding om hier inzichten te zien.
           </Typography>
         </ContentCard>
       </PageLayout>
@@ -147,14 +154,18 @@ export function NutritionInsights() {
           Voedingspatroon
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Op basis van {stats.nLogged} geloggde {stats.nLogged === 1 ? 'dag' : 'dagen'} in de laatste 30 dagen.
+          {stats.onlyToday
+            ? 'Alleen vandaag is gelogd, en die dag is nog niet om. Dit is vandaag tot nu toe.'
+            : `Op basis van ${stats.nLogged} gelogde ${stats.nLogged === 1 ? 'dag' : 'dagen'} in de laatste 30 dagen.${
+                stats.todayLogged ? ' Vandaag telt mee zodra de dag voorbij is.' : ''
+              }`}
         </Typography>
 
         {/* Gemiddelde per dag */}
         <Card sx={{ backgroundColor: 'transparent', border: '1px solid', borderColor: 'divider', boxShadow: 'none', borderRadius: 2, mb: 2 }}>
           <CardContent sx={{ '&:last-child': { pb: 2 } }}>
             <Typography variant="caption" color="text.secondary">
-              Gemiddeld per geloggde dag
+              {stats.onlyToday ? 'Vandaag tot nu toe' : 'Gemiddeld per gelogde dag'}
             </Typography>
             <Box sx={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', flexWrap: 'wrap', gap: 1, mt: 1 }}>
               {[
@@ -204,15 +215,15 @@ export function NutritionInsights() {
           </CardContent>
         </Card>
 
-        {/* Doel-consistentie */}
-        {goal?.kcal ? (
+        {/* Doel-consistentie; niet op een dag die nog niet om is. */}
+        {goal?.kcal && !stats.onlyToday ? (
           <Card sx={{ backgroundColor: 'transparent', border: '1px solid', borderColor: 'divider', boxShadow: 'none', borderRadius: 2, mb: 2 }}>
             <CardContent sx={{ '&:last-child': { pb: 2 } }}>
               <Typography variant="caption" color="text.secondary">
                 Op koers (kcal binnen 10% van je doel van {goal.kcal})
               </Typography>
               <Typography variant="h6" fontWeight={700}>
-                {stats.onTarget} / {stats.nLogged} dagen
+                {stats.onTarget} van {stats.nLogged} {stats.nLogged === 1 ? 'dag' : 'dagen'}
               </Typography>
             </CardContent>
           </Card>

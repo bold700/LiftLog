@@ -23,6 +23,9 @@ describe('layoutDay', () => {
     const r = layoutDay([c('18:00', '19:00', 'a'), c('18:30', '19:30', 'b'), c('19:00', '20:00', 'c'), c('21:00', '22:00', 'd')]);
     const by = Object.fromEntries(r.map((p) => [p.item.id, [p.lane, p.lanes]]));
     expect(by).toEqual({ a: [0, 2], b: [1, 2], c: [0, 2], d: [0, 1] });
+    // a, b en c horen bij elkaar (op de telefoon één blok "3 lessen"); d staat los.
+    const groups = Object.fromEntries(r.map((p) => [p.item.id, p.group]));
+    expect(groups).toEqual({ a: 0, b: 0, c: 0, d: 1 });
   });
 
   it('zonder eindtijd duurt een les een uur', () => {

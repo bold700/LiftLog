@@ -41,7 +41,7 @@ export interface MuscleSessions {
 }
 
 /** Trainingsdag = lokale kalenderdag van de log. */
-function dayKey(date: string): string | null {
+export function dayKey(date: string): string | null {
   if (/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) return date.trim();
   const ms = Date.parse(date);
   if (Number.isNaN(ms)) return null;

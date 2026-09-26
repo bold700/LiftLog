@@ -323,7 +323,9 @@ export function NutritionPage() {
     return days.map((d) => ({ date: d, kcal: map[d] ?? 0 }));
   }, [days.join(','), rangeLogs]);
 
-  const nDays = days.length;
+  // Gemiddelde over de dagen waarop iets is gelogd: een dag zonder logs is niet "0 kcal gegeten".
+  const loggedDays = useMemo(() => new Set(rangeLogs.map((l) => l.date)).size, [rangeLogs]);
+  const nDays = Math.max(1, loggedDays);
   const avg = {
     kcal: Math.round(totals.kcal / nDays),
     protein: Math.round((totals.protein / nDays) * 10) / 10,
@@ -399,7 +401,10 @@ export function NutritionPage() {
     await loadLogs();
   };
 
-  const periodLabel = period === 'day' ? t('nutrition.summary.day') : period === 'week' ? t('nutrition.summary.weekAvg') : t('nutrition.summary.monthAvg');
+  const periodLabel =
+    period === 'day'
+      ? t('nutrition.summary.day')
+      : t(period === 'week' ? 'nutrition.summary.weekAvg' : 'nutrition.summary.monthAvg', { count: loggedDays });
   const theme = useTheme();
   /** Desktop: maaltijden altijd open met kolommen voor gram en kcal (Figma); telefoon: inklapbaar. */
   const wide = useMediaQuery(theme.breakpoints.up('md'));

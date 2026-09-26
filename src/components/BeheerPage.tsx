@@ -418,7 +418,8 @@ export function BeheerPage() {
       {/* De titel staat in de kop van de schil. Knoppen: op desktop rechts in die kop (Figma), op een
           telefoon boven de tabs. */}
       <HeaderActions>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 2, mb: { xs: 1.5, md: 0 } }}>
+      {/* flexWrap: op een smalle telefoon komt "Leden importeren" onder "Account toevoegen" in plaats van buiten beeld. */}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-start', gap: { xs: 1, md: 2 }, mb: { xs: 1.5, md: 0 } }}>
         {section === 'lessoorten' ? (
           <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewTypeSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
             {t('classTypes.newType')}
@@ -431,7 +432,7 @@ export function BeheerPage() {
           <Button variant="contained" disableElevation startIcon={<DownloadRoundedIcon />} onClick={() => setExportSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
             {t('billing.export')}
           </Button>
-        ) : section === 'meldingen' ? null : section === 'leden' ? (
+        ) : section === 'leden' ? (
           <>
             <Button variant="contained" disableElevation startIcon={<PersonAddRoundedIcon />} onClick={openCreate} disabled={!auth} sx={{ flexShrink: 0 }}>
               {t('admin.addAccount')}
@@ -440,11 +441,7 @@ export function BeheerPage() {
               Leden importeren
             </Button>
           </>
-        ) : (
-          <Button variant="contained" disableElevation startIcon={<PersonAddRoundedIcon />} onClick={openCreate} disabled={!auth} sx={{ flexShrink: 0 }}>
-            {t('admin.addAccount')}
-          </Button>
-        )}
+        ) : null /* Huisstijl en Meldingen: de acties staan in de kaarten zelf. */}
       </Box>
       </HeaderActions>
       <SectionTabs sections={sections} value={section} onChange={setSection} />

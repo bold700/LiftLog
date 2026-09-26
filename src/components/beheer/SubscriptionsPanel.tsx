@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -77,6 +78,8 @@ export function SubscriptionsPanel({ memberships, credits, createSignal, onChang
 
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Ophalen mislukt: dan géén "nog geen abonnementen", want die zijn er misschien wel. */
+  const [loadFailed, setLoadFailed] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,7 +89,9 @@ export function SubscriptionsPanel({ memberships, credits, createSignal, onChang
     setLoading(true);
     try {
       setPlans(await getPlans());
+      setLoadFailed(false);
     } catch (e) {
+      setLoadFailed(true);
       notify.error(t('plans.failed'), e);
     } finally {
       setLoading(false);
@@ -205,7 +210,19 @@ export function SubscriptionsPanel({ memberships, credits, createSignal, onChang
 
   const list = (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1, minWidth: 0 }}>
-      {!loading && plans.length === 0 && (
+      {!loading && loadFailed && (
+        <Alert
+          severity="error"
+          action={
+            <Button color="inherit" size="small" onClick={() => void load()}>
+              {t('common.retry')}
+            </Button>
+          }
+        >
+          {t('plans.loadFailed')}
+        </Alert>
+      )}
+      {!loading && !loadFailed && plans.length === 0 && (
         <Box sx={{ p: 3, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground }}>
           <Typography color="text.secondary">{t('plans.empty')}</Typography>
         </Box>
@@ -335,11 +352,19 @@ export function SubscriptionsPanel({ memberships, credits, createSignal, onChang
     </Box>
   );
 
+  /** Hoeveel leden dit abonnement nu hebben: dat moet je weten voordat je het verwijdert. */
+  const draftMembers = draft?.id ? (stats.byPlan.get(draft.id) ?? 0) : 0;
+
   const confirm = (
     <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)} maxWidth="xs" fullWidth>
       <DialogTitle>{t('plans.delete')}</DialogTitle>
       <DialogContent>
         <Typography variant="body2">{t('plans.deleteConfirm', { name: draft?.name ?? '' })}</Typography>
+        {draftMembers > 0 && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            {t('plans.deleteMembers', { count: draftMembers })}
+          </Alert>
+        )}
       </DialogContent>
       <DialogActions>
         <Button onClick={() => setConfirmDelete(false)} disabled={saving}>

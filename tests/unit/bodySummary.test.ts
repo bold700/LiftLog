@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Measurement } from '../../src/services/measurementService';
 import type { BodyScan } from '../../src/utils/bodyScan';
-import { bodyComposition, latestWeight, measurementSource, measurementWhen } from '../../src/utils/bodySummary';
+import { bodyComposition, deltaTone, latestWeight, measurementSource, measurementWhen, weightTone } from '../../src/utils/bodySummary';
 
 let n = 0;
 const m = (date: string, extra: Partial<Measurement> = {}): Measurement =>
@@ -57,6 +57,8 @@ describe('bodyComposition', () => {
       ['Visceraal vet', 'Niveau 6', '−1'],
     ]);
     expect(rows[0].fill).toBeCloseTo(38.6 / 60);
+    // Meer spier, minder vet en minder visceraal vet: allemaal goed nieuws; water zonder vergelijking neutraal.
+    expect(rows.map((r) => r.tone)).toEqual(['good', 'good', 'neutral', 'good']);
   });
 
   it('zonder scan: vetpercentage, vetvrije massa en BMI uit gewone metingen', () => {
@@ -84,5 +86,22 @@ describe('measurementWhen', () => {
     expect(measurementWhen(withScan, { weekday: true }, now)).toBe('zo 16 aug 07:04');
     expect(measurementWhen(withScan, { time: false }, now)).toBe('16 aug');
     expect(measurementWhen(m('2025-12-30'), {}, now)).toBe('30 dec 2025');
+  });
+});
+
+describe('kleur van een verandering', () => {
+  it('meer vet is slecht, meer spier is goed, water is neutraal', () => {
+    expect(deltaTone(18, 17, 'down')).toBe('bad');
+    expect(deltaTone(39, 38, 'up')).toBe('good');
+    expect(deltaTone(45, 44, null)).toBe('neutral');
+    expect(deltaTone(17, 17, 'down')).toBe('neutral');
+  });
+
+  it('gewicht: richting het doel is goed, ervan af slecht, zonder doel neutraal', () => {
+    expect(weightTone(82, 83, 78)).toBe('good');
+    expect(weightTone(84, 83, 78)).toBe('bad');
+    // Wie wil aankomen: omhoog is goed.
+    expect(weightTone(71, 70, 75)).toBe('good');
+    expect(weightTone(82, 83, null)).toBe('neutral');
   });
 });

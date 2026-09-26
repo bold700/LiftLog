@@ -17,6 +17,7 @@ import { checkinRecipient } from '../utils/pushTargets';
 import { emptyMeasurementFields, newMeasurementId, saveMeasurement } from '../services/measurementService';
 import { FEELING_LABELS } from '../utils/trainingFeedback';
 import type { Profile } from '../types';
+import { todayIso } from '../utils/format';
 
 const FEELINGS = [5, 4, 3, 2, 1] as const;
 
@@ -54,7 +55,7 @@ export function WeeklyCheckinDialog({
           userId: me.userId,
           loggedBy: me.userId,
           trainerId: me.trainerId ?? null,
-          date: new Date().toISOString().slice(0, 10),
+          date: todayIso(),
           weightKg,
           note: 'Wekelijkse check-in',
         });

@@ -134,7 +134,8 @@ function BroadcastsColumn() {
       setHistoryError(null);
     } catch (e) {
       setHistoryError(e instanceof Error ? e.message : 'Berichten laden mislukt.');
-      setHistory([]);
+      // Niet op [] zetten: dan staat er naast de fout ook "Nog geen berichten verstuurd".
+      setHistory((h) => h ?? []);
     }
   }, []);
 
@@ -383,16 +384,26 @@ function BroadcastsColumn() {
           Berichten
         </Typography>
         {historyError && (
-          <Alert severity="error" sx={{ mb: 1.5 }}>
+          <Alert
+            severity="error"
+            sx={{ mb: 1.5 }}
+            action={
+              <Button color="inherit" size="small" onClick={() => void loadHistory()}>
+                Opnieuw proberen
+              </Button>
+            }
+          >
             {historyError}
           </Alert>
         )}
         {history === null ? (
           <CircularProgress size={20} />
         ) : history.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            Nog geen berichten verstuurd.
-          </Typography>
+          historyError ? null : (
+            <Typography variant="body2" color="text.secondary">
+              Nog geen berichten verstuurd.
+            </Typography>
+          )
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column' }}>
             {history.map((b, i) => (

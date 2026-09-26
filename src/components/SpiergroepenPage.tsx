@@ -7,6 +7,7 @@ import { MuscleFrequencyBody } from './MuscleFrequencyBody';
 import { muscleTints } from '../theme/muscleTints';
 import { PageLayout } from './layout';
 import { designTokens } from '../theme/designTokens';
+import { OVERVIEW_PERIOD_DAYS, isWithinLastDays } from '../utils/insightsOverview';
 
 const cardSx = () => ({
   backgroundColor: designTokens.cardBackground,
@@ -18,9 +19,11 @@ export const SpiergroepenPage = () => {
   const { exercises, error } = useViewedExercises();
   const theme = useTheme();
 
+  // Dezelfde periode als "Spierfocus" op Overzicht, waar de knop Details naartoe leidt.
+  const recent = useMemo(() => exercises.filter((e) => isWithinLastDays(e.date, OVERVIEW_PERIOD_DAYS, new Date())), [exercises]);
   const muscles = useMemo(
-    () => countMuscleSessions(exercises, (name) => getExerciseMuscleMapping(name)?.primary ?? []),
-    [exercises]
+    () => countMuscleSessions(recent, (name) => getExerciseMuscleMapping(name)?.primary ?? []),
+    [recent]
   );
   const max = muscles[0]?.sessions ?? 0;
 
@@ -39,7 +42,10 @@ export const SpiergroepenPage = () => {
         }}
       >
         <Box sx={{ ...cardSx(), p: { xs: 2, md: 3 }, minWidth: 0 }}>
-          <MuscleFrequencyBody size="calc(50% - 12px)" aspectRatio="1 / 1.8" exercises={exercises} />
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+            Afgelopen {OVERVIEW_PERIOD_DAYS} dagen
+          </Typography>
+          <MuscleFrequencyBody size="calc(50% - 12px)" aspectRatio="1 / 1.8" sinceDays={OVERVIEW_PERIOD_DAYS} exercises={exercises} />
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mt: 2 }} aria-label="Legenda: van minder naar meer getraind">
             <Typography variant="caption" color="text.secondary">
               Minder
@@ -67,7 +73,7 @@ export const SpiergroepenPage = () => {
           </Typography>
           {muscles.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
-              Nog geen oefeningen gelogd.
+              Geen oefeningen gelogd in de afgelopen {OVERVIEW_PERIOD_DAYS} dagen.
             </Typography>
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>

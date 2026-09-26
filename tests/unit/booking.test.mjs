@@ -203,6 +203,11 @@ const getFeed = async (token) => {
 
 /** Een les morgen, zodat annuleren ruim binnen de termijn valt. */
 const morgen = () => new Date(Date.now() + 36 * 3_600_000).toISOString().slice(0, 10);
+/** Datum en begintijd zoals een les ze opslaat: Nederlandse tijd, waar de tests ook draaien. */
+const amsterdamWallClock = (d) => {
+  const [date, time] = d.toLocaleString('sv-SE', { timeZone: 'Europe/Amsterdam' }).split(' ');
+  return { date, startTime: time.slice(0, 5) };
+};
 
 beforeEach(() => {
   store = {
@@ -343,9 +348,7 @@ describe('afmelden', () => {
 
   it('houdt de credit in als het te laat is', async () => {
     // Les over twee uur: binnen de annuleertermijn van twaalf uur.
-    const straks = new Date(Date.now() + 2 * 3_600_000);
-    store['classes/c1'].date = straks.toISOString().slice(0, 10);
-    store['classes/c1'].startTime = straks.toTimeString().slice(0, 5);
+    Object.assign(store['classes/c1'], amsterdamWallClock(new Date(Date.now() + 2 * 3_600_000)));
 
     const booked = await post({ action: 'book', classId: 'c1' });
     const res = await post({ action: 'cancel', bookingId: booked.body.bookingId });
@@ -399,9 +402,7 @@ describe('afmelden', () => {
   it('gebruikt de eigen annuleertermijn van de studio in plaats van de standaard 12 uur', async () => {
     store['orgs/vanas'] = { bookingPolicy: { freeCancelHours: 1 } };
     // Les over twee uur: buiten de eigen termijn van 1 uur, maar wel binnen de standaard 12 uur.
-    const straks = new Date(Date.now() + 2 * 3_600_000);
-    store['classes/c1'].date = straks.toISOString().slice(0, 10);
-    store['classes/c1'].startTime = straks.toTimeString().slice(0, 5);
+    Object.assign(store['classes/c1'], amsterdamWallClock(new Date(Date.now() + 2 * 3_600_000)));
 
     const booked = await post({ action: 'book', classId: 'c1' });
     const res = await post({ action: 'cancel', bookingId: booked.body.bookingId });

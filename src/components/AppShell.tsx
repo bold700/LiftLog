@@ -335,7 +335,8 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
   const title = [...destinations, ...secondary].find((d) => d.tabIndex === activeTab)?.label ?? brand.name;
 
   if (!wide) {
-    const barIndex = Math.max(0, destinations.findIndex((d) => d.tabIndex === activeTab));
+    // -1 als de bestemming niet in de onderbalk staat (Beheer, Assistent): dan is er geen tab actief.
+    const barIndex = destinations.findIndex((d) => d.tabIndex === activeTab);
     return (
       <PageTitleProvider>
       <TopBarBackProvider>

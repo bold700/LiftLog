@@ -175,6 +175,7 @@ export const nl = {
   plans: {
     newPlan: 'Nieuw abonnement',
     empty: 'Nog geen abonnementen. Maak er een aan en koppel het daarna aan leden.',
+    loadFailed: 'Abonnementen laden lukte niet. Je abonnementen zijn er nog; probeer het opnieuw.',
     pickToEdit: 'Kies links een abonnement om te bewerken.',
     kpi: {
       members: 'Actieve leden',
@@ -223,6 +224,10 @@ export const nl = {
     members: { one: '1 lid', other: '{count} leden' },
     delete: 'Verwijderen',
     deleteConfirm: 'Abonnement "{name}" verwijderen? Leden die het hebben houden hun credits; hun lidmaatschap verlengt niet meer.',
+    deleteMembers: {
+      one: 'Let op: 1 lid heeft dit abonnement nu. Dat lidmaatschap stopt dan bij de volgende verlenging. Wil je het liever overzetten? Doe dat eerst bij Leden.',
+      other: 'Let op: {count} leden hebben dit abonnement nu. Hun lidmaatschap stopt dan bij de volgende verlenging. Wil je ze liever overzetten? Doe dat eerst bij Leden.',
+    },
     saved: 'Abonnement opgeslagen.',
     deleted: 'Abonnement verwijderd.',
     failed: 'Opslaan mislukt.',
@@ -240,6 +245,7 @@ export const nl = {
   billing: {
     export: 'Exporteer CSV',
     empty: 'Nog geen posten. Die ontstaan zodra je een abonnement aan een lid koppelt.',
+    loadFailed: 'Posten laden lukte niet. Er is niets verdwenen; probeer het opnieuw.',
     pickToView: 'Kies links een post.',
     kpi: { open: 'Open', paidMonth: 'Betaald deze maand', paidShort: 'Betaald', overdue: 'Achterstallig', monthly: 'Maandelijks terugkerend' },
     filter: { open: 'Open', paid: 'Betaald', all: 'Alles' },
@@ -336,6 +342,7 @@ export const nl = {
     save: 'Opslaan',
     cancel: 'Annuleren',
     saving: 'Bezig…',
+    retry: 'Opnieuw proberen',
     none: '—',
   },
   nutrition: {
@@ -347,8 +354,8 @@ export const nl = {
     until: 'Tot en met',
     summary: {
       day: 'Deze dag',
-      weekAvg: 'Gemiddeld per dag (7 dagen)',
-      monthAvg: 'Gemiddeld per dag (30 dagen)',
+      weekAvg: { one: 'Gemiddeld over 1 gelogde dag (van 7)', other: 'Gemiddeld per gelogde dag ({count} van 7)' },
+      monthAvg: { one: 'Gemiddeld over 1 gelogde dag (van 30)', other: 'Gemiddeld per gelogde dag ({count} van 30)' },
       ofKcal: 'van {kcal} kcal',
       kcal: 'kcal',
       ofGrams: 'van {grams} g',
