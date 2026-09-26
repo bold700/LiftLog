@@ -8,7 +8,7 @@
  * chat-app en dit zijn geen berichten maar cijfers.
  */
 import { useState } from 'react';
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, TextField } from '@mui/material';
+import { Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, TextField, Typography } from '@mui/material';
 import { NumberField } from './NumberField';
 import { useNotify } from '../context/NotifyContext';
 import { saveCheckin } from '../services/checkinService';
@@ -100,7 +100,12 @@ export function WeeklyCheckinDialog({
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <DialogTitle>Wekelijkse check-in</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, '&&': { pt: 1.5 } }}>
-        {me.healthConsent?.given !== false && (
+        {me.healthConsent?.given === false ? (
+          <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
+            Je gewicht vragen we niet, want je hebt geen toestemming gegeven voor gezondheidsgegevens. Wil je goed begeleid worden?
+            Zet het aan in Profiel → Account.
+          </Typography>
+        ) : (
           <NumberField
             label="Gewicht (kg)"
             decimal

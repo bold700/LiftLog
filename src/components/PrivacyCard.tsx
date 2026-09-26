@@ -25,9 +25,9 @@ import DeleteForeverRoundedIcon from '@mui/icons-material/DeleteForeverRounded';
 import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
-import { recordHealthConsent, withdrawHealthConsent } from '../services/privacyService';
+import { withdrawHealthConsent } from '../services/privacyService';
 import { designTokens } from '../theme/designTokens';
-import { HealthConsentExplanation } from './HealthConsentDialog';
+import { GiveHealthConsentDialog, HEALTH_CONSENT_WHY } from './HealthConsentDialog';
 
 const CONFIRM_WORD = 'VERWIJDER';
 
@@ -58,20 +58,6 @@ export function PrivacyCard() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   if (!me || !auth?.user) return null;
-
-  const give = async () => {
-    setBusy(true);
-    try {
-      await recordHealthConsent(me.userId, true);
-      await profileCtx?.refreshProfile();
-      setGiveOpen(false);
-      notify.success('Toestemming gegeven.');
-    } catch (e) {
-      notify.error('Opslaan mislukt. Probeer het opnieuw.', e);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const withdraw = async () => {
     if (!auth.user) return;
@@ -116,6 +102,9 @@ export function PrivacyCard() {
         <Typography sx={{ fontSize: 14 }}>Gezondheidsgegevens</Typography>
         <Typography sx={{ fontSize: 14, color: 'text.secondary', textAlign: 'right' }}>{status}</Typography>
       </Box>
+      {!consent?.given && (
+        <Typography sx={{ fontSize: 13, color: 'text.secondary', mt: 0.5 }}>{HEALTH_CONSENT_WHY}</Typography>
+      )}
       <Box sx={{ mt: 0.5 }}>
         {consent?.given ? (
           <Button size="small" color="inherit" onClick={() => setWithdrawOpen(true)} sx={{ px: 0, textTransform: 'none' }}>
@@ -144,21 +133,7 @@ export function PrivacyCard() {
         </Button>
       </Box>
 
-      {/* Toestemming geven */}
-      <Dialog open={giveOpen} onClose={() => !busy && setGiveOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>Toestemming voor gezondheidsgegevens</DialogTitle>
-        <DialogContent>
-          <HealthConsentExplanation />
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button color="inherit" disabled={busy} onClick={() => setGiveOpen(false)}>
-            Annuleren
-          </Button>
-          <Button variant="contained" disableElevation disabled={busy} onClick={() => void give()}>
-            Ik geef toestemming
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <GiveHealthConsentDialog open={giveOpen} onClose={() => setGiveOpen(false)} />
 
       {/* Toestemming intrekken */}
       <Dialog open={withdrawOpen} onClose={() => !busy && setWithdrawOpen(false)} fullWidth maxWidth="xs">
@@ -166,7 +141,7 @@ export function PrivacyCard() {
         <DialogContent>
           <DialogContentText>
             Je metingen (gewicht, lichaamssamenstelling, omtrek), voortgangsfoto's, rusthartslag en blessures worden verwijderd, ook
-            bij je trainer. Dit kun je niet ongedaan maken. Je trainingen, voeding en lessen blijven gewoon staan.
+            bij je trainer. Dit kun je niet ongedaan maken, en je trainer kan je voortgang daarna niet meer bijhouden. Je trainingen, voeding en lessen blijven gewoon staan.
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
