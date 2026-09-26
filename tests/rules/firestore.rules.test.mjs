@@ -68,6 +68,12 @@ await t('trainer maakt sporter admin → geweigerd', false, updateDoc(doc(as('tr
 await t('trainer maakt zichzelf admin → geweigerd', false, updateDoc(doc(as('trainer1'), 'profiles/trainer1'), { role: 'admin' }));
 await t('trainer koppelt sporter aan zichzelf → mag', true, updateDoc(doc(as('trainer1'), 'profiles/sporter2'), { trainerId: 'trainer1' }));
 await t('trainer werkt rusthartslag van sporter bij → mag', true, updateDoc(doc(as('trainer1'), 'profiles/sporter1'), { restingHrBpm: 60 }));
+// Toestemming voor gezondheidsgegevens (AVG art. 9): alleen de persoon zelf.
+const consent = { given: true, at: '2026-09-26T08:00:00.000Z', version: 1 };
+await t('sporter geeft zelf toestemming voor gezondheidsgegevens → mag', true, updateDoc(doc(as('sporter1'), 'profiles/sporter1'), { healthConsent: consent }));
+await t('trainer zet toestemming namens sporter → geweigerd', false, updateDoc(doc(as('trainer1'), 'profiles/sporter1'), { healthConsent: { ...consent, given: false } }));
+await t('beheerder zet toestemming namens sporter → geweigerd', false, updateDoc(doc(as('admin1'), 'profiles/sporter1'), { healthConsent: { ...consent, given: false } }));
+await t('beheerder zet eigen toestemming → mag', true, updateDoc(doc(as('admin1'), 'profiles/admin1'), { healthConsent: consent }));
 await t('trainer wijzigt profiel van andere trainer → geweigerd', false, updateDoc(doc(as('trainer1'), 'profiles/admin1'), { displayName: 'x' }));
 await t('trainer leest sporterprofiel → mag', true, getDoc(doc(as('trainer1'), 'profiles/sporter2')));
 await t('admin maakt sporter trainer → mag', true, updateDoc(doc(as('admin1'), 'profiles/sporter1'), { role: 'trainer', trainerId: null }));

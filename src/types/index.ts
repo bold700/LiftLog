@@ -479,8 +479,21 @@ export interface Profile {
   leaderboardVisibility?: LeaderboardVisibility;
   /** Taal van de app voor dit account; ontbreekt hij, dan beslist de browser. */
   language?: 'nl' | 'en' | null;
+  /**
+   * Toestemming voor gezondheidsgegevens (AVG art. 9): alleen de persoon zelf zet dit, via de
+   * toestemmingsvraag of Profiel → Account. Ontbreekt het, dan is er nog niets gevraagd.
+   */
+  healthConsent?: HealthConsent | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface HealthConsent {
+  given: boolean;
+  /** ISO-tijdstip van de keuze. */
+  at: string;
+  /** Versie van de toestemmingstekst waarop de keuze is gemaakt. */
+  version: number;
 }
 
 /**

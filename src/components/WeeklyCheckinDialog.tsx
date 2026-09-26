@@ -46,7 +46,8 @@ export function WeeklyCheckinDialog({
       if (!feeling) throw new Error('Geef even aan hoe het ging.');
 
       // Gewicht ook als meting vastleggen: één invoer, op beide plekken bruikbaar.
-      if (weightKg != null) {
+      // Zonder toestemming voor gezondheidsgegevens geen meting; de check-in zelf gaat wel door.
+      if (weightKg != null && me.healthConsent?.given !== false) {
         await saveMeasurement({
           ...emptyMeasurementFields(),
           id: newMeasurementId(),
@@ -99,14 +100,16 @@ export function WeeklyCheckinDialog({
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <DialogTitle>Wekelijkse check-in</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, '&&': { pt: 1.5 } }}>
-        <NumberField
-          label="Gewicht (kg)"
-          decimal
-          value={weight}
-          onChange={setWeight}
-          size="small"
-          helperText="Wordt ook als meting opgeslagen."
-        />
+        {me.healthConsent?.given !== false && (
+          <NumberField
+            label="Gewicht (kg)"
+            decimal
+            value={weight}
+            onChange={setWeight}
+            size="small"
+            helperText="Wordt ook als meting opgeslagen."
+          />
+        )}
         <TextField label="Hoe ging het?" select value={feeling} onChange={(e) => setFeeling(e.target.value)} size="small">
           {FEELINGS.map((f) => (
             <MenuItem key={f} value={String(f)}>

@@ -109,6 +109,13 @@ service cloud.firestore {
       return touchesProtectedProfileFields()
         || request.resource.data.diff(resource.data).affectedKeys().hasAny(['trainerId']);
     }
+    /**
+     * Toestemming voor gezondheidsgegevens (AVG art. 9) geeft alleen de persoon zelf. Een trainer
+     * of beheerder mag die dus nooit namens iemand anders zetten of wijzigen.
+     */
+    function touchesHealthConsent() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(['healthConsent']);
+    }
     /** Zelfs een beheerder mag `platformAdmin` niet vanuit de app zetten of wijzigen. */
     function touchesPlatformAdmin() {
       return request.resource.data.diff(resource.data).affectedKeys().hasAny(['platformAdmin']);
@@ -171,11 +178,13 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && !touchesPlatformAdmin()
         && ((isAdmin() && sameOrg() && writesMyOrg()
-             && request.resource.data.get('orgIds', [myOrg()]).hasAny(myOrgs()))
+             && request.resource.data.get('orgIds', [myOrg()]).hasAny(myOrgs())
+             && (request.auth.uid == userId || !touchesHealthConsent()))
             || (request.auth.uid == userId && !touchesProtectedSelfFields())
             || (isStaffInSameOrg()
                 && resource.data.role == 'sporter'
-                && !touchesProtectedProfileFields()));
+                && !touchesProtectedProfileFields()
+                && !touchesHealthConsent()));
       // Bewust niemand: verwijderen loopt via api/admin-account.mjs met de Admin SDK, dat het
       // login-account en de bijbehorende gegevens in één keer opruimt. Kon je hier je eigen profiel
       // weggooien, dan kon je jezelf daarna in een andere studio opnieuw aanmaken met dezelfde uid.

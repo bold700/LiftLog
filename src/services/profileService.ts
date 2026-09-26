@@ -17,7 +17,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
-import type { Profile, ProfileRole, LeaderboardVisibility, Limitation, LimitationArea } from '../types';
+import type { HealthConsent, Profile, ProfileRole, LeaderboardVisibility, Limitation, LimitationArea } from '../types';
 import { DEFAULT_ORG_ID, orgIdOf, orgIdsOf, requireOrgId } from './orgContext';
 
 const COLLECTION = 'profiles';
@@ -91,9 +91,17 @@ function toProfile(data: Record<string, unknown>, userId: string): Profile {
     createdByAdmin: data.createdByAdmin === true,
     leaderboardVisibility,
     language: data.language === 'nl' || data.language === 'en' ? data.language : null,
+    healthConsent: toHealthConsent(data.healthConsent),
     createdAt: ts(data.createdAt),
     updatedAt: ts(data.updatedAt),
   };
+}
+
+function toHealthConsent(raw: unknown): HealthConsent | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.given !== 'boolean') return null;
+  return { given: r.given, at: typeof r.at === 'string' ? r.at : '', version: Number(r.version) || 1 };
 }
 
 export async function createProfile(
@@ -164,6 +172,7 @@ export async function updateProfile(
       | 'trainerRequested'
       | 'leaderboardVisibility'
       | 'language'
+      | 'healthConsent'
     >
   >
 ): Promise<void> {
