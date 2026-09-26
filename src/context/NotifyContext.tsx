@@ -3,7 +3,7 @@
  * Gebruik: const notify = useNotify(); notify.error('Opslaan mislukt.'); notify.success('Opgeslagen.');
  * Zo hoeft niet elk scherm zijn eigen foutweergave te bouwen en verdwijnen er geen fouten stil.
  */
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Alert, Button, Snackbar } from '@mui/material';
 
 type Severity = 'error' | 'success' | 'info';
@@ -29,11 +29,28 @@ const consoleNotify: Notify = {
   undo: (message) => console.info(message),
 };
 
+type Item = { key: number; severity: Severity; message: string; onUndo?: () => void | Promise<void> };
+
 export function NotifyProvider({ children }: { children: ReactNode }) {
-  const [current, setCurrent] = useState<{ key: number; severity: Severity; message: string; onUndo?: () => void | Promise<void> } | null>(null);
+  const [current, setCurrent] = useState<Item | null>(null);
+  const currentRef = useRef<Item | null>(null);
+  currentRef.current = current;
+  // Meldingen die wachten tot een "Ongedaan maken"-melding weg is: anders verdrong een melding die
+  // direct erna kwam (bijv. "1 les bleef staan") de knop en was er geen weg terug meer.
+  const queueRef = useRef<Item[]>([]);
 
   const show = useCallback((severity: Severity, message: string, onUndo?: () => void | Promise<void>) => {
-    setCurrent({ key: Date.now(), severity, message, onUndo });
+    const item: Item = { key: Date.now() + Math.random(), severity, message, onUndo };
+    if (currentRef.current?.onUndo && !onUndo) {
+      queueRef.current.push(item);
+      return;
+    }
+    queueRef.current = [];
+    setCurrent(item);
+  }, []);
+
+  const close = useCallback(() => {
+    setCurrent(queueRef.current.shift() ?? null);
   }, []);
 
   const value = useMemo<Notify>(
@@ -59,14 +76,14 @@ export function NotifyProvider({ children }: { children: ReactNode }) {
         autoHideDuration={current?.onUndo ? 6000 : Math.min(10000, Math.max(current?.severity === 'error' ? 6000 : 3500, (current?.message.length ?? 0) * 60))}
         onClose={(_, reason) => {
           if (reason === 'clickaway') return;
-          setCurrent(null);
+          close();
         }}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert
           severity={current?.severity ?? 'info'}
           variant="filled"
-          onClose={() => setCurrent(null)}
+          onClose={close}
           action={
             current?.onUndo ? (
               <Button
@@ -75,6 +92,8 @@ export function NotifyProvider({ children }: { children: ReactNode }) {
                 sx={{ fontWeight: 700 }}
                 onClick={() => {
                   const undo = current.onUndo;
+                  // Wat na het verwijderen in de wachtrij stond, gaat over het verwijderen: na terugzetten niet meer tonen.
+                  queueRef.current = [];
                   setCurrent(null);
                   void undo?.();
                 }}

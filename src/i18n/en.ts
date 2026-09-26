@@ -125,6 +125,8 @@ export const en: Messages = {
     deleteConfirm: 'Delete class type "{name}"? Classes already created from it stay as they are.',
     saved: 'Class type saved.',
     deleted: 'Class type deleted.',
+    deletedNamed: 'Class type "{name}" deleted.',
+    restored: 'Class type "{name}" restored.',
     saveFailed: 'Could not save.',
     nameRequired: 'Enter a name.',
     classType: 'Class type',
