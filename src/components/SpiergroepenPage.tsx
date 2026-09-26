@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
-import { Alert, Box, Typography } from '@mui/material';
+import { Alert, Box, Typography, useTheme } from '@mui/material';
 import { useViewedExercises } from '../hooks/useViewedExercises';
 import { getExerciseMuscleMapping } from '../utils/muscleMappingResolver';
 import { countMuscleSessions } from '../utils/muscleSessions';
-import { MuscleFrequencyBody, GREEN_TINTS } from './MuscleFrequencyBody';
+import { MuscleFrequencyBody } from './MuscleFrequencyBody';
+import { muscleTints } from '../theme/muscleTints';
 import { PageLayout } from './layout';
 import { designTokens } from '../theme/designTokens';
 
@@ -15,6 +16,7 @@ const cardSx = () => ({
 /** Figma "Insights · Muscles": links het lichaam met legenda, rechts "Meest getraind" als balken. */
 export const SpiergroepenPage = () => {
   const { exercises, error } = useViewedExercises();
+  const theme = useTheme();
 
   const muscles = useMemo(
     () => countMuscleSessions(exercises, (name) => getExerciseMuscleMapping(name)?.primary ?? []),
@@ -42,7 +44,7 @@ export const SpiergroepenPage = () => {
             <Typography variant="caption" color="text.secondary">
               Minder
             </Typography>
-            {GREEN_TINTS.map((color) => (
+            {muscleTints(theme.palette.mode).map((color) => (
               <Box key={color} sx={{ width: 30, height: 12, borderRadius: '4px', backgroundColor: color }} />
             ))}
             <Typography variant="caption" color="text.secondary">
