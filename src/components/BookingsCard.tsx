@@ -53,7 +53,7 @@ export function BookingsCard({ userId }: { userId: string }) {
   return (
     <Box sx={{ p: 2, mb: 0, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: upcoming.length > 0 ? 1.5 : 0 }}>
-        <Typography variant="subtitle2" fontWeight={600}>
+        <Typography component="h2" sx={{ fontSize: 14, fontWeight: 500, lineHeight: '20px' }}>
           Boekingen
         </Typography>
         <Chip

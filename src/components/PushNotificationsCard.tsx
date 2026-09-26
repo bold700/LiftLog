@@ -76,7 +76,7 @@ export function PushNotificationsCard({ userId }: { userId: string }) {
     <ContentCard>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
         <NotificationsActiveRoundedIcon fontSize="small" />
-        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+        <Typography component="h2" sx={{ fontSize: 14, fontWeight: 500, lineHeight: '20px' }}>
           Meldingen
         </Typography>
       </Box>

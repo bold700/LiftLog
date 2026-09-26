@@ -5,8 +5,9 @@
  * en een dialoog. Betalen gebeurt buiten de app; dit is het overzicht en de afvinklijst.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Alert, Box, Button, Chip, Dialog, DialogContent, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useI18n } from '../../context/I18nContext';
+import { FullScreenDialogTitle } from './FullScreenDialogTitle';
 import { useNotify } from '../../context/NotifyContext';
 import { chargesToCsv, downloadInvoicePdf, getChargesForOrg, getInvoiceLink, getMailStatus, isOverdue, markChargePaid, reopenCharge, saveChargeNote, sendInvoiceEmail, vatSplit, writeOffCharge } from '../../services/chargeService';
 import { copyText, whatsappUrl } from '../../utils/share';
@@ -365,13 +366,10 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
         {filters}
         {list}
         <Dialog open={!!selected} onClose={() => setSelectedId(null)} fullScreen>
-          <DialogTitle>{selected ? nameOf(selected.userId) : ''}</DialogTitle>
+          <FullScreenDialogTitle title={selected ? nameOf(selected.userId) : ''} onClose={() => setSelectedId(null)} />
           <DialogContent>
             <Box sx={{ pt: 1.5 }}>{detail}</Box>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setSelectedId(null)}>{t('common.cancel')}</Button>
-          </DialogActions>
         </Dialog>
       </>
     );

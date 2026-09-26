@@ -20,6 +20,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { useI18n } from '../../context/I18nContext';
+import { FullScreenDialogTitle } from './FullScreenDialogTitle';
 import { useNotify } from '../../context/NotifyContext';
 import { deletePlan, getPlans, newPlanId, savePlan } from '../../services/planService';
 import { NumberField } from '../NumberField';
@@ -383,13 +384,10 @@ export function SubscriptionsPanel({ memberships, credits, createSignal, onChang
         {tiles}
         {list}
         <Dialog open={!!draft} onClose={() => setDraft(null)} fullScreen>
-          <DialogTitle>{isNew ? t('plans.newPlan') : draft?.name}</DialogTitle>
+          <FullScreenDialogTitle title={isNew ? t('plans.newPlan') : draft?.name ?? ''} onClose={() => setDraft(null)} />
           <DialogContent>
             <Box sx={{ pt: 1.5 }}>{editor}</Box>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setDraft(null)}>{t('common.cancel')}</Button>
-          </DialogActions>
         </Dialog>
         {confirm}
       </>

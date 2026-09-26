@@ -30,6 +30,7 @@ import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
 import { useProfile } from '../context/ProfileContext';
 import { useI18n } from '../context/I18nContext';
 import { useViewAs } from '../context/ViewAsContext';
+import { useNotify } from '../context/NotifyContext';
 import { LANGS, type Lang } from '../i18n';
 import { useAuth } from '../context/AuthContext';
 import { updateProfile } from '../services/profileService';
@@ -102,6 +103,7 @@ const radioSx = { my: -0.25, '& .MuiFormControlLabel-label': { fontSize: 14 } } 
 export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
   const profile = useProfile();
   const { t, lang, setLang } = useI18n();
+  const notify = useNotify();
   const colorMode = useColorMode();
   const auth = useAuth();
   const { viewed } = useViewAs();
@@ -515,7 +517,12 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
           Blessures en beperkingen worden niet bijgehouden: er is geen toestemming voor gezondheidsgegevens.
         </Typography>
       ) : (
-        <LimitationsEditor value={limitations} onChange={setLimitations} disabled={saving || !editing} />
+        <LimitationsEditor
+          value={limitations}
+          onChange={setLimitations}
+          disabled={saving || !editing}
+          disabledHint={!editing ? 'Tik op Wijzigen om een bijzonderheid toe te voegen of te verwijderen.' : undefined}
+        />
       )}
     </Box>
   );
@@ -554,7 +561,7 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
         </>
       )}
       <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: editing ? 1.5 : 1 }}>
-        Dezelfde doelen als bij Metingen (gewicht) en Voeding (calorieën en macro's).
+        Dezelfde doelen als bij Inzichten → Metingen (gewicht) en Voeding (calorieën en macro's).
       </Typography>
     </Box>
   );
@@ -588,7 +595,7 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
             disabled={!isPasswordAccount}
             helperText={
               !isPasswordAccount
-                ? 'Beheerd via je aanbieder (Google, etc.).'
+                ? 'Beheerd via je aanbieder (bijv. Google).'
                 : viewed.isOther
                   ? 'Wordt direct gewijzigd, zonder bevestigingsmail.'
                   : 'Na opslaan krijg je een bevestigingslink op het nieuwe adres.'
@@ -620,14 +627,16 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
               fullWidth
             />
           )}
-          {/* Taal: op het profiel, zodat elk apparaat dezelfde keuze laat zien. */}
-          <TextField select label={t('lang.label')} value={langChoice} onChange={(e) => setLangChoice(e.target.value as Lang)} fullWidth>
-            {LANGS.map((l) => (
-              <MenuItem key={l} value={l}>
-                {t(`lang.${l}`)}
-              </MenuItem>
-            ))}
-          </TextField>
+          {/* Taal van een bekeken sporter: hoort bij het formulier. Je eigen taal staat hieronder en werkt meteen. */}
+          {viewed.isOther && (
+            <TextField select label={t('lang.label')} value={langChoice} onChange={(e) => setLangChoice(e.target.value as Lang)} fullWidth>
+              {LANGS.map((l) => (
+                <MenuItem key={l} value={l}>
+                  {t(`lang.${l}`)}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
         </Box>
       ) : (
         <>
@@ -636,12 +645,37 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
               {email}
             </Box>
           </FieldRow>
-          {isPasswordAccount && <FieldRow label="Wachtwoord">••••••••</FieldRow>}
-          <FieldRow label={t('lang.label')}>{t(`lang.${displayLang}`)}</FieldRow>
+          {/* Direct onder E-mail, waar het over gaat (stond eerst onder Taal). */}
           {!isPasswordAccount && (
-            <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 0.5 }}>E-mail wordt beheerd via je aanbieder (Google, etc.).</Typography>
+            <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: -0.25, mb: 0.5 }}>E-mail wordt beheerd via je aanbieder (bijv. Google).</Typography>
           )}
+          {isPasswordAccount && <FieldRow label="Wachtwoord">••••••••</FieldRow>}
+          {viewed.isOther && <FieldRow label={t('lang.label')}>{t(`lang.${displayLang}`)}</FieldRow>}
         </>
+      )}
+      {/* Je eigen taal: meteen actief, net als Weergave, en bewaard op je profiel zodat elk apparaat hem volgt. */}
+      {!viewed.isOther && (
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, minHeight: 34, mt: 1 }}>
+          <Typography sx={{ fontSize: 14 }}>{t('lang.label')}</Typography>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={lang}
+            onChange={(_, v: Lang | null) => {
+              if (!v) return;
+              setLangChoice(v);
+              void setLang(v).catch((e) => notify.error('Taal opslaan mislukt.', e));
+            }}
+            sx={segmentedToggleSx}
+            aria-label={t('lang.label')}
+          >
+            {LANGS.map((l) => (
+              <ToggleButton key={l} value={l}>
+                {t(`lang.${l}`)}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        </Box>
       )}
       {/* Licht/donker: per apparaat en meteen actief, dus los van Wijzigen/Opslaan. */}
       {!viewed.isOther && (

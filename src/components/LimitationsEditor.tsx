@@ -14,13 +14,15 @@ interface LimitationsEditorProps {
   value: Limitation[];
   onChange: (next: Limitation[]) => void;
   disabled?: boolean;
+  /** Uitleg in plaats van een uitgeschakelde knop (bijv. "Tik op Wijzigen …"): een grijze knop zonder reden zegt niets. */
+  disabledHint?: string;
 }
 
 function newId(): string {
   return `lim_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
-export function LimitationsEditor({ value, onChange, disabled }: LimitationsEditorProps) {
+export function LimitationsEditor({ value, onChange, disabled, disabledHint }: LimitationsEditorProps) {
   const [adding, setAdding] = useState(false);
   const [area, setArea] = useState<LimitationArea>('schouder');
   const [severity, setSeverity] = useState<Limitation['severity']>('let-op');
@@ -41,7 +43,7 @@ export function LimitationsEditor({ value, onChange, disabled }: LimitationsEdit
 
   return (
     <Box>
-      <Typography variant="subtitle2" fontWeight={600}>
+      <Typography component="h2" sx={{ fontSize: 14, fontWeight: 500, lineHeight: '20px' }}>
         Bijzonderheden
       </Typography>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
@@ -126,6 +128,10 @@ export function LimitationsEditor({ value, onChange, disabled }: LimitationsEdit
             </Button>
           </Box>
         </Box>
+      ) : disabled && disabledHint ? (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+          {disabledHint}
+        </Typography>
       ) : (
         <Button
           size="small"

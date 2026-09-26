@@ -23,7 +23,7 @@ describe('i18n', () => {
     const t = translator('nl');
     expect(t('admin.openRequests', { count: 1 })).toBe('1 open aanvraag');
     expect(t('admin.openRequests', { count: 3 })).toBe('3 open aanvragen');
-    expect(translate('en', 'admin.creditsLeft', { count: 8 })).toBe('8 left');
+    expect(translate('en', 'admin.creditsLeft', { count: 8 })).toBe('8 credits left');
   });
 
   it('laat een onbekende sleutel zichtbaar staan in plaats van leeg', () => {

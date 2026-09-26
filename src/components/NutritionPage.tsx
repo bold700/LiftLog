@@ -392,13 +392,27 @@ export function NutritionPage() {
     }
   };
 
+  // Wissen gaat meteen (geen extra vraag), maar met "Ongedaan maken": een mis-tik op de telefoon is zo hersteld.
   const handleDelete = async (id: string) => {
+    const removed = allLogs.find((l) => l.id === id);
     try {
       await deleteNutritionLog(id);
     } catch (err) {
       notify.error(t('nutrition.deleteFailed'), err);
+      await loadLogs();
+      return;
     }
     await loadLogs();
+    if (removed) {
+      notify.undo(t('nutrition.deleted', { name: removed.productName }), async () => {
+        try {
+          await saveNutritionLog(removed);
+        } catch (err) {
+          notify.error(t('nutrition.deleteFailed'), err);
+        }
+        await loadLogs();
+      });
+    }
   };
 
   const periodLabel =
@@ -757,18 +771,17 @@ export function NutritionPage() {
                     </AccordionSummary>
                     <AccordionDetails sx={{ px: 0, pt: 0, pb: 0.5 }}>
                       {wide ? (
-                        /* Desktop (Figma): naam, gram en kcal in kolommen; bewerken/verwijderen bij aanwijzen. */
+                        /* Desktop (Figma): naam, gram en kcal in kolommen. Bewerken/verwijderen staan er altijd (ingetogen):
+                           alleen bij aanwijzen tonen was op een touchscreen-laptop onvindbaar. */
                         <Box sx={{ px: 2.5, pb: 1 }}>
                           {items.map((l) => (
                             <Box
                               key={l.id}
                               sx={{
                                 display: 'grid',
-                                gridTemplateColumns: 'minmax(0, 1fr) 60px 70px 64px',
+                                gridTemplateColumns: 'minmax(0, 1fr) 60px 70px 72px',
                                 alignItems: 'center',
-                                minHeight: 28,
-                                '& .row-actions': { opacity: 0, transition: 'opacity 0.15s ease' },
-                                '&:hover .row-actions, &:focus-within .row-actions': { opacity: 1 },
+                                minHeight: 36,
                               }}
                             >
                               <Typography sx={{ fontSize: 13, lineHeight: '18px' }} noWrap title={l.productName}>
@@ -776,12 +789,12 @@ export function NutritionPage() {
                               </Typography>
                               <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{l.grams} g</Typography>
                               <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>{l.kcal} kcal</Typography>
-                              <Box className="row-actions" sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                <IconButton size="small" onClick={() => openEdit(l)} aria-label={t('nutrition.edit')}>
-                                  <EditRoundedIcon sx={{ fontSize: 16 }} />
+                              <Box sx={{ display: 'flex', justifyContent: 'flex-end', color: 'text.secondary' }}>
+                                <IconButton size="small" color="inherit" onClick={() => openEdit(l)} aria-label={t('nutrition.edit')}>
+                                  <EditRoundedIcon sx={{ fontSize: 18 }} />
                                 </IconButton>
-                                <IconButton size="small" onClick={() => handleDelete(l.id)} aria-label={t('nutrition.delete')}>
-                                  <DeleteOutlineRoundedIcon sx={{ fontSize: 16 }} />
+                                <IconButton size="small" color="inherit" onClick={() => handleDelete(l.id)} aria-label={t('nutrition.delete')}>
+                                  <DeleteOutlineRoundedIcon sx={{ fontSize: 18 }} />
                                 </IconButton>
                               </Box>
                             </Box>
@@ -792,12 +805,14 @@ export function NutritionPage() {
                         {items.map((l) => (
                           <ListItem
                             key={l.id}
+                            sx={{ pr: 12 }}
                             secondaryAction={
-                              <Box>
-                                <IconButton edge="end" size="small" onClick={() => openEdit(l)} aria-label={t('nutrition.edit')} sx={{ mr: 0.5 }}>
+                              // Tikdoel 40px (was 28px): op de telefoon raakte je snel de verkeerde knop.
+                              <Box sx={{ display: 'flex', color: 'text.secondary' }}>
+                                <IconButton color="inherit" onClick={() => openEdit(l)} aria-label={t('nutrition.edit')} sx={{ width: 40, height: 40 }}>
                                   <EditRoundedIcon fontSize="small" />
                                 </IconButton>
-                                <IconButton edge="end" size="small" onClick={() => handleDelete(l.id)} aria-label={t('nutrition.delete')}>
+                                <IconButton edge="end" color="inherit" onClick={() => handleDelete(l.id)} aria-label={t('nutrition.delete')} sx={{ width: 40, height: 40 }}>
                                   <DeleteOutlineRoundedIcon fontSize="small" />
                                 </IconButton>
                               </Box>

@@ -22,6 +22,7 @@ import {
   Typography,
 } from '@mui/material';
 import DeleteForeverRoundedIcon from '@mui/icons-material/DeleteForeverRounded';
+import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import { apiUrl } from '../utils/apiOrigin';
 import { useAuth } from '../context/AuthContext';
@@ -44,6 +45,9 @@ function formatDate(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' });
 }
+
+/** Tekstknoppen links uitgelijnd met de tekst, maar met een volle hover/tikvlakte (px: 0 knipte die af). */
+const actionSx = { px: 1, ml: -1, minHeight: 36, textTransform: 'none' } as const;
 
 export function PrivacyCard() {
   const auth = useAuth();
@@ -124,11 +128,11 @@ export function PrivacyCard() {
       )}
       <Box sx={{ mt: 0.5 }}>
         {consent?.given ? (
-          <Button size="small" color="inherit" onClick={() => setWithdrawOpen(true)} sx={{ px: 0, textTransform: 'none' }}>
+          <Button size="small" color="inherit" onClick={() => setWithdrawOpen(true)} sx={actionSx}>
             Toestemming intrekken
           </Button>
         ) : (
-          <Button size="small" onClick={() => setGiveOpen(true)} sx={{ px: 0, textTransform: 'none' }}>
+          <Button size="small" onClick={() => setGiveOpen(true)} sx={actionSx}>
             Toestemming geven
           </Button>
         )}
@@ -140,7 +144,7 @@ export function PrivacyCard() {
           startIcon={<DownloadRoundedIcon />}
           disabled={downloading}
           onClick={() => void download()}
-          sx={{ px: 0, textTransform: 'none' }}
+          sx={actionSx}
         >
           {downloading ? 'Bezig met ophalen…' : 'Download mijn gegevens'}
         </Button>
@@ -150,7 +154,8 @@ export function PrivacyCard() {
           href={apiUrl('/privacy')}
           target="_blank"
           rel="noopener"
-          sx={{ px: 0, textTransform: 'none' }}
+          startIcon={<OpenInNewRoundedIcon />}
+          sx={actionSx}
         >
           Privacyverklaring
         </Button>
@@ -163,7 +168,7 @@ export function PrivacyCard() {
             setDeleteError(null);
             setDeleteOpen(true);
           }}
-          sx={{ px: 0, textTransform: 'none' }}
+          sx={actionSx}
         >
           Account verwijderen
         </Button>

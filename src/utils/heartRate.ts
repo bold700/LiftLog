@@ -52,6 +52,7 @@ export function heartRateZones(ageYears: number | null | undefined, restingHr: n
     maxHr,
     restingHr: rest,
     method,
-    zones: ZONE_DEFS.map((z) => ({ ...z, lowBpm: bpm(z.low), highBpm: bpm(z.high) })),
+    // Een zone begint één slag boven de vorige, zodat een grens (bijv. 140) maar in één zone valt.
+    zones: ZONE_DEFS.map((z, i) => ({ ...z, lowBpm: i === 0 ? bpm(z.low) : bpm(ZONE_DEFS[i - 1].high) + 1, highBpm: bpm(z.high) })),
   };
 }

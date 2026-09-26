@@ -23,6 +23,7 @@ import {
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useI18n } from '../../context/I18nContext';
+import { FullScreenDialogTitle } from './FullScreenDialogTitle';
 import { useNotify } from '../../context/NotifyContext';
 import { useProfile } from '../../context/ProfileContext';
 import {
@@ -179,6 +180,18 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
       const updated = rooms.filter((r) => r !== name);
       await saveOrgRooms(orgId, updated);
       setRooms(updated);
+      // Eén tik op het kruisje wiste de ruimte meteen; nu met een weg terug (M3: ongedaan maken i.p.v. extra vraag).
+      notify.undo(t('classTypes.rooms.removed', { name }), async () => {
+        try {
+          const current = (await getOrg(orgId))?.rooms ?? [];
+          if (current.some((r) => r.toLowerCase() === name.toLowerCase())) return;
+          const restored = [...current, name].sort((a, b) => a.localeCompare(b));
+          await saveOrgRooms(orgId, restored);
+          setRooms(restored);
+        } catch (e) {
+          notify.error(t('classTypes.saveFailed'), e);
+        }
+      });
     } catch (e) {
       notify.error(t('classTypes.saveFailed'), e);
     } finally {
@@ -342,6 +355,7 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         <Box sx={{ display: 'flex', gap: 1 }}>
           <TextField
             size="small"
+            label={t('classTypes.rooms.newLabel')}
             placeholder={t('classTypes.rooms.placeholder')}
             value={newRoom}
             onChange={(e) => setNewRoom(e.target.value)}
@@ -599,15 +613,12 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         {roomsManager}
         {list}
         <Dialog open={!!draft} onClose={() => setDraft(null)} fullScreen>
-          <DialogTitle>{isNew ? t('classTypes.newType') : draft?.name}</DialogTitle>
+          <FullScreenDialogTitle title={isNew ? t('classTypes.newType') : draft?.name ?? ''} onClose={() => setDraft(null)} />
           {/* Eigen Box voor de ruimte: MUI zet padding-top van DialogContent na een titel op 0, en dan
               valt het label van het eerste veld half weg. */}
           <DialogContent>
             <Box sx={{ pt: 1.5 }}>{editor}</Box>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setDraft(null)}>{t('common.cancel')}</Button>
-          </DialogActions>
         </Dialog>
         {confirm}
       </>

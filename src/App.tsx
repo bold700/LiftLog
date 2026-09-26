@@ -253,7 +253,8 @@ function AppContent() {
       Workout aanmaken
     </MenuItem>
   ) : null;
-  const floating = !addOpen && activeTab !== TAB_BEHEER ? (
+  // Geen "+" op Beheer en in de Assistent: daar lag hij over de acties en het invoerveld.
+  const floating = !addOpen && activeTab !== TAB_BEHEER && activeTab !== TAB_ASSISTENT ? (
         <>
           <Fab
             aria-label="Log toevoegen"
