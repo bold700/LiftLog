@@ -1,0 +1,158 @@
+# De iPhone- en Android-app van VORM, uit dezelfde code als de website.
+#
+# - Bij een pull request die iets aan de apps verandert: bouwen zonder ondertekening, zodat een
+#   kapotte native wijziging meteen opvalt (Android op Linux, iOS op een Mac van GitHub).
+# - Handmatig (Actions → Apps → Run workflow): een ondertekende build uploaden naar TestFlight en/of
+#   de interne test van Google Play. Vereist de secrets en variabelen uit docs/ACTIELIJST-APPS.md.
+name: Apps
+
+on:
+  pull_request:
+    paths:
+      - 'ios/**'
+      - 'android/**'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/native.yml'
+  workflow_dispatch:
+    inputs:
+      upload_ios:
+        description: 'iOS-build uploaden naar TestFlight'
+        type: boolean
+        default: true
+      upload_android:
+        description: 'Android-build uploaden naar Google Play (interne test)'
+        type: boolean
+        default: true
+
+# De web-app in de apps praat met de productie-API; de Firebase-config is dezelfde als op Vercel
+# (openbare waarden, staan ook in de website). Zonder variabelen bouwt hij met een nep-config: prima om
+# te controleren of het compileert, niet om te uploaden.
+env:
+  VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY || 'ci' }}
+  VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN || 'ci.firebaseapp.com' }}
+  VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID || 'ci' }}
+  VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET || 'ci.appspot.com' }}
+  VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID || '1' }}
+  VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID || '1:1:web:1' }}
+  # Elke upload een hoger buildnummer (iOS); Android krijgt 20000 + dit nummer als versionCode.
+  BUILD_NUMBER: ${{ github.run_number }}
+
+jobs:
+  android:
+    name: Android
+    if: github.event_name == 'pull_request' || inputs.upload_android
+    runs-on: ubuntu-latest
+    env:
+      HAS_PLAY_KEY: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - run: npm run build:native
+      - run: npx cap sync android
+
+      - name: Bouwen (zonder ondertekening)
+        if: github.event_name == 'pull_request'
+        working-directory: android
+        run: ./gradlew assembleDebug -PskipWebBuild --no-daemon
+
+      - name: Uploadsleutel klaarzetten
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+        run: |
+          test -n "$KEYSTORE_B64" || { echo "::error::Secret ANDROID_UPLOAD_KEYSTORE_B64 ontbreekt (zie docs/ACTIELIJST-APPS.md)"; exit 1; }
+          mkdir -p android/keystore
+          echo "$KEYSTORE_B64" | base64 --decode > android/keystore/liftlog-release.keystore
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\n' "$KEYSTORE_PASSWORD" "$KEYSTORE_PASSWORD" "$KEY_ALIAS" > keystore.properties
+
+      - name: Ondertekende bundle bouwen
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: android
+        run: VERSION_CODE=$((20000 + BUILD_NUMBER)) ./gradlew bundleRelease -PskipWebBuild --no-daemon
+
+      # Google wil de allereerste bundle met de hand in de Play Console: daarom staat hij ook hier
+      # om te downloaden. Daarna gaat het vanzelf via de stap hieronder.
+      - name: Bundle bewaren
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vorm-android-${{ github.run_number }}
+          path: android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Uploaden naar Google Play (interne test)
+        if: github.event_name == 'workflow_dispatch' && env.HAS_PLAY_KEY == 'true'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.bold700.vorm
+          releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
+
+  ios:
+    name: iOS
+    if: github.event_name == 'pull_request' || inputs.upload_ios
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build:native
+      - run: npx cap sync ios
+
+      - name: Bouwen voor de simulator (zonder ondertekening)
+        if: github.event_name == 'pull_request'
+        run: |
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build | tail -n 40
+          exit ${PIPESTATUS[0]}
+
+      - name: App Store Connect-sleutel klaarzetten
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          KEY_P8: ${{ secrets.APPSTORE_KEY_P8 }}
+          KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+        run: |
+          test -n "$KEY_P8" || { echo "::error::Secret APPSTORE_KEY_P8 ontbreekt (zie docs/ACTIELIJST-APPS.md)"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s\n' "$KEY_P8" > "$RUNNER_TEMP/keys/AuthKey_$KEY_ID.p8"
+
+      - name: Archiveren en uploaden naar TestFlight
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+        run: |
+          test -n "$TEAM_ID" || { echo "::error::Variabele APPLE_TEAM_ID ontbreekt (zie docs/ACTIELIJST-APPS.md)"; exit 1; }
+          AUTH=(-allowProvisioningUpdates
+                -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_$KEY_ID.p8"
+                -authenticationKeyID "$KEY_ID"
+                -authenticationKeyIssuerID "$ISSUER_ID")
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            DEVELOPMENT_TEAM="$TEAM_ID" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            "${AUTH[@]}" archive | tail -n 40
+          test ${PIPESTATUS[0]} -eq 0
+          cp ios/App/ExportOptions.plist "$RUNNER_TEMP/ExportOptions.plist"
+          /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" "$RUNNER_TEMP/ExportOptions.plist"
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export" \
+            "${AUTH[@]}" | tail -n 40
+          test ${PIPESTATUS[0]} -eq 0

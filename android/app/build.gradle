@@ -1,16 +1,16 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "com.vanas.liftlog"
+    namespace "com.bold700.vorm"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.vanas.liftlog"
+        applicationId "com.bold700.vorm"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // Play Store vereist dat versionCode altijd oploopt.
-        // We gebruiken een future-proof schema: major*10000 + minor*100 + patch (1.2.15 -> 10215)
-        versionCode 10300
-        versionName "1.3.0"
+        // Play Store vereist dat versionCode altijd oploopt. Lokaal: major*10000 + minor*100 + patch
+        // (1.0.0 -> 10000); de bouwstap in GitHub (native.yml) geeft elke upload een hoger nummer mee.
+        versionCode((System.getenv("VERSION_CODE") ?: "10000") as Integer)
+        versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -73,15 +73,20 @@ def webAppDir = file("$rootDir/..")               // repo root (één niveau bov
 def webDistDir = file("$webAppDir/dist")          // Vite output
 def assetsPublicDir = file("$projectDir/src/main/assets/public")
 
+// Bouwt de web-app met de juiste API-origin (build:native). Werkt op macOS, Linux en Windows; overslaan
+// met -PskipWebBuild als de web-app al gebouwd en gesynct is (zoals in de GitHub-bouwstap).
+def isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
 tasks.register("npmBuild", Exec) {
     workingDir webAppDir
-    commandLine "cmd", "/c", "npm", "run", "build"
+    commandLine(isWindows ? ["cmd", "/c", "npm", "run", "build:native"] : ["npm", "run", "build:native"])
+    onlyIf { !project.hasProperty("skipWebBuild") }
 }
 
 tasks.register("copyWebAssets", Copy) {
     dependsOn "npmBuild"
     from(webDistDir)
     into(assetsPublicDir)
+    onlyIf { !project.hasProperty("skipWebBuild") }
     doFirst {
         delete assetsPublicDir
     }

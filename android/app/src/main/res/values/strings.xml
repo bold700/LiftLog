@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">LiftLog</string>
-    <string name="title_activity_main">LiftLog</string>
-    <string name="package_name">com.vanas.liftlog</string>
-    <string name="custom_url_scheme">com.vanas.liftlog</string>
+    <string name="app_name">VORM</string>
+    <string name="title_activity_main">VORM</string>
+    <string name="package_name">com.bold700.vorm</string>
+    <string name="custom_url_scheme">com.bold700.vorm</string>
 </resources>

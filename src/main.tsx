@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
+import { initLiveUpdates } from './native/liveUpdate'
 
 // Zorg ervoor dat de document title correct is
 if (typeof document !== 'undefined') {
@@ -40,6 +41,9 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
     }
   });
 }
+
+// iPhone/Android-app: nieuwe web-versies ophalen zonder App Store (doet niets in de browser).
+void initLiveUpdates().catch((e) => console.warn('[live update]', e));
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

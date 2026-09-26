@@ -4,10 +4,19 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 const isGitHubPages = process.env.GITHUB_PAGES === 'true';
 
+// Versie van de web-bundel voor live updates in de apps (src/native/liveUpdate.ts). Dezelfde commit
+// geeft op Vercel en in de GitHub-bouwstap dezelfde versie, zodat een verse app niet meteen opnieuw
+// downloadt wat hij al heeft.
+const appBundleVersion =
+  (process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || '').slice(0, 12) || `dev-${Date.now()}`;
+
 export default defineConfig({
   // Default voor app / Play Store builds: root ('/')
   // Voor GitHub Pages: build met GITHUB_PAGES=true npm run build
   base: isGitHubPages ? '/LiftLog/' : '/',
+  define: {
+    __APP_BUNDLE_VERSION__: JSON.stringify(appBundleVersion),
+  },
   plugins: [
     react(),
     VitePWA({

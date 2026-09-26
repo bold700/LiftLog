@@ -122,7 +122,7 @@ npm run cap:open:ios
 ### Probleem: "Bundle identifier already exists"
 **Oplossing**: 
 - Wijzig de Bundle Identifier in Xcode naar iets unieks
-- Bijvoorbeeld: `com.vanas.liftlog.dev`
+- Bijvoorbeeld: `com.bold700.vorm.dev`
 
 ## 📝 Checklist
 

@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   // Houd dit gelijk aan Android applicationId / iOS bundle id
-  appId: 'com.vanas.liftlog',
+  appId: 'com.bold700.vorm',
   appName: 'VORM',
   webDir: 'dist',
   server: {
@@ -21,6 +21,13 @@ const config: CapacitorConfig = {
       showSpinner: false,
       iosSpinnerStyle: 'small',
       spinnerColor: '#999999'
+    },
+    // Live updates (src/native/liveUpdate.ts): wij bepalen zelf wanneer er een nieuwe web-versie
+    // komt, vanaf onze eigen server. Geen Capgo-cloud, geen statistieken naar buiten.
+    CapacitorUpdater: {
+      autoUpdate: false,
+      statsUrl: '',
+      appReadyTimeout: 15000,
     },
     StatusBar: {
       style: 'dark',
