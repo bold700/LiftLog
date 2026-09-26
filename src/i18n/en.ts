@@ -150,6 +150,7 @@ export const en: Messages = {
       adminOnly: 'Only an admin can add or remove rooms.',
       duplicate: 'That room already exists.',
       removed: 'Room "{name}" deleted.',
+      restored: 'Room "{name}" restored.',
       newLabel: 'New room',
     },
     schedule: {

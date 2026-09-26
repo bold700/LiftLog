@@ -4,7 +4,7 @@
  * tikken opent het paneel als dialoog. De knop "Nieuwe lessoort" staat in de kop van Beheer en
  * geeft via `createSignal` door dat er een lege lessoort open moet.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -119,6 +119,8 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
   const isAdmin = profile?.profile?.role === 'admin';
   const orgId = profile?.activeOrgId ?? null;
   const [rooms, setRooms] = useState<string[]>([]);
+  const roomsRef = useRef<string[]>([]);
+  roomsRef.current = rooms;
   const [newRoom, setNewRoom] = useState('');
   const [savingRoom, setSavingRoom] = useState(false);
 
@@ -182,13 +184,17 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
       setRooms(updated);
       // Eén tik op het kruisje wiste de ruimte meteen; nu met een weg terug (M3: ongedaan maken i.p.v. extra vraag).
       notify.undo(t('classTypes.rooms.removed', { name }), async () => {
+        // Uit de actuele lijst in het scherm (ref), niet opnieuw uit de database: dan telt een ruimte
+        // die je intussen hebt toegevoegd mee en hangt het terugzetten niet af van een extra leesactie.
+        const current = roomsRef.current;
+        if (current.some((r) => r.toLowerCase() === name.toLowerCase())) return;
+        const restored = [...current, name].sort((a, b) => a.localeCompare(b));
+        setRooms(restored);
         try {
-          const current = (await getOrg(orgId))?.rooms ?? [];
-          if (current.some((r) => r.toLowerCase() === name.toLowerCase())) return;
-          const restored = [...current, name].sort((a, b) => a.localeCompare(b));
           await saveOrgRooms(orgId, restored);
-          setRooms(restored);
+          notify.success(t('classTypes.rooms.restored', { name }));
         } catch (e) {
+          setRooms(current);
           notify.error(t('classTypes.saveFailed'), e);
         }
       });

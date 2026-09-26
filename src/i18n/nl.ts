@@ -152,6 +152,7 @@ export const nl = {
       adminOnly: 'Alleen een beheerder kan ruimtes toevoegen of verwijderen.',
       duplicate: 'Die ruimte bestaat al.',
       removed: 'Ruimte "{name}" verwijderd.',
+      restored: 'Ruimte "{name}" teruggezet.',
       newLabel: 'Nieuwe ruimte',
     },
     schedule: {

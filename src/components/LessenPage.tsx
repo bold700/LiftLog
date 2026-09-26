@@ -33,6 +33,7 @@ import {
   bookClass,
   cancelBooking,
   cancelClass,
+  createClass,
   deleteClass,
   restoreClass,
   SESSION_KIND_COLORS,
@@ -312,6 +313,18 @@ export function LessenPage() {
         if (cls.classTypeId) await cancelClass(cls.id);
         else await deleteClass(cls.id);
         await load();
+        // Per ongeluk op de verkeerde les getikt: meteen terug te zetten (afgelast → herstellen,
+        // losse les → opnieuw aanmaken met dezelfde gegevens).
+        notify.undo(cls.classTypeId ? `${cls.title} afgelast.` : `${cls.title} verwijderd.`, async () => {
+          try {
+            if (cls.classTypeId) await restoreClass(cls.id);
+            else await createClass(cls);
+            notify.success('Les teruggezet.');
+          } catch (e) {
+            notify.error(e instanceof Error ? e.message : 'Les terugzetten mislukt');
+          }
+          await load();
+        });
       } catch (e) {
         notify?.error(e instanceof Error ? e.message : 'Les verwijderen mislukt');
       } finally {
@@ -439,7 +452,8 @@ export function LessenPage() {
               <GroupRoundedIcon fontSize="small" />
             </IconButton>
           )}
-          {isStaff && !cls.cancelledAt && (
+          {/* Een begonnen of voorbije les blijft staan: dat is de geschiedenis (wie was er, wat is er gegeven). */}
+          {isStaff && !cls.cancelledAt && !started && (
             <IconButton size="small" onClick={() => setCancelConfirmClass(cls)} disabled={busy} aria-label="Les verwijderen">
               <DeleteOutlineRoundedIcon fontSize="small" />
             </IconButton>
