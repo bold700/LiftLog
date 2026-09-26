@@ -138,9 +138,12 @@ import BodyBackUnderarmLevel5 from '../assets/body/levels/back levels/Body Back 
 // Basis body SVG's
 import BodyBackSvg from '../assets/body/Body Back.svg';
 import BodyFrontSvg from '../assets/body/Body Front.svg'; // Gebruikt als base voor voorkant body outline
+import { BodyLayerImg } from './BodyLayerImg';
+import { levelForFrequency } from '../utils/muscleLevel';
 
-// Groentinten - level 1 (lichtste) tot level 5 (donkerste)
-export const GREEN_TINTS = ['#D0EABF', '#A5C392', '#799A64', '#4B6738', '#3D532E'];
+// Groentinten - level 1 (lichtste) tot level 5 (donkerste); in de donkere modus omgedraaid.
+export { GREEN_TINTS } from '../theme/muscleTints';
+import { GREEN_TINTS } from '../theme/muscleTints';
 
 // Mapping van spiergroep namen naar level SVG arrays (level 1-5)
 const muscleGroupToLevelSvgs: Record<string, string[]> = {
@@ -228,25 +231,9 @@ const muscleGroupToLevelSvgs: Record<string, string[]> = {
 /** Re-export voor backward compatibility */
 export { getDisplayName } from '../utils/muscleNames';
 
-/**
- * Krijg het level (1-5) voor een gegeven frequentie
- * Meest getraind = level 5 (donkerste)
- * Minder getraind = lichtere levels
- */
-const getLevelForFrequency = (frequency: number, maxFrequency: number, sortedFrequencies: number[]): number => {
-  if (frequency === 0) return 0;
-  if (maxFrequency === 0) return 1;
-  
-  // Vind de positie van deze frequentie in de gesorteerde lijst (hoog naar laag)
-  const rank = sortedFrequencies.indexOf(frequency);
-  
-  // Map rank naar level (1-5)
-  // Rank 0 (meest getraind) = level 5 (donkerste)
-  // Lagere rank = lichtere levels
-  const level = Math.floor((rank / Math.max(1, sortedFrequencies.length - 1)) * 4) + 1;
-  
-  return Math.max(1, Math.min(5, level));
-};
+/** Level (1-5) voor een frequentie: meest getraind = level 5 (zie utils/muscleLevel.ts). */
+const getLevelForFrequency = (frequency: number, _maxFrequency: number, sortedFrequencies: number[]): number =>
+  levelForFrequency(frequency, sortedFrequencies);
 
 /**
  * Krijg de kleur voor een gegeven frequentie (voor pie charts)
@@ -432,8 +419,7 @@ export const MuscleFrequencyBody = ({ sinceDays, size = 350, aspectRatio = '1 / 
             }}
           >
             {/* Level SVG - al gekleurd */}
-            <Box
-              component="img"
+            <BodyLayerImg
               src={svg}
               alt={muscle}
               sx={{
@@ -477,8 +463,7 @@ export const MuscleFrequencyBody = ({ sinceDays, size = 350, aspectRatio = '1 / 
         }}
       >
         {/* Basis voorkant body */}
-        <Box
-          component="img"
+        <BodyLayerImg
           src={BodyFrontSvg}
           alt="body front"
           sx={{
@@ -508,8 +493,7 @@ export const MuscleFrequencyBody = ({ sinceDays, size = 350, aspectRatio = '1 / 
         }}
       >
         {/* Basis achterkant body */}
-        <Box
-          component="img"
+        <BodyLayerImg
           src={BodyBackSvg}
           alt="body back"
           sx={{

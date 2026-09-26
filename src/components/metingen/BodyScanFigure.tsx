@@ -4,8 +4,9 @@
 // (voorkant: de rechterkant van de sporter staat links in beeld).
 import { Box, Typography } from '@mui/material';
 import BodyFrontSvg from '../../assets/body/Body Front.svg';
-import { GREEN_TINTS } from '../MuscleFrequencyBody';
+import { muscleTints } from '../../theme/muscleTints';
 import { BODY_SCAN_SEGMENTS, segmentLevel, type BodyScan, type BodyScanSegment, type BodyScanSegmentKey } from '../../utils/bodyScan';
+import { BodyLayerImg } from '../BodyLayerImg';
 
 /** Alle laag-SVG's van de voorkant in één keer, op bestandsnaam (bijv. "Biceps Primary Level 3"). */
 const LEVEL_SVGS = import.meta.glob('../../assets/body/levels/front levels/* Primary Level *.svg', {
@@ -48,7 +49,7 @@ const LAYER_SX = {
 /** Gekleurde laag over de basisillustratie; `side` snijdt de laag af op de middellijn van het lichaam. */
 function Overlay({ src, side }: { src: string; side?: 'viewerLeft' | 'viewerRight' }) {
   const clipPath = side === 'viewerLeft' ? 'inset(0 50% 0 0)' : side === 'viewerRight' ? 'inset(0 0 0 50%)' : undefined;
-  return <Box component="img" src={src} alt="" aria-hidden sx={{ ...LAYER_SX, clipPath }} />;
+  return <BodyLayerImg src={src} alt="" ariaHidden sx={{ ...LAYER_SX, clipPath }} />;
 }
 
 function SegmentLabel({ segKey, seg, align }: { segKey: BodyScanSegmentKey; seg: BodyScanSegment; align: 'left' | 'right' | 'center' }) {
@@ -61,7 +62,7 @@ function SegmentLabel({ segKey, seg, align }: { segKey: BodyScanSegmentKey; seg:
         {label}
       </Typography>
       <Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start' }}>
-        {level != null && <Box component="span" sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: GREEN_TINTS[level - 1], flex: '0 0 auto' }} />}
+        {level != null && <Box component="span" sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: (t) => muscleTints(t.palette.mode)[level - 1], flex: '0 0 auto' }} />}
         {fmt(seg.muscleKg)}
       </Typography>
       <Typography variant="caption" sx={{ display: 'block', whiteSpace: 'nowrap' }}>
@@ -93,7 +94,7 @@ export function BodyScanFigure({ scan }: { scan: BodyScan }) {
       <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(110px, 34%) minmax(0, 1fr)', columnGap: 1, alignItems: 'start' }}>
         {/* Illustratie in het midden, over twee rijen */}
         <Box sx={{ gridColumn: 2, gridRow: '1 / span 2', position: 'relative', aspectRatio: `${CROP_W} / ${SVG_H}`, width: '100%', overflow: 'hidden' }}>
-          <Box component="img" src={BodyFrontSvg} alt="Lichaam, voorkant" sx={LAYER_SX} />
+          <BodyLayerImg src={BodyFrontSvg} alt="Lichaam, voorkant" sx={LAYER_SX} />
           {overlays.map((o, i) => (
             <Overlay key={`${o.src}-${o.side ?? 'both'}-${i}`} src={o.src} side={o.side} />
           ))}

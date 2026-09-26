@@ -68,6 +68,7 @@ import BodyBackObliquesLevel1 from '../assets/body/levels/back levels/Body Back 
 import BodyBackTricpesLevel1 from '../assets/body/levels/back levels/Body Back Tricpes Level 1.svg';
 import BodyBackUnderarmLevel1 from '../assets/body/levels/back levels/Body Back Underarm Level 1.svg';
 import { NumberField } from './NumberField';
+import { BodyLayerImg } from './BodyLayerImg';
 
 // Mapping van spiergroep display namen naar Level 1 SVG's (voorkant)
 // Alleen spiergroepen die daadwerkelijk op de voorkant zitten
@@ -593,8 +594,7 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
                 }}
               >
                 {/* Base body outline */}
-                <Box
-                  component="img"
+                <BodyLayerImg
                   src={BodyFrontSvg}
                   alt="body front"
                   sx={{
@@ -613,9 +613,8 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
                 {displayedMuscleGroups
                   .filter(muscle => frontMuscleGroups.includes(muscle) && frontMuscleToSvg[muscle])
                   .map((muscle, index) => (
-                    <Box
+                    <BodyLayerImg
                       key={`front-${muscle}-${index}`}
-                      component="img"
                       src={frontMuscleToSvg[muscle]}
                       alt={muscle}
                       sx={{
@@ -649,8 +648,7 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
                 }}
               >
                 {/* Base body outline */}
-                <Box
-                  component="img"
+                <BodyLayerImg
                   src={BodyBackSvg}
                   alt="body back"
                   sx={{
@@ -669,9 +667,8 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
                 {displayedMuscleGroups
                   .filter(muscle => backMuscleGroups.includes(muscle) && backMuscleToSvg[muscle])
                   .map((muscle, index) => (
-                    <Box
+                    <BodyLayerImg
                       key={`back-${muscle}-${index}`}
-                      component="img"
                       src={backMuscleToSvg[muscle]}
                       alt={muscle}
                       sx={{
