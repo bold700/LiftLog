@@ -31,7 +31,7 @@ import { getAdmin } from './_lib/firebaseAdmin.mjs';
 import { amsterdamDate } from './_lib/classReminders.mjs';
 
 /** Versie van de toestemmingstekst voor gezondheidsgegevens (zie src/components/HealthConsentDialog.tsx). */
-const HEALTH_CONSENT_VERSION = 1;
+const HEALTH_CONSENT_VERSION = 2;
 
 function json(res, status, body) {
   const payload = JSON.stringify(body);

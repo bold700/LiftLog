@@ -11,10 +11,11 @@
  * Geen vooraf aangevinkt vakje (telt niet als toestemming); het is een bewuste keuze met twee knoppen.
  */
 import { useState } from 'react';
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Typography } from '@mui/material';
+import { Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Typography } from '@mui/material';
+import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
-import { HEALTH_CONSENT_VERSION, recordHealthConsent } from '../services/privacyService';
+import { HEALTH_CONSENT_VERSION, recordHealthConsent, withdrawHealthConsent } from '../services/privacyService';
 import type { Profile } from '../types';
 
 /** Moet deze persoon de vraag (nog) krijgen? Alleen sporters; trainers en beheerders vullen dit niet voor zichzelf in. */
@@ -37,8 +38,9 @@ export function HealthConsentExplanation() {
         bodyscan), omtrekmaten, voortgangsfoto's, hartslag en blessures.
       </Typography>
       <Typography variant="body2">
-        Die zijn alleen zichtbaar voor jou, je trainer en je studio, en worden gebruikt om je training te begeleiden. We delen ze niet
-        met anderen en gebruiken ze niet voor reclame.
+        Die zijn alleen zichtbaar voor jou, je trainer en je studio, en worden gebruikt om je training te begeleiden. We verkopen ze
+        niet en gebruiken ze niet voor reclame. Maakt je trainer een schema met de AI-hulp, dan gaat wat de trainer daarvoor invult
+        (zoals een blessure) naar de AI-dienst OpenAI, die het niet gebruikt om zijn AI mee te trainen.
       </Typography>
       <Typography variant="body2" sx={{ fontWeight: 500 }}>
         {HEALTH_CONSENT_WHY}
@@ -94,27 +96,59 @@ export function GiveHealthConsentDialog({ open, onClose }: { open: boolean; onCl
 }
 
 export function HealthConsentDialog() {
+  const auth = useAuth();
   const profileCtx = useProfile();
   const notify = useNotify();
   const me = profileCtx?.profile ?? null;
   const [busy, setBusy] = useState(false);
   const [answered, setAnswered] = useState(false);
+  /** "Liever niet" geklikt: eerst zeggen wat er gebeurt, dan pas doen. */
+  const [confirmNo, setConfirmNo] = useState(false);
 
   if (answered || !needsHealthConsentQuestion(me)) return null;
 
-  const choose = async (given: boolean) => {
-    if (!me) return;
+  const run = async (action: () => Promise<void>) => {
     setBusy(true);
     try {
-      await recordHealthConsent(me.userId, given);
+      await action();
       setAnswered(true);
       await profileCtx?.refreshProfile();
     } catch (e) {
-      notify.error('Opslaan mislukt. Probeer het opnieuw.', e);
+      notify.error(e instanceof Error && e.message ? e.message : 'Opslaan mislukt. Probeer het opnieuw.', e);
     } finally {
       setBusy(false);
     }
   };
+
+  const yes = () => run(() => recordHealthConsent(me!.userId, true));
+  // Nee: geen toestemming, dus ook niets bewaren wat er al stond (metingen, foto's, rusthartslag, blessures).
+  const no = () =>
+    run(async () => {
+      if (!auth?.user) throw new Error('Je bent niet ingelogd.');
+      await withdrawHealthConsent(auth.user);
+    });
+
+  if (confirmNo) {
+    return (
+      <Dialog open fullWidth maxWidth="xs" disableEscapeKeyDown aria-labelledby="health-consent-title">
+        <DialogTitle id="health-consent-title">Zonder toestemming verder?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Je trainer kan je gewicht, metingen en voortgang dan niet bijhouden. Metingen, voortgangsfoto's, rusthartslag en
+            blessures die al waren vastgelegd, worden verwijderd. Lessen boeken, trainen en je voeding bijhouden blijft gewoon werken.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, flexWrap: 'wrap', gap: 1 }}>
+          <Button color="inherit" disabled={busy} onClick={() => void no()}>
+            {busy ? 'Bezig…' : 'Ja, zonder toestemming'}
+          </Button>
+          <Button variant="contained" disableElevation disabled={busy} onClick={() => setConfirmNo(false)}>
+            Terug
+          </Button>
+        </DialogActions>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open fullWidth maxWidth="xs" disableEscapeKeyDown aria-labelledby="health-consent-title">
@@ -123,10 +157,10 @@ export function HealthConsentDialog() {
         <HealthConsentExplanation />
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, flexWrap: 'wrap', gap: 1 }}>
-        <Button color="inherit" disabled={busy} onClick={() => void choose(false)}>
+        <Button color="inherit" disabled={busy} onClick={() => setConfirmNo(true)}>
           Liever niet
         </Button>
-        <Button variant="contained" disableElevation disabled={busy} onClick={() => void choose(true)}>
+        <Button variant="contained" disableElevation disabled={busy} onClick={() => void yes()}>
           Ik geef toestemming
         </Button>
       </DialogActions>

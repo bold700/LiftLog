@@ -7,6 +7,7 @@
  * wettelijk moet bewaren. Een boeking die blijft staan houdt ook een plek in de les bezet.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 
 let store = {};
 let currentUid = 'bas';
@@ -182,9 +183,16 @@ describe('toestemming voor gezondheidsgegevens intrekken', () => {
     expect(store['measurements/m2']).toBeDefined();
     expect(store['profiles/bas'].restingHrBpm).toBeNull();
     expect(store['profiles/bas'].limitations).toEqual([]);
-    expect(store['profiles/bas'].healthConsent).toMatchObject({ given: false, version: 1 });
+    expect(store['profiles/bas'].healthConsent).toMatchObject({ given: false, version: 2 });
     // Trainingen en het account zelf blijven.
     expect(store['logs/l1']).toBeDefined();
     expect(deletedAuthUsers).toEqual([]);
+  });
+});
+
+describe('versie van de toestemmingstekst', () => {
+  it('is in de app en op de server gelijk, anders vraagt de app na intrekken meteen opnieuw', () => {
+    const version = (file) => Number(/HEALTH_CONSENT_VERSION = (\d+);/.exec(readFileSync(new URL(file, import.meta.url), 'utf8'))?.[1]);
+    expect(version('../../src/services/privacyService.ts')).toBe(version('../../api/admin-account.mjs'));
   });
 });
