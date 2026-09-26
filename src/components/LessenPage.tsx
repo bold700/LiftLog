@@ -116,6 +116,8 @@ export function LessenPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [selectedDate, setSelectedDate] = useState(today());
   const [roomFilter, setRoomFilter] = useState('');
+  /** Soort les (1-op-1, Duo PT, Groep, Concept); leeg = alle soorten. De legenda is tegelijk het filter. */
+  const [kindFilter, setKindFilter] = useState<SessionKind | ''>('');
   /** Staf-only: "Mijn dag" toont alleen de eigen sessies (Figma "Trainer day"). */
   const [myDayOnly, setMyDayOnly] = useState(false);
   const [confirmClass, setConfirmClass] = useState<StudioClass | null>(null);
@@ -203,8 +205,11 @@ export function LessenPage() {
     return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b));
   }, [scopedClasses]);
   const visibleClasses = useMemo(
-    () => (roomFilter ? scopedClasses.filter((c) => c.room && roomKey(c.room) === roomKey(roomFilter)) : scopedClasses),
-    [scopedClasses, roomFilter]
+    () =>
+      scopedClasses.filter(
+        (c) => (!roomFilter || (c.room && roomKey(c.room) === roomKey(roomFilter))) && (!kindFilter || c.sessionKind === kindFilter)
+      ),
+    [scopedClasses, roomFilter, kindFilter]
   );
   const weekStrip = useMemo(() => weekOf(selectedDate), [selectedDate]);
   /** Voor de weekweergave: alleen de geselecteerde week, per datum (ook lege dagen krijgen zo een kolom). */
@@ -423,18 +428,19 @@ export function LessenPage() {
     );
   };
 
-  const legend = (
-    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
-      {SESSION_KIND_KEYS.map((k) => (
-        <Box key={k} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: SESSION_KIND_COLORS[k] }} />
-          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
-            {SESSION_KIND_LABELS[k]}
-          </Typography>
-        </Box>
-      ))}
-    </Box>
-  );
+  /** Legenda én filter: tik op een soort om alleen die lessen te zien, nog een keer om alles te zien. */
+  const kindChips = (size: 'small' | 'medium') =>
+    SESSION_KIND_KEYS.map((k) => (
+      <Chip
+        key={k}
+        size={size}
+        label={SESSION_KIND_LABELS[k]}
+        aria-pressed={kindFilter === k}
+        onClick={() => setKindFilter((cur) => (cur === k ? '' : k))}
+        icon={<Box component="span" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: SESSION_KIND_COLORS[k], ml: '10px !important', flexShrink: 0 }} />}
+        sx={filterPillSx(kindFilter === k)}
+      />
+    ));
 
   return (
     <PageLayout maxWidth="none">
@@ -473,13 +479,16 @@ export function LessenPage() {
             ))}
           </Box>
         )}
-        <Box sx={{ display: { xs: 'none', md: 'flex' }, ml: 'auto' }}>{legend}</Box>
+        <Box role="group" aria-label="Soort les" sx={{ display: { xs: 'none', md: 'flex' }, gap: 1, flexWrap: 'wrap', ml: 'auto' }}>
+          {kindChips('small')}
+        </Box>
         <Box sx={{ display: { xs: 'flex', md: 'none' }, ml: 'auto' }}>
           <FilterSheet
-            activeCount={(myDayOnly ? 1 : 0) + (roomFilter ? 1 : 0)}
+            activeCount={(myDayOnly ? 1 : 0) + (roomFilter ? 1 : 0) + (kindFilter ? 1 : 0)}
             onReset={() => {
               setMyDayOnly(false);
               setRoomFilter('');
+              setKindFilter('');
             }}
           >
             {isStaff && (
@@ -496,7 +505,10 @@ export function LessenPage() {
                 ))}
               </FilterGroup>
             )}
-            <FilterGroup label="Legenda">{legend}</FilterGroup>
+            <FilterGroup label="Soort les">
+              <Chip label="Alle soorten" onClick={() => setKindFilter('')} sx={filterPillSx(kindFilter === '')} />
+              {kindChips('medium')}
+            </FilterGroup>
           </FilterSheet>
         </Box>
       </Box>
@@ -602,7 +614,11 @@ export function LessenPage() {
             <>
               {classesByDay.length === 0 && (
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, px: 0.5 }}>
-                  {roomFilter ? `Geen lessen in ${roomFilter} deze week.` : 'Geen lessen deze week.'}
+                  {kindFilter
+                    ? `Geen ${SESSION_KIND_LABELS[kindFilter]}-lessen${roomFilter ? ` in ${roomFilter}` : ''} deze week.`
+                    : roomFilter
+                      ? `Geen lessen in ${roomFilter} deze week.`
+                      : 'Geen lessen deze week.'}
                 </Typography>
               )}
               <WeekTimeGrid
