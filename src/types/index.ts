@@ -316,18 +316,18 @@ export interface Org {
   allowSelfSignup: boolean;
   /** Eigen uiterlijk van de studio. Ontbreekt dit, dan ziet de studio er uit als VORM zelf. */
   branding?: OrgBranding | null;
-  /** Bedrijfsgegevens voor op de factuur (Beheer → Huisstijl). Ontbreekt dit, dan staat alleen de naam op de factuur. */
+  /** Bedrijfsgegevens voor op de factuur (Beheer → Facturatie). Ontbreekt dit, dan staat alleen de naam op de factuur. */
   business?: OrgBusiness | null;
   /**
-   * Status van de betaalkoppeling (Beheer → Huisstijl → Betalingen). Nooit de sleutels zelf: die
+   * Status van de betaalkoppeling (Beheer → Facturatie → Betalingen). Nooit de sleutels zelf: die
    * staan los in `orgSecrets/{orgId}`, ongelezen door de client. Alleen wat een beheerder mag
    * zien: welke modus actief is en, per modus, de laatste vier tekens en wanneer gekoppeld.
    */
   payments: OrgPaymentsStatus;
-  /** Wanneer afmelden nog gratis is (Beheer → Huisstijl). Ontbreekt dit, dan geldt het standaard aantal uur van de server. */
+  /** Wanneer afmelden nog gratis is (Beheer → Instellingen). Ontbreekt dit, dan geldt het standaard aantal uur van de server. */
   bookingPolicy?: OrgBookingPolicy | null;
   /**
-   * Accounts die lang niet zijn gebruikt automatisch verwijderen (Beheer → Huisstijl). Alleen de
+   * Accounts die lang niet zijn gebruikt automatisch verwijderen (Beheer → Instellingen). Alleen de
    * eigenaar zet dit aan; de dagelijkse ronde op de server doet de rest (api/_lib/accountRetention.mjs).
    */
   accountRetention?: OrgAccountRetention | null;
@@ -444,6 +444,11 @@ export interface OrgBranding {
   logoUrl?: string | null;
   /** Drukversie van het logo als PNG (orgLogos/print/{orgId}), voor facturen en mail. Ook bij een SVG-logo. */
   logoPrintUrl?: string | null;
+  /**
+   * Eigen logo voor de donkere modus (orgLogos/dark/{orgId}). Zonder maakt de app er zelf een:
+   * donkere delen van het gewone logo worden licht (components/BrandLogo).
+   */
+  logoDarkUrl?: string | null;
   /** Merkkleur als hex, bijv. "#4E6543". Daaruit wordt het hele schema afgeleid. */
   seedColor?: string | null;
   /** Volledig licht schema uit de Material Theme Builder (schemes.light). Gaat vóór seedColor. */
@@ -596,7 +601,7 @@ export interface StandingBooking {
   updatedAt: string;
 }
 
-/** Boekingsbeleid van de studio (Beheer → Huisstijl): wanneer afmelden nog gratis is. */
+/** Boekingsbeleid van de studio (Beheer → Instellingen): wanneer afmelden nog gratis is. */
 export interface OrgBookingPolicy {
   /** Aantal uur voor aanvang tot waar afmelden geen credit kost; erna wel. */
   freeCancelHours: number;

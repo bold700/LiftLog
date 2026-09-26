@@ -12,6 +12,7 @@ import { chargesToCsv, downloadInvoicePdf, getChargesForOrg, getInvoiceLink, get
 import { copyText, whatsappUrl } from '../../utils/share';
 import { designTokens } from '../../theme/designTokens';
 import type { Charge, Membership, Plan, Profile } from '../../types';
+import { filterPillSx } from '../../theme/segmentedToggle';
 
 interface BillingPanelProps {
   profiles: Profile[];
@@ -176,11 +177,7 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
           key={f}
           label={t(`billing.filter.${f}`)}
           onClick={() => setFilter(f)}
-          sx={{
-            bgcolor: filter === f ? designTokens.secondaryContainer : designTokens.cardBackground,
-            color: filter === f ? designTokens.onSecondaryContainer : 'text.primary',
-            fontWeight: filter === f ? 600 : 400,
-          }}
+          sx={filterPillSx(filter === f)}
         />
       ))}
     </Box>
@@ -386,18 +383,20 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
       {filters}
       <Box sx={{ display: 'flex', gap: 2.5, alignItems: 'flex-start' }}>
         {list}
-        <Box sx={{ width: 400, flexShrink: 0, p: 3, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground, position: 'sticky', top: 24 }}>
-          {selected ? (
-            <>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                {nameOf(selected.userId)}
-              </Typography>
-              {detail}
-            </>
-          ) : (
-            <Typography color="text.secondary">{t('billing.pickToView')}</Typography>
-          )}
-        </Box>
+        {(selected || visible.length > 0) && (
+          <Box sx={{ width: 400, flexShrink: 0, p: 3, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground, position: 'sticky', top: 24 }}>
+            {selected ? (
+              <>
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                  {nameOf(selected.userId)}
+                </Typography>
+                {detail}
+              </>
+            ) : (
+              <Typography color="text.secondary">{t('billing.pickToView')}</Typography>
+            )}
+          </Box>
+        )}
       </Box>
     </>
   );

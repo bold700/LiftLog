@@ -88,6 +88,23 @@ export async function makePrintLogoFromUrl(orgId: string, logoUrl: string): Prom
   }
 }
 
+/** Eigen logo voor de donkere modus uploaden (orgLogos/dark/{orgId}). */
+export async function uploadOrgDarkLogo(orgId: string, file: File): Promise<string> {
+  if (!isFirebaseConfigured() || !storage) throw new Error('Firebase niet geconfigureerd');
+  const r = ref(storage, `orgLogos/dark/${orgId}`);
+  await uploadBytes(r, file, { contentType: file.type || 'image/png', cacheControl: 'public, max-age=3600' });
+  return getDownloadURL(r);
+}
+
+export async function deleteOrgDarkLogo(orgId: string): Promise<void> {
+  if (!isFirebaseConfigured() || !storage) return;
+  try {
+    await deleteObject(ref(storage, `orgLogos/dark/${orgId}`));
+  } catch {
+    // bestaat mogelijk niet
+  }
+}
+
 export async function deleteOrgLogo(orgId: string): Promise<void> {
   if (!isFirebaseConfigured() || !storage) return;
   for (const path of [`orgLogos/${orgId}`, `orgLogos/print/${orgId}`]) {

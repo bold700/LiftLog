@@ -19,11 +19,7 @@ export function ContentCard({ children, sx }: ContentCardProps) {
         mb: 3,
         backgroundColor: designTokens.cardBackground,
         borderRadius: `${designTokens.cardRadius}px`,
-        transition: 'transform 0.25s ease, box-shadow 0.25s ease',
-        '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: 2,
-        },
+        // Geen optil-effect bij hover: deze kaart is niet klikbaar, en optillen belooft dat wel.
         ...sx,
       }}
       elevation={0}
@@ -49,12 +45,6 @@ export function OutlineCard({
         backgroundColor: 'transparent',
         borderRadius: `${designTokens.cardRadius}px`,
         border: `1px solid ${designTokens.cardBorder}`,
-        transition: 'transform 0.25s ease, box-shadow 0.25s ease, border-color 0.2s ease',
-        '&:hover': {
-          transform: 'translateY(-1px)',
-          boxShadow: 1,
-          borderColor: designTokens.outline,
-        },
         ...sx,
       }}
       elevation={0}

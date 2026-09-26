@@ -18,6 +18,7 @@ import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import SupervisorAccountRoundedIcon from '@mui/icons-material/SupervisorAccountRounded';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import { NavigationBar } from './NavigationBar';
+import { BrandLogo } from './BrandLogo';
 import { UserAvatar } from './UserAvatar';
 import { ViewAsSheet } from './ViewAsSheet';
 import { useI18n } from '../context/I18nContext';
@@ -45,7 +46,7 @@ interface AppShellProps {
   onLog: (event: MouseEvent<HTMLElement>) => void;
   onLogout: () => void;
   /** Naam en logo van de studio; zonder huisstijl is dat VORM. */
-  brand: { name: string; logoUrl: string | null };
+  brand: { name: string; logoUrl: string | null; logoDarkUrl?: string | null };
   /** Tab van Profiel: waar de avatar in de bovenbalk heen gaat. */
   profileTabIndex?: number;
   /** Zwevende knoppen (de +-knop met zijn menu): staan buiten het scrollende deel, onderaan de schil. */
@@ -393,7 +394,9 @@ export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, px: 2, pb: 2, minHeight: 36 }}>
-          {brand.logoUrl && <Box component="img" src={brand.logoUrl} alt="" sx={{ height: 32, width: 'auto', maxWidth: 120, objectFit: 'contain' }} />}
+          {brand.logoUrl && (
+            <BrandLogo src={brand.logoUrl} darkSrc={brand.logoDarkUrl} sx={{ height: 32, width: 'auto', maxWidth: 120, objectFit: 'contain' }} />
+          )}
           <Typography sx={{ fontWeight: 700, fontSize: 20, letterSpacing: '-0.3px', lineHeight: 1.1 }} noWrap>
             {brand.name}
           </Typography>

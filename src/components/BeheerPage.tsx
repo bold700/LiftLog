@@ -34,6 +34,8 @@ import { deleteAccountAsAdmin } from '../services/adminAccountService';
 import type { LeaderboardVisibility, Membership, Plan, Profile, ProfileRole, Limitation } from '../types';
 import { PageLayout, ContentCard, HeaderActions } from './layout';
 import { BrandingSettings } from './beheer/BrandingSettings';
+import { StudioSettings } from './beheer/StudioSettings';
+import { BusinessSettings } from './beheer/BusinessSettings';
 import { UserAvatar } from './UserAvatar';
 import { ageOnDate } from '../utils/bodyFat';
 import { heartRateZones } from '../utils/heartRate';
@@ -66,7 +68,7 @@ import { EMAIL_RE, generatePassword } from '../utils/account';
 import { MemberImportDialog } from './beheer/MemberImportDialog';
 import { LEADERBOARD_ENABLED } from '../config/features';
 
-type Section = 'leden' | 'lessoorten' | 'abonnementen' | 'huisstijl' | 'facturatie' | 'meldingen';
+type Section = 'leden' | 'lessoorten' | 'abonnementen' | 'huisstijl' | 'instellingen' | 'facturatie' | 'meldingen';
 /** Beheer gebruikt de hele breedte van het hoofdvlak, zoals in het ontwerp; de andere pagina's blijven op 800. */
 const ADMIN_MAX_WIDTH = 'none';
 
@@ -455,6 +457,8 @@ export function BeheerPage() {
           {header}
           {section === 'huisstijl' ? (
             <BrandingSettings />
+          ) : section === 'instellingen' ? (
+            <StudioSettings />
           ) : section === 'lessoorten' ? (
             <ClassTypesPanel staff={trainers} createSignal={newTypeSignal} />
           ) : section === 'abonnementen' ? (
@@ -462,7 +466,14 @@ export function BeheerPage() {
           ) : section === 'meldingen' ? (
             <NotificationsPanel canEditSettings={isAdmin} />
           ) : section === 'facturatie' ? (
-            <BillingPanel profiles={profiles} memberships={memberships} plans={plans} selfId={selfId} exportSignal={exportSignal} />
+            <>
+              <BillingPanel profiles={profiles} memberships={memberships} plans={plans} selfId={selfId} exportSignal={exportSignal} />
+              {/* Wat er op de factuur staat en hoe er betaald wordt, onder de posten zelf. */}
+              <Typography variant="h6" sx={{ fontWeight: 600, mt: 4, mb: 1.5 }}>
+                Factuurgegevens en betalen
+              </Typography>
+              <BusinessSettings />
+            </>
           ) : (
             // Lessoorten, Abonnementen en Facturatie staan in het ontwerp en komen elk in hun eigen stap.
             <ContentCard>
@@ -812,15 +823,16 @@ export function BeheerPage() {
   );
 }
 
-const SECTIONS: Section[] = ['leden', 'lessoorten', 'abonnementen', 'meldingen', 'huisstijl', 'facturatie'];
+const SECTIONS: Section[] = ['leden', 'lessoorten', 'abonnementen', 'meldingen', 'facturatie', 'huisstijl', 'instellingen'];
 /** Wat een trainer ziet: de leden, en berichten sturen. De rest is aan de eigenaar. */
 const STAFF_SECTIONS: Section[] = ['leden', 'meldingen'];
 const SECTION_STORAGE_KEY = 'vorm.beheer.section';
-const SECTION_KEY: Record<Section, 'members' | 'classTypes' | 'subscriptions' | 'branding' | 'billing' | 'notifications'> = {
+const SECTION_KEY: Record<Section, 'members' | 'classTypes' | 'subscriptions' | 'branding' | 'settings' | 'billing' | 'notifications'> = {
   leden: 'members',
   lessoorten: 'classTypes',
   abonnementen: 'subscriptions',
   huisstijl: 'branding',
+  instellingen: 'settings',
   facturatie: 'billing',
   meldingen: 'notifications',
 };

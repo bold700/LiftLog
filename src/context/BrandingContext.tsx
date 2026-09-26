@@ -17,6 +17,8 @@ export interface BrandingValue {
   /** Naam in de balk: de studionaam, en vóór het inloggen VORM. */
   name: string;
   logoUrl: string | null;
+  /** Eigen logo voor donker; zonder maakt BrandLogo er zelf een. */
+  logoDarkUrl: string | null;
   scheme: LightScheme;
   theme: Theme;
   org: Org | null;
@@ -65,7 +67,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   }, [name]);
 
   const value = useMemo<BrandingValue>(
-    () => ({ name, logoUrl: org?.branding?.logoUrl ?? null, scheme, theme, org, refresh: load }),
+    () => ({ name, logoUrl: org?.branding?.logoUrl ?? null, logoDarkUrl: org?.branding?.logoDarkUrl ?? null, scheme, theme, org, refresh: load }),
     [name, org, scheme, theme, load]
   );
   return <BrandingContext.Provider value={value}>{children}</BrandingContext.Provider>;

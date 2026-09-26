@@ -1,5 +1,5 @@
 /**
- * Mollie-koppeling per studio (Beheer → Huisstijl → Betalingen).
+ * Mollie-koppeling per studio (Beheer → Facturatie → Betalingen).
  *
  * Elk bedrijf ontvangt geld op zijn eigen rekening, dus is dit geen platformbrede sleutel zoals
  * Resend maar een instelling per studio. De sleutel zelf staat alleen in `orgSecrets/{orgId}`,

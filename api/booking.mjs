@@ -492,7 +492,7 @@ async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
     const classSnap = await tx.get(classRef);
     const cls = classSnap.exists ? classSnap.data() : null;
 
-    // Studio's stellen zelf in tot hoeveel uur van tevoren afmelden gratis is (Beheer → Huisstijl);
+    // Studio's stellen zelf in tot hoeveel uur van tevoren afmelden gratis is (Beheer → Instellingen);
     // zonder instelling geldt het standaard aantal uur van de server.
     const orgSnap = await tx.get(db.collection('orgs').doc(orgId));
     const freeCancelHours = Number(orgSnap.data()?.bookingPolicy?.freeCancelHours) || FREE_CANCEL_HOURS;

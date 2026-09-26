@@ -46,6 +46,7 @@ export const nl = {
       classTypes: 'Lessoorten',
       subscriptions: 'Abonnementen',
       branding: 'Huisstijl',
+      settings: 'Instellingen',
       billing: 'Facturatie',
       notifications: 'Meldingen',
     },
@@ -143,7 +144,7 @@ export const nl = {
     descriptionHelp: 'Kort, voor de sporter in de boekingsdialoog. Leeg = geen omschrijving.',
     rooms: {
       title: 'Ruimtes',
-      help: 'Beheer hier de ruimtes van de studio; een lessoort of losse les kiest er dan een uit — geen vrij te typen tekst meer, dat gaf typfouten als "Boven" naast "boven".',
+      help: 'De ruimtes van je studio. Bij een lessoort of losse les kies je er een uit deze lijst.',
       placeholder: 'Naam van de ruimte',
       add: 'Toevoegen',
       empty: 'Nog geen ruimtes toegevoegd.',
@@ -176,7 +177,7 @@ export const nl = {
     newPlan: 'Nieuw abonnement',
     empty: 'Nog geen abonnementen. Maak er een aan en koppel het daarna aan leden.',
     loadFailed: 'Abonnementen laden lukte niet. Je abonnementen zijn er nog; probeer het opnieuw.',
-    pickToEdit: 'Kies links een abonnement om te bewerken.',
+    pickToEdit: 'Kies een abonnement om het te bewerken.',
     kpi: {
       members: 'Actieve leden',
       membersShort: 'Leden',
@@ -246,7 +247,7 @@ export const nl = {
     export: 'Exporteer CSV',
     empty: 'Nog geen posten. Die ontstaan zodra je een abonnement aan een lid koppelt.',
     loadFailed: 'Posten laden lukte niet. Er is niets verdwenen; probeer het opnieuw.',
-    pickToView: 'Kies links een post.',
+    pickToView: 'Kies een post om de details te zien.',
     kpi: { open: 'Open', paidMonth: 'Betaald deze maand', paidShort: 'Betaald', overdue: 'Achterstallig', monthly: 'Maandelijks terugkerend' },
     filter: { open: 'Open', paid: 'Betaald', all: 'Alles' },
     member: 'Lid',
@@ -312,7 +313,7 @@ export const nl = {
     saved: 'Bedrijfsgegevens opgeslagen.',
     failed: 'Opslaan mislukt.',
     preview: 'Voorbeeld factuur',
-    previewHint: 'Zo komen logo en gegevens op de factuur. Download een echte factuur via Facturatie.',
+    previewHint: 'Zo komen logo en gegevens op de factuur. Een echte factuur download je bij een post hierboven.',
   },
   payments: {
     title: 'Betalingen · Mollie',

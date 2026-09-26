@@ -325,7 +325,7 @@ function AppContent() {
           secondary={secondary}
           onLog={handleFabClick}
           onLogout={handleLogout}
-          brand={{ name: branding?.name ?? 'VORM', logoUrl: branding?.logoUrl ?? null }}
+          brand={{ name: branding?.name ?? 'VORM', logoUrl: branding?.logoUrl ?? null, logoDarkUrl: branding?.logoDarkUrl ?? null }}
           profileTabIndex={TAB_PROFIEL}
           floating={floating}
         >
