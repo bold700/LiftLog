@@ -74,6 +74,10 @@ docs/                Documentatie; docs/archief bevat oude probleemnotities
 - Oefening-GIF's staan in Firebase Storage (`exercises/720/{id}.gif`, publiek leesbaar); `/api/exercise-gif` levert er een stilstaand beeld van voor de PDF.
 - Geen geheimen in Git: `.env` en service-accounts staan in `.gitignore`.
 
+## bold700 HQ
+
+LiftLog is onderdeel van [bold700 HQ](https://bold700.github.io/hq/). Gedeelde agents en werkwijzen komen uit [bold700/hq](https://github.com/bold700/hq).
+
 ## Licentie
 
 Privé project, alle rechten voorbehouden.
