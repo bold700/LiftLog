@@ -11,6 +11,7 @@ import { LeaderboardPage } from './LeaderboardPage';
 import { NutritionInsights } from './NutritionInsights';
 import { OverzichtPage } from './OverzichtPage';
 import { LEADERBOARD_ENABLED } from '../config/features';
+import { tabsOverflowHintSx } from '../theme/tabs';
 
 export const INZICHTEN_SUB = {
   INZICHTEN: 0,
@@ -62,6 +63,7 @@ export const InzichtenPage = ({
         // Geen pijltjes: die reserveren links ruimte, en in Figma lopen de tabs vanaf de rand (swipen).
         scrollButtons={false}
         sx={{
+          ...(!wide ? tabsOverflowHintSx : {}),
           minHeight: 48,
           mb: 2,
           width: '100%',

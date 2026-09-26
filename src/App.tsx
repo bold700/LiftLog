@@ -242,8 +242,18 @@ function AppContent() {
     }
   };
 
-  /** De +-knop met zijn menu: de schil zet hem buiten het scrollende deel (zie AppShell). */
-  const floating = !addOpen ? (
+  /**
+   * De +-knop met zijn menu: de schil zet hem buiten het scrollende deel (zie AppShell). Niet op
+   * Beheer: daar hoort geen persoonlijk logmenu, de acties van elke tab staan boven de tabs.
+   */
+  const onWorkouts = activeTab === TAB_SCHEMAS;
+  const newWorkoutItem = isTrainer ? (
+    <MenuItem onClick={handleNewWorkoutFromFab}>
+      <PostAddRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
+      Workout aanmaken
+    </MenuItem>
+  ) : null;
+  const floating = !addOpen && activeTab !== TAB_BEHEER ? (
         <>
           <Fab
             aria-label="Log toevoegen"
@@ -285,6 +295,9 @@ function AppContent() {
               },
             }}
           >
+            {/* Op Workouts staat "Workout aanmaken" bovenaan: dat is daar het meest logische. */}
+            {onWorkouts && newWorkoutItem}
+            {onWorkouts && newWorkoutItem && <Divider />}
             <MenuItem onClick={handleAddExerciseFromFab}>
               <FitnessCenterRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
               Oefening loggen
@@ -301,13 +314,8 @@ function AppContent() {
               <MonitorWeightRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
               Meting loggen
             </MenuItem>
-            {isTrainer && <Divider />}
-            {isTrainer && (
-              <MenuItem onClick={handleNewWorkoutFromFab}>
-                <PostAddRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
-                Workout aanmaken
-              </MenuItem>
-            )}
+            {!onWorkouts && newWorkoutItem && <Divider />}
+            {!onWorkouts && newWorkoutItem}
           </Menu>
         </>
   ) : null;

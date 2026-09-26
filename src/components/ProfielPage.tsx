@@ -54,6 +54,7 @@ import { PrivacyCard } from './PrivacyCard';
 import { useColorMode, type ColorModePreference } from '../context/ColorModeContext';
 import { segmentedToggleSx } from '../theme/segmentedToggle';
 import { LEADERBOARD_ENABLED } from '../config/features';
+import { tabsOverflowHintSx } from '../theme/tabs';
 
 /** Kaart op de profielpagina (Figma: Surface Container Low, 16 rond, 24 binnenmarge). Functie: volgt het thema. */
 const sectionSx = () => ({
@@ -783,7 +784,8 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
         aria-label="Profiel"
         variant={wideTabs ? 'fullWidth' : 'scrollable'}
         scrollButtons={false}
-        sx={{ minHeight: 44, mb: 2.5, borderBottom: '1px solid', borderColor: 'divider', '& .MuiTab-root': { minHeight: 44, textTransform: 'none', fontWeight: 600, px: 2 } }}
+        sx={{
+          ...(!wideTabs ? tabsOverflowHintSx : {}), minHeight: 44, mb: 2.5, borderBottom: '1px solid', borderColor: 'divider', '& .MuiTab-root': { minHeight: 44, textTransform: 'none', fontWeight: 600, px: 2 } }}
       >
         {tabs.map((x) => (
           <Tab key={x.value} value={x.value} label={x.label} />

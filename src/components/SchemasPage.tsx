@@ -129,7 +129,7 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
   const nameOf = useCallback(
     (uid: string) => {
       const p = rosterById.get(uid);
-      return p?.displayName?.trim() || p?.email || 'Onbekende sporter';
+      return p?.displayName?.trim() || p?.email || 'Sporter niet gevonden';
     },
     [rosterById]
   );
@@ -698,12 +698,7 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
             </Button>
           </HeaderActions>
         )}
-        {activeCategory && (
-          <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
-            {activeCategory}
-          </Typography>
-        )}
-
+        {/* Geen extra kop met de categorienaam: die staat al op de tab erboven. */}
         <SchemaListFilters
           activeCategory={activeCategory}
           showAssigneeFilter={isTrainer && sportersForAssignment.length > 0}
