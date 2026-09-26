@@ -89,8 +89,9 @@ export function StudioSettings() {
             Boekingsbeleid
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Tot hoeveel uur voor de les kan iemand gratis afmelden? Wie later afmeldt, verliest de credit. Afmelden blijft
-            altijd mogelijk, zodat de plek vrijkomt voor een ander.
+            Tot hoeveel uur voor de les kan iemand gratis afmelden? Wie later afmeldt, verliest de credit, behalve binnen
+            een uur na het boeken (bedenktijd). Afmelden blijft altijd mogelijk: de wachtlijst krijgt dan een melding en
+            heeft een uur voorrang op de vrije plek.
           </Typography>
           <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             <TextField

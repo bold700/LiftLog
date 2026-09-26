@@ -62,6 +62,13 @@ export const messages = {
       body: `Je plek bij ${cls?.title || 'de les'} (${when(cls)}) is geannuleerd door de studio.${refunded ? ' Je credit staat weer op je saldo.' : ''}`,
     };
   },
+  /** Plek vrij in een les waar je op de wachtlijst staat: zelf aanmelden, wie het eerst is. */
+  waitlistSpot(cls) {
+    return {
+      title: 'Plek vrij!',
+      body: `Er is een plek vrijgekomen bij ${cls?.title || 'de les'} (${when(cls)}). Je staat op de wachtlijst: meld je aan in de app, wie het eerst is heeft de plek.`,
+    };
+  },
   waitlistPromoted(cls, cost) {
     return {
       title: 'Je hebt een plek!',

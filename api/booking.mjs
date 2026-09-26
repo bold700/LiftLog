@@ -105,6 +105,16 @@ import {
   standingAppliesOn,
   standingBookingId,
 } from './_lib/classSchedule.mjs';
+import {
+  bookedAtOf,
+  freeCancelHoursOf,
+  minutesSince,
+  placeNewBooking,
+  refundOnCancel,
+  spotFreeForWaitlister,
+  waitlistPosition,
+  waitlistPriorityUntil,
+} from './_lib/bookingRules.mjs';
 
 const BUILD = (process.env.VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7);
 
@@ -202,6 +212,8 @@ export default async function handler(req, res) {
         );
       case 'cancel':
         return await cancel(res, db, uid, myOrgs, isStaff, String(body.bookingId ?? '').trim());
+      case 'waitlistPositions':
+        return await waitlistPositions(res, db, uid, myOrgs);
       case 'setStandingBooking':
         return await setStandingBooking(res, db, uid, myOrgs, isStaff, String(body.standingBookingId ?? '').trim(), body.active === true);
       case 'addStandingBooking':
@@ -275,7 +287,9 @@ function refuse(message, status) {
 
 /**
  * Reserveren. In één transactie: plek controleren, credit afschrijven, reservering vastleggen.
- * Zit de les vol, dan kom je op de wachtlijst — zonder dat er een credit af gaat.
+ * Zit de les vol (of is een vrije plek nog even voor de wachtlijst), dan kom je op de wachtlijst,
+ * zonder dat er een credit af gaat. Sta je al op de wachtlijst en is er een plek vrij, dan meld je
+ * je hiermee aan: wie van de wachtlijst het eerst is, heeft de plek.
  */
 async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId) {
   if (!classId) return json(res, 400, { error: 'Geen les opgegeven.', build: BUILD });
@@ -334,12 +348,18 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
       db.collection('bookings').where('classId', '==', classId).where('userId', '==', beneficiaryUid)
     );
     const active = mine.docs.filter((d) => ['booked', 'waitlist'].includes(String(d.data().status)));
-    if (active.length > 0) throw refuse(beneficiaryUid === uid ? 'Je staat al ingeschreven voor deze les.' : 'Deze sporter staat al ingeschreven voor deze les.');
+    if (active.some((d) => d.data().status === 'booked')) {
+      throw refuse(beneficiaryUid === uid ? 'Je staat al ingeschreven voor deze les.' : 'Deze sporter staat al ingeschreven voor deze les.');
+    }
+    // Al op de wachtlijst: met een vrije plek is dit aanmelden (de plek pakken), anders niets te doen.
+    const claim = active.find((d) => d.data().status === 'waitlist') ?? null;
+    if (claim && !spotFreeForWaitlister(cls)) {
+      throw refuse(beneficiaryUid === uid ? 'Je staat al op de wachtlijst. Komt er een plek vrij, dan krijg je een melding.' : 'Deze sporter staat al op de wachtlijst.');
+    }
 
-    const capacity = Number(cls.capacity) || 0;
-    const booked = Number(cls.bookedCount) || 0;
     const cost = unlimited || beneficiaryIsStaff ? 0 : Number(cls.creditCost ?? 1) || 0;
-    const onWaitlist = booked >= capacity;
+    const onWaitlist = claim ? false : placeNewBooking(cls, Date.now()) === 'waitlist';
+    const waitlistAfter = (Number(cls.waitlistCount) || 0) - (claim ? 1 : 0);
 
     const accountRef = db.collection('creditAccounts').doc(accountId(orgId, beneficiaryUid));
     const accountSnap = await tx.get(accountRef);
@@ -355,24 +375,39 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
       );
     }
 
-    const bookingId = newId('bk');
     const now = new Date().toISOString();
-    tx.set(db.collection('bookings').doc(bookingId), {
-      id: bookingId,
-      orgId,
-      classId,
-      userId: beneficiaryUid,
-      status: onWaitlist ? 'waitlist' : 'booked',
-      creditsSpent: onWaitlist ? 0 : cost,
-      createdAt: now,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+    const bookingId = claim ? claim.id : newId('bk');
+    if (claim) {
+      // Aanmelden vanaf de wachtlijst: dezelfde reservering wordt een echte boeking. `claimedAt`
+      // telt voor de bedenktijd (je koos op dit moment voor de les).
+      tx.set(claim.ref, { status: 'booked', creditsSpent: cost, claimedAt: now, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    } else {
+      tx.set(db.collection('bookings').doc(bookingId), {
+        id: bookingId,
+        orgId,
+        classId,
+        userId: beneficiaryUid,
+        status: onWaitlist ? 'waitlist' : 'booked',
+        creditsSpent: onWaitlist ? 0 : cost,
+        createdAt: now,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
 
     const reopened = reopen ? { cancelledAt: null, autoCancelled: false } : {};
     if (onWaitlist) {
       tx.set(classRef, { waitlistCount: FieldValue.increment(1), ...reopened }, { merge: true });
+    } else if (claim) {
+      // Laatste van de wachtlijst aangemeld: dan is er geen voorrang meer om bij te houden.
+      tx.set(
+        classRef,
+        { bookedCount: FieldValue.increment(1), waitlistCount: FieldValue.increment(-1), ...(waitlistAfter <= 0 ? { waitlistPriorityUntil: null } : {}) },
+        { merge: true }
+      );
     } else {
       tx.set(classRef, { bookedCount: FieldValue.increment(1), ...reopened }, { merge: true });
+    }
+    if (!onWaitlist) {
       if (cost > 0) {
         tx.set(accountRef, { orgId, userId: beneficiaryUid, balance: balance - cost, updatedAt: now }, { merge: true });
         tx.set(db.collection('creditLedger').doc(newId('cl')), {
@@ -437,9 +472,9 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
 }
 
 /**
- * Afmelden. Binnen de annuleertermijn krijg je je credit terug; daarna niet — anders meldt
- * iedereen zich op het laatste moment af en staat de zaal leeg.
- * Komt er een plek vrij, dan schuift de eerste van de wachtlijst door.
+ * Afmelden. Binnen de annuleertermijn (of de bedenktijd na boeken) krijg je je credit terug;
+ * daarna niet — anders meldt iedereen zich op het laatste moment af en staat de zaal leeg.
+ * Komt er een plek vrij, dan krijgt de wachtlijst een melding (zie cancelBookingCore).
  */
 async function cancel(res, db, uid, myOrgs, isStaff, bookingId) {
   if (!bookingId) return json(res, 400, { error: 'Geen reservering opgegeven.', build: BUILD });
@@ -449,8 +484,8 @@ async function cancel(res, db, uid, myOrgs, isStaff, bookingId) {
 }
 
 /**
- * Meldingen na afmelden: de studio meldde iemand anders af ("Les geannuleerd"), en/of iemand van
- * de wachtlijst kreeg de plek. Nooit laten mislukken: de afmelding zelf is al gelukt.
+ * Meldingen na afmelden: de studio meldde iemand anders af ("Les geannuleerd"), en/of de wachtlijst
+ * hoort dat er een plek vrij is. Nooit laten mislukken: de afmelding zelf is al gelukt.
  */
 async function notifyAfterCancel(db, uid, notice, result) {
   if (!notice) return;
@@ -463,20 +498,45 @@ async function notifyAfterCancel(db, uid, notice, result) {
         data: { kind: 'classCancelled' },
       });
     }
-    if (result.promotedUserId && notificationEnabled(org, 'waitlistPromoted')) {
-      await sendPushToUser(db, result.promotedUserId, {
-        ...pushMessages.waitlistPromoted(notice.cls, notice.promotedCost),
-        data: { kind: 'waitlistPromoted' },
-      });
+    // Plek vrij in een les met wachtlijst: iedereen op de wachtlijst hoort het tegelijk. (De
+    // instelling heet nog 'waitlistPromoted', zodat de keuze van de studio behouden blijft.)
+    if (notice.waitlistUserIds?.length && notificationEnabled(org, 'waitlistPromoted')) {
+      for (const waiterId of notice.waitlistUserIds) {
+        await sendPushToUser(db, waiterId, { ...pushMessages.waitlistSpot(notice.cls), data: { kind: 'waitlistSpot' } }).catch((e) =>
+          console.error('[booking] melding plek vrij mislukt', e)
+        );
+      }
     }
   } catch (e) {
     console.error('[booking] melding na afmelden mislukt', e);
   }
 }
 
+/**
+ * Op welke plek sta je op de wachtlijst, per les ({ [classId]: 2 }). Alleen de positie: wie er voor
+ * of na je staat blijft onzichtbaar (een lid kan de boekingen van anderen ook niet lezen).
+ */
+async function waitlistPositions(res, db, uid, myOrgs) {
+  const mine = await db.collection('bookings').where('userId', '==', uid).where('status', '==', 'waitlist').get();
+  const positions = {};
+  for (const d of mine.docs) {
+    const b = d.data();
+    if (!myOrgs.includes(orgIdOf(b.orgId))) continue;
+    const classId = String(b.classId);
+    const all = await db.collection('bookings').where('classId', '==', classId).where('status', '==', 'waitlist').get();
+    const pos = waitlistPosition(
+      all.docs.map((x) => ({ id: x.id, createdAt: x.data().createdAt })),
+      d.id
+    );
+    if (pos) positions[classId] = pos;
+  }
+  return json(res, 200, { positions, build: BUILD });
+}
+
 /** Het eigenlijke afmelden, ook gebruikt bij het stoppen of pauzeren van een vaste les. */
 async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
   return db.runTransaction(async (tx) => {
+    // Firestore: eerst alles lezen, dan pas schrijven.
     const bookingRef = db.collection('bookings').doc(bookingId);
     const bookingSnap = await tx.get(bookingRef);
     if (!bookingSnap.exists) throw refuse('Deze reservering bestaat niet (meer).');
@@ -493,29 +553,35 @@ async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
     const cls = classSnap.exists ? classSnap.data() : null;
 
     // Studio's stellen zelf in tot hoeveel uur van tevoren afmelden gratis is (Beheer → Instellingen);
-    // zonder instelling geldt het standaard aantal uur van de server.
+    // zonder instelling geldt het standaard aantal uur van de server. Ook 0 uur is een keuze.
     const orgSnap = await tx.get(db.collection('orgs').doc(orgId));
-    const freeCancelHours = Number(orgSnap.data()?.bookingPolicy?.freeCancelHours) || FREE_CANCEL_HOURS;
+    const freeCancelHours = freeCancelHoursOf(orgSnap.data()?.bookingPolicy, FREE_CANCEL_HOURS);
 
+    const nowMs = Date.now();
     const startsAt = cls ? classStartsAt(cls) : null;
-    const hoursLeft = startsAt ? (startsAt.getTime() - Date.now()) / 3_600_000 : Infinity;
+    const hoursLeft = startsAt ? (startsAt.getTime() - nowMs) / 3_600_000 : Infinity;
     const spent = Number(booking.creditsSpent) || 0;
-    // De les is afgelast: dan altijd terug, ongeacht het tijdstip.
-    const refund = spent > 0 && (cls?.cancelledAt ? true : hoursLeft >= freeCancelHours);
+    // Te laat is te laat, behalve bij een afgelaste les of binnen de bedenktijd na het boeken.
+    const refund = refundOnCancel({
+      spent,
+      classCancelled: !!cls?.cancelledAt,
+      hoursLeft,
+      freeCancelHours,
+      minutesSinceBooked: minutesSince(bookedAtOf(booking), nowMs),
+    });
 
-    // Eerste van de wachtlijst laten doorschuiven als er een plek vrijkomt.
-    let promoted = null;
-    if (booking.status === 'booked' && cls && !cls.cancelledAt) {
+    // Komt er een plek vrij in een les met een wachtlijst: niemand schuift automatisch door, maar
+    // iedereen op de wachtlijst krijgt een melding en mag zich aanmelden (wie het eerst is). Een uur
+    // lang is de plek alleen voor de wachtlijst.
+    let waitlistUserIds = [];
+    if (booking.status === 'booked' && cls && !cls.cancelledAt && hoursLeft > 0) {
       const waiting = await tx.get(
         db.collection('bookings').where('classId', '==', String(booking.classId)).where('status', '==', 'waitlist')
       );
-      const sorted = waiting.docs
-        .map((d) => ({ ref: d.ref, data: d.data() }))
-        .sort((a, b) => String(a.data.createdAt).localeCompare(String(b.data.createdAt)));
-      promoted = sorted[0] ?? null;
+      waitlistUserIds = [...new Set(waiting.docs.map((d) => String(d.data().userId)))].filter((id) => id !== String(booking.userId));
     }
 
-    const now = new Date().toISOString();
+    const now = new Date(nowMs).toISOString();
     tx.set(bookingRef, { status: 'cancelled', cancelledAt: now, refunded: refund }, { merge: true });
 
     if (refund) {
@@ -533,59 +599,38 @@ async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
     }
 
     if (booking.status === 'waitlist') {
-      tx.set(classRef, { waitlistCount: FieldValue.increment(-1) }, { merge: true });
-    } else if (promoted) {
-      // Plek gaat direct naar de wachtlijst; die persoon betaalt nu zijn credit.
-      const cost = Number(cls?.creditCost ?? 1) || 0;
-      const promotedAccountRef = db.collection('creditAccounts').doc(accountId(orgId, String(promoted.data.userId)));
-      const promotedAccount = await tx.get(promotedAccountRef);
-      const promotedBalance = Number(promotedAccount.exists ? promotedAccount.data().balance : 0) || 0;
-
-      if (promotedBalance >= cost) {
-        tx.set(promoted.ref, { status: 'booked', creditsSpent: cost, promotedAt: now }, { merge: true });
-        tx.set(classRef, { waitlistCount: FieldValue.increment(-1) }, { merge: true });
-        if (cost > 0) {
-          tx.set(promotedAccountRef, { balance: promotedBalance - cost, updatedAt: now }, { merge: true });
-          tx.set(db.collection('creditLedger').doc(newId('cl')), {
-            orgId,
-            userId: promoted.data.userId,
-            delta: -cost,
-            reason: 'booking',
-            classId: booking.classId,
-            byUserId: uid,
-            createdAt: now,
-          });
-        }
-      } else {
-        // Geen saldo: plek komt gewoon vrij en de wachtlijst blijft staan. De teller wordt
-        // hieronder één keer verlaagd — hier ook aftrekken zou hem op -1 zetten en zo plekken
-        // uit het niets laten ontstaan.
-        promoted = null;
-      }
-    }
-
-    if (booking.status === 'booked' && !promoted) {
-      tx.set(classRef, { bookedCount: FieldValue.increment(-1) }, { merge: true });
+      const left = (Number(cls?.waitlistCount) || 0) - 1;
+      tx.set(classRef, { waitlistCount: FieldValue.increment(-1), ...(left <= 0 ? { waitlistPriorityUntil: null } : {}) }, { merge: true });
+    } else {
+      tx.set(
+        classRef,
+        {
+          bookedCount: FieldValue.increment(-1),
+          ...(waitlistUserIds.length > 0 ? { waitlistPriorityUntil: waitlistPriorityUntil(nowMs, startsAt ? startsAt.getTime() : NaN) } : {}),
+        },
+        { merge: true }
+      );
     }
 
     // Privé-les (vaste PT) waar nu niemand meer op staat: van het rooster van de trainer af. De
     // credit-regel hierboven keek nog naar de les zoals hij was, dus dit geeft geen gratis afmelding.
     const emptied = privateClassEmptyAfter(cls, {
-      bookedDelta: booking.status === 'booked' && !promoted ? -1 : 0,
-      waitlistDelta: booking.status === 'waitlist' || promoted ? -1 : 0,
+      bookedDelta: booking.status === 'booked' ? -1 : 0,
+      waitlistDelta: booking.status === 'waitlist' ? -1 : 0,
     });
     if (emptied) tx.set(classRef, { cancelledAt: now, autoCancelled: true }, { merge: true });
 
     return {
       cancelled: true,
       refunded: refund,
-      promotedUserId: promoted ? String(promoted.data.userId) : null,
+      // Bleef voor oudere app-versies in het antwoord; er schuift niemand meer automatisch door.
+      promotedUserId: null,
       // Alleen voor de meldingen hierna; gaat niet mee in het antwoord.
       notice: {
         orgId,
         bookingUserId: String(booking.userId),
         cls: cls ? { title: cls.title, date: cls.date, startTime: cls.startTime } : null,
-        promotedCost: promoted ? Number(cls?.creditCost ?? 1) || 0 : 0,
+        waitlistUserIds,
       },
     };
   });
@@ -646,6 +691,7 @@ async function cancelSeriesBookings(db, uid, myOrgs, isStaff, standing, inRange)
     if (!classIds.has(String(b.classId)) || !['booked', 'waitlist'].includes(String(b.status))) continue;
     const r = await cancelBookingCore(db, uid, myOrgs, isStaff, d.id).catch(() => null);
     if (r) {
+      await notifyAfterCancel(db, uid, r.notice, r);
       cancelled++;
       if (r.refunded) refunded++;
     }
@@ -1851,7 +1897,8 @@ async function attemptStandingBooking(db, orgId, classId, standing) {
     const capacity = Number(cls.capacity) || 0;
     const booked = Number(cls.bookedCount) || 0;
     const cost = Number(cls.creditCost ?? 1) || 0;
-    const onWaitlist = booked >= capacity;
+    // Zelfde regel als zelf boeken: een vrije plek die nu voor de wachtlijst is, gaat niet naar een vaste les.
+    const onWaitlist = booked >= capacity || placeNewBooking(cls, Date.now()) === 'waitlist';
 
     const accountRef = db.collection('creditAccounts').doc(accountId(orgId, userId));
     const accountSnap = await tx.get(accountRef);
