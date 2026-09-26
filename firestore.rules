@@ -144,7 +144,12 @@ service cloud.firestore {
     // van díe studio. Nieuwe studio's worden met het beheerscript (Admin SDK) aangemaakt.
     match /orgs/{orgId} {
       allow read: if isSignedIn() && orgId == myOrg();
-      allow update: if isAdmin() && orgId == myOrg();
+      // "Inactieve accounts verwijderen" is een beslissing van de eigenaar, niet van elke beheerder.
+      // Heeft de studio (nog) geen eigenaar, dan mag een beheerder het.
+      allow update: if isAdmin() && orgId == myOrg()
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['accountRetention'])
+            || resource.data.get('ownerId', null) == null
+            || resource.data.get('ownerId', null) == request.auth.uid);
       allow create, delete: if false;
     }
 

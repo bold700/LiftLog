@@ -10,6 +10,7 @@ import { applyCors } from './_lib/cors.mjs';
  *                                       van accounts die al eerder zijn verwijderd.
  *  - { action: 'delete-self' }       het eigen account opzeggen (iedereen, behalve de eigenaar van een
  *                                       studio). Ruimt dezelfde gegevens op als 'delete'.
+ *  - { action: 'export-self' }       een kopie van al je eigen gegevens als JSON (AVG art. 15/20).
  *  - { action: 'withdraw-health-consent' }
  *                                       toestemming voor gezondheidsgegevens intrekken: metingen weg,
  *                                       rusthartslag en blessures van het profiel, toestemming op nee.
@@ -28,10 +29,14 @@ import { applyCors } from './_lib/cors.mjs';
  * (als string). Zonder deze var geeft het endpoint een nette foutmelding.
  */
 import { getAdmin } from './_lib/firebaseAdmin.mjs';
-import { amsterdamDate } from './_lib/classReminders.mjs';
+import { deleteQueryInBatches, deleteUserData, exportUserData } from './_lib/accountData.mjs';
+import { enforceRateLimit } from './_lib/requireUser.mjs';
 
 /** Versie van de toestemmingstekst voor gezondheidsgegevens (zie src/components/HealthConsentDialog.tsx). */
 const HEALTH_CONSENT_VERSION = 2;
+
+/** Zo vaak per dag mag iemand zijn gegevens downloaden (het haalt veel documenten op). */
+const EXPORTS_PER_DAY = 5;
 
 function json(res, status, body) {
   const payload = JSON.stringify(body);
@@ -136,6 +141,19 @@ export default async function handler(req, res) {
     } catch (e) {
       console.error('[admin-account] toestemming intrekken mislukte:', e);
       return json(res, 500, { error: 'Intrekken mislukt. Probeer het opnieuw.' });
+    }
+  }
+
+  // Een kopie van al je eigen gegevens (Profiel → Account → "Download mijn gegevens"): recht op
+  // inzage en overdraagbaarheid (AVG art. 15 en 20). Alleen je eigen gegevens, nooit die van een ander.
+  if (action === 'export-self') {
+    if (!(await enforceRateLimit(db, res, callerUid, 'export-self', EXPORTS_PER_DAY, 24 * 60 * 60 * 1000))) return;
+    try {
+      const authUser = await auth.getUser(callerUid).catch(() => null);
+      return json(res, 200, { ok: true, data: await exportUserData(db, callerUid, authUser) });
+    } catch (e) {
+      console.error('[admin-account] export mislukte:', e);
+      return json(res, 500, { error: 'Je gegevens ophalen mislukte. Probeer het later opnieuw.' });
     }
   }
 
@@ -247,76 +265,6 @@ export default async function handler(req, res) {
   }
 
   return json(res, 200, { ok: true, deletedUid: targetUid, cleaned });
-}
-
-/** Verwijdert alle documenten uit een query in batches van 400 (Firestore-limiet is 500). */
-async function deleteQueryInBatches(db, query) {
-  let total = 0;
-  for (;;) {
-    const snap = await query.limit(400).get();
-    if (snap.empty) return total;
-    const batch = db.batch();
-    snap.docs.forEach((d) => batch.delete(d.ref));
-    await batch.commit();
-    total += snap.size;
-    if (snap.size < 400) return total;
-  }
-}
-
-/**
- * Alles wat aan één persoon hangt: per-user collecties op userId, berichten, sleutels, vaste
- * afspraken, komende boekingen en het ranglijstdocument.
- *
- * Wat bewust blijft staan: facturen, betalingen, lidmaatschappen, het creditsaldo en boekingen uit
- * het verleden. Die heeft de studio nodig voor haar administratie (fiscale bewaarplicht); ze
- * verwijzen alleen nog naar een uid waar geen profiel meer bij hoort.
- */
-async function deleteUserData(db, uid) {
-  const result = {};
-  for (const name of [
-    'logs',
-    'checkins',
-    'nutritionLogs',
-    'measurements',
-    'workoutRequests',
-    'pushTokens',
-    'calendarFeedTokens',
-    'mcpKeys',
-    'standingBookings',
-  ]) {
-    result[name] = await deleteQueryInBatches(db, db.collection(name).where('userId', '==', uid));
-  }
-  result.messages = await deleteQueryInBatches(db, db.collection('messages').where('participants', 'array-contains', uid));
-  result.bookingsCancelled = await cancelFutureBookings(db, uid);
-  const lb = db.collection('leaderboardPublic').doc(uid);
-  const lbSnap = await lb.get();
-  if (lbSnap.exists) await lb.delete();
-  result.leaderboardPublic = lbSnap.exists ? 1 : 0;
-  return result;
-}
-
-/**
- * Komende boekingen (en wachtlijstplekken) vrijgeven, zodat de plek in de les niet bezet blijft
- * door iemand die er niet meer is. Boekingen uit het verleden blijven voor de administratie.
- */
-async function cancelFutureBookings(db, uid) {
-  const today = amsterdamDate(new Date(), 0);
-  const snap = await db.collection('bookings').where('userId', '==', uid).get();
-  let cancelled = 0;
-  for (const d of snap.docs) {
-    const booking = d.data();
-    if (!['booked', 'waitlist'].includes(String(booking.status))) continue;
-    const classRef = db.collection('classes').doc(String(booking.classId));
-    const classSnap = await classRef.get();
-    if (!classSnap.exists || String(classSnap.data().date) < today) continue;
-    const batch = db.batch();
-    batch.set(d.ref, { status: 'cancelled', cancelledAt: new Date().toISOString(), refunded: false, cancelledReason: 'account-deleted' }, { merge: true });
-    const counter = booking.status === 'waitlist' ? 'waitlistCount' : 'bookedCount';
-    batch.set(classRef, { [counter]: Math.max(0, (Number(classSnap.data()[counter]) || 0) - 1) }, { merge: true });
-    await batch.commit();
-    cancelled++;
-  }
-  return cancelled;
 }
 
 /** Ranglijstdocumenten waarvan het profiel niet meer bestaat (document-id = uid): resten van

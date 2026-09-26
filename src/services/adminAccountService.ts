@@ -71,3 +71,18 @@ export async function withdrawHealthConsentOnServer(caller: User): Promise<void>
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string })?.error || 'Toestemming intrekken mislukt.');
 }
+
+/**
+ * Een kopie van al je eigen gegevens (AVG: inzage en overdraagbaarheid), als JSON-object van de server.
+ */
+export async function exportOwnData(caller: User): Promise<unknown> {
+  const token = await caller.getIdToken();
+  const res = await fetch(apiUrl('/api/admin-account'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ action: 'export-self' }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string })?.error || 'Je gegevens ophalen mislukte.');
+  return (data as { data?: unknown }).data;
+}

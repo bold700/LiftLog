@@ -10,6 +10,7 @@ import { LogsPage } from './LogsPage';
 import { LeaderboardPage } from './LeaderboardPage';
 import { NutritionInsights } from './NutritionInsights';
 import { OverzichtPage } from './OverzichtPage';
+import { LEADERBOARD_ENABLED } from '../config/features';
 
 export const INZICHTEN_SUB = {
   INZICHTEN: 0,
@@ -87,7 +88,7 @@ export const InzichtenPage = ({
         <Tab value={5} label="Metingen" id="inzichten-tab-5" aria-controls="inzichten-panel-5" />
         <Tab value={4} label="Voeding" id="inzichten-tab-4" aria-controls="inzichten-panel-4" />
         <Tab value={2} label="Logs" id="inzichten-tab-2" aria-controls="inzichten-panel-2" />
-        <Tab value={3} label="Ranglijst" id="inzichten-tab-3" aria-controls="inzichten-panel-3" />
+        {LEADERBOARD_ENABLED && <Tab value={3} label="Ranglijst" id="inzichten-tab-3" aria-controls="inzichten-panel-3" />}
       </Tabs>
       <Box role="tabpanel" id="inzichten-panel-6" hidden={subTab !== 6} sx={{ flex: 1, minHeight: 0 }}>
         {subTab === 6 && (
@@ -120,7 +121,7 @@ export const InzichtenPage = ({
         )}
       </Box>
       <Box role="tabpanel" id="inzichten-panel-3" hidden={subTab !== 3} sx={{ flex: 1, minHeight: 0 }}>
-        {subTab === 3 && <LeaderboardPage />}
+        {LEADERBOARD_ENABLED && subTab === 3 && <LeaderboardPage />}
       </Box>
       <Box role="tabpanel" id="inzichten-panel-4" hidden={subTab !== 4} sx={{ flex: 1, minHeight: 0 }}>
         {subTab === 4 && <NutritionInsights />}

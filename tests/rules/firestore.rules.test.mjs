@@ -176,6 +176,15 @@ await t('beheerder slaat bedrijfsgegevens van eigen studio op → mag', true, up
 await t('trainer slaat bedrijfsgegevens op → geweigerd', false, updateDoc(doc(as('trainer1'), 'orgs/vanas'), { business: { legalName: 'X' } }));
 await t('beheerder zet zelf de actieve betaalmodus → mag (geen geheim)', true, updateDoc(doc(as('admin1'), 'orgs/vanas'), { payments: { mode: 'live' } }));
 
+// "Inactieve accounts verwijderen": alleen de eigenaar (of een beheerder als er geen eigenaar is).
+const retention = { enabled: true, months: 24 };
+await t('beheerder zonder eigenaar boven zich zet inactieve-accounts-instelling → mag', true, updateDoc(doc(as('admin1'), 'orgs/vanas'), { accountRetention: retention }));
+await env.withSecurityRulesDisabled(async (c) => { await updateDoc(doc(c.firestore(), 'orgs/studiob'), { ownerId: 'eigenaarB' }); });
+await t('beheerder die geen eigenaar is zet inactieve-accounts-instelling → geweigerd', false, updateDoc(doc(as('adminB'), 'orgs/studiob'), { accountRetention: retention }));
+await t('diezelfde beheerder wijzigt iets anders van de studio → mag', true, updateDoc(doc(as('adminB'), 'orgs/studiob'), { payments: { mode: 'test' } }));
+await env.withSecurityRulesDisabled(async (c) => { await updateDoc(doc(c.firestore(), 'orgs/studiob'), { ownerId: 'adminB' }); });
+await t('eigenaar zet inactieve-accounts-instelling → mag', true, updateDoc(doc(as('adminB'), 'orgs/studiob'), { accountRetention: retention }));
+
 // orgSecrets: de Mollie-sleutels. Nooit leesbaar of schrijfbaar via de client, ook niet voor de
 // eigen beheerder van de studio — alleen de server (Admin SDK) mag hierbij, na de sleutel bij
 // Mollie zelf geverifieerd te hebben.

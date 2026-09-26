@@ -66,7 +66,9 @@ import { applyCors } from './_lib/cors.mjs';
  *  - Alles blijft binnen de studio van de aanvrager; een sporter reserveert alleen voor zichzelf.
  *  - Credits toekennen kan alleen staf, en alleen aan iemand in de eigen studio.
  */
-import { getAdmin } from './_lib/firebaseAdmin.mjs';
+import { getAdmin, getStorageBucket } from './_lib/firebaseAdmin.mjs';
+import { runAccountRetention } from './_lib/accountRetention.mjs';
+import { clearPublishedLeaderboard } from './_lib/leaderboardCleanup.mjs';
 import { orgIdOf, newId } from './_lib/liftlogData.mjs';
 import { randomBytes } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -1488,7 +1490,41 @@ function cronAuthorized(req, res) {
 async function eveningRun(req, res, db) {
   if (!cronAuthorized(req, res)) return;
   const report = await runEveningNotifications(db);
+  // Opruimen hoort bij dezelfde dagelijkse ronde (Hobby-plan: één cron per dag per taak). Een fout
+  // hier mag de meldingen niet tegenhouden, en andersom.
+  try {
+    report.retention = await runAccountRetention({
+      db,
+      auth: getAdmin().auth,
+      bucket: await getStorageBucket(),
+      notify: notifyRetention(db),
+    });
+  } catch (e) {
+    console.error('[eveningRun] inactieve accounts nalopen mislukte:', e);
+    report.retention = { error: String(e?.message || e) };
+  }
+  try {
+    report.leaderboardRemoved = await clearPublishedLeaderboard(db);
+  } catch (e) {
+    console.error('[eveningRun] ranglijst opruimen mislukte:', e);
+  }
   return json(res, 200, { ...report, build: BUILD });
+}
+
+/** Waarschuwing voor een inactief account: pushmelding, en e-mail als mail is ingericht. */
+function notifyRetention(db) {
+  return async (uid, message, authUser) => {
+    await sendPushToUser(db, uid, { ...message, data: { kind: 'accountRetention' } }).catch(() => 0);
+    if (authUser?.email && mailConfigured()) {
+      await sendViaResend({
+        fromName: 'VORM',
+        to: authUser.email,
+        subject: message.title,
+        text: message.body,
+        html: `<p>${message.body.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c])}</p>`,
+      });
+    }
+  };
 }
 
 // --- Berichten van de studio (Beheer → Meldingen) -----------------------------------------

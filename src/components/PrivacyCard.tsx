@@ -22,10 +22,12 @@ import {
   Typography,
 } from '@mui/material';
 import DeleteForeverRoundedIcon from '@mui/icons-material/DeleteForeverRounded';
+import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
+import { apiUrl } from '../utils/apiOrigin';
 import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
-import { withdrawHealthConsent } from '../services/privacyService';
+import { downloadOwnData, withdrawHealthConsent } from '../services/privacyService';
 import { designTokens } from '../theme/designTokens';
 import { GiveHealthConsentDialog, HEALTH_CONSENT_WHY } from './HealthConsentDialog';
 
@@ -51,6 +53,7 @@ export function PrivacyCard() {
   const consent = me?.healthConsent ?? null;
 
   const [busy, setBusy] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [giveOpen, setGiveOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -71,6 +74,20 @@ export function PrivacyCard() {
       notify.error(e instanceof Error ? e.message : 'Intrekken mislukt.', e);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const download = async () => {
+    if (!auth.user) return;
+    setDownloading(true);
+    try {
+      await downloadOwnData(auth.user);
+    } catch (e) {
+      // Delen geannuleerd op de telefoon is geen fout.
+      if (e instanceof Error && e.name === 'AbortError') return;
+      notify.error(e instanceof Error ? e.message : 'Downloaden mislukt.', e);
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -117,7 +134,26 @@ export function PrivacyCard() {
         )}
       </Box>
 
-      <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 1.5, pt: 1.5 }}>
+      <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 1.5, pt: 1.5, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5 }}>
+        <Button
+          size="small"
+          startIcon={<DownloadRoundedIcon />}
+          disabled={downloading}
+          onClick={() => void download()}
+          sx={{ px: 0, textTransform: 'none' }}
+        >
+          {downloading ? 'Bezig met ophalen…' : 'Download mijn gegevens'}
+        </Button>
+        <Button
+          size="small"
+          component="a"
+          href={apiUrl('/privacy')}
+          target="_blank"
+          rel="noopener"
+          sx={{ px: 0, textTransform: 'none' }}
+        >
+          Privacyverklaring
+        </Button>
         <Button
           size="small"
           color="error"
@@ -160,7 +196,7 @@ export function PrivacyCard() {
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
           <DialogContentText>
             Je account en je gegevens worden definitief verwijderd: je profiel, trainingen, voeding, metingen, foto's, berichten en
-            je plek op de ranglijst. Lessen die je nog had geboekt worden afgemeld; credits vervallen.
+            je koppelingen. Lessen die je nog had geboekt worden afgemeld; credits vervallen.
           </DialogContentText>
           <DialogContentText>
             Facturen en betalingen blijven bij je studio voor hun administratie, omdat de wet dat vraagt.

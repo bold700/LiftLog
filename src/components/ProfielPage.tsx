@@ -49,6 +49,7 @@ import { todayIso } from '../utils/format';
 import { LimitationsEditor } from './LimitationsEditor';
 import { NumberField } from './NumberField';
 import { PrivacyCard } from './PrivacyCard';
+import { LEADERBOARD_ENABLED } from '../config/features';
 
 /** Kaart op de profielpagina (Figma: Surface Container Low, 16 rond, 24 binnenmarge). Functie: volgt het thema. */
 const sectionSx = () => ({
@@ -437,7 +438,7 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
         </>
       )}
       <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: editing ? 1.5 : 1 }}>
-        Je naam staat in de app en op de ranglijst. Leeftijd en geslacht vullen de AI-routekaart alvast in.
+        Je naam staat in de app. Leeftijd en geslacht vullen de AI-routekaart alvast in.
       </Typography>
     </Box>
   );
@@ -790,12 +791,12 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
 
       {activeTab === 'account' && (
         <Box sx={gridSx}>
+          <Box sx={columnSx}>{accountCard}</Box>
           <Box sx={columnSx}>
-            {accountCard}
             {/* Toestemming en account verwijderen gaan altijd over jezelf, nooit over een bekeken sporter. */}
             {!viewed.isOther && <PrivacyCard />}
+            {LEADERBOARD_ENABLED && leaderboardCard}
           </Box>
-          <Box sx={columnSx}>{leaderboardCard}</Box>
         </Box>
       )}
 

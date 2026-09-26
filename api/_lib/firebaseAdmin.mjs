@@ -103,3 +103,19 @@ export function getAdmin() {
   }
   return { auth: getAuth(), db: getFirestore() };
 }
+
+/**
+ * De opslagbucket (profielfoto's, voortgangsfoto's), of null als die niet bekend is. De naam staat
+ * al in Vercel voor de app (VITE_FIREBASE_STORAGE_BUCKET); FIREBASE_STORAGE_BUCKET gaat voor.
+ */
+export async function getStorageBucket() {
+  const name = String(process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET || '').trim();
+  if (!name || getAdmin().error) return null;
+  try {
+    const { getStorage } = await import('firebase-admin/storage');
+    return getStorage().bucket(name);
+  } catch (e) {
+    console.error('[firebaseAdmin] opslag niet beschikbaar:', e?.message || e);
+    return null;
+  }
+}
