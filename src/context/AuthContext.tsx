@@ -29,6 +29,7 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured, firebaseConfig } from '../firebase/config';
 import { createProfile } from '../services/profileService';
 import { deleteOwnAccount } from '../services/adminAccountService';
+import { removeOwnFiles } from '../services/privacyService';
 import { getCurrentOrgId, requireOrgId } from '../services/orgContext';
 import { isStandaloneApp } from '../utils/appMode';
 import type { ProfileRole } from '../types';
@@ -267,6 +268,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       // Via de server: de app mag geen profielen verwijderen, en de server ruimt in één keer
       // ook de logs, metingen en het ranglijstdocument op.
+      // Eerst de eigen foto's (voortgang, profiel): de server kan niet bij de opslag. Lukt dat
+      // niet helemaal, dan gaat het verwijderen van het account toch door.
+      await removeOwnFiles(auth.currentUser.uid).catch((e) => console.warn('[account] bestanden opruimen deels mislukt', e));
       await deleteOwnAccount(auth.currentUser);
       await firebaseSignOut(auth);
     } catch (e: unknown) {

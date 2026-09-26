@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
+  Alert,
   Typography,
   TextField,
   Accordion,
@@ -139,6 +140,8 @@ export function MetingenPage({ openFormRequested, onConsumeOpenForm }: MetingenP
   const effectiveUserId = targetId || selfUid;
   const targetProfile = targetId ? sporters.find((s) => s.userId === targetId) ?? null : profileCtx?.profile ?? null;
   const effectiveTrainerId = targetId ? targetProfile?.trainerId ?? null : selfTrainerId;
+  // Nee gezegd tegen gezondheidsgegevens (AVG): dan leggen we ook geen nieuwe metingen vast.
+  const healthBlocked = targetProfile?.healthConsent?.given === false;
 
   const load = useCallback(async () => {
     if (!effectiveUserId) return;
@@ -298,6 +301,14 @@ export function MetingenPage({ openFormRequested, onConsumeOpenForm }: MetingenP
     if (bodyScan?.values.weightKg != null) w = bodyScan.values.weightKg;
     if (bodyScan?.values.bodyFatPct != null && !fatIsComputed) bf = bodyScan.values.bodyFatPct;
     if (w == null && bf == null && !hasCirc && !hasSkin && !hasPhoto && !bodyScan) return;
+    if (healthBlocked) {
+      notify.error(
+        targetId
+          ? 'Deze sporter heeft geen toestemming gegeven voor gezondheidsgegevens. Metingen vastleggen kan pas als die er is.'
+          : 'Je hebt geen toestemming gegeven voor gezondheidsgegevens. Zet die aan in Profiel → Account om metingen vast te leggen.'
+      );
+      return;
+    }
     const bodyFatMethod: BodyFatMethod | null =
       bf == null ? null : fatIsComputed ? 'durnin-womersley' : bodyScan?.values.bodyFatPct != null ? 'bodyscan' : bodyFatMethodStored ?? 'manual';
     setSaving(true);
@@ -414,6 +425,13 @@ export function MetingenPage({ openFormRequested, onConsumeOpenForm }: MetingenP
   return (
     <PageLayout maxWidth="none">
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+        {healthBlocked && (
+          <Alert severity="info">
+            {targetId
+              ? 'Deze sporter heeft geen toestemming gegeven voor gezondheidsgegevens. Nieuwe metingen kunnen pas worden vastgelegd als die er is.'
+              : 'Je hebt geen toestemming gegeven voor gezondheidsgegevens. Wil je metingen bijhouden? Zet het aan in Profiel → Account.'}
+          </Alert>
+        )}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: { xs: 0.5, sm: 1 } }}>
           {!isTrainer && profileCtx?.profile && (
             <Button size="small" variant="text" sx={{ textTransform: 'none' }} onClick={() => setWeeklyOpen(true)}>

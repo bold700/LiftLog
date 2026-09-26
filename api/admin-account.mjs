@@ -8,6 +8,11 @@ import { applyCors } from './_lib/cors.mjs';
  *                                       workout-aanvragen en het ranglijstdocument van die persoon.
  *                                       Daarna wordt de ranglijst automatisch nagelopen op documenten
  *                                       van accounts die al eerder zijn verwijderd.
+ *  - { action: 'delete-self' }       het eigen account opzeggen (iedereen, behalve de eigenaar van een
+ *                                       studio). Ruimt dezelfde gegevens op als 'delete'.
+ *  - { action: 'withdraw-health-consent' }
+ *                                       toestemming voor gezondheidsgegevens intrekken: metingen weg,
+ *                                       rusthartslag en blessures van het profiel, toestemming op nee.
  *  - { action: 'updateCredentials', targetUid, email?, password? }
  *                                       wijzigt het e-mailadres en/of wachtwoord van een sporter uit
  *                                       eigen studio, direct en zonder diens huidige wachtwoord (voor
@@ -23,6 +28,10 @@ import { applyCors } from './_lib/cors.mjs';
  * (als string). Zonder deze var geeft het endpoint een nette foutmelding.
  */
 import { getAdmin } from './_lib/firebaseAdmin.mjs';
+import { amsterdamDate } from './_lib/classReminders.mjs';
+
+/** Versie van de toestemmingstekst voor gezondheidsgegevens (zie src/components/HealthConsentDialog.tsx). */
+const HEALTH_CONSENT_VERSION = 1;
 
 function json(res, status, body) {
   const payload = JSON.stringify(body);
@@ -87,6 +96,14 @@ export default async function handler(req, res) {
   // verwijderen. Anders kon iemand zijn profiel weggooien en zich met hetzelfde account opnieuw
   // aanmaken in een andere studio — inclusief de logs en metingen die op zijn uid blijven staan.
   if (action === 'delete-self') {
+    // Een eigenaar kan zijn studio niet wees laten: eerst het eigenaarschap overdragen of de studio
+    // opzeggen (via support), anders staan de trainers en leden zonder beheerder.
+    const owned = await db.collection('orgs').where('ownerId', '==', callerUid).get();
+    if (!owned.empty) {
+      return json(res, 409, {
+        error: 'Je bent eigenaar van een studio. Draag die eerst over of neem contact op met support@bold700.com om je account te verwijderen.',
+      });
+    }
     try {
       await auth.deleteUser(callerUid);
     } catch (e) {
@@ -100,6 +117,25 @@ export default async function handler(req, res) {
       return json(res, 200, { ok: true, deletedUid: callerUid, cleaned });
     } catch {
       return json(res, 500, { error: 'Login verwijderd, maar het opruimen van je gegevens mislukte.' });
+    }
+  }
+
+  // Toestemming voor gezondheidsgegevens intrekken (Profiel → Account). De AVG vraagt dat de
+  // verwerking dan stopt: metingen (gewicht, lichaamssamenstelling, omtrek) gaan weg, net als
+  // rusthartslag en blessures op het profiel. Voortgangsfoto's ruimt de app eerst zelf op (zie
+  // src/services/privacyService.ts); de server kent de opslagbucket niet.
+  if (action === 'withdraw-health-consent') {
+    try {
+      const removed = await deleteQueryInBatches(db, db.collection('measurements').where('userId', '==', callerUid));
+      await db.collection('profiles').doc(callerUid).update({
+        restingHrBpm: null,
+        limitations: [],
+        healthConsent: { given: false, at: new Date().toISOString(), version: HEALTH_CONSENT_VERSION },
+      });
+      return json(res, 200, { ok: true, measurementsRemoved: removed });
+    } catch (e) {
+      console.error('[admin-account] toestemming intrekken mislukte:', e);
+      return json(res, 500, { error: 'Intrekken mislukt. Probeer het opnieuw.' });
     }
   }
 
@@ -227,17 +263,60 @@ async function deleteQueryInBatches(db, query) {
   }
 }
 
-/** Alles wat aan één persoon hangt: per-user collecties op userId, plus het ranglijstdocument. */
+/**
+ * Alles wat aan één persoon hangt: per-user collecties op userId, berichten, sleutels, vaste
+ * afspraken, komende boekingen en het ranglijstdocument.
+ *
+ * Wat bewust blijft staan: facturen, betalingen, lidmaatschappen, het creditsaldo en boekingen uit
+ * het verleden. Die heeft de studio nodig voor haar administratie (fiscale bewaarplicht); ze
+ * verwijzen alleen nog naar een uid waar geen profiel meer bij hoort.
+ */
 async function deleteUserData(db, uid) {
   const result = {};
-  for (const name of ['logs', 'checkins', 'nutritionLogs', 'measurements', 'workoutRequests']) {
+  for (const name of [
+    'logs',
+    'checkins',
+    'nutritionLogs',
+    'measurements',
+    'workoutRequests',
+    'pushTokens',
+    'calendarFeedTokens',
+    'mcpKeys',
+    'standingBookings',
+  ]) {
     result[name] = await deleteQueryInBatches(db, db.collection(name).where('userId', '==', uid));
   }
+  result.messages = await deleteQueryInBatches(db, db.collection('messages').where('participants', 'array-contains', uid));
+  result.bookingsCancelled = await cancelFutureBookings(db, uid);
   const lb = db.collection('leaderboardPublic').doc(uid);
   const lbSnap = await lb.get();
   if (lbSnap.exists) await lb.delete();
   result.leaderboardPublic = lbSnap.exists ? 1 : 0;
   return result;
+}
+
+/**
+ * Komende boekingen (en wachtlijstplekken) vrijgeven, zodat de plek in de les niet bezet blijft
+ * door iemand die er niet meer is. Boekingen uit het verleden blijven voor de administratie.
+ */
+async function cancelFutureBookings(db, uid) {
+  const today = amsterdamDate(new Date(), 0);
+  const snap = await db.collection('bookings').where('userId', '==', uid).get();
+  let cancelled = 0;
+  for (const d of snap.docs) {
+    const booking = d.data();
+    if (!['booked', 'waitlist'].includes(String(booking.status))) continue;
+    const classRef = db.collection('classes').doc(String(booking.classId));
+    const classSnap = await classRef.get();
+    if (!classSnap.exists || String(classSnap.data().date) < today) continue;
+    const batch = db.batch();
+    batch.set(d.ref, { status: 'cancelled', cancelledAt: new Date().toISOString(), refunded: false, cancelledReason: 'account-deleted' }, { merge: true });
+    const counter = booking.status === 'waitlist' ? 'waitlistCount' : 'bookedCount';
+    batch.set(classRef, { [counter]: Math.max(0, (Number(classSnap.data()[counter]) || 0) - 1) }, { merge: true });
+    await batch.commit();
+    cancelled++;
+  }
+  return cancelled;
 }
 
 /** Ranglijstdocumenten waarvan het profiel niet meer bestaat (document-id = uid): resten van

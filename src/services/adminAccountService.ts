@@ -55,3 +55,19 @@ export async function updateMemberCredentials(
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string })?.error || 'Wijzigen van accountgegevens mislukt.');
 }
+
+/**
+ * Toestemming voor gezondheidsgegevens intrekken: de server verwijdert de metingen en zet
+ * rusthartslag en blessures op het profiel leeg. Voortgangsfoto's ruimt de app eerst zelf op
+ * (zie privacyService.withdrawHealthConsent).
+ */
+export async function withdrawHealthConsentOnServer(caller: User): Promise<void> {
+  const token = await caller.getIdToken();
+  const res = await fetch(apiUrl('/api/admin-account'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ action: 'withdraw-health-consent' }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string })?.error || 'Toestemming intrekken mislukt.');
+}
