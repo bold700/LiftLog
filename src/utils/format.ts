@@ -11,6 +11,21 @@ import type {
 
 const LOCALE = 'nl-NL';
 
+const NUMBER_FORMATS = new Map<number, Intl.NumberFormat>();
+
+/**
+ * Getal zoals je het in Nederland schrijft: komma voor decimalen, punt voor duizendtallen
+ * ("2.400", "18,9"). Hoogstens `decimals` cijfers achter de komma, nullen erachter vallen weg.
+ */
+export function formatNumber(n: number, decimals = 1): string {
+  let f = NUMBER_FORMATS.get(decimals);
+  if (!f) {
+    f = new Intl.NumberFormat('nl-NL', { maximumFractionDigits: decimals });
+    NUMBER_FORMATS.set(decimals, f);
+  }
+  return f.format(n);
+}
+
 /** Vandaag als YYYY-MM-DD in de lokale tijdzone (niet UTC: na middernacht is het hier al de volgende dag). */
 export function todayIso(): string {
   return toIsoDate(new Date());

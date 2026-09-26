@@ -1,4 +1,4 @@
-// Bevestigingsdialoog "Oefening Verwijderen" op de Log-pagina.
+// Bevestigingsdialoog "Log verwijderen" op de Log-pagina.
 // Koppelt de md-* knoppen (annuleren/verwijderen) via refs aan de DOM, zoals voorheen in LogsPage.
 import { useEffect, useRef } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Typography } from '@mui/material';
@@ -63,10 +63,10 @@ export function DeleteExerciseDialog({ open, onClose, onConfirm }: DeleteExercis
       onClose={onClose}
       maxWidth="sm"
     >
-      <DialogTitle>Oefening Verwijderen</DialogTitle>
+      <DialogTitle>Log verwijderen</DialogTitle>
       <DialogContent>
         <Typography variant="body1">
-          Weet je zeker dat je deze oefening wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.
+          Weet je zeker dat je deze log wilt verwijderen? Dit kan niet ongedaan worden gemaakt.
         </Typography>
       </DialogContent>
       <DialogActions>
@@ -77,7 +77,7 @@ export function DeleteExerciseDialog({ open, onClose, onConfirm }: DeleteExercis
         {/* @ts-ignore - Material Web Components are web components */}
         <md-filled-button
           ref={deleteConfirmButtonRef}
-          style={{ '--md-filled-button-container-color': '#BA1A1A' } as any}
+          style={{ '--md-filled-button-container-color': 'var(--md-sys-color-error, #BA1A1A)', '--md-filled-button-label-text-color': 'var(--md-sys-color-on-error, #FFFFFF)' } as any}
         >
           {/* @ts-ignore */}
           <md-icon slot="start">delete</md-icon>

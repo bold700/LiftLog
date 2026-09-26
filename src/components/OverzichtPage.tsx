@@ -26,10 +26,9 @@ interface StatTileProps {
   label: string;
   /** Alleen op desktop achter het label; op mobiel is daar geen ruimte voor (Figma: drie smalle tegels). */
   period?: string;
-  desktopOnly?: boolean;
 }
 
-function StatTile({ value, label, period, desktopOnly }: StatTileProps) {
+function StatTile({ value, label, period }: StatTileProps) {
   return (
     <Box
       sx={{
@@ -37,18 +36,18 @@ function StatTile({ value, label, period, desktopOnly }: StatTileProps) {
         px: 2,
         py: 1.75,
         minWidth: 0,
-        display: desktopOnly ? { xs: 'none', md: 'block' } : 'block',
+        display: 'block',
       }}
     >
       <Typography sx={{ fontSize: 28, lineHeight: '36px', fontWeight: 500 }}>{value}</Typography>
       <Typography variant="body2" color="text.secondary" noWrap>
         {label}
-        {period && (
-          <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>
-            {` · ${period}`}
-          </Box>
-        )}
       </Typography>
+      {period && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} noWrap>
+          {period}
+        </Typography>
+      )}
     </Box>
   );
 }
@@ -108,15 +107,16 @@ export function OverzichtPage({ onOpenMuscles, onOpenLogs }: OverzichtPageProps)
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: 'repeat(3, 1fr)', md: 'repeat(4, 1fr)' },
+          // Telefoon 2×2, zodat ook "Schema deze week" past en elke tegel zijn periode kan tonen.
+          gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' },
           gap: { xs: 1.25, md: 2 },
           mb: 3,
         }}
       >
-        <StatTile value={String(stats.sessions)} label="Trainingen" period={`${OVERVIEW_PERIOD_DAYS} d`} />
-        <StatTile value={formatVolume(stats.volumeKg)} label="Volume" period={`${OVERVIEW_PERIOD_DAYS} d`} />
-        <StatTile value={`${stats.streakWeeks}w`} label="Reeks" />
-        <StatTile value={plan == null ? '–' : `${plan}%`} label="Schema deze week" desktopOnly />
+        <StatTile value={String(stats.sessions)} label="Trainingen" period={`Afgelopen ${OVERVIEW_PERIOD_DAYS} dagen`} />
+        <StatTile value={formatVolume(stats.volumeKg)} label="Volume" period={`Afgelopen ${OVERVIEW_PERIOD_DAYS} dagen`} />
+        <StatTile value={String(stats.streakWeeks)} label={stats.streakWeeks === 1 ? 'Week op rij' : 'Weken op rij'} period="Elke week getraind" />
+        <StatTile value={plan == null ? '–' : `${plan}%`} label="Schema" period="Gedaan deze week" />
       </Box>
 
       {/* Twee kolommen op desktop (Figma "Overview"): spierfocus links, recente logs rechts. */}

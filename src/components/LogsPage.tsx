@@ -11,6 +11,8 @@ import {
   useTheme,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
+import ArrowDropDownRoundedIcon from '@mui/icons-material/ArrowDropDownRounded';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { getAllExercises, updateExercise, deleteExercise } from '../utils/storage';
 import { getSessionLogs, saveSessionLog, deleteSessionLog } from '../utils/sessionLogStorage';
@@ -93,7 +95,7 @@ function LogRow({
         minHeight: 42,
         px: { xs: 1.75, md: 2.5 },
         py: 1,
-        borderRadius: 3,
+        borderRadius: `${designTokens.cardRadius}px`,
         bgcolor: designTokens.cardBackground,
         cursor: onOpen ? 'pointer' : 'default',
         transition: 'background-color 0.15s ease',
@@ -115,12 +117,23 @@ function LogRow({
           {details}
         </Typography>
       )}
+      {/* Zelfde ⋮ als bij Metingen en Oefeningen: zo zie je dat de rij een menu opent. */}
+      {onOpen && <MoreVertIcon fontSize="small" sx={{ color: 'text.secondary', mr: -0.5, flexShrink: 0 }} aria-hidden />}
     </Box>
   );
 }
 
-/** Filterpil zoals Figma: 12px, compact, zodat drie pillen en het aantal op een telefoon naast elkaar passen. */
-const pillSx = (selected: boolean) => ({ ...filterPillSx(selected), fontSize: { xs: 11, sm: 12 }, '& .MuiChip-label': { px: { xs: 1.125, sm: 1.25 } } });
+/** Filterpil: 32px hoog (Material 3), met een pijltje zodat je ziet dat hij een keuzemenu opent. */
+const pillSx = (selected: boolean) => ({ ...filterPillSx(selected), fontSize: 13, '& .MuiChip-label': { px: 1.25 } });
+
+const withCaret = (text: string) => (
+  <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', minWidth: 0 }}>
+    <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      {text}
+    </Box>
+    <ArrowDropDownRoundedIcon sx={{ fontSize: 20, mr: -0.75, flexShrink: 0 }} />
+  </Box>
+);
 
 export interface LogsPageProps {
   /** Open direct het dialoog "Training log toevoegen" (bijv. na klik FAB → Training log). */
@@ -468,21 +481,18 @@ export const LogsPage = ({ openSessionLogDialogRequested, onConsumeOpenSessionLo
       {/* Filters en aantal, zoals Figma: "Last 30 days · All exercises · All workouts   142 entries". */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.75, sm: 1 }, mb: 2.5, flexWrap: 'wrap' }}>
         <Chip
-          size="small"
-          label={periodLabel}
+          label={withCaret(periodLabel)}
           onClick={(e) => setFilterMenu({ kind: 'period', anchor: e.currentTarget })}
           sx={pillSx(filter.periodDays != null)}
         />
         <Chip
-          size="small"
-          label={filter.exerciseName ?? 'Alle oefeningen'}
+          label={withCaret(filter.exerciseName ?? 'Alle oefeningen')}
           onClick={(e) => setFilterMenu({ kind: 'exercise', anchor: e.currentTarget })}
           onDelete={filter.exerciseName ? () => setFilter((f) => ({ ...f, exerciseName: null })) : undefined}
           sx={{ ...pillSx(filter.exerciseName != null), maxWidth: 200 }}
         />
         <Chip
-          size="small"
-          label={workoutLabel}
+          label={withCaret(workoutLabel)}
           onClick={(e) => setFilterMenu({ kind: 'workout', anchor: e.currentTarget })}
           onDelete={filter.schemaId ? () => setFilter((f) => ({ ...f, schemaId: null })) : undefined}
           sx={{ ...pillSx(filter.schemaId != null), maxWidth: 200 }}

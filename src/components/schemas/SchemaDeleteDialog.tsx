@@ -67,7 +67,7 @@ export const SchemaDeleteDialog = ({ open, schemaName, onClose, onConfirm }: Sch
         {/* @ts-ignore */}
         <md-filled-button
           ref={deleteConfirmButtonRef}
-          style={{ '--md-filled-button-container-color': '#BA1A1A' } as any}
+          style={{ '--md-filled-button-container-color': 'var(--md-sys-color-error, #BA1A1A)', '--md-filled-button-label-text-color': 'var(--md-sys-color-on-error, #FFFFFF)' } as any}
         >
           <md-icon slot="start">delete</md-icon>
           Verwijderen

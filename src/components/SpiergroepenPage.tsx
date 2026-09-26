@@ -39,6 +39,8 @@ export const SpiergroepenPage = () => {
           display: 'grid',
           gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 5fr) minmax(0, 3fr)' },
           gap: { xs: 2, md: 2.5 },
+          // Kaarten niet uitrekken tot de rijhoogte: dat gaf grote lege vlakken onder de legenda en de lijst.
+          alignItems: 'start',
         }}
       >
         <Box sx={{ ...cardSx(), p: { xs: 2, md: 3 }, minWidth: 0 }}>

@@ -172,7 +172,7 @@ export function formatLogDetails(ex: Pick<Exercise, 'weight' | 'sets' | 'reps'>)
 
 export function getRecentLogs(exercises: Exercise[], limit: number, now: Date): RecentLog[] {
   return parseLogs(exercises)
-    .sort((a, b) => b.at.getTime() - a.at.getTime())
+    .sort((a, b) => b.at.getTime() - a.at.getTime() || String(b.ex.id).localeCompare(String(a.ex.id)))
     .slice(0, limit)
     .map((l) => ({
       id: l.ex.id,
@@ -182,9 +182,9 @@ export function getRecentLogs(exercises: Exercise[], limit: number, now: Date): 
     }));
 }
 
-/** "48t" vanaf een ton (één decimaal onder de 10 t), anders "850 kg". */
+/** "48 ton" vanaf een ton (één decimaal onder de 10 ton), anders "850 kg". "48t" las als een afkorting. */
 export function formatVolume(kg: number): string {
-  if (kg < 1000) return `${kg} kg`;
+  if (kg < 1000) return `${Math.round(kg)} kg`;
   const t = kg / 1000;
-  return t < 10 ? `${t.toFixed(1).replace('.', ',')}t` : `${Math.round(t)}t`;
+  return t < 10 ? `${t.toFixed(1).replace('.', ',')} ton` : `${Math.round(t)} ton`;
 }

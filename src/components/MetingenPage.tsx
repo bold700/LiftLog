@@ -463,7 +463,7 @@ export function MetingenPage({ openFormRequested, onConsumeOpenForm }: MetingenP
               setGoalOpen(true);
             }}
           >
-            {goalWeight != null ? `Doel: ${goalWeight} kg` : 'Doelgewicht instellen'}
+            {goalWeight != null ? `Doel ${String(goalWeight).replace('.', ',')} kg` : 'Doelgewicht instellen'}
           </Button>
           <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => openNew()} sx={PRIMARY_BUTTON_SX}>
             Meting
