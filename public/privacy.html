@@ -5,104 +5,251 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Privacyverklaring VORM</title>
 <meta name="description" content="Hoe VORM (BOLD700 B.V.) met je gegevens omgaat." />
+<meta name="theme-color" content="#F8FAF0" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#121410" media="(prefers-color-scheme: dark)" />
 <style>
-  :root { --bg: #fbf8f3; --text: #1b1c18; --muted: #5b5f55; --line: #e2ddd4; --accent: #426833; }
+  /*
+   * Material 3, met hetzelfde kleurenschema als de app (bronkleur #426833, src/theme.json).
+   * Geen externe lettertypen of scripts: een privacypagina hoort zelf niets naar derden te sturen.
+   * Roboto als die op het toestel staat (Android), anders het systeemlettertype.
+   */
+  :root {
+    --md-primary: #426833; --md-on-primary: #FFFFFF;
+    --md-primary-container: #C3EFAD; --md-on-primary-container: #2B4F1E;
+    --md-secondary-container: #D8E7CC; --md-on-secondary-container: #3D4B36;
+    --md-surface: #F8FAF0; --md-on-surface: #191D17; --md-on-surface-variant: #43483F;
+    --md-surface-container-low: #F2F5EA; --md-surface-container: #ECEFE5; --md-surface-container-high: #E7E9DF;
+    --md-outline: #73796E; --md-outline-variant: #C3C8BB;
+    --md-font: Roboto, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #151712; --text: #e4e3dc; --muted: #a9ad9f; --line: #33362f; --accent: #a8d38f; }
+    :root {
+      --md-primary: #9AD680; --md-on-primary: #0B3900;
+      --md-primary-container: #1C520A; --md-on-primary-container: #B5F399;
+      --md-secondary-container: #3D4B36; --md-on-secondary-container: #D8E7CC;
+      --md-surface: #121410; --md-on-surface: #E3E3DC; --md-on-surface-variant: #C3C8BB;
+      --md-surface-container-low: #1A1C18; --md-surface-container: #1E201C; --md-surface-container-high: #292B26;
+      --md-outline: #8D9387; --md-outline-variant: #43483F;
+    }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 720px; margin: 0 auto; padding: 40px 16px 64px; }
-  h1 { font-size: 32px; line-height: 1.2; margin: 0 0 8px; }
-  h2 { font-size: 20px; margin: 36px 0 8px; }
-  p, li { color: var(--text); }
-  ul { padding-left: 20px; }
-  li { margin: 4px 0; }
-  .meta { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
-  a { color: var(--accent); }
-  footer { border-top: 1px solid var(--line); margin-top: 48px; padding-top: 16px; color: var(--muted); font-size: 14px; }
+  html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+  body {
+    margin: 0; background: var(--md-surface); color: var(--md-on-surface);
+    font-family: var(--md-font);
+    /* Body large */
+    font-size: 16px; line-height: 24px; letter-spacing: 0.5px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Top app bar (small) */
+  .app-bar {
+    position: sticky; top: 0; z-index: 1; height: 64px;
+    display: flex; align-items: center; gap: 12px; padding: 0 16px;
+    padding-top: env(safe-area-inset-top, 0px); box-sizing: content-box;
+    background: var(--md-surface-container);
+  }
+  .app-bar .brand { font-size: 22px; line-height: 28px; font-weight: 500; color: var(--md-primary); letter-spacing: 1px; }
+  .app-bar .title { font-size: 16px; line-height: 24px; font-weight: 500; letter-spacing: 0.15px; color: var(--md-on-surface-variant); }
+
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+
+  /* Headline large + body medium */
+  h1 { font-size: 32px; line-height: 40px; font-weight: 400; margin: 8px 0 4px; }
+  .meta { font-size: 14px; line-height: 20px; letter-spacing: 0.25px; color: var(--md-on-surface-variant); margin: 0 0 16px; }
+  .intro { margin: 0 0 24px; }
+
+  /* Samenvatting: gevulde card in primary container */
+  .summary {
+    background: var(--md-primary-container); color: var(--md-on-primary-container);
+    border-radius: 28px; padding: 20px 24px; margin-bottom: 24px;
+  }
+  .summary h2 { font-size: 16px; line-height: 24px; font-weight: 500; letter-spacing: 0.15px; margin: 0 0 8px; }
+  .summary ul { list-style: none; padding: 0; margin: 0; }
+  .summary li { display: flex; gap: 16px; align-items: flex-start; padding: 8px 0; }
+  .summary svg { flex: none; width: 24px; height: 24px; fill: currentColor; }
+
+  /* Inhoud: chips */
+  nav.toc { margin-bottom: 24px; }
+  nav.toc h2 { font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0.1px; color: var(--md-on-surface-variant); margin: 0 0 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: inline-flex; align-items: center; height: 32px; padding: 0 16px;
+    border: 1px solid var(--md-outline-variant); border-radius: 8px;
+    font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: 0.1px;
+    color: var(--md-on-surface-variant); text-decoration: none; position: relative; overflow: hidden;
+  }
+  .chip:hover { background: color-mix(in srgb, var(--md-on-surface-variant) 8%, transparent); }
+  .chip:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+
+  /* Secties: gevulde cards */
+  .card {
+    background: var(--md-surface-container-low); border-radius: 16px;
+    padding: 20px 24px; margin-bottom: 12px;
+  }
+  .card h2 { font-size: 22px; line-height: 28px; font-weight: 400; margin: 0 0 12px; }
+  .card p { margin: 0 0 12px; }
+  .card p:last-child, .card ul:last-child { margin-bottom: 0; }
+  .card ul { margin: 0 0 12px; padding-left: 20px; }
+  .card li { margin: 0 0 8px; }
+  .card li::marker { color: var(--md-primary); }
+  strong { font-weight: 500; }
+  a { color: var(--md-primary); text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; border-radius: 4px; }
+
+  footer {
+    margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--md-outline-variant);
+    font-size: 12px; line-height: 16px; letter-spacing: 0.4px; color: var(--md-on-surface-variant);
+  }
+
+  @media (max-width: 480px) {
+    h1 { font-size: 28px; line-height: 36px; }
+    .card { padding: 16px; }
+    .summary { padding: 16px 20px; }
+  }
+  @media print {
+    .app-bar, nav.toc { display: none; }
+    .card, .summary { background: none; padding: 0; }
+  }
 </style>
 </head>
 <body>
+<header class="app-bar">
+  <span class="brand">VORM</span>
+  <span class="title">Privacy</span>
+</header>
 <main>
-  <h1>Privacyverklaring VORM</h1>
-  <p class="meta">Versie 1.1, 26 september 2026</p>
+  <h1>Privacyverklaring</h1>
+  <p class="meta">Versie 1.1 · 26 september 2026</p>
+  <p class="intro">VORM is een app voor studio's, personal trainers en hun leden: lessen boeken, trainen en je voortgang bijhouden. Hieronder lees je welke gegevens daarvoor worden bewaard, waarom, en wat je zelf kunt regelen.</p>
 
-  <p>VORM is een app voor studio's, personal trainers en hun leden: lessen boeken, trainen en je voortgang bijhouden. Hieronder lees je welke gegevens daarvoor worden bewaard, waarom, en wat je zelf kunt regelen.</p>
+  <section class="summary" aria-labelledby="kort-t">
+    <h2 id="kort-t">In het kort</h2>
+    <ul>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg><span>Alleen jij, je trainer en je studio zien je gegevens. We verkopen ze nooit en gebruiken ze niet voor reclame.</span></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg><span>Gezondheidsgegevens alleen met jouw toestemming. Die kun je altijd intrekken.</span></li>
+      <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg><span>In Profiel → Account download je al je gegevens of verwijder je je account.</span></li>
+    </ul>
+  </section>
 
-  <h2>Wie zijn wij?</h2>
-  <p>VORM is een product van <strong>BOLD700 B.V.</strong>, Zilveren Florijnlaan 7, 3541 HA Utrecht. Vragen over privacy: <a href="mailto:support@bold700.com">support@bold700.com</a>.</p>
+  <nav class="toc" aria-labelledby="toc-t">
+    <h2 id="toc-t">Inhoud</h2>
+    <div class="chips">
+        <a class="chip" href="#wie">Wie zijn wij</a>
+        <a class="chip" href="#verantwoordelijk">Verantwoordelijk</a>
+        <a class="chip" href="#gegevens">Welke gegevens</a>
+        <a class="chip" href="#toestemming">Toestemming</a>
+        <a class="chip" href="#doelen">Waarvoor</a>
+        <a class="chip" href="#grondslag">Grondslag</a>
+        <a class="chip" href="#ontvangers">Wie ziet ze</a>
+        <a class="chip" href="#locatie">Waar</a>
+        <a class="chip" href="#bewaren">Bewaren</a>
+        <a class="chip" href="#beveiliging">Beveiliging</a>
+        <a class="chip" href="#rechten">Jouw rechten</a>
+        <a class="chip" href="#kinderen">Kinderen</a>
+        <a class="chip" href="#wijzigingen">Wijzigingen</a>
+    </div>
+  </nav>
 
-  <h2>Wie is verantwoordelijk voor je gegevens?</h2>
-  <ul>
-    <li><strong>Je studio of personal trainer</strong> bepaalt welke gegevens over jou in VORM worden bijgehouden en waarvoor. Je studio is daarom <em>verwerkingsverantwoordelijke</em>. BOLD700 verwerkt die gegevens namens je studio (<em>verwerker</em>) en heeft daar afspraken over gemaakt.</li>
-    <li>Voor gegevens van studio's als klant en van bezoekers van onze website is <strong>BOLD700</strong> zelf verantwoordelijk.</li>
-  </ul>
-  <p>Heb je een vraag over wat je studio met je gegevens doet? Stel die dan eerst aan je studio. Wij helpen je studio daarbij.</p>
+    <section class="card" id="wie" aria-labelledby="wie-t">
+      <h2 id="wie-t">Wie zijn wij?</h2>
+      <p>VORM is een product van <strong>BOLD700 B.V.</strong>, Zilveren Florijnlaan 7, 3541 HA Utrecht. Vragen over privacy: <a href="mailto:support@bold700.com">support@bold700.com</a>.</p>
+    </section>
 
-  <h2>Welke gegevens?</h2>
-  <ul>
-    <li><strong>Account en contact:</strong> naam, e-mailadres, profielfoto, je rol (sporter, trainer, beheerder) en bij welke studio je hoort.</li>
-    <li><strong>Lessen en administratie:</strong> boekingen en aanwezigheid, abonnement, credits, facturen en de status van betalingen. Betalen gaat via Mollie; wij zien geen volledige bank- of kaartgegevens.</li>
-    <li><strong>Training en voeding:</strong> trainingsschema's, gelogde trainingen, persoonlijke records, voeding die je bijhoudt en je check-ins.</li>
-    <li><strong>Gezondheid (bijzondere persoonsgegevens):</strong> gewicht, lichaamssamenstelling (zoals uit een bodyscan), omtrekmaten, voortgangsfoto's, rusthartslag en blessures of beperkingen. Alleen als jij daar in de app toestemming voor geeft (zie hieronder). Verder geboortedatum, geslacht en lengte, voor het berekenen van bijvoorbeeld hartslagzones.</li>
-    <li><strong>Apparaat:</strong> een code om je pushmeldingen te kunnen sturen. We gebruiken <strong>geen advertentie- of trackingcookies</strong>.</li>
-  </ul>
+    <section class="card" id="verantwoordelijk" aria-labelledby="verantwoordelijk-t">
+      <h2 id="verantwoordelijk-t">Wie is verantwoordelijk voor je gegevens?</h2>
+      <ul>
+      <li><strong>Je studio of personal trainer</strong> bepaalt welke gegevens over jou in VORM worden bijgehouden en waarvoor. Je studio is daarom <em>verwerkingsverantwoordelijke</em>. BOLD700 verwerkt die gegevens namens je studio (<em>verwerker</em>) en heeft daar afspraken over gemaakt.</li>
+      <li>Voor gegevens van studio's als klant en van bezoekers van onze website is <strong>BOLD700</strong> zelf verantwoordelijk.</li>
+      </ul>
+      <p>Heb je een vraag over wat je studio met je gegevens doet? Stel die dan eerst aan je studio. Wij helpen je studio daarbij.</p>
+    </section>
 
-  <h2>Toestemming voor gezondheidsgegevens</h2>
-  <p>Voor gezondheidsgegevens vraagt VORM je uitdrukkelijke toestemming. Die kun je altijd wijzigen in Profiel → Account. Geef je geen toestemming of trek je die in, dan worden je metingen, voortgangsfoto's, rusthartslag en blessures verwijderd en kunnen ze niet opnieuw worden vastgelegd, ook niet door je trainer. Lessen boeken, trainen en je voeding bijhouden blijft gewoon werken. Wel kan je trainer je voortgang dan niet volgen.</p>
+    <section class="card" id="gegevens" aria-labelledby="gegevens-t">
+      <h2 id="gegevens-t">Welke gegevens?</h2>
+      <ul>
+      <li><strong>Account en contact:</strong> naam, e-mailadres, profielfoto, je rol (sporter, trainer, beheerder) en bij welke studio je hoort.</li>
+      <li><strong>Lessen en administratie:</strong> boekingen en aanwezigheid, abonnement, credits, facturen en de status van betalingen. Betalen gaat via Mollie; wij zien geen volledige bank- of kaartgegevens.</li>
+      <li><strong>Training en voeding:</strong> trainingsschema's, gelogde trainingen, persoonlijke records, voeding die je bijhoudt en je check-ins.</li>
+      <li><strong>Gezondheid (bijzondere persoonsgegevens):</strong> gewicht, lichaamssamenstelling (zoals uit een bodyscan), omtrekmaten, voortgangsfoto's, rusthartslag en blessures of beperkingen. Alleen als jij daar in de app toestemming voor geeft (zie hieronder). Verder geboortedatum, geslacht en lengte, voor het berekenen van bijvoorbeeld hartslagzones.</li>
+      <li><strong>Apparaat:</strong> een code om je pushmeldingen te kunnen sturen. We gebruiken <strong>geen advertentie- of trackingcookies</strong>.</li>
+      </ul>
+    </section>
 
-  <h2>Waarvoor gebruiken we ze?</h2>
-  <ul>
-    <li>Om VORM te laten werken: inloggen, lessen boeken, je schema en voortgang tonen, en je trainer je laten begeleiden.</li>
-    <li>Om meldingen te sturen, zoals lesherinneringen en berichten van je studio. Je kunt meldingen uitzetten.</li>
-    <li>Om facturen te maken en betalingen te verwerken.</li>
-    <li>Voor de AI-hulp: als jij of je trainer die gebruikt (een schema laten maken, een foto van een bodyscan of maaltijd laten uitlezen, een trainingssamenvatting of een vraag aan de assistent), gaat wat daarvoor nodig is naar OpenAI. OpenAI gebruikt het niet om zijn AI mee te trainen. Zonder toestemming voor gezondheidsgegevens vraagt de AI-hulp niet naar je gezondheid.</li>
-    <li>Om VORM te beveiligen en misbruik te voorkomen.</li>
-  </ul>
+    <section class="card" id="toestemming" aria-labelledby="toestemming-t">
+      <h2 id="toestemming-t">Toestemming voor gezondheidsgegevens</h2>
+      <p>Voor gezondheidsgegevens vraagt VORM je uitdrukkelijke toestemming. Die kun je altijd wijzigen in Profiel → Account. Geef je geen toestemming of trek je die in, dan worden je metingen, voortgangsfoto's, rusthartslag en blessures verwijderd en kunnen ze niet opnieuw worden vastgelegd, ook niet door je trainer. Lessen boeken, trainen en je voeding bijhouden blijft gewoon werken. Wel kan je trainer je voortgang dan niet volgen.</p>
+    </section>
 
-  <h2>Op welke grond?</h2>
-  <ul>
-    <li><strong>Uitvoering van de overeenkomst</strong> tussen jou en je studio: je account, boekingen en betalingen.</li>
-    <li><strong>Uitdrukkelijke toestemming</strong>: gezondheidsgegevens.</li>
-    <li><strong>Wettelijke plicht</strong>: het bewaren van facturen.</li>
-    <li><strong>Gerechtvaardigd belang</strong>: beveiliging en het voorkomen van misbruik.</li>
-  </ul>
+    <section class="card" id="doelen" aria-labelledby="doelen-t">
+      <h2 id="doelen-t">Waarvoor gebruiken we ze?</h2>
+      <ul>
+      <li>Om VORM te laten werken: inloggen, lessen boeken, je schema en voortgang tonen, en je trainer je laten begeleiden.</li>
+      <li>Om meldingen te sturen, zoals lesherinneringen en berichten van je studio. Je kunt meldingen uitzetten.</li>
+      <li>Om facturen te maken en betalingen te verwerken.</li>
+      <li>Voor de AI-hulp: als jij of je trainer die gebruikt (een schema laten maken, een foto van een bodyscan of maaltijd laten uitlezen, een trainingssamenvatting of een vraag aan de assistent), gaat wat daarvoor nodig is naar OpenAI. OpenAI gebruikt het niet om zijn AI mee te trainen. Zonder toestemming voor gezondheidsgegevens vraagt de AI-hulp niet naar je gezondheid.</li>
+      <li>Om VORM te beveiligen en misbruik te voorkomen.</li>
+      </ul>
+    </section>
 
-  <h2>Wie ziet je gegevens?</h2>
-  <ul>
-    <li><strong>Je studio en je trainers</strong>, voor zover dat bij hun rol past. Studio's zien nooit elkaars leden. Andere leden zien je gegevens niet.</li>
-    <li><strong>Dienstverleners die VORM mogelijk maken:</strong> Google Firebase (database, opslag, inloggen, pushmeldingen), Vercel (hosting), Mollie (betalingen), Resend (e-mail) en OpenAI (AI-hulp). Met hen zijn afspraken gemaakt over beveiliging en geheimhouding.</li>
-    <li>We <strong>verkopen je gegevens nooit</strong> en gebruiken ze niet voor reclame.</li>
-  </ul>
+    <section class="card" id="grondslag" aria-labelledby="grondslag-t">
+      <h2 id="grondslag-t">Op welke grond?</h2>
+      <ul>
+      <li><strong>Uitvoering van de overeenkomst</strong> tussen jou en je studio: je account, boekingen en betalingen.</li>
+      <li><strong>Uitdrukkelijke toestemming</strong>: gezondheidsgegevens.</li>
+      <li><strong>Wettelijke plicht</strong>: het bewaren van facturen.</li>
+      <li><strong>Gerechtvaardigd belang</strong>: beveiliging en het voorkomen van misbruik.</li>
+      </ul>
+    </section>
 
-  <h2>Waar staan je gegevens?</h2>
-  <p>Een deel van onze dienstverleners zit in de Europese Unie, een deel in de Verenigde Staten (onder andere Vercel, OpenAI en Resend). Gegevens gaan alleen naar landen buiten de EU met passende waarborgen, zoals het EU-VS Data Privacy Framework of de standaardcontractbepalingen van de Europese Commissie.</p>
+    <section class="card" id="ontvangers" aria-labelledby="ontvangers-t">
+      <h2 id="ontvangers-t">Wie ziet je gegevens?</h2>
+      <ul>
+      <li><strong>Je studio en je trainers</strong>, voor zover dat bij hun rol past. Studio's zien nooit elkaars leden. Andere leden zien je gegevens niet.</li>
+      <li><strong>Dienstverleners die VORM mogelijk maken:</strong> Google Firebase (database, opslag, inloggen, pushmeldingen), Vercel (hosting), Mollie (betalingen), Resend (e-mail) en OpenAI (AI-hulp). Met hen zijn afspraken gemaakt over beveiliging en geheimhouding.</li>
+      <li>We <strong>verkopen je gegevens nooit</strong> en gebruiken ze niet voor reclame.</li>
+      </ul>
+    </section>
 
-  <h2>Hoe lang bewaren we ze?</h2>
-  <ul>
-    <li>Zolang je account bestaat. Je kunt je account zelf verwijderen in Profiel → Account; je gegevens worden dan direct verwijderd, en binnen 90 dagen ook uit back-ups.</li>
-    <li>Je studio kan instellen dat accounts die lange tijd niet zijn gebruikt automatisch worden verwijderd. Je krijgt dan 30 dagen van tevoren een melding en kunt je account houden door in te loggen.</li>
-    <li>Facturen en betalingen bewaart je studio 7 jaar, omdat de wet dat vraagt.</li>
-  </ul>
+    <section class="card" id="locatie" aria-labelledby="locatie-t">
+      <h2 id="locatie-t">Waar staan je gegevens?</h2>
+      <p>Een deel van onze dienstverleners zit in de Europese Unie, een deel in de Verenigde Staten (onder andere Vercel, OpenAI en Resend). Gegevens gaan alleen naar landen buiten de EU met passende waarborgen, zoals het EU-VS Data Privacy Framework of de standaardcontractbepalingen van de Europese Commissie.</p>
+    </section>
 
-  <h2>Beveiliging</h2>
-  <p>Alle verbindingen zijn versleuteld. Iedereen ziet alleen de gegevens van zijn eigen studio en wat bij zijn rol past; die toegangsregels worden bij elke wijziging automatisch getest. Er wordt elke dag een back-up gemaakt, die 14 dagen wordt bewaard. Geen systeem is volledig veilig; merken we een datalek, dan handelen we volgens de wet en informeren we je studio.</p>
+    <section class="card" id="bewaren" aria-labelledby="bewaren-t">
+      <h2 id="bewaren-t">Hoe lang bewaren we ze?</h2>
+      <ul>
+      <li>Zolang je account bestaat. Je kunt je account zelf verwijderen in Profiel → Account; je gegevens worden dan direct verwijderd, en binnen 90 dagen ook uit back-ups.</li>
+      <li>Je studio kan instellen dat accounts die lange tijd niet zijn gebruikt automatisch worden verwijderd. Je krijgt dan 30 dagen van tevoren een melding en kunt je account houden door in te loggen.</li>
+      <li>Facturen en betalingen bewaart je studio 7 jaar, omdat de wet dat vraagt.</li>
+      </ul>
+    </section>
 
-  <h2>Jouw rechten</h2>
-  <p>Je hebt recht op inzage, correctie, verwijdering, beperking, bezwaar en overdracht van je gegevens, en je kunt je toestemming intrekken. Veel regel je zelf in de app, in Profiel → Account:</p>
-  <ul>
-    <li><strong>Download mijn gegevens</strong>: een kopie van alles wat VORM over je bewaart.</li>
-    <li><strong>Toestemming voor gezondheidsgegevens</strong> geven of intrekken.</li>
-    <li><strong>Account verwijderen</strong>.</li>
-  </ul>
-  <p>Voor de rest: neem contact op met je studio of met <a href="mailto:support@bold700.com">support@bold700.com</a>. Ben je het niet eens met hoe we met je gegevens omgaan, dan kun je een klacht indienen bij de <a href="https://www.autoriteitpersoonsgegevens.nl" rel="noopener">Autoriteit Persoonsgegevens</a>.</p>
+    <section class="card" id="beveiliging" aria-labelledby="beveiliging-t">
+      <h2 id="beveiliging-t">Beveiliging</h2>
+      <p>Alle verbindingen zijn versleuteld. Iedereen ziet alleen de gegevens van zijn eigen studio en wat bij zijn rol past; die toegangsregels worden bij elke wijziging automatisch getest. Er wordt elke dag een back-up gemaakt, die 14 dagen wordt bewaard. Geen systeem is volledig veilig; merken we een datalek, dan handelen we volgens de wet en informeren we je studio.</p>
+    </section>
 
-  <h2>Kinderen</h2>
-  <p>VORM is bedoeld voor personen van 16 jaar en ouder. Ben je jonger, dan is toestemming van een ouder of voogd nodig.</p>
+    <section class="card" id="rechten" aria-labelledby="rechten-t">
+      <h2 id="rechten-t">Jouw rechten</h2>
+      <p>Je hebt recht op inzage, correctie, verwijdering, beperking, bezwaar en overdracht van je gegevens, en je kunt je toestemming intrekken. Veel regel je zelf in de app, in Profiel → Account:</p>
+      <ul>
+      <li><strong>Download mijn gegevens</strong>: een kopie van alles wat VORM over je bewaart.</li>
+      <li><strong>Toestemming voor gezondheidsgegevens</strong> geven of intrekken.</li>
+      <li><strong>Account verwijderen</strong>.</li>
+      </ul>
+      <p>Voor de rest: neem contact op met je studio of met <a href="mailto:support@bold700.com">support@bold700.com</a>. Ben je het niet eens met hoe we met je gegevens omgaan, dan kun je een klacht indienen bij de <a href="https://www.autoriteitpersoonsgegevens.nl" rel="noopener">Autoriteit Persoonsgegevens</a>.</p>
+    </section>
 
-  <h2>Wijzigingen</h2>
-  <p>We kunnen deze privacyverklaring aanpassen. De actuele versie staat altijd op deze pagina. Bij belangrijke wijzigingen laten we het je in de app weten.</p>
+    <section class="card" id="kinderen" aria-labelledby="kinderen-t">
+      <h2 id="kinderen-t">Kinderen</h2>
+      <p>VORM is bedoeld voor personen van 16 jaar en ouder. Ben je jonger, dan is toestemming van een ouder of voogd nodig.</p>
+    </section>
+
+    <section class="card" id="wijzigingen" aria-labelledby="wijzigingen-t">
+      <h2 id="wijzigingen-t">Wijzigingen</h2>
+      <p>We kunnen deze privacyverklaring aanpassen. De actuele versie staat altijd op deze pagina. Bij belangrijke wijzigingen laten we het je in de app weten.</p>
+    </section>
 
   <footer>BOLD700 B.V. · Zilveren Florijnlaan 7, 3541 HA Utrecht · <a href="mailto:support@bold700.com">support@bold700.com</a></footer>
 </main>
