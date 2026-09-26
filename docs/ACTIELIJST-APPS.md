@@ -16,18 +16,19 @@ tot die er is, slaan de apps de live update over.
 
 ---
 
-## A. Apple: ontwikkelaarsaccount voor BOLD700
+## A. Apple: bestaand account omzetten naar BOLD700 B.V.
 
-- [ ] **D-U-N-S-nummer** van BOLD700 bij de hand (hetzelfde als bij Google). De bedrijfsnaam moet
-      precies zo gespeld zijn als bij de KvK en D&B.
-- [ ] **Apple ID op een bold700.com-adres** aanmaken (bijv. `apps@bold700.com`), met tweestapsverificatie.
-- [ ] Aanmelden op <https://developer.apple.com/programs/enroll/> als **Organization**:
-      bedrijfsnaam, D-U-N-S, website `bold700.com`, zakelijk telefoonnummer. Kosten € 99 per jaar.
-      Apple controleert dit (vaak een telefoontje); reken op een paar dagen.
+Het huidige account (Team-ID `YR94KX729G`, op naam van Kenny Timmer) wordt omgezet naar een
+organisatie. Alle apps op het account gaan mee; het Team-ID blijft hetzelfde.
 
-Als het account is goedgekeurd:
+- [x] Aanvraag "Individual to Organization" ingediend (26 sept 2026) met BOLD700 B.V.,
+      D-U-N-S `965764607`, website `bold700.com`. Apple reageert binnen een werkdag en belt vaak ter
+      controle.
+- [ ] Na goedkeuring: in App Store Connect staat **BOLD700 B.V.** als verkoper.
 
-- [ ] **Team-ID** noteren: developer.apple.com → Account → Membership details.
+Als het account is omgezet:
+
+- [x] **Team-ID**: `YR94KX729G` (blijft na het omzetten hetzelfde).
 - [ ] **App-ID registreren**: Certificates, Identifiers & Profiles → Identifiers → + → App IDs → App.
       Bundle ID (Explicit): `com.bold700.vorm`. Vink aan: **HealthKit** en **Push Notifications**.
 - [ ] **App aanmaken** in <https://appstoreconnect.apple.com> → Apps → + → Nieuwe app:
@@ -90,7 +91,7 @@ Tab **Variables** (niet geheim):
 
 | Naam | Waarde |
 |---|---|
-| `APPLE_TEAM_ID` | het Team-ID van BOLD700 |
+| `APPLE_TEAM_ID` | `YR94KX729G` |
 | `VITE_FIREBASE_API_KEY` … `VITE_FIREBASE_APP_ID` | de zes `VITE_FIREBASE_*`-waarden, over te nemen uit Vercel → Settings → Environment Variables |
 
 ## E. Eerste builds
