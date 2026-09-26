@@ -1,5 +1,5 @@
 /**
- * Beheer → Huisstijl: accounts die lang niet zijn gebruikt automatisch verwijderen.
+ * Beheer → Instellingen: accounts die lang niet zijn gebruikt automatisch verwijderen.
  *
  * Alleen de eigenaar van de studio mag dit aan- of uitzetten en de termijn kiezen (Firestore-regels);
  * andere beheerders zien hoe het staat. Het werk zelf doet de dagelijkse ronde op de server
@@ -60,7 +60,7 @@ export function AccountRetentionSettings({ orgId, myUid }: { orgId: string; myUi
 
   return (
     <ContentCard>
-      <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
+      <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
         Inactieve accounts
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>

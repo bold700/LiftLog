@@ -44,6 +44,7 @@ export const en: Messages = {
       classTypes: 'Class types',
       subscriptions: 'Subscriptions',
       branding: 'Branding',
+      settings: 'Settings',
       billing: 'Billing',
       notifications: 'Notifications',
     },
@@ -141,7 +142,7 @@ export const en: Messages = {
     descriptionHelp: 'Short, shown to the member in the booking dialog. Empty = no description.',
     rooms: {
       title: 'Rooms',
-      help: 'Manage the studio\'s rooms here; a class type or one-off class then picks one — no more free typing, which caused typos like "Boven" next to "boven".',
+      help: 'Your studio\'s rooms. A class type or one-off class picks one from this list.',
       placeholder: 'Room name',
       add: 'Add',
       empty: 'No rooms added yet.',
@@ -174,7 +175,7 @@ export const en: Messages = {
     newPlan: 'New plan',
     empty: 'No plans yet. Create one, then assign it to members.',
     loadFailed: 'Could not load plans. Your plans are still there; please try again.',
-    pickToEdit: 'Pick a plan on the left to edit it.',
+    pickToEdit: 'Pick a plan to edit it.',
     kpi: {
       members: 'Active members',
       membersShort: 'Members',
@@ -244,7 +245,7 @@ export const en: Messages = {
     export: 'Export CSV',
     empty: 'No charges yet. They appear once you assign a plan to a member.',
     loadFailed: 'Could not load charges. Nothing was lost; please try again.',
-    pickToView: 'Pick a charge on the left.',
+    pickToView: 'Pick a charge to see the details.',
     kpi: { open: 'Open', paidMonth: 'Paid this month', paidShort: 'Paid', overdue: 'Overdue', monthly: 'Monthly recurring' },
     filter: { open: 'Open', paid: 'Paid', all: 'All' },
     member: 'Member',
@@ -310,7 +311,7 @@ export const en: Messages = {
     saved: 'Business details saved.',
     failed: 'Could not save.',
     preview: 'Invoice preview',
-    previewHint: 'This is how logo and details land on the invoice. Download a real invoice from Billing.',
+    previewHint: 'This is how logo and details land on the invoice. Download a real invoice from a charge above.',
   },
   payments: {
     title: 'Payments · Mollie',

@@ -1,47 +1,70 @@
 /**
- * Huisstijl van de studio, voor de beheerder. Volgt het scherm "Branding" uit het ontwerp:
- * logo, naam, merkkleur met de afgeleide stalen, en een voorbeeld dat meteen meebeweegt.
+ * Huisstijl van de studio, voor de beheerder: logo, naam en merkkleur, met een voorbeeld dat meteen
+ * meebeweegt, in licht en donker. Hoe de studio werkt staat bij Instellingen; bedrijfsgegevens en
+ * betalingen bij Facturatie.
  *
- * Twee manieren om aan kleuren te komen. De gewone: één merkkleur kiezen, de rest rolt eruit.
- * De precieze: een export van Google's Material Theme Builder plakken; die gaat dan voor.
+ * Kleuren: één merkkleur kiezen, de rest rolt eruit (Material 3). Wie het precies wil, plakt onder
+ * "Geavanceerd" een export van Google's Material Theme Builder; die gaat dan voor.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, Button, Chip, CircularProgress, FormControlLabel, Switch, TextField, Typography } from '@mui/material';
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from '@mui/material';
 import UploadRoundedIcon from '@mui/icons-material/UploadRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
+import AddPhotoAlternateOutlinedIcon from '@mui/icons-material/AddPhotoAlternateOutlined';
 import { ContentCard } from '../layout';
-import { PaymentsSettings } from './PaymentsSettings';
-import { AccountRetentionSettings } from './AccountRetentionSettings';
+import { BrandLogo } from '../BrandLogo';
 import { useI18n } from '../../context/I18nContext';
 import { useProfile } from '../../context/ProfileContext';
 import { useBranding } from '../../context/BrandingContext';
 import { useNotify } from '../../context/NotifyContext';
-import { getOrg, saveOrg, saveOrgBookingPolicy, saveOrgBranding, saveOrgBusiness, toPaymentsStatus } from '../../services/orgService';
-import { deleteOrgLogo, makePrintLogoFromUrl, uploadOrgLogo } from '../../services/orgLogoService';
-import { isHexColor, parseThemeBuilderExport, resolveScheme, SWATCH_KEYS, type LightScheme } from '../../theme/brandingTheme';
-import type { OrgBranding, OrgBusiness, OrgPaymentsStatus } from '../../types';
-
-/** Standaard bij een studio die het nog niet heeft ingesteld: zelfde aantal uur als de server. */
-const DEFAULT_FREE_CANCEL_HOURS = 12;
+import { getOrg, saveOrg, saveOrgBranding } from '../../services/orgService';
+import { deleteOrgDarkLogo, deleteOrgLogo, makePrintLogoFromUrl, uploadOrgDarkLogo, uploadOrgLogo } from '../../services/orgLogoService';
+import { isHexColor, parseThemeBuilderExport, resolveScheme, SWATCH_KEYS, type ColorMode, type LightScheme } from '../../theme/brandingTheme';
+import { segmentedToggleSx } from '../../theme/segmentedToggle';
+import type { OrgBranding } from '../../types';
 
 const THEME_BUILDER_URL = 'https://material-foundation.github.io/material-theme-builder/';
 
-/** Lege bedrijfsgegevens: naam van de studio, voorvoegsel met het jaar, teller op 1. */
-const emptyBusiness = (orgName: string): OrgBusiness => ({
-  legalName: orgName,
-  street: '',
-  postcode: '',
-  city: '',
-  kvk: '',
-  vatNumber: '',
-  iban: '',
-  invoiceEmail: '',
-  phone: '',
-  invoicePrefix: `${new Date().getFullYear()}-`,
-  nextInvoiceNumber: 1,
-});
-
-const pad4 = (n: number) => String(Math.max(1, Math.trunc(n) || 1)).padStart(4, '0');
+/** Vak voor een logo: het logo zelf, of een gestippeld vak met een icoon als er nog geen is. */
+function LogoSlot({ src, darkSrc, mode, bg }: { src: string | null; darkSrc?: string | null; mode: ColorMode; bg: string }) {
+  return (
+    <Box
+      sx={{
+        width: 56,
+        height: 56,
+        borderRadius: 3,
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        bgcolor: bg,
+        border: src ? 1 : '1px dashed',
+        borderColor: 'divider',
+        color: 'text.secondary',
+      }}
+    >
+      {src ? (
+        <BrandLogo src={src} darkSrc={darkSrc} mode={mode} sx={{ width: '100%', height: '100%', objectFit: 'contain', p: 0.5 }} />
+      ) : (
+        <AddPhotoAlternateOutlinedIcon />
+      )}
+    </Box>
+  );
+}
 
 export function BrandingSettings() {
   const { t } = useI18n();
@@ -59,15 +82,14 @@ export function BrandingSettings() {
   const [staffFullClientAccess, setStaffFullClientAccess] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [logoPrintUrl, setLogoPrintUrl] = useState<string | null>(null);
+  const [logoDarkUrl, setLogoDarkUrl] = useState<string | null>(null);
   const [seed, setSeed] = useState('#426833');
   const [exportText, setExportText] = useState('');
   const [busy, setBusy] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [business, setBusiness] = useState<OrgBusiness>(() => emptyBusiness(''));
-  const [savingBusiness, setSavingBusiness] = useState(false);
-  const [freeCancelHours, setFreeCancelHours] = useState(String(DEFAULT_FREE_CANCEL_HOURS));
-  const [payments, setPayments] = useState<OrgPaymentsStatus>(() => toPaymentsStatus(null));
+  const [uploading, setUploading] = useState<'light' | 'dark' | null>(null);
+  const [previewMode, setPreviewMode] = useState<ColorMode>('light');
   const fileRef = useRef<HTMLInputElement>(null);
+  const darkFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!orgId) return;
@@ -81,6 +103,7 @@ export function BrandingSettings() {
       setStaffFullClientAccess(org.staffFullClientAccess);
       setLogoUrl(org.branding?.logoUrl ?? null);
       setLogoPrintUrl(org.branding?.logoPrintUrl ?? null);
+      setLogoDarkUrl(org.branding?.logoDarkUrl ?? null);
       setSeed(org.branding?.seedColor ?? '#426833');
       // Logo van vóór de drukversie: die alsnog maken, zodat hij op de factuur komt.
       if (org.branding?.logoUrl && !org.branding.logoPrintUrl) {
@@ -91,9 +114,6 @@ export function BrandingSettings() {
         });
       }
       setExportText(org.branding?.lightScheme ? JSON.stringify({ schemes: { light: org.branding.lightScheme } }, null, 2) : '');
-      setBusiness(org.business ?? emptyBusiness(org.name));
-      setPayments(org.payments);
-      setFreeCancelHours(String(org.bookingPolicy?.freeCancelHours ?? DEFAULT_FREE_CANCEL_HOURS));
       setLoaded(true);
     });
     return () => {
@@ -109,16 +129,19 @@ export function BrandingSettings() {
     () => ({
       logoUrl,
       logoPrintUrl,
+      logoDarkUrl,
       seedColor: seedValid ? seed.trim().toUpperCase() : null,
       lightScheme: exportScheme,
     }),
-    [logoUrl, logoPrintUrl, seed, seedValid, exportScheme]
+    [logoUrl, logoPrintUrl, logoDarkUrl, seed, seedValid, exportScheme]
   );
-  const preview: LightScheme = useMemo(() => resolveScheme(draft), [draft]);
+  const preview: LightScheme = useMemo(() => resolveScheme(draft, previewMode), [draft, previewMode]);
+  const lightPreview: LightScheme = useMemo(() => resolveScheme(draft, 'light'), [draft]);
+  const darkPreview: LightScheme = useMemo(() => resolveScheme(draft, 'dark'), [draft]);
 
   const handleLogo = async (file: File | null) => {
     if (!file || !orgId) return;
-    setUploading(true);
+    setUploading('light');
     try {
       const up = await uploadOrgLogo(orgId, file);
       setLogoUrl(up.logoUrl);
@@ -126,7 +149,20 @@ export function BrandingSettings() {
     } catch (e) {
       notify.error('Logo uploaden mislukt.', e);
     } finally {
-      setUploading(false);
+      setUploading(null);
+    }
+  };
+
+  const handleDarkLogo = async (file: File | null) => {
+    if (!file || !orgId) return;
+    setUploading('dark');
+    try {
+      setLogoDarkUrl(await uploadOrgDarkLogo(orgId, file));
+      setPreviewMode('dark');
+    } catch (e) {
+      notify.error('Logo uploaden mislukt.', e);
+    } finally {
+      setUploading(null);
     }
   };
 
@@ -137,8 +173,11 @@ export function BrandingSettings() {
     setLogoPrintUrl(null);
   };
 
-  const freeCancelHoursNum = Number(freeCancelHours);
-  const freeCancelHoursValid = Number.isInteger(freeCancelHoursNum) && freeCancelHoursNum >= 0;
+  const handleRemoveDarkLogo = async () => {
+    if (!orgId) return;
+    await deleteOrgDarkLogo(orgId);
+    setLogoDarkUrl(null);
+  };
 
   const handleSave = async () => {
     if (!orgId) return;
@@ -150,10 +189,6 @@ export function BrandingSettings() {
       notify.error('Geef de studio een naam.');
       return;
     }
-    if (!freeCancelHoursValid) {
-      notify.error('Vul een geldig aantal uur in bij het boekingsbeleid.');
-      return;
-    }
     setBusy(true);
     try {
       if (orgName.trim() !== savedOrgName) {
@@ -161,7 +196,6 @@ export function BrandingSettings() {
         setSavedOrgName(orgName.trim());
       }
       await saveOrgBranding(orgId, draft);
-      await saveOrgBookingPolicy(orgId, { freeCancelHours: freeCancelHoursNum });
       await branding?.refresh();
       notify.success('Huisstijl opgeslagen. Leden zien hem bij hun volgende bezoek.');
     } catch (e) {
@@ -171,29 +205,16 @@ export function BrandingSettings() {
     }
   };
 
-  const setBiz = (patch: Partial<OrgBusiness>) => setBusiness((b) => ({ ...b, ...patch }));
-
-  const handleSaveBusiness = async () => {
-    if (!orgId) return;
-    setSavingBusiness(true);
-    try {
-      await saveOrgBusiness(orgId, business);
-      notify.success(t('business.saved'));
-    } catch (e) {
-      notify.error(t('business.failed'), e);
-    } finally {
-      setSavingBusiness(false);
-    }
-  };
-
   const handleReset = async () => {
     if (!orgId) return;
     setBusy(true);
     try {
       await deleteOrgLogo(orgId);
+      await deleteOrgDarkLogo(orgId);
       await saveOrgBranding(orgId, null);
       setLogoUrl(null);
       setLogoPrintUrl(null);
+      setLogoDarkUrl(null);
       setSeed('#426833');
       setExportText('');
       await branding?.refresh();
@@ -215,63 +236,73 @@ export function BrandingSettings() {
   }
 
   const shownName = orgName.trim() || savedOrgName;
+  const logoRow = (opts: {
+    title: string;
+    hint: string;
+    slot: React.ReactNode;
+    onPick: () => void;
+    busy: boolean;
+    has: boolean;
+    onRemove: () => void;
+  }) => (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: { xs: 'wrap', sm: 'nowrap' }, mb: 2 }}>
+      {opts.slot}
+      <Box sx={{ flex: '1 1 160px', minWidth: 0 }}>
+        <Typography fontWeight={600}>{opts.title}</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+          {opts.hint}
+        </Typography>
+      </Box>
+      <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+        <Button variant="outlined" size="small" startIcon={opts.busy ? <CircularProgress size={14} /> : <UploadRoundedIcon />} disabled={opts.busy} onClick={opts.onPick}>
+          {opts.has ? 'Vervangen' : 'Uploaden'}
+        </Button>
+        {opts.has && (
+          <Button size="small" color="inherit" startIcon={<DeleteOutlineRoundedIcon />} onClick={opts.onRemove}>
+            Verwijderen
+          </Button>
+        )}
+      </Box>
+    </Box>
+  );
 
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) minmax(0, 1fr)' }, gap: 2, alignItems: 'start' }}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) minmax(0, 1fr)' }, gap: 2, alignItems: 'start', '& .MuiCard-root': { mb: 0 } }}>
       <ContentCard>
-        <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
-          Huisstijl
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Wijzigingen gelden overal zodra je opslaat. Leden zien ze bij hun volgende bezoek.
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+          Logo, naam en kleur van je studio. Wijzigingen gelden zodra je opslaat; leden zien ze bij hun volgende bezoek.
         </Typography>
 
-        {/* Logo */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2.5 }}>
-          <Box
-            sx={{
-              width: 56,
-              height: 56,
-              borderRadius: 3,
-              bgcolor: preview.primary,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'hidden',
-              flexShrink: 0,
-            }}
-          >
-            {logoUrl ? <Box component="img" src={logoUrl} alt="" sx={{ width: '100%', height: '100%', objectFit: 'contain', bgcolor: '#fff' }} /> : null}
-          </Box>
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography fontWeight={600}>{logoUrl ? 'Huidig logo' : 'Nog geen logo'}</Typography>
-            <Typography variant="caption" color="text.secondary">
-              {logoUrl && !logoPrintUrl ? t('billing.logoHint') : 'PNG of SVG, liefst zonder achtergrond. Max 2 MB.'}
-            </Typography>
-          </Box>
-          <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => void handleLogo(e.target.files?.[0] ?? null)} />
-          <Button variant="outlined" size="small" startIcon={uploading ? <CircularProgress size={14} /> : <UploadRoundedIcon />} disabled={uploading} onClick={() => fileRef.current?.click()}>
-            {logoUrl ? 'Vervangen' : 'Uploaden'}
-          </Button>
-          {logoUrl && (
-            <Button size="small" color="inherit" startIcon={<DeleteOutlineRoundedIcon />} onClick={() => void handleRemoveLogo()}>
-              Weg
-            </Button>
-          )}
-        </Box>
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.25 }}>
+          Logo
+        </Typography>
+        <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => void handleLogo(e.target.files?.[0] ?? null)} />
+        <input ref={darkFileRef} type="file" accept="image/*" hidden onChange={(e) => void handleDarkLogo(e.target.files?.[0] ?? null)} />
+        {logoRow({
+          title: logoUrl ? 'Logo' : 'Nog geen logo',
+          hint: logoUrl && !logoPrintUrl ? t('billing.logoHint') : 'PNG of SVG, liefst zonder achtergrond. Max 2 MB.',
+          slot: <LogoSlot src={logoUrl} mode="light" bg={lightPreview.surface} />,
+          onPick: () => fileRef.current?.click(),
+          busy: uploading === 'light',
+          has: !!logoUrl,
+          onRemove: () => void handleRemoveLogo(),
+        })}
+        {logoUrl &&
+          logoRow({
+            title: 'In de donkere modus',
+            hint: logoDarkUrl
+              ? 'Je eigen versie voor donker.'
+              : 'Automatisch: donkere delen van je logo worden licht. Liever een eigen versie? Upload die hier.',
+            slot: <LogoSlot src={logoUrl} darkSrc={logoDarkUrl} mode="dark" bg={darkPreview.surface} />,
+            onPick: () => darkFileRef.current?.click(),
+            busy: uploading === 'dark',
+            has: !!logoDarkUrl,
+            onRemove: () => void handleRemoveDarkLogo(),
+          })}
 
-        <TextField
-          label="Studionaam"
-          value={orgName}
-          onChange={(e) => setOrgName(e.target.value)}
-          fullWidth
-          size="small"
-          sx={{ mb: 2.5 }}
-        />
+        <TextField label="Naam van de studio" value={orgName} onChange={(e) => setOrgName(e.target.value)} fullWidth size="small" sx={{ mt: 0.5, mb: 2.5 }} />
 
-        {/* Merkkleur */}
-        <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.75 }}>
           Merkkleur
         </Typography>
         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', mb: 1 }}>
@@ -283,91 +314,68 @@ export function BrandingSettings() {
             aria-label="Merkkleur kiezen"
             sx={{ width: 48, height: 48, p: 0, border: 0, borderRadius: 3, bgcolor: 'transparent', cursor: 'pointer', '&::-webkit-color-swatch-wrapper': { p: 0 }, '&::-webkit-color-swatch': { border: 0, borderRadius: 12 } }}
           />
-          <TextField value={seed} onChange={(e) => setSeed(e.target.value)} size="small" error={!seedValid} helperText={seedValid ? undefined : 'Een hexkleur zoals #4E6543'} sx={{ flex: 1 }} inputProps={{ spellCheck: false, style: { fontFamily: 'monospace' } }} />
+          <TextField
+            value={seed}
+            onChange={(e) => setSeed(e.target.value)}
+            size="small"
+            error={!seedValid}
+            helperText={seedValid ? undefined : 'Een kleurcode zoals #4E6543'}
+            sx={{ flex: 1 }}
+            inputProps={{ spellCheck: false, style: { fontFamily: 'monospace' }, 'aria-label': 'Kleurcode' }}
+          />
         </Box>
         <Box sx={{ display: 'flex', gap: 0.75, mb: 0.5 }}>
           {SWATCH_KEYS.map((k) => (
-            <Box key={k} title={k} sx={{ flex: 1, height: 22, borderRadius: 1, bgcolor: preview[k], border: 1, borderColor: 'divider' }} />
+            <Box key={k} sx={{ flex: 1, height: 22, borderRadius: 1, bgcolor: preview[k], border: 1, borderColor: 'divider' }} />
           ))}
         </Box>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2.5 }}>
-          {exportScheme ? 'Uit de geplakte Theme Builder-export.' : 'Automatisch afgeleid · Material 3 · zelfde rekensom als de Theme Builder.'}
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+          {exportScheme
+            ? 'Kleuren uit je eigen kleurenschema (zie Geavanceerd).'
+            : 'Alle andere kleuren, ook voor de donkere modus, maakt de app zelf uit deze ene kleur.'}
         </Typography>
 
-        {/* Theme Builder */}
-        <Typography variant="subtitle2" sx={{ mb: 0.75 }}>
-          Material Theme Builder · optioneel
-        </Typography>
-        <TextField
-          value={exportText}
-          onChange={(e) => setExportText(e.target.value)}
-          multiline
-          minRows={3}
-          maxRows={10}
-          fullWidth
-          size="small"
-          placeholder='{ "schemes": { "light": { "primary": "#4E6543", … } } }'
-          error={exportInvalid}
-          helperText={
-            exportInvalid
-              ? 'Dit is geen Theme Builder-schema (verwacht schemes.light met hexkleuren).'
-              : exportScheme
-                ? 'Schema herkend · gaat vóór de merkkleur.'
-                : 'Plak de JSON-export · gaat vóór de merkkleur.'
-          }
-          inputProps={{ spellCheck: false, style: { fontFamily: 'monospace', fontSize: 12 } }}
-          sx={{ mb: 0.5 }}
-        />
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <Button size="small" component="a" href={THEME_BUILDER_URL} target="_blank" rel="noopener noreferrer" sx={{ px: 0 }}>
-            Open Material Theme Builder →
-          </Button>
-          {exportText && (
-            <Button size="small" color="inherit" onClick={() => setExportText('')}>
-              Export wissen
-            </Button>
-          )}
-        </Box>
+        {/* Voor wie het precies wil: een eigen kleurenschema uit de Material Theme Builder. */}
+        <Accordion disableGutters elevation={0} defaultExpanded={!!exportText} sx={{ bgcolor: 'transparent', '&::before': { display: 'none' }, mb: 2 }}>
+          <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />} sx={{ px: 0, minHeight: 40, '& .MuiAccordionSummary-content': { my: 0.5 } }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+              Geavanceerd: eigen kleurenschema
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails sx={{ px: 0 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              Heeft een ontwerper je kleuren al uitgewerkt in de Material Theme Builder? Exporteer daar als JSON en plak het
+              hier. Dat gaat dan vóór de merkkleur.
+            </Typography>
+            <TextField
+              value={exportText}
+              onChange={(e) => setExportText(e.target.value)}
+              multiline
+              minRows={3}
+              maxRows={10}
+              fullWidth
+              size="small"
+              placeholder='{ "schemes": { "light": { "primary": "#4E6543", … } } }'
+              error={exportInvalid}
+              helperText={exportInvalid ? 'Dit herkennen we niet als export van de Theme Builder.' : exportScheme ? 'Herkend: deze kleuren worden gebruikt.' : undefined}
+              inputProps={{ spellCheck: false, style: { fontFamily: 'monospace', fontSize: 12 }, 'aria-label': 'Export van de Theme Builder' }}
+              sx={{ mb: 0.5 }}
+            />
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <Button size="small" component="a" href={THEME_BUILDER_URL} target="_blank" rel="noopener noreferrer" sx={{ px: 0 }}>
+                Open de Theme Builder
+              </Button>
+              {exportText && (
+                <Button size="small" color="inherit" onClick={() => setExportText('')}>
+                  Wissen
+                </Button>
+              )}
+            </Box>
+          </AccordionDetails>
+        </Accordion>
 
-        {/* Boekingsbeleid: tot wanneer afmelden gratis is (ontwerp "Booking policy"). */}
-        <Box sx={{ mt: 2.5 }}>
-          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-            Boekingsbeleid
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-            Gratis afmelden tot dit aantal uur voor de les begint. Meldt iemand zich later af, dan kost het nog steeds een
-            credit — maar we moedigen afmelden wel aan, zodat de plek vrijkomt.
-          </Typography>
-          <TextField
-            label="Vrije annuleertermijn (uren)"
-            size="small"
-            value={freeCancelHours}
-            onChange={(e) => setFreeCancelHours(e.target.value)}
-            error={!freeCancelHoursValid}
-            helperText={freeCancelHoursValid ? undefined : 'Vul een geheel getal in, 0 of hoger.'}
-            inputProps={{ inputMode: 'numeric' }}
-            sx={{ maxWidth: 220 }}
-          />
-        </Box>
-
-        {/* Toegang tussen trainers: standaard uit, per organisatie te kiezen (bijv. voor een dienst-overdracht). */}
-        <Box sx={{ mt: 2.5 }}>
-          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-            Toegang tussen trainers
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-            Staat dit uit, dan ziet een trainer alleen de schema's van de eigen cliënten. Staat dit aan, dan mag elke
-            trainer of beheerder in de studio het schema van iedere cliënt inzien — bijvoorbeeld handig bij het
-            overnemen van een dienst, maar het geldt dan voor iedereen, altijd.
-          </Typography>
-          <FormControlLabel
-            control={<Switch checked={staffFullClientAccess} onChange={(e) => setStaffFullClientAccess(e.target.checked)} />}
-            label="Trainers mogen elkaars cliënten zien"
-          />
-        </Box>
-
-        <Box sx={{ display: 'flex', gap: 1, mt: 2.5, flexWrap: 'wrap' }}>
-          <Button variant="contained" onClick={() => void handleSave()} disabled={busy || uploading || exportInvalid || !seedValid || !freeCancelHoursValid}>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Button variant="contained" disableElevation onClick={() => void handleSave()} disabled={busy || uploading != null || exportInvalid || !seedValid}>
             {busy ? 'Bezig…' : 'Opslaan'}
           </Button>
           <Button color="inherit" onClick={() => void handleReset()} disabled={busy}>
@@ -376,72 +384,24 @@ export function BrandingSettings() {
         </Box>
       </ContentCard>
 
-      {/* Bedrijfsgegevens voor op de factuur (ontwerp "Business details") */}
+      {/* Voorbeeld, in licht en donker. */}
       <ContentCard>
-        <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
-          {t('business.title')}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-          {t('business.intro')}
-        </Typography>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <TextField label={t('business.legalName')} size="small" fullWidth value={business.legalName} onChange={(e) => setBiz({ legalName: e.target.value })} />
-          <TextField label={t('business.street')} size="small" fullWidth value={business.street} onChange={(e) => setBiz({ street: e.target.value })} />
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-            <TextField label={t('business.postcode')} size="small" fullWidth value={business.postcode} onChange={(e) => setBiz({ postcode: e.target.value })} />
-            <TextField label={t('business.city')} size="small" fullWidth value={business.city} onChange={(e) => setBiz({ city: e.target.value })} />
-          </Box>
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-            <TextField label={t('business.kvk')} size="small" fullWidth value={business.kvk} onChange={(e) => setBiz({ kvk: e.target.value })} inputProps={{ inputMode: 'numeric' }} />
-            <TextField label={t('business.vatNumber')} size="small" fullWidth value={business.vatNumber} onChange={(e) => setBiz({ vatNumber: e.target.value })} placeholder="NL001234567B01" />
-          </Box>
-          <TextField label={t('business.iban')} size="small" fullWidth value={business.iban} onChange={(e) => setBiz({ iban: e.target.value })} placeholder="NL12 RABO 0123 4567 89" />
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-            <TextField label={t('business.invoiceEmail')} type="email" size="small" fullWidth value={business.invoiceEmail} onChange={(e) => setBiz({ invoiceEmail: e.target.value })} />
-            <TextField label={t('business.phone')} type="tel" size="small" fullWidth value={business.phone} onChange={(e) => setBiz({ phone: e.target.value })} />
-          </Box>
-          <Box>
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-              <TextField label={t('business.invoicePrefix')} size="small" fullWidth value={business.invoicePrefix} onChange={(e) => setBiz({ invoicePrefix: e.target.value })} inputProps={{ spellCheck: false }} />
-              <TextField
-                label={t('business.nextNumber')}
-                size="small"
-                fullWidth
-                value={String(business.nextInvoiceNumber)}
-                onChange={(e) => setBiz({ nextInvoiceNumber: Math.max(1, Math.trunc(Number(e.target.value) || 1)) })}
-                inputProps={{ inputMode: 'numeric' }}
-              />
-            </Box>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-              {t('business.numberingHelp', { example: `${business.invoicePrefix}${pad4(business.nextInvoiceNumber)}` })}
-            </Typography>
-          </Box>
-          <Alert severity="info" icon={false}>
-            {t('business.vatNote')}
-          </Alert>
-          <Box>
-            <Button variant="contained" onClick={() => void handleSaveBusiness()} disabled={savingBusiness}>
-              {savingBusiness ? t('common.saving') : t('common.save')}
-            </Button>
-          </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1.5 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Voorbeeld
+          </Typography>
+          <ToggleButtonGroup size="small" exclusive value={previewMode} onChange={(_, v: ColorMode | null) => v && setPreviewMode(v)} sx={segmentedToggleSx} aria-label="Voorbeeld in">
+            <ToggleButton value="light">Licht</ToggleButton>
+            <ToggleButton value="dark">Donker</ToggleButton>
+          </ToggleButtonGroup>
         </Box>
-      </ContentCard>
-
-      {/* Betalingen: elk bedrijf koppelt zijn eigen Mollie-account (ontwerp "Payments — Mollie") */}
-      <PaymentsSettings orgId={orgId} payments={payments} onChange={setPayments} />
-      <AccountRetentionSettings orgId={orgId} myUid={profile?.profile?.userId} />
-      </Box>
-
-      {/* Voorbeeld */}
-      <ContentCard>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mb: 1.5 }}>
-          Voorbeeld
-        </Typography>
         <Box sx={{ mx: 'auto', maxWidth: 280, borderRadius: 5, border: `1px solid ${preview.outlineVariant}`, bgcolor: preview.surface, color: preview.onSurface, p: 2, minHeight: 360, display: 'flex', flexDirection: 'column' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-            <Box sx={{ width: 24, height: 24, borderRadius: 1.5, bgcolor: preview.primary, overflow: 'hidden', flexShrink: 0 }}>
-              {logoUrl && <Box component="img" src={logoUrl} alt="" sx={{ width: '100%', height: '100%', objectFit: 'contain', bgcolor: '#fff' }} />}
-            </Box>
+            {logoUrl ? (
+              <BrandLogo src={logoUrl} darkSrc={logoDarkUrl} mode={previewMode} lightColor={darkPreview.onSurface} sx={{ height: 24, width: 'auto', maxWidth: 72, objectFit: 'contain' }} />
+            ) : (
+              <Box sx={{ width: 24, height: 24, borderRadius: 1.5, bgcolor: preview.primary, flexShrink: 0 }} />
+            )}
             <Typography fontWeight={600} noWrap>
               {shownName}
             </Typography>
@@ -471,51 +431,8 @@ export function BrandingSettings() {
             ))}
           </Box>
         </Box>
-        <Alert severity="info" icon={false} sx={{ mt: 2 }}>
-          Het inlogscherm blijft VORM: daar is nog niet bekend bij welke studio iemand hoort.
-        </Alert>
-
-        {/* Voorbeeld van de factuur: zo landen logo en bedrijfsgegevens op de PDF. */}
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 3, mb: 1.5 }}>
-          {t('business.preview')}
-        </Typography>
-        <Box sx={{ mx: 'auto', maxWidth: 420, borderRadius: 3, border: `1px solid ${preview.outlineVariant}`, bgcolor: '#fff', color: '#191d17', p: 3, fontSize: 11 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-            <Box sx={{ width: 32, height: 32, borderRadius: 2, bgcolor: preview.primary, overflow: 'hidden', flexShrink: 0 }}>
-              {logoUrl && <Box component="img" src={logoUrl} alt="" sx={{ width: '100%', height: '100%', objectFit: 'contain', bgcolor: '#fff' }} />}
-            </Box>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="body2" fontWeight={600} noWrap>
-                {business.legalName || shownName}
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#43483f' }} noWrap>
-                {[business.street, [business.postcode, business.city].filter(Boolean).join(' ')].filter(Boolean).join(' · ') || '—'}
-              </Typography>
-            </Box>
-            <Typography sx={{ fontWeight: 700, fontSize: 16, color: preview.primary }}>FACTUUR</Typography>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 3, mb: 2 }}>
-            {[
-              ['Factuurnummer', `${business.invoicePrefix}${pad4(business.nextInvoiceNumber)}`],
-              ['Factuurdatum', new Date().toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })],
-              ['Aan', firstName],
-            ].map(([k, v]) => (
-              <Box key={k}>
-                <Typography sx={{ fontSize: 9, fontWeight: 600, color: '#43483f' }}>{k}</Typography>
-                <Typography sx={{ fontSize: 11 }}>{v}</Typography>
-              </Box>
-            ))}
-          </Box>
-          <Box sx={{ borderTop: '1px solid #c3c8bd', borderBottom: '1px solid #c3c8bd', py: 1, display: 'flex', justifyContent: 'space-between' }}>
-            <span>Abonnement · periode</span>
-            <span>€ 0,00</span>
-          </Box>
-          <Typography sx={{ fontSize: 9, color: '#43483f', mt: 2 }} noWrap>
-            {[business.kvk && `KvK ${business.kvk}`, business.vatNumber && `btw ${business.vatNumber}`, business.iban].filter(Boolean).join(' · ') || '—'}
-          </Typography>
-        </Box>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
-          {t('business.previewHint')}
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1.5 }}>
+          Het inlogscherm toont nog VORM: daar weet de app nog niet bij welke studio iemand hoort.
         </Typography>
       </ContentCard>
     </Box>

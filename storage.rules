@@ -66,6 +66,13 @@ service firebase.storage {
         && (request.resource == null || isImageUnder(2 * 1024 * 1024));
     }
 
+    // Eigen logo voor de donkere modus (optioneel; zonder maakt de app er zelf een).
+    match /orgLogos/dark/{orgId} {
+      allow read: if true;
+      allow write: if signedIn() && myRole() == 'admin' && myOrgId() == orgId
+        && (request.resource == null || isImageUnder(2 * 1024 * 1024));
+    }
+
     // Profielfoto's: iedereen die is ingelogd mag ze zien (ranglijst). Schrijven mag de eigenaar
     // zelf, en verder trainers/beheerders van diens eigen studio — nodig sinds "Bekijk als" op
     // Profiel de gegevens van een sporter volledig bewerkbaar maakt, inclusief de foto.

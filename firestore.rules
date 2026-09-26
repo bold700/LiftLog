@@ -75,7 +75,7 @@ service cloud.firestore {
     }
     /**
      * Heeft de studio van het bestaande document expliciet aangezet dat elke trainer/beheerder
-     * elkaars cliëntdata mag zien (Beheer → Huisstijl)? Standaard uit: dan blijft een trainer
+     * elkaars cliëntdata mag zien (Beheer → Instellingen)? Standaard uit: dan blijft een trainer
      * beperkt tot de eigen cliënten, ook als hij verder gewoon trainer/beheerder is.
      */
     function orgAllowsStaffFullClientAccess() {
@@ -153,7 +153,7 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
-    // Mollie-sleutels per studio (Beheer → Huisstijl → Betalingen). Elk bedrijf ontvangt geld op
+    // Mollie-sleutels per studio (Beheer → Facturatie → Betalingen). Elk bedrijf ontvangt geld op
     // zijn eigen rekening, dus is dit geen platformbrede sleutel maar een instelling per studio.
     // Nooit leesbaar of schrijfbaar via de client, ook niet voor de eigen beheerder: alleen de
     // server (Admin SDK, api/booking.mjs) raakt dit document aan, na de sleutel bij Mollie zelf
@@ -232,7 +232,7 @@ service cloud.firestore {
     }
 
     // Workouts: alleen binnen de eigen studio, en daarbinnen alleen eigen of toegewezen schema's —
-    // tenzij de studio `staffFullClientAccess` aan heeft staan (Beheer → Huisstijl), dan mag elke
+    // tenzij de studio `staffFullClientAccess` aan heeft staan (Beheer → Instellingen), dan mag elke
     // trainer/beheerder in de studio meekijken (bijv. voor een dienst-overdracht).
     // Let op `audience == 'open'`: dat is open binnen de studio, nooit daarbuiten.
     match /workouts/{workoutId} {

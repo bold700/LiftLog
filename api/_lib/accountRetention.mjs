@@ -1,7 +1,7 @@
 /**
  * Accounts die lang niet zijn gebruikt automatisch verwijderen (AVG: niet langer bewaren dan nodig).
  *
- * Staat per studio uit, tot de eigenaar het aanzet in Beheer → Huisstijl en zelf kiest na hoeveel
+ * Staat per studio uit, tot de eigenaar het aanzet in Beheer → Instellingen en zelf kiest na hoeveel
  * maanden (orgs/{orgId}.accountRetention = { enabled, months }). De dagelijkse avondronde
  * (api/booking.mjs → eveningRun) loopt dan de leden na:
  *

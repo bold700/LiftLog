@@ -401,18 +401,21 @@ export function SubscriptionsPanel({ memberships, credits, createSignal, onChang
       {tiles}
       <Box sx={{ display: 'flex', gap: 2.5, alignItems: 'flex-start' }}>
         {list}
-        <Box sx={{ width: 400, flexShrink: 0, p: 3, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground, position: 'sticky', top: 24 }}>
-          {draft ? (
-            <>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                {isNew ? t('plans.newPlan') : draft.name || t('plans.membership')}
-              </Typography>
-              {editor}
-            </>
-          ) : (
-            <Typography color="text.secondary">{t('plans.pickToEdit')}</Typography>
-          )}
-        </Box>
+        {/* Zonder abonnementen geen tweede "leeg"-vak ernaast: de lijst zegt het al. */}
+        {(draft || plans.length > 0) && (
+          <Box sx={{ width: 400, flexShrink: 0, p: 3, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground, position: 'sticky', top: 24 }}>
+            {draft ? (
+              <>
+                <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                  {isNew ? t('plans.newPlan') : draft.name || t('plans.membership')}
+                </Typography>
+                {editor}
+              </>
+            ) : (
+              <Typography color="text.secondary">{t('plans.pickToEdit')}</Typography>
+            )}
+          </Box>
+        )}
         {confirm}
       </Box>
     </>

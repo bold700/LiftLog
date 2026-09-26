@@ -1,5 +1,5 @@
 /**
- * Betalingen · Mollie (Beheer → Huisstijl), naar het ontwerp "Payments — Mollie". Elk bedrijf
+ * Betalingen · Mollie (Beheer → Facturatie), naar het ontwerp "Payments — Mollie". Elk bedrijf
  * koppelt zijn eigen Mollie-account: het geld gaat rechtstreeks naar hun rekening, dus dit is
  * geen platformbrede instelling zoals Resend maar iets per studio.
  *
@@ -133,7 +133,7 @@ export function PaymentsSettings({ orgId, payments, onChange }: PaymentsSettings
 
   return (
     <ContentCard>
-      <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
+      <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
         {t('payments.title')}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>

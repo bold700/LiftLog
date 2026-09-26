@@ -78,6 +78,7 @@ export function toBranding(raw: unknown): OrgBranding | null {
   const out: OrgBranding = {
     logoUrl: str(b.logoUrl),
     logoPrintUrl: str(b.logoPrintUrl),
+    logoDarkUrl: str(b.logoDarkUrl),
     seedColor: seed && HEX.test(seed) ? seed.toUpperCase() : null,
     lightScheme,
   };
@@ -156,6 +157,17 @@ export function toBookingPolicy(raw: unknown): OrgBookingPolicy | null {
 }
 
 /** Boekingsbeleid opslaan (Beheer → Huisstijl). Alleen een beheerder mag dit (Firestore-regels). */
+/**
+ * Mogen trainers elkaars cliënten zien? Los opgeslagen: via saveOrg ging het alleen mee als ook de
+ * studionaam wijzigde, en saveOrg schrijft ook eigenaar en aanmelden, wat hier niet hoort.
+ */
+export async function saveOrgStaffAccess(orgId: string, staffFullClientAccess: boolean): Promise<void> {
+  if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
+  const id = orgId.trim();
+  if (!id) throw new Error('Studio-id ontbreekt');
+  await setDoc(doc(db, COLLECTION, id), { staffFullClientAccess: staffFullClientAccess === true, updatedAt: serverTimestamp() }, { merge: true });
+}
+
 export async function saveOrgBookingPolicy(orgId: string, policy: OrgBookingPolicy): Promise<void> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
   const id = orgId.trim();
@@ -241,6 +253,7 @@ export async function saveOrgBranding(orgId: string, branding: OrgBranding | nul
     ? {
         logoUrl: branding.logoUrl ?? null,
         logoPrintUrl: branding.logoPrintUrl ?? null,
+        logoDarkUrl: branding.logoDarkUrl ?? null,
         seedColor: branding.seedColor ?? null,
         lightScheme: branding.lightScheme ?? null,
       }
