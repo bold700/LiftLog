@@ -165,7 +165,7 @@ export function ProductSheet({ product, grams, setGrams, meal, setMeal, onPortio
               {product.imageLargeUrl || product.imageUrl ? (
                 <Box component="img" src={product.imageLargeUrl || product.imageUrl || undefined} alt="" sx={{ width: '100%', height: '100%', objectFit: 'contain' }} />
               ) : (
-                <RestaurantRoundedIcon sx={{ fontSize: 56, color: 'rgba(0,0,0,0.25)' }} />
+                <RestaurantRoundedIcon sx={{ fontSize: 56, color: 'text.disabled' }} />
               )}
             </Box>
 

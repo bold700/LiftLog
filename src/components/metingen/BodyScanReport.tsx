@@ -33,7 +33,7 @@ const STATUS_STYLE: Record<RangeStatus, { color: string; bg: string }> = {
 };
 
 /** Zones van de balk: laag | normaal | hoog. De normaalzone is groen, de rest neutraal. */
-const ZONE_BG = { laag: 'rgba(0,0,0,0.06)', normaal: 'rgba(0,207,147,0.28)', hoog: 'rgba(0,0,0,0.06)' } as const;
+const ZONE_BG = { laag: 'action.selected', normaal: 'rgba(0,207,147,0.28)', hoog: 'action.selected' } as const;
 
 const SECTION_TITLE_SX = { display: 'block', mb: 1, mt: 2.5, fontWeight: 600, letterSpacing: 0.2 } as const;
 
@@ -125,7 +125,7 @@ function ValueRow({ scan, fieldKey }: { scan: BodyScan; fieldKey: BodyScanValueK
         alignItems: 'center',
         columnGap: 1.5,
         py: 0.75,
-        borderBottom: '1px solid rgba(0,0,0,0.06)',
+        borderBottom: 1, borderColor: 'divider',
         '&:last-child': { borderBottom: 0 },
       }}
     >
@@ -172,7 +172,7 @@ function HeadlineTiles({ scan }: { scan: BodyScan }) {
         const def = fieldDef(t.key);
         const v = scan.values[t.key] as number;
         return (
-          <Box key={t.key} sx={{ p: 1.25, borderRadius: 2, bgcolor: 'rgba(0,0,0,0.04)' }}>
+          <Box key={t.key} sx={{ p: 1.25, borderRadius: 2, bgcolor: 'action.hover' }}>
             <Typography variant="h5" fontWeight={700} sx={{ lineHeight: 1.1 }}>
               {formatScanValue(t.key, v)}
               {t.key === 'healthScore' && (

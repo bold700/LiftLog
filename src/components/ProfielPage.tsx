@@ -17,6 +17,8 @@ import {
   CircularProgress,
   Tab,
   Tabs,
+  ToggleButton,
+  ToggleButtonGroup,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -49,6 +51,8 @@ import { todayIso } from '../utils/format';
 import { LimitationsEditor } from './LimitationsEditor';
 import { NumberField } from './NumberField';
 import { PrivacyCard } from './PrivacyCard';
+import { useColorMode, type ColorModePreference } from '../context/ColorModeContext';
+import { segmentedToggleSx } from '../theme/segmentedToggle';
 import { LEADERBOARD_ENABLED } from '../config/features';
 
 /** Kaart op de profielpagina (Figma: Surface Container Low, 16 rond, 24 binnenmarge). Functie: volgt het thema. */
@@ -97,6 +101,7 @@ const radioSx = { my: -0.25, '& .MuiFormControlLabel-label': { fontSize: 14 } } 
 export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
   const profile = useProfile();
   const { t, lang, setLang } = useI18n();
+  const colorMode = useColorMode();
   const auth = useAuth();
   const { viewed } = useViewAs();
   const theme = useTheme();
@@ -636,6 +641,24 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
             <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 0.5 }}>E-mail wordt beheerd via je aanbieder (Google, etc.).</Typography>
           )}
         </>
+      )}
+      {/* Licht/donker: per apparaat en meteen actief, dus los van Wijzigen/Opslaan. */}
+      {!viewed.isOther && (
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, minHeight: 34, mt: 1 }}>
+          <Typography sx={{ fontSize: 14 }}>{t('appearance.label')}</Typography>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={colorMode.preference}
+            onChange={(_, v: ColorModePreference | null) => v && colorMode.setPreference(v)}
+            sx={segmentedToggleSx}
+            aria-label={t('appearance.label')}
+          >
+            <ToggleButton value="system">{t('appearance.system')}</ToggleButton>
+            <ToggleButton value="light">{t('appearance.light')}</ToggleButton>
+            <ToggleButton value="dark">{t('appearance.dark')}</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
       )}
       {/* Uitloggen hoort bij het account (ontwerp: Account-kaart, "Sign out"); op desktop staat hij ook in de zijbalk.
           Bij "Bekijk als" verborgen: hij logt altijd de trainer zelf uit, nooit de bekeken sporter. */}

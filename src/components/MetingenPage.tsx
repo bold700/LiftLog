@@ -598,7 +598,7 @@ export function MetingenPage({ openFormRequested, onConsumeOpenForm }: MetingenP
                         />
                       ))}
                     </Box>
-                    <Box sx={{ mt: 1, p: 1.5, borderRadius: 2, bgcolor: 'rgba(0,0,0,0.04)', fontSize: 14 }} aria-live="polite">
+                    <Box sx={{ mt: 1, p: 1.5, borderRadius: 2, bgcolor: 'action.hover', fontSize: 14 }} aria-live="polite">
                       {computedFat ? (
                         <>
                           <Box component="span" sx={{ fontWeight: 500 }}>

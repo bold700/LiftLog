@@ -94,7 +94,7 @@ export function StretchingSection({
                 ...STRETCH_ROW,
                 p: 1.5,
                 borderRadius: 1,
-                bgcolor: 'rgba(0,0,0,0.03)',
+                bgcolor: 'action.hover',
               }}
             >
               <TextField

@@ -287,7 +287,7 @@ export function BrandingSettings() {
         </Box>
         <Box sx={{ display: 'flex', gap: 0.75, mb: 0.5 }}>
           {SWATCH_KEYS.map((k) => (
-            <Box key={k} title={k} sx={{ flex: 1, height: 22, borderRadius: 1, bgcolor: preview[k], border: '1px solid rgba(0,0,0,0.08)' }} />
+            <Box key={k} title={k} sx={{ flex: 1, height: 22, borderRadius: 1, bgcolor: preview[k], border: 1, borderColor: 'divider' }} />
           ))}
         </Box>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2.5 }}>

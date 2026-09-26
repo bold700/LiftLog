@@ -251,14 +251,14 @@ export function BodyScanSection({ draft, onDraftChange, onRecognized, onClear, p
                   component="img"
                   src={p.previewUrl}
                   alt={`Foto ${i + 1} van de weegschaal`}
-                  sx={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 1.5, display: 'block', bgcolor: 'rgba(0,0,0,0.06)' }}
+                  sx={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 1.5, display: 'block', bgcolor: 'action.hover' }}
                 />
                 <IconButton
                   size="small"
                   aria-label={`Foto ${i + 1} verwijderen`}
                   onClick={() => removePending(i)}
                   disabled={recognizing}
-                  sx={{ position: 'absolute', top: -6, right: -6, bgcolor: '#fff', boxShadow: 1, width: 24, height: 24, '&:hover': { bgcolor: '#fff' } }}
+                  sx={{ position: 'absolute', top: -6, right: -6, bgcolor: 'background.paper', boxShadow: 1, width: 24, height: 24, '&:hover': { bgcolor: 'background.paper' } }}
                 >
                   <CloseRoundedIcon sx={{ fontSize: 16 }} />
                 </IconButton>
@@ -293,7 +293,7 @@ export function BodyScanSection({ draft, onDraftChange, onRecognized, onClear, p
           ))}
 
           {preview && (
-            <Box sx={{ p: 1.5, mb: 2, borderRadius: 2, bgcolor: '#fff', border: '1px solid rgba(0,0,0,0.08)' }}>
+            <Box sx={{ p: 1.5, mb: 2, borderRadius: 2, bgcolor: 'background.paper', border: 1, borderColor: 'divider' }}>
               <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5 }}>
                 Zo komt het rapport eruit te zien
               </Typography>

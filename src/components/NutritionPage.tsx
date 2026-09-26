@@ -703,7 +703,7 @@ export function NutritionPage() {
                 {results.map((p) => (
                   <ListItemButton key={p.code || p.name} onClick={() => openAdd(p)}>
                     <ListItemAvatar sx={{ minWidth: 52 }}>
-                      <Avatar src={p.imageUrl || undefined} variant="rounded" sx={{ width: 40, height: 40, bgcolor: 'rgba(0,0,0,0.06)', color: 'text.secondary' }}>
+                      <Avatar src={p.imageUrl || undefined} variant="rounded" sx={{ width: 40, height: 40, bgcolor: 'action.hover', color: 'text.secondary' }}>
                         <RestaurantRoundedIcon fontSize="small" />
                       </Avatar>
                     </ListItemAvatar>
@@ -847,7 +847,7 @@ export function NutritionPage() {
             {(suggestions ?? []).map((s, i) => (
               <ListItemButton key={i} onClick={() => pickSuggestion(s)}>
                 <ListItemAvatar sx={{ minWidth: 52 }}>
-                  <Avatar variant="rounded" sx={{ width: 40, height: 40, bgcolor: 'rgba(0,0,0,0.06)', color: 'text.secondary' }}>
+                  <Avatar variant="rounded" sx={{ width: 40, height: 40, bgcolor: 'action.hover', color: 'text.secondary' }}>
                     <RestaurantRoundedIcon fontSize="small" />
                   </Avatar>
                 </ListItemAvatar>

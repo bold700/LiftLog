@@ -21,8 +21,8 @@ export const SchemaPeriodSummary = ({ schema, startDate, endDate }: SchemaPeriod
       px: 2,
       mb: 2,
       borderRadius: 2,
-      bgcolor: 'rgba(0,0,0,0.04)',
-      border: '1px solid rgba(0,0,0,0.08)',
+      bgcolor: 'action.hover',
+      border: 1, borderColor: 'divider',
     }}
   >
     <Typography variant="subtitle2" fontWeight={600} gutterBottom>

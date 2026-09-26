@@ -9,6 +9,12 @@ export const nl = {
     en: 'English',
     label: 'Taal',
   },
+  appearance: {
+    label: 'Weergave',
+    system: 'Systeem',
+    light: 'Licht',
+    dark: 'Donker',
+  },
   nav: {
     log: 'Log',
     insights: 'Inzichten',

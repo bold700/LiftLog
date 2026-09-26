@@ -304,7 +304,7 @@ function FloatingToolbar({ items, activeTab, onNavigate }: { items: ShellDestina
                 height: 48,
                 bgcolor: active ? designTokens.secondaryContainer : 'transparent',
                 color: active ? designTokens.onSecondaryContainer : 'text.secondary',
-                '&:hover': { bgcolor: active ? designTokens.secondaryContainer : 'rgba(0,0,0,0.06)' },
+                '&:hover': { bgcolor: active ? designTokens.secondaryContainer : 'action.hover' },
               }}
             >
               {d.icon}
@@ -325,7 +325,7 @@ const railItemSx = (active: boolean) => ({
   color: active ? designTokens.onSecondaryContainer : 'text.primary',
   '& .MuiListItemIcon-root': { color: 'inherit', minWidth: 36 },
   '& .MuiListItemText-primary': { fontWeight: active ? 600 : 500, fontSize: 14 },
-  '&:hover': { bgcolor: active ? designTokens.secondaryContainer : 'rgba(0,0,0,0.04)' },
+  '&:hover': { bgcolor: active ? designTokens.secondaryContainer : 'action.hover' },
 });
 
 export function AppShell({ activeTab, onNavigate, destinations, secondary, onLog, onLogout, brand, profileTabIndex, floating, children }: AppShellProps) {

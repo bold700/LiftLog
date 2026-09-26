@@ -1,13 +1,17 @@
 /**
  * Centrale design tokens, afgeleid van het actieve Material 3-schema — dat van VORM zelf, of dat
- * van de studio als die een eigen huisstijl heeft. Gebruik deze — of het MUI-palet
- * ('primary.main') — in plaats van hexcodes in componenten.
+ * van de studio als die een eigen huisstijl heeft, in licht of donker. Gebruik deze — of het
+ * MUI-palet ('primary.main') — in plaats van hexcodes in componenten.
  *
- * Het zijn getters: een component dat `designTokens.cardBackground` leest, krijgt de kleur van
- * het schema dat op dát moment actief is. Bij een wisseling van studio rendert alles opnieuw
- * (het MUI-thema is dan een nieuw object), dus de getters worden vanzelf opnieuw gelezen.
+ * Een kleur-token is een CSS-variabele (`var(--md-sys-color-…)`), met de huidige kleur als
+ * terugval. De variabelen zet brandingTheme.setActiveScheme op <html>. Zo wisselt ook een stijl
+ * die al bij het laden van een bestand is vastgelegd (een `const cardSx = {…}`) mee met de studio
+ * en met licht/donker, zonder dat het component opnieuw hoeft te rekenen.
  */
-import { getActiveScheme } from './brandingTheme';
+import { getActiveScheme, type LightScheme } from './brandingTheme';
+
+const cssVar = (key: keyof LightScheme) =>
+  `var(--md-sys-color-${String(key).replace(/([A-Z])/g, '-$1').toLowerCase()}, ${getActiveScheme()[key]})`;
 
 export const designTokens = {
   /** Max breedte pagina-inhoud (px) */
@@ -23,53 +27,53 @@ export const designTokens = {
 
   /** Achtergrond van de pagina */
   get surface() {
-    return getActiveScheme().surface;
+    return cssVar('surface');
   },
   /** Achtergrondkleur hoofdcards: een tint donkerder dan de pagina */
   get cardBackground() {
-    return getActiveScheme().surfaceContainerLow;
+    return cssVar('surfaceContainerLow');
   },
   /** Nog een tint donkerder: tegels ín een card, de keuzebalk, de navigatie */
   get cardBackgroundHigh() {
-    return getActiveScheme().surfaceContainer;
+    return cssVar('surfaceContainer');
   },
   /** Randkleur secundaire/outline cards */
   get cardBorder() {
-    return getActiveScheme().outlineVariant;
+    return cssVar('outlineVariant');
   },
   /** Donkergroen: gevulde knoppen, actieve balken */
   get primary() {
-    return getActiveScheme().primary;
+    return cssVar('primary');
   },
   get onPrimary() {
-    return getActiveScheme().onPrimary;
+    return cssVar('onPrimary');
   },
   /** Zachtgroen: FAB, "Assigned to you"-chips, avatars */
   get primaryContainer() {
-    return getActiveScheme().primaryContainer;
+    return cssVar('primaryContainer');
   },
   get onPrimaryContainer() {
-    return getActiveScheme().onPrimaryContainer;
+    return cssVar('onPrimaryContainer');
   },
   /** Gedempt groen: gekozen segment in een keuzebalk, actieve navigatie */
   get secondaryContainer() {
-    return getActiveScheme().secondaryContainer;
+    return cssVar('secondaryContainer');
   },
   get onSecondaryContainer() {
-    return getActiveScheme().onSecondaryContainer;
+    return cssVar('onSecondaryContainer');
   },
   /** Blauwgroen: "Last time"-balk, Duo PT, informatie */
   get tertiaryContainer() {
-    return getActiveScheme().tertiaryContainer;
+    return cssVar('tertiaryContainer');
   },
   get onTertiaryContainer() {
-    return getActiveScheme().onTertiaryContainer;
+    return cssVar('onTertiaryContainer');
   },
   /** Verzadigd blauwgroen: secundaire voortgangsbalken (bijv. macro's op Voeding) */
   get tertiary() {
-    return getActiveScheme().tertiary;
+    return cssVar('tertiary');
   },
   get outline() {
-    return getActiveScheme().outline;
+    return cssVar('outline');
   },
 };

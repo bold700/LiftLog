@@ -84,7 +84,7 @@ export function ProgressPhotoSlots({ photos, inputsRef, onPick, onClear }: Progr
                   color: 'text.secondary',
                   fontSize: 12,
                   transition: 'background-color 0.2s ease',
-                  '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' },
+                  '&:hover': { bgcolor: 'action.hover' },
                   '&:focus-within': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
                 }}
               >

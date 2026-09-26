@@ -11,7 +11,8 @@ import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
 import PostAddRoundedIcon from '@mui/icons-material/PostAddRounded';
 import MonitorWeightRoundedIcon from '@mui/icons-material/MonitorWeightRounded';
-import { lightTheme } from './theme';
+import { useApplyBaseScheme, useBaseTheme } from './theme';
+import { ColorModeProvider } from './context/ColorModeContext';
 import { AppShell, type ShellDestination } from './components/AppShell';
 import { StudioSwitcher } from './components/StudioSwitcher';
 import { InzichtenPage } from './components/InzichtenPage';
@@ -400,23 +401,24 @@ function AppContent() {
  */
 function AuthedApp() {
   const auth = useAuth();
+  const baseTheme = useBaseTheme();
   const firebaseConfigured = isFirebaseConfigured();
   const showLogin = firebaseConfigured && !auth?.loading && !auth?.user;
 
   if (showLogin) {
     return (
-      <ThemeProvider theme={lightTheme}>
-        <CssBaseline />
+      <ThemeProvider theme={baseTheme}>
+        <CssBaseline enableColorScheme />
         <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
-          <LoginPage />
+          <LoginScreen />
         </Box>
       </ThemeProvider>
     );
   }
 
   return (
-    <ThemeProvider theme={lightTheme}>
-      <CssBaseline />
+    <ThemeProvider theme={baseTheme}>
+      <CssBaseline enableColorScheme />
       <NotifyProvider>
       <ProfileProvider>
       <I18nProvider>
@@ -439,12 +441,19 @@ function AuthedApp() {
   );
 }
 
+/** Inlogscherm in VORM-kleuren, in de gekozen modus. */
+function LoginScreen() {
+  useApplyBaseScheme();
+  return <LoginPage />;
+}
+
 /** Het thema van de studio over dat van VORM heen, zodra de huisstijl bekend is. */
 function BrandedTheme({ children }: { children: React.ReactNode }) {
   const branding = useBranding();
+  const baseTheme = useBaseTheme();
   return (
-    <ThemeProvider theme={branding?.theme ?? lightTheme}>
-      <CssBaseline />
+    <ThemeProvider theme={branding?.theme ?? baseTheme}>
+      <CssBaseline enableColorScheme />
       {children}
     </ThemeProvider>
   );
@@ -468,9 +477,11 @@ function VerificationGate({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
-    <AuthProvider>
-      <AuthedApp />
-    </AuthProvider>
+    <ColorModeProvider>
+      <AuthProvider>
+        <AuthedApp />
+      </AuthProvider>
+    </ColorModeProvider>
   );
 }
 

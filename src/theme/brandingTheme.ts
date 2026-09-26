@@ -8,6 +8,10 @@
  *
  * Het schema heeft de vorm van theme.json (schemes.light), zodat het standaardthema en een
  * studiothema door precies dezelfde code lopen.
+ *
+ * Donkere modus: Material 3 leidt het donkere schema af uit dezelfde bronkleur (andere tonen uit
+ * dezelfde paletten). Dat doen we hier ook, voor VORM zelf én voor elke studio. schemes.dark in
+ * theme.json gebruiken we niet: dat komt nog uit een oudere huisstijl (zwart met geel).
  */
 import { createTheme, type Theme } from '@mui/material/styles';
 import { argbFromHex, hexFromArgb, themeFromSourceColor, type TonalPalette } from '@material/material-color-utilities';
@@ -15,6 +19,8 @@ import themeData from '../theme.json';
 import type { OrgBranding } from '../types';
 
 export type LightScheme = Record<keyof typeof themeData.schemes.light, string>;
+/** Licht of donker. De voorkeur van de gebruiker (ook "systeem") staat in ColorModeContext. */
+export type ColorMode = 'light' | 'dark';
 type SchemeKey = keyof LightScheme;
 
 export const DEFAULT_SCHEME: LightScheme = { ...themeData.schemes.light } as LightScheme;
@@ -26,16 +32,17 @@ export const isHexColor = (v: unknown): v is string => typeof v === 'string' && 
 const up = (argb: number) => hexFromArgb(argb).toUpperCase();
 
 /**
- * Het volledige lichte schema uit één kleur.
+ * Het volledige schema (licht of donker) uit één kleur.
  *
  * De bibliotheek (0.2.x) levert de 29 kernrollen. De surface-familie en de "fixed"-rollen die
  * de Theme Builder tegenwoordig ook uitgeeft zijn vaste tonen uit dezelfde paletten; die
  * rekenen we hier bij, zodat het resultaat gelijk is aan wat de Theme Builder exporteert.
  */
-export function schemeFromSeed(seedHex: string): LightScheme {
+export function schemeFromSeed(seedHex: string, mode: ColorMode = 'light'): LightScheme {
   const source = argbFromHex(seedHex.trim());
   const t = themeFromSourceColor(source);
-  const core = t.schemes.light.toJSON() as unknown as Record<string, number>;
+  const core = t.schemes[mode].toJSON() as unknown as Record<string, number>;
+  const dark = mode === 'dark';
   const tone = (p: TonalPalette, n: number) => up(p.tone(n));
   const { primary, secondary, tertiary, neutral, neutralVariant } = t.palettes;
 
@@ -45,16 +52,16 @@ export function schemeFromSeed(seedHex: string): LightScheme {
   Object.assign(scheme, {
     surfaceTint: scheme.primary,
     // Surface-familie zoals de Theme Builder hem uitgeeft (neutraal palet, vaste tonen).
-    surface: tone(neutral, 98),
-    background: tone(neutral, 98),
-    surfaceBright: tone(neutral, 98),
-    surfaceDim: tone(neutral, 87),
-    surfaceContainerLowest: tone(neutral, 100),
-    surfaceContainerLow: tone(neutral, 96),
-    surfaceContainer: tone(neutral, 94),
-    surfaceContainerHigh: tone(neutral, 92),
-    surfaceContainerHighest: tone(neutral, 90),
-    surfaceVariant: tone(neutralVariant, 90),
+    surface: tone(neutral, dark ? 6 : 98),
+    background: tone(neutral, dark ? 6 : 98),
+    surfaceBright: tone(neutral, dark ? 24 : 98),
+    surfaceDim: tone(neutral, dark ? 6 : 87),
+    surfaceContainerLowest: tone(neutral, dark ? 4 : 100),
+    surfaceContainerLow: tone(neutral, dark ? 10 : 96),
+    surfaceContainer: tone(neutral, dark ? 12 : 94),
+    surfaceContainerHigh: tone(neutral, dark ? 17 : 92),
+    surfaceContainerHighest: tone(neutral, dark ? 22 : 90),
+    surfaceVariant: tone(neutralVariant, dark ? 30 : 90),
     // "Fixed"-rollen: gelijk in licht en donker.
     primaryFixed: tone(primary, 90),
     primaryFixedDim: tone(primary, 80),
@@ -74,6 +81,12 @@ export function schemeFromSeed(seedHex: string): LightScheme {
   for (const k of SCHEME_KEYS) out[k] = scheme[k] ?? DEFAULT_SCHEME[k];
   return out;
 }
+
+/** Het donkere schema van VORM zelf: dezelfde bronkleur als het lichte. */
+export const DEFAULT_DARK_SCHEME: LightScheme = schemeFromSeed(themeData.seed, 'dark');
+
+/** Het standaardschema (VORM) voor licht of donker. */
+export const defaultScheme = (mode: ColorMode): LightScheme => (mode === 'dark' ? DEFAULT_DARK_SCHEME : DEFAULT_SCHEME);
 
 /**
  * Een geplakte Theme Builder-export. Die ziet er uit als theme.json (`{ schemes: { light: … } }`),
@@ -105,8 +118,19 @@ export function parseThemeBuilderExport(text: string): LightScheme | null {
   return found >= 4 && isHexColor(candidate.primary) && isHexColor(candidate.surface) ? out : null;
 }
 
-/** Het schema dat bij deze huisstijl hoort: export vóór merkkleur, en anders VORM zelf. */
-export function resolveScheme(branding: OrgBranding | null | undefined): LightScheme {
+/**
+ * Het schema dat bij deze huisstijl hoort: export vóór merkkleur, en anders VORM zelf.
+ * Donker: afgeleid van de merkkleur, of van de primaire kleur uit de export.
+ */
+export function resolveScheme(branding: OrgBranding | null | undefined, mode: ColorMode = 'light'): LightScheme {
+  if (mode === 'dark') {
+    const seed = isHexColor(branding?.seedColor)
+      ? branding!.seedColor!
+      : isHexColor(branding?.lightScheme?.primary)
+        ? branding!.lightScheme!.primary
+        : null;
+    return seed ? schemeFromSeed(seed, 'dark') : DEFAULT_DARK_SCHEME;
+  }
   if (branding?.lightScheme && isHexColor(branding.lightScheme.primary)) {
     const out = { ...DEFAULT_SCHEME };
     for (const k of SCHEME_KEYS) {
@@ -134,26 +158,35 @@ export const SWATCH_KEYS: SchemeKey[] = [
  * De Material Web-componenten (navigatiebalk, gevulde knoppen) lezen CSS-variabelen, geen
  * MUI-thema. Die zetten we op <html>, zodat material-web-theme.css ze oppakt.
  */
-export function applyMaterialWebVars(scheme: LightScheme, root: HTMLElement | null = typeof document !== 'undefined' ? document.documentElement : null): void {
+export function applyMaterialWebVars(
+  scheme: LightScheme,
+  mode: ColorMode = 'light',
+  root: HTMLElement | null = typeof document !== 'undefined' ? document.documentElement : null
+): void {
   if (!root) return;
   const toKebab = (k: string) => k.replace(/([A-Z])/g, '-$1').toLowerCase();
   for (const k of SCHEME_KEYS) root.style.setProperty(`--md-sys-color-${toKebab(k)}`, scheme[k]);
   root.style.setProperty('--vorm-background', scheme.surface);
+  // Formuliervelden, scrollbalken en datumkiezers van de browser zelf in dezelfde modus.
+  root.style.colorScheme = mode;
+  // Kleur van de browserbalk en (op een telefoon) de statusbalk.
+  const meta = typeof document !== 'undefined' ? document.querySelector('meta[name="theme-color"]') : null;
+  if (meta) meta.setAttribute('content', scheme.surface);
 }
 
 let activeScheme: LightScheme = DEFAULT_SCHEME;
 /** Het schema dat op dit moment op het scherm staat; designTokens leest hieruit. */
 export const getActiveScheme = (): LightScheme => activeScheme;
-export function setActiveScheme(scheme: LightScheme): void {
+export function setActiveScheme(scheme: LightScheme, mode: ColorMode = 'light'): void {
   activeScheme = scheme;
-  applyMaterialWebVars(scheme);
+  applyMaterialWebVars(scheme, mode);
 }
 
 /** Het MUI-thema voor een schema. Alle vormgeving buiten kleur staat hier één keer. */
-export function createAppTheme(s: LightScheme): Theme {
+export function createAppTheme(s: LightScheme, mode: ColorMode = 'light'): Theme {
   return createTheme({
     palette: {
-      mode: 'light',
+      mode,
       primary: {
         main: s.primary,
         // light = de zachte container (chips, FAB); dark = de hover-tint van een gevulde knop.
@@ -195,7 +228,9 @@ export function createAppTheme(s: LightScheme): Theme {
           },
         },
       },
-      MuiPaper: { styleOverrides: { rounded: { borderRadius: 16 } } },
+      // Geen witte waas over papier in donkere modus (MUI's elevation-overlay): Material 3 werkt met
+      // de surface-container-tonen uit het schema, niet met een laag erbovenop.
+      MuiPaper: { styleOverrides: { root: { backgroundImage: 'none' }, rounded: { borderRadius: 16 } } },
       MuiFab: {
         styleOverrides: {
           root: { borderRadius: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.3), 0 4px 8px 3px rgba(0,0,0,0.15)' },

@@ -20,8 +20,8 @@ const AI_PANEL_SHELL_SX = {
   p: 2,
   mb: 2,
   borderRadius: 2,
-  backgroundColor: 'rgba(0,0,0,0.03)',
-  border: '1px solid rgba(0,0,0,0.08)',
+  backgroundColor: 'action.hover',
+  border: 1, borderColor: 'divider',
 } as const;
 
 /** Waarschuwing als een sporter van dit schema geen toestemming gaf voor gezondheidsgegevens. */

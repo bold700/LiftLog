@@ -7,6 +7,12 @@ export const en: Messages = {
     en: 'English',
     label: 'Language',
   },
+  appearance: {
+    label: 'Appearance',
+    system: 'System',
+    light: 'Light',
+    dark: 'Dark',
+  },
   nav: {
     log: 'Log',
     insights: 'Insights',

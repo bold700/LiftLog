@@ -53,7 +53,7 @@ export function OutlineCard({
         '&:hover': {
           transform: 'translateY(-1px)',
           boxShadow: 1,
-          borderColor: 'rgba(0,0,0,0.15)',
+          borderColor: designTokens.outline,
         },
         ...sx,
       }}
