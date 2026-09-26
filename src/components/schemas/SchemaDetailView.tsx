@@ -213,8 +213,9 @@ export function SchemaDetailView({
       </HeaderActions>
       {menu}
 
-      {/* Kruimelpad: "Workouts › Push Pull Legs". */}
-      <Box component="nav" aria-label="Kruimelpad" sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: { xs: 1.5, md: 2.5 }, fontSize: 12, lineHeight: '16px', minWidth: 0 }}>
+      {/* Kruimelpad: "Workouts › Push Pull Legs". Alleen op desktop: op de telefoon staat de naam
+          al in de bovenbalk, met een terugpijl. */}
+      <Box component="nav" aria-label="Kruimelpad" sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 0.75, mb: { xs: 1.5, md: 2.5 }, fontSize: 12, lineHeight: '16px', minWidth: 0 }}>
         <Box
           component="button"
           type="button"

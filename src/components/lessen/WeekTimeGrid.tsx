@@ -4,7 +4,6 @@ import { SESSION_KIND_COLORS, classHasStarted, type StudioClass, type Booking } 
 import { designTokens } from '../../theme/designTokens';
 import { hourRange, layoutDay, type Placed } from '../../utils/weekGrid';
 
-const WEEKDAY_LETTER = ['Z', 'M', 'D', 'W', 'D', 'V', 'Z'];
 const WEEKDAY_SHORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
 
 /** Hoogte van één uur in het rooster (px). */
@@ -68,11 +67,11 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
             <Box
               key={d}
               role="button"
-              tabIndex={isPast ? -1 : 0}
+              tabIndex={0}
               aria-label={`Bekijk ${dt.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' })}`}
-              onClick={() => !isPast && onSelectDay(d)}
+              onClick={() => onSelectDay(d)}
               onKeyDown={(e) => {
-                if (!isPast && (e.key === 'Enter' || e.key === ' ')) {
+                if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
                   onSelectDay(d);
                 }
@@ -82,8 +81,8 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
                 flexDirection: 'column',
                 alignItems: 'center',
                 gap: 0.25,
-                cursor: isPast ? 'default' : 'pointer',
-                opacity: isPast ? 0.45 : 1,
+                cursor: 'pointer',
+                opacity: isPast ? 0.6 : 1,
                 minWidth: 0,
               }}
             >
@@ -91,10 +90,8 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
                 variant="caption"
                 sx={{ fontSize: 11, fontWeight: 500, lineHeight: '16px', color: isToday ? designTokens.primary : 'text.secondary' }}
               >
-                <Box component="span" sx={{ display: { xs: 'inline', md: 'none' } }}>
-                  {WEEKDAY_LETTER[dt.getDay()]}
-                </Box>
-                <Box component="span" sx={{ display: { xs: 'none', md: 'inline' }, textTransform: 'uppercase' }}>
+                {/* "ma di wo …": letters (M D W D V Z Z) waren dubbelzinnig. */}
+                <Box component="span" sx={{ textTransform: { xs: 'none', md: 'uppercase' } }}>
                   {WEEKDAY_SHORT[dt.getDay()]}
                 </Box>
               </Typography>
@@ -111,7 +108,7 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
                   fontSize: { xs: 14, md: 20 },
                   lineHeight: 1,
                   transition: 'background-color 0.15s ease',
-                  '&:hover': isPast || isToday ? undefined : { bgcolor: designTokens.cardBackgroundHigh },
+                  '&:hover': isToday ? undefined : { bgcolor: designTokens.cardBackgroundHigh },
                 }}
               >
                 {dt.getDate()}
@@ -124,24 +121,23 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
       {/* Uren en dagkolommen. */}
       <Box sx={{ display: 'grid', gridTemplateColumns: cols, pt: 1 }}>
         <Box sx={{ position: 'relative', height: gridHeight }}>
-          {hours.map((h, i) =>
-            i === 0 ? null : (
-              <Typography
-                key={h}
-                variant="caption"
-                sx={{
-                  position: 'absolute',
-                  top: i * HOUR_PX - 8,
-                  right: { xs: 4, md: 8 },
-                  fontSize: 10,
-                  lineHeight: '16px',
-                  color: 'text.secondary',
-                }}
-              >
-                {String(h).padStart(2, '0')}:00
-              </Typography>
-            )
-          )}
+          {/* Ook het eerste uur een label: anders stond nergens hoe laat het rooster begint. */}
+          {hours.map((h, i) => (
+            <Typography
+              key={h}
+              variant="caption"
+              sx={{
+                position: 'absolute',
+                top: i * HOUR_PX - (i === 0 ? 2 : 8),
+                right: { xs: 4, md: 8 },
+                fontSize: 10,
+                lineHeight: '16px',
+                color: 'text.secondary',
+              }}
+            >
+              {String(h).padStart(2, '0')}:00
+            </Typography>
+          ))}
         </Box>
         {days.map((d) => {
           const placed = layoutDay(classesByDate.get(d) ?? []);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Autocomplete,
   Box,
@@ -101,6 +101,13 @@ function weekRangeLabel(weekStrip: string[]): string {
 /** Sleutel om een les te koppelen aan een "elke week"-instelling: zelfde lessoort en weekmoment. */
 const standingKey = (classTypeId: string, weekday: number, startTime: string) => `${classTypeId}_${weekday}_${startTime}`;
 
+/** Bezetting op één manier, overal: hoeveel plekken er nog vrij zijn ("3/8" las als "3 vrij"). */
+function spotsLabel(cls: Pick<StudioClass, 'bookedCount' | 'capacity'>): string {
+  const free = Math.max(0, cls.capacity - cls.bookedCount);
+  if (free === 0) return 'Vol';
+  return `${free} ${free === 1 ? 'plek' : 'plekken'} vrij`;
+}
+
 export function LessenPage() {
   const profileCtx = useProfile();
   const notify = useNotify();
@@ -118,7 +125,10 @@ export function LessenPage() {
   const [roomFilter, setRoomFilter] = useState('');
   /** Soort les (1-op-1, Duo PT, Groep, Concept); leeg = alle soorten. De legenda is tegelijk het filter. */
   const [kindFilter, setKindFilter] = useState<SessionKind | ''>('');
-  /** Staf-only: "Mijn dag" toont alleen de eigen sessies (Figma "Trainer day"). */
+  /**
+   * "Mijn lessen": staf ziet alleen de eigen sessies (Figma "Trainer day"), een sporter alleen de
+   * lessen waarvoor hij is ingeschreven of op de wachtlijst staat.
+   */
   const [myDayOnly, setMyDayOnly] = useState(false);
   const [confirmClass, setConfirmClass] = useState<StudioClass | null>(null);
   const [cancelConfirmClass, setCancelConfirmClass] = useState<StudioClass | null>(null);
@@ -131,12 +141,23 @@ export function LessenPage() {
    */
   const [trainerNames, setTrainerNames] = useState<Record<string, string>>({});
 
+  /**
+   * Vanaf wanneer lessen laden: vandaag, of het begin van de week die je bekijkt als die al voorbij
+   * is. Zo toont "vorige week" de lessen die er waren (als "Afgelopen") in plaats van een leeg rooster.
+   */
+  const loadFrom = useMemo(() => {
+    const weekStart = weekOf(selectedDate)[0];
+    return weekStart < today() ? weekStart : today();
+  }, [selectedDate]);
+  const loadedOnce = useRef(false);
+
   const load = useCallback(async () => {
     if (!me) return;
-    setLoading(true);
+    // Alleen de eerste keer een laadrondje; bij terugbladeren blijft het rooster staan tot de data er is.
+    if (!loadedOnce.current) setLoading(true);
     try {
       const [cls, mine, balance, standing] = await Promise.all([
-        getUpcomingClasses(today()),
+        getUpcomingClasses(loadFrom),
         getMyBookings(me.userId),
         getCreditBalance(me.userId),
         getMyStandingBookings(me.userId),
@@ -154,9 +175,10 @@ export function LessenPage() {
     } catch (e) {
       notify?.error(e instanceof Error ? e.message : 'Rooster laden mislukt');
     } finally {
+      loadedOnce.current = true;
       setLoading(false);
     }
-  }, [me, notify]);
+  }, [me, notify, loadFrom]);
 
   useEffect(() => {
     void load();
@@ -187,8 +209,9 @@ export function LessenPage() {
     const visible = classes.filter(
       (c) => !c.privateFor || (!c.autoCancelled && (isStaff || c.privateFor === me?.userId))
     );
-    return myDayOnly && me ? visible.filter((c) => c.trainerId === me.userId) : visible;
-  }, [classes, myDayOnly, me, isStaff]);
+    if (!myDayOnly || !me) return visible;
+    return isStaff ? visible.filter((c) => c.trainerId === me.userId) : visible.filter((c) => myBookingByClass.has(c.id));
+  }, [classes, myDayOnly, me, isStaff, myBookingByClass]);
   /**
    * Ruimtes die daadwerkelijk in gebruik zijn, voor het filter. `room` is vrije tekst (geen
    * vaste lijst), dus genormaliseerd op hoofdletters/spaties: anders levert "Boven" naast "boven"
@@ -375,15 +398,17 @@ export function LessenPage() {
             {cls.title}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {trainerNames[cls.trainerId] ? `${trainerNames[cls.trainerId]} · ` : ''}
-            {dayLabel(cls.date)} · {cls.startTime}
+            {/* Tijd eerst: in de Dag-weergave staat de datum al boven de lijst. */}
+            {cls.startTime}
             {cls.endTime ? `–${cls.endTime}` : ''}
+            {viewMode === 'day' ? '' : ` · ${dayLabel(cls.date)}`}
+            {trainerNames[cls.trainerId] ? ` · ${trainerNames[cls.trainerId]}` : ''}
             {cls.room ? ` · ${cls.room}` : ''}
           </Typography>
           <Box sx={{ display: 'flex', gap: 0.75, mt: 1, flexWrap: 'wrap' }}>
             <Chip
               size="small"
-              label={`${cls.bookedCount}/${cls.capacity} plekken`}
+              label={spotsLabel(cls)}
               sx={full ? { bgcolor: designTokens.cardBackgroundHigh, color: 'text.secondary' } : undefined}
             />
             {cls.waitlistCount > 0 && <Chip size="small" variant="outlined" label={`${cls.waitlistCount} op wachtlijst`} />}
@@ -404,7 +429,7 @@ export function LessenPage() {
                 Afmelden
               </Button>
             ) : (
-              <Button size="small" variant="contained" disabled={busy} onClick={() => setConfirmClass(cls)}>
+              <Button size="small" variant="contained" disableElevation disabled={busy} onClick={() => setConfirmClass(cls)}>
                 {full ? 'Wachtlijst' : 'Reserveren'}
               </Button>
             ))}
@@ -447,19 +472,17 @@ export function LessenPage() {
       {/* Figma "Schedule": weergave, ruimtes en legenda op één regel. Op de telefoon blijft alleen
           Week/Dag staan; de rest zit achter de filterknop in een bottom sheet. */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, rowGap: 1, mb: 2 }}>
-        {isStaff && (
-          <ToggleButtonGroup
-            size="small"
-            exclusive
-            value={myDayOnly ? 'mine' : 'all'}
-            onChange={(_, v: 'all' | 'mine' | null) => v && setMyDayOnly(v === 'mine')}
-            sx={{ ...segmentedToggleSx, display: { xs: 'none', md: 'inline-flex' } }}
-            aria-label="Rooster of mijn dag"
-          >
-            <ToggleButton value="all">Rooster</ToggleButton>
-            <ToggleButton value="mine">Mijn dag</ToggleButton>
-          </ToggleButtonGroup>
-        )}
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={myDayOnly ? 'mine' : 'all'}
+          onChange={(_, v: 'all' | 'mine' | null) => v && setMyDayOnly(v === 'mine')}
+          sx={{ ...segmentedToggleSx, display: { xs: 'none', md: 'inline-flex' } }}
+          aria-label="Alle lessen of alleen mijn lessen"
+        >
+          <ToggleButton value="all">Alles</ToggleButton>
+          <ToggleButton value="mine">Mijn lessen</ToggleButton>
+        </ToggleButtonGroup>
         <ToggleButtonGroup
           size="small"
           exclusive
@@ -491,12 +514,10 @@ export function LessenPage() {
               setKindFilter('');
             }}
           >
-            {isStaff && (
-              <FilterGroup label="Laten zien">
-                <Chip label="Hele rooster" onClick={() => setMyDayOnly(false)} sx={filterPillSx(!myDayOnly)} />
-                <Chip label="Mijn dag" onClick={() => setMyDayOnly(true)} sx={filterPillSx(myDayOnly)} />
-              </FilterGroup>
-            )}
+            <FilterGroup label="Laten zien">
+              <Chip label="Alles" onClick={() => setMyDayOnly(false)} sx={filterPillSx(!myDayOnly)} />
+              <Chip label="Mijn lessen" onClick={() => setMyDayOnly(true)} sx={filterPillSx(myDayOnly)} />
+            </FilterGroup>
             {roomOptions.length > 0 && (
               <FilterGroup label="Ruimte">
                 <Chip label="Alle ruimtes" onClick={() => setRoomFilter('')} sx={filterPillSx(roomFilter === '')} />
@@ -536,15 +557,23 @@ export function LessenPage() {
                   <Box
                     key={d}
                     role="button"
-                    tabIndex={isPast ? -1 : 0}
-                    onClick={() => !isPast && setSelectedDate(d)}
+                    tabIndex={0}
+                    aria-pressed={selected}
+                    onClick={() => setSelectedDate(d)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedDate(d);
+                      }
+                    }}
                     sx={{
                       flex: 1,
                       textAlign: 'center',
                       py: 0.75,
                       borderRadius: 2,
-                      cursor: isPast ? 'default' : 'pointer',
-                      opacity: isPast ? 0.35 : 1,
+                      cursor: 'pointer',
+                      // Voorbije dagen iets gedempt, maar wel te openen: je ziet dan wat er was.
+                      opacity: isPast && !selected ? 0.6 : 1,
                       // Volgt het ontwerp: de geselecteerde dag is Primary (gevuld), geen zachte container.
                       bgcolor: selected ? designTokens.primary : 'transparent',
                       color: selected ? designTokens.onPrimary : 'text.primary',
@@ -572,7 +601,7 @@ export function LessenPage() {
           {dayClasses.length === 0 ? (
             <ContentCard>
               <EmptyState>
-                {myDayOnly ? `Geen eigen sessies op ${relativeDayLabel(selectedDate).toLowerCase()}.` : `Nog niets gepland op ${relativeDayLabel(selectedDate).toLowerCase()}.`}
+                {myDayOnly ? `Geen lessen van jou op ${relativeDayLabel(selectedDate).toLowerCase()}.` : `Nog niets gepland op ${relativeDayLabel(selectedDate).toLowerCase()}.`}
               </EmptyState>
             </ContentCard>
           ) : (
@@ -604,9 +633,11 @@ export function LessenPage() {
             <ContentCard>
               <EmptyState>
                 {myDayOnly
-                  ? 'Geen eigen sessies deze week.'
+                  ? isStaff
+                    ? 'Geen eigen lessen in deze periode.'
+                    : 'Je bent nog nergens voor ingeschreven. Kies "Alles" om te reserveren.'
                   : isStaff
-                    ? 'Nog geen lessen op het rooster. Voeg de eerste toe.'
+                    ? 'Nog geen lessen op het rooster. Maak een lessoort aan bij Beheer → Lessoorten; de lessen verschijnen dan vanzelf.'
                     : 'Er staan nog geen lessen gepland. Je trainer zet ze hier neer.'}
               </EmptyState>
             </ContentCard>
@@ -761,7 +792,7 @@ function BookConfirmDialog({
           {cls.endTime ? `–${cls.endTime}` : ''}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          {[trainerName, cls.room, `${cls.bookedCount} van ${cls.capacity} plekken bezet`].filter(Boolean).join(' · ')}
+          {[trainerName, cls.room, spotsLabel(cls)].filter(Boolean).join(' · ')}
         </Typography>
 
         {cls.description && <Typography variant="body2">{cls.description}</Typography>}
@@ -772,7 +803,7 @@ function BookConfirmDialog({
               {cost === 0 ? (isStaff ? 'Gratis (staf)' : 'Gratis') : cost === 1 ? 'Kost 1 credit' : `Kost ${cost} credits`}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {cost > 0 ? `Je hebt ${credits} · ${credits - cost} over na deze` : `Je hebt ${credits}`}
+              {cost > 0 ? `Saldo ${credits} · daarna ${credits - cost}` : `Saldo ${credits}`}
             </Typography>
           </Box>
         )}
@@ -792,7 +823,7 @@ function BookConfirmDialog({
         <Button onClick={onClose} disabled={busy}>
           Sluiten
         </Button>
-        <Button variant="contained" disabled={busy} onClick={() => onConfirm(weekly)}>
+        <Button variant="contained" disableElevation disabled={busy} onClick={() => onConfirm(weekly)}>
           {full ? 'Wachtlijst' : cost === 0 ? 'Reserveren' : `Reserveren · ${cost} credit${cost > 1 ? 's' : ''}`}
         </Button>
       </DialogActions>

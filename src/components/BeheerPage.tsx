@@ -67,6 +67,7 @@ import { designTokens } from '../theme/designTokens';
 import { EMAIL_RE, generatePassword } from '../utils/account';
 import { MemberImportDialog } from './beheer/MemberImportDialog';
 import { LEADERBOARD_ENABLED } from '../config/features';
+import { tabsOverflowHintSx } from '../theme/tabs';
 
 type Section = 'leden' | 'lessoorten' | 'abonnementen' | 'huisstijl' | 'instellingen' | 'facturatie' | 'meldingen';
 /** Beheer gebruikt de hele breedte van het hoofdvlak, zoals in het ontwerp; de andere pagina's blijven op 800. */
@@ -414,39 +415,44 @@ export function BeheerPage() {
     );
   }
 
-  // Kop naar het ontwerp: "Account toevoegen" rechts, daaronder de tabs.
+  // Kop naar het ontwerp: de acties van de tab rechts in de kop (desktop), de tabs eronder.
+  const actions =
+    section === 'lessoorten' ? (
+      <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewTypeSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
+        {t('classTypes.newType')}
+      </Button>
+    ) : section === 'abonnementen' ? (
+      <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewPlanSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
+        {t('plans.newPlan')}
+      </Button>
+    ) : section === 'facturatie' ? (
+      <Button variant="contained" disableElevation startIcon={<DownloadRoundedIcon />} onClick={() => setExportSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
+        {t('billing.export')}
+      </Button>
+    ) : section === 'leden' ? (
+      <>
+        <Button variant="contained" disableElevation startIcon={<PersonAddRoundedIcon />} onClick={openCreate} disabled={!auth} sx={{ flexShrink: 0 }}>
+          {t('admin.addAccount')}
+        </Button>
+        <Button variant="outlined" startIcon={<UploadFileRoundedIcon />} onClick={() => setImportOpen(true)} disabled={!auth} sx={{ flexShrink: 0 }}>
+          Leden importeren
+        </Button>
+      </>
+    ) : null; // Meldingen, Huisstijl en Instellingen: de acties staan in de kaarten zelf.
   const header = (
     <>
-      {/* De titel staat in de kop van de schil. Knoppen: op desktop rechts in die kop (Figma), op een
-          telefoon boven de tabs. */}
-      <HeaderActions>
-      {/* flexWrap: op een smalle telefoon komt "Leden importeren" onder "Account toevoegen" in plaats van buiten beeld. */}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-start', gap: { xs: 1, md: 2 }, mb: { xs: 1.5, md: 0 } }}>
-        {section === 'lessoorten' ? (
-          <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewTypeSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
-            {t('classTypes.newType')}
-          </Button>
-        ) : section === 'abonnementen' ? (
-          <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewPlanSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
-            {t('plans.newPlan')}
-          </Button>
-        ) : section === 'facturatie' ? (
-          <Button variant="contained" disableElevation startIcon={<DownloadRoundedIcon />} onClick={() => setExportSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
-            {t('billing.export')}
-          </Button>
-        ) : section === 'leden' ? (
-          <>
-            <Button variant="contained" disableElevation startIcon={<PersonAddRoundedIcon />} onClick={openCreate} disabled={!auth} sx={{ flexShrink: 0 }}>
-              {t('admin.addAccount')}
-            </Button>
-            <Button variant="outlined" startIcon={<UploadFileRoundedIcon />} onClick={() => setImportOpen(true)} disabled={!auth} sx={{ flexShrink: 0 }}>
-              Leden importeren
-            </Button>
-          </>
-        ) : null /* Huisstijl en Meldingen: de acties staan in de kaarten zelf. */}
-      </Box>
-      </HeaderActions>
+      {/* Telefoon: eerst de tabs, dan pas de knoppen. Zo staan de tabs op elke tab op dezelfde plek
+          (sommige tabs hebben geen knoppen) in plaats van op en neer te springen. Desktop: de knoppen
+          staan rechts in de kop van de schil (Figma). */}
       <SectionTabs sections={sections} value={section} onChange={setSection} />
+      {actions && (
+        <HeaderActions>
+          {/* flexWrap: op een smalle telefoon komt "Leden importeren" onder "Account toevoegen" in plaats van buiten beeld. */}
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-start', gap: { xs: 1, md: 2 }, mb: { xs: 2, md: 0 } }}>
+            {actions}
+          </Box>
+        </HeaderActions>
+      )}
     </>
   );
 
@@ -850,7 +856,8 @@ function SectionTabs({ sections, value, onChange }: { sections: Section[]; value
       variant={wide ? 'fullWidth' : 'scrollable'}
       scrollButtons={false}
       allowScrollButtonsMobile
-      sx={{ minHeight: 44, mb: 2, borderBottom: '1px solid', borderColor: 'divider', '& .MuiTab-root': { minHeight: 44, textTransform: 'none', fontWeight: 600, px: 2 } }}
+      sx={{
+          ...(!wide ? tabsOverflowHintSx : {}), minHeight: 44, mb: 2, borderBottom: '1px solid', borderColor: 'divider', '& .MuiTab-root': { minHeight: 44, textTransform: 'none', fontWeight: 600, px: 2 } }}
     >
       {sections.map((sec) => (
         <Tab key={sec} value={sec} label={t(`admin.tabs.${SECTION_KEY[sec]}`)} />
