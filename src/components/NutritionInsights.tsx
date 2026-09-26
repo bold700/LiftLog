@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Typography, Card, CardContent, CircularProgress } from '@mui/material';
+import { Box, Typography, CircularProgress } from '@mui/material';
 import { PageLayout, ContentCard } from './layout';
 import { useProfile } from '../context/ProfileContext';
 import { useViewAs } from '../context/ViewAsContext';
 import { getNutritionLogsForUser, type NutritionLog } from '../services/nutritionService';
 import { getMeasurementsForUser, latestWeight } from '../services/measurementService';
+import { designTokens } from '../theme/designTokens';
+import { formatNumber } from '../utils/format';
+import { KcalBars } from './nutrition/KcalBars';
 
 function isoDay(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -109,9 +112,8 @@ export function NutritionInsights() {
     // 14-daagse trend
     const days14 = lastNDays(14);
     const trend = days14.map((d) => ({ date: d, kcal: byDay[d]?.kcal ?? 0 }));
-    const maxKcal = Math.max(1, ...trend.map((t) => t.kcal), goal?.kcal ?? 0);
 
-    return { nLogged, onlyToday, todayLogged, avg, split, onTarget, trend, maxKcal };
+    return { nLogged, onlyToday, todayLogged, avg, split, onTarget, trend };
   }, [logs, goal]);
 
   if (loading) {
@@ -130,9 +132,6 @@ export function NutritionInsights() {
     return (
       <PageLayout maxWidth="none">
         <ContentCard>
-          <Typography variant="h6" fontWeight={600} sx={{ mb: 1 }}>
-            Voedingspatroon
-          </Typography>
           <Typography variant="body2" color="text.secondary">
             Nog geen voeding gelogd in de laatste 30 dagen. Log je voeding bij Voeding om hier inzichten te zien.
           </Typography>
@@ -142,67 +141,60 @@ export function NutritionInsights() {
   }
 
   const macroBar = [
-    { key: 'protein', label: 'Eiwit', pct: stats.split.protein, color: 'success.main' },
-    { key: 'carbs', label: 'Koolhydraten', pct: stats.split.carbs, color: 'info.main' },
-    { key: 'fat', label: 'Vet', pct: stats.split.fat, color: 'warning.main' },
+    { key: 'protein', label: 'Eiwit', pct: stats.split.protein, color: designTokens.primary },
+    { key: 'carbs', label: 'Koolhydraten', pct: stats.split.carbs, color: designTokens.tertiary },
+    { key: 'fat', label: 'Vet', pct: stats.split.fat, color: 'secondary.main' },
   ];
+  const tile = { bgcolor: designTokens.cardBackground, borderRadius: `${designTokens.cardRadius}px`, p: { xs: 2, md: 3 }, minWidth: 0 } as const;
+  const heading = (text: string) => (
+    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5 }}>
+      {text}
+    </Typography>
+  );
 
   return (
     <PageLayout maxWidth="none">
-      <ContentCard>
-        <Typography variant="h6" fontWeight={600} sx={{ mb: 0.5 }}>
-          Voedingspatroon
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          {stats.onlyToday
-            ? 'Alleen vandaag is gelogd, en die dag is nog niet om. Dit is vandaag tot nu toe.'
-            : `Op basis van ${stats.nLogged} gelogde ${stats.nLogged === 1 ? 'dag' : 'dagen'} in de laatste 30 dagen.${
-                stats.todayLogged ? ' Vandaag telt mee zodra de dag voorbij is.' : ''
-              }`}
-        </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        {stats.onlyToday
+          ? 'Alleen vandaag is gelogd, en die dag is nog niet om. Dit is vandaag tot nu toe.'
+          : `Op basis van ${stats.nLogged} gelogde ${stats.nLogged === 1 ? 'dag' : 'dagen'} in de afgelopen 30 dagen.${
+              stats.todayLogged ? ' Vandaag telt mee zodra de dag voorbij is.' : ''
+            }`}
+      </Typography>
 
-        {/* Gemiddelde per dag */}
-        <Card sx={{ backgroundColor: 'transparent', border: '1px solid', borderColor: 'divider', boxShadow: 'none', borderRadius: 2, mb: 2 }}>
-          <CardContent sx={{ '&:last-child': { pb: 2 } }}>
-            <Typography variant="caption" color="text.secondary">
-              {stats.onlyToday ? 'Vandaag tot nu toe' : 'Gemiddeld per gelogde dag'}
+      {/* Zelfde tegels als Overzicht: het getal groot, eronder wat het is. */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' }, gap: { xs: 1.25, md: 2 }, mb: { xs: 2, md: 2.5 } }}>
+        {[
+          { v: formatNumber(stats.avg.kcal, 0), l: 'kcal' },
+          { v: `${formatNumber(stats.avg.protein)} g`, l: 'eiwit' },
+          { v: `${formatNumber(stats.avg.carbs)} g`, l: 'koolhydraten' },
+          { v: `${formatNumber(stats.avg.fat)} g`, l: 'vet' },
+        ].map((x) => (
+          <Box key={x.l} sx={{ ...tile, px: 2, py: 1.75 }}>
+            <Typography sx={{ fontSize: 28, lineHeight: '36px', fontWeight: 500 }} noWrap>
+              {x.v}
             </Typography>
-            <Box sx={{ display: 'flex', justifyContent: 'space-around', textAlign: 'center', flexWrap: 'wrap', gap: 1, mt: 1 }}>
-              {[
-                { v: stats.avg.kcal, l: 'kcal' },
-                { v: `${stats.avg.protein} g`, l: 'eiwit' },
-                { v: `${stats.avg.carbs} g`, l: 'koolh.' },
-                { v: `${stats.avg.fat} g`, l: 'vet' },
-              ].map((x) => (
-                <Box key={x.l}>
-                  <Typography variant="h6" fontWeight={700}>
-                    {x.v}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {x.l}
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
-            {weightKg ? (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1.5 }}>
-                ≈ {Math.round((stats.avg.protein / weightKg) * 10) / 10} g eiwit per kg lichaamsgewicht ({weightKg} kg)
-              </Typography>
-            ) : null}
-          </CardContent>
-        </Card>
+            <Typography variant="body2" color="text.secondary" noWrap>
+              {x.l}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+              {stats.onlyToday ? 'Vandaag tot nu toe' : 'Gemiddeld per dag'}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
 
-        {/* Macro-verdeling */}
-        <Card sx={{ backgroundColor: 'transparent', border: '1px solid', borderColor: 'divider', boxShadow: 'none', borderRadius: 2, mb: 2 }}>
-          <CardContent sx={{ '&:last-child': { pb: 2 } }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              Verdeling calorieën
-            </Typography>
-            {/* Zelfde balk als "Trainingsbalans" bij Oefeningen: losse afgeronde delen met een kiertje,
-                de labels erboven (links, midden, rechts) in dezelfde volgorde als de delen. */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, mb: 0.625 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) minmax(0, 1fr)' }, gap: { xs: 2, md: 2.5 }, alignItems: 'start' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 2, md: 2.5 }, minWidth: 0 }}>
+          <Box sx={tile}>
+            {heading('Verdeling calorieën')}
+            {/* Zelfde balk als "Trainingsbalans" bij Oefeningen: losse afgeronde delen met een kiertje. */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, mb: 0.75 }}>
               {macroBar.map((m) => (
-                <Typography key={m.key} variant="caption">{`${m.label} ${m.pct}%`}</Typography>
+                <Typography key={m.key} variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <Box component="span" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: m.color, flexShrink: 0 }} />
+                  {`${m.label} ${m.pct}%`}
+                </Typography>
               ))}
             </Box>
             <Box sx={{ display: 'flex', gap: '3px', height: 8 }}>
@@ -212,51 +204,32 @@ export function NutritionInsights() {
                   <Box key={m.key} sx={{ flex: `${m.pct} 1 0`, minWidth: 0, bgcolor: m.color, borderRadius: 1 }} />
                 ))}
             </Box>
-          </CardContent>
-        </Card>
-
-        {/* Doel-consistentie; niet op een dag die nog niet om is. */}
-        {goal?.kcal && !stats.onlyToday ? (
-          <Card sx={{ backgroundColor: 'transparent', border: '1px solid', borderColor: 'divider', boxShadow: 'none', borderRadius: 2, mb: 2 }}>
-            <CardContent sx={{ '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" color="text.secondary">
-                Op koers (kcal binnen 10% van je doel van {goal.kcal})
+            {weightKg ? (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                Eiwit: {formatNumber(stats.avg.protein / weightKg)} g per kg lichaamsgewicht ({formatNumber(weightKg)} kg)
               </Typography>
-              <Typography variant="h6" fontWeight={700}>
+            ) : null}
+          </Box>
+
+          {/* Doel-consistentie; niet op een dag die nog niet om is. */}
+          {goal?.kcal && !stats.onlyToday ? (
+            <Box sx={tile}>
+              {heading('Op koers')}
+              <Typography sx={{ fontSize: 28, lineHeight: '36px', fontWeight: 500 }}>
                 {stats.onTarget} van {stats.nLogged} {stats.nLogged === 1 ? 'dag' : 'dagen'}
               </Typography>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {/* 14-daagse kcal-trend */}
-        <Card sx={{ backgroundColor: 'transparent', border: '1px solid', borderColor: 'divider', boxShadow: 'none', borderRadius: 2 }}>
-          <CardContent sx={{ '&:last-child': { pb: 2 } }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              kcal per dag (14 dagen)
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 0.5, height: 110 }}>
-              {stats.trend.map((t) => (
-                <Box key={t.date} sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', gap: 0.5, minWidth: 0, height: '100%' }}>
-                  <Box
-                    title={`${t.date}: ${t.kcal} kcal`}
-                    sx={{
-                      width: '78%',
-                      height: `${Math.round((t.kcal / stats.maxKcal) * 100)}%`,
-                      minHeight: t.kcal > 0 ? 2 : 0,
-                      bgcolor: goal?.kcal && t.kcal > goal.kcal ? 'warning.main' : 'success.main',
-                      borderRadius: 1,
-                    }}
-                  />
-                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>
-                    {t.date.slice(8)}
-                  </Typography>
-                </Box>
-              ))}
+              <Typography variant="body2" color="text.secondary">
+                Binnen 10% van je doel van {formatNumber(goal.kcal, 0)} kcal.
+              </Typography>
             </Box>
-          </CardContent>
-        </Card>
-      </ContentCard>
+          ) : null}
+        </Box>
+
+        <Box sx={tile}>
+          {heading('Kcal per dag · afgelopen 14 dagen')}
+          <KcalBars days={stats.trend} goal={goal?.kcal ?? null} />
+        </Box>
+      </Box>
     </PageLayout>
   );
 }

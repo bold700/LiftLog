@@ -105,8 +105,8 @@ describe('computePlanCompletion', () => {
 describe('opmaak', () => {
   it('volume in kg of ton', () => {
     expect(formatVolume(850)).toBe('850 kg');
-    expect(formatVolume(4830)).toBe('4,8t');
-    expect(formatVolume(48200)).toBe('48t');
+    expect(formatVolume(4830)).toBe('4,8 ton');
+    expect(formatVolume(48200)).toBe('48 ton');
   });
 
   it('details van een log', () => {

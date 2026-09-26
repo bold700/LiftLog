@@ -55,7 +55,7 @@ export function ScanBanner({ onClick }: { onClick: () => void }) {
     >
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography variant="body2" sx={{ fontWeight: 600, color: 'inherit' }}>
-          Scan je bodyscan
+          Bodyscan uitlezen
         </Typography>
         <Typography variant="caption" sx={{ display: 'block', color: 'inherit', opacity: 0.85 }}>
           Maak een foto van de uitslag op de weegschaal; de waarden worden ingevuld
@@ -110,7 +110,7 @@ export function LatestWeightCard({ items, goalWeight }: LatestWeightCardProps) {
   const toGoal = goalWeight != null ? Math.round((latest.weightKg - goalWeight) * 10) / 10 : null;
 
   return (
-    <Box sx={{ ...cardSx(), p: { xs: 2, md: 3 }, minWidth: 0, flex: { md: 1 } }}>
+    <Box sx={{ ...cardSx(), p: { xs: 2, md: 3 }, minWidth: 0 }}>
       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
         <Typography sx={{ fontSize: { xs: 36, md: 45 }, lineHeight: 1.15, fontWeight: 500 }}>{nl(latest.weightKg)}</Typography>
         <Typography variant="body1" color="text.secondary" sx={{ flex: 1 }}>
@@ -127,6 +127,10 @@ export function LatestWeightCard({ items, goalWeight }: LatestWeightCardProps) {
           >
             {latest.deltaKg > 0 ? '+' : '−'}
             {nl(Math.abs(latest.deltaKg))} kg
+            {/* Ook op de telefoon zeggen waar het verschil over gaat, anders staat er een los getal. */}
+            <Box component="span" sx={{ display: { xs: 'inline', md: 'none' } }}>
+              {' '}t.o.v. vorige
+            </Box>
             <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>
               {' '}t.o.v. vorige meting
             </Box>
@@ -288,7 +292,10 @@ export function HistoryRows({ loading, items, onEdit, onDelete, onViewScan }: Hi
                 </Typography>
               )}
             </Box>
-            <SourceTag source={measurementSource(m)} />
+            {/* Vaste breedte: anders springen de waarden per regel door "Scan", "Plooien" of "Handmatig". */}
+            <Box sx={{ width: 84, display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
+              <SourceTag source={measurementSource(m)} />
+            </Box>
             <IconButton size="small" aria-label="Meting bewerken of verwijderen" onClick={(e) => open(e, m)} sx={{ color: 'text.secondary' }}>
               <MoreVertIcon fontSize="small" />
             </IconButton>

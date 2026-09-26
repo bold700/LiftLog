@@ -1,4 +1,4 @@
-// Dialoog "Oefening Bewerken" op de Log-pagina: velden voor naam, gewicht, sets, reps en notitie.
+// Dialoog "Oefening bewerken" op de Log-pagina: velden voor naam, gewicht, sets, reps en notitie.
 // De veldwaarden blijven in LogsPage; dit bestand koppelt alleen de md-* knoppen (annuleren/opslaan) aan de DOM.
 import { useEffect, useRef } from 'react';
 import { Dialog, DialogTitle, DialogContent, Box, TextField, Autocomplete } from '@mui/material';
@@ -115,7 +115,7 @@ export function ExerciseEditDialog({
       fullWidth
       fullScreen={isMobile}
     >
-      <DialogTitle>Oefening Bewerken</DialogTitle>
+      <DialogTitle>Oefening bewerken</DialogTitle>
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
           <Autocomplete

@@ -19,7 +19,6 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import { Line, LineChart, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { updateExercise, deleteExercise } from '../utils/storage';
 import { saveExerciseLog, deleteExerciseLog } from '../services/logService';
 import { useViewedExercises } from '../hooks/useViewedExercises';
@@ -39,6 +38,8 @@ import '@material/web/button/filled-button.js';
 import '@material/web/button/text-button.js';
 import '@material/web/icon/icon.js';
 import { NumberField } from './NumberField';
+import { TrendChart } from './metingen/TrendChart';
+import { OVERVIEW_PERIOD_DAYS, isWithinLastDays } from '../utils/insightsOverview';
 
 const cardSx = () => ({
   backgroundColor: designTokens.cardBackground,
@@ -142,7 +143,8 @@ export const OefeningenPage = () => {
 
   const balance = useMemo(
     () =>
-      computeTrainingBalance(allExercises, (name) => ({
+      // Dezelfde 30 dagen als Overzicht en Spieren: balans over je recente training, niet over alles ooit.
+      computeTrainingBalance(allExercises.filter((e) => isWithinLastDays(e.date, OVERVIEW_PERIOD_DAYS, new Date())), (name) => ({
         movementType: findExerciseMetadata(name)?.movementType,
         primaryRegions: getExerciseMuscleMapping(name)?.primary ?? [],
       })),
@@ -454,25 +456,9 @@ export const OefeningenPage = () => {
                       : `Record ${kg(progress.max)}`}
                   </Typography>
                   {progress.sessions.length > 1 && (
-                    <Box sx={{ width: '100%', height: { xs: 110, md: 160 }, mt: 2 }}>
-                      <ResponsiveContainer>
-                        <LineChart data={progress.sessions} margin={{ top: 8, right: 4, bottom: 4, left: 4 }}>
-                          <YAxis hide domain={['dataMin - 2', 'dataMax + 2']} />
-                          <Tooltip
-                            formatter={(value: number) => [kg(value), 'Gewicht']}
-                            labelFormatter={(_, payload) => (payload?.[0] ? sessionDayLabel(payload[0].payload.day) : '')}
-                          />
-                          <Line
-                            type="linear"
-                            dataKey="weight"
-                            stroke={theme.palette.primary.main}
-                            strokeWidth={2.5}
-                            dot={false}
-                            activeDot={{ r: 5 }}
-                            isAnimationActive={false}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
+                    // Zelfde grafiek als het gewicht bij Metingen: met assen, datums en punten.
+                    <Box sx={{ mt: 2 }}>
+                      <TrendChart points={progress.sessions.map((x) => ({ id: x.day, date: x.day, value: x.weight }))} unit="kg" />
                     </Box>
                   )}
                 </>
@@ -523,8 +509,12 @@ export const OefeningenPage = () => {
 
             {balanceRows.length > 0 && (
               <Box sx={{ gridArea: 'balance', ...cardSx(), p: { xs: 2, md: 3 }, minWidth: 0 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                   Trainingsbalans
+                </Typography>
+                {/* Staat onder één oefening, maar gaat over al je training: dat moet erbij staan. */}
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  Al je oefeningen · afgelopen {OVERVIEW_PERIOD_DAYS} dagen
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75 }}>
                   {balanceRows.map((pair) => (
@@ -570,7 +560,7 @@ export const OefeningenPage = () => {
         fullWidth
         fullScreen={isMobile}
       >
-        <DialogTitle>Oefening Bewerken</DialogTitle>
+        <DialogTitle>Oefening bewerken</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <Autocomplete
@@ -653,10 +643,10 @@ export const OefeningenPage = () => {
         onClose={handleCloseDeleteDialog}
         maxWidth="sm"
       >
-        <DialogTitle>Oefening Verwijderen</DialogTitle>
+        <DialogTitle>Log verwijderen</DialogTitle>
         <DialogContent>
           <Typography variant="body1">
-            Weet je zeker dat je deze oefening wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.
+            Weet je zeker dat je deze log wilt verwijderen? Dit kan niet ongedaan worden gemaakt.
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -667,7 +657,7 @@ export const OefeningenPage = () => {
           {/* @ts-ignore - Material Web Components are web components */}
           <md-filled-button
             ref={deleteConfirmButtonRef}
-            style={{ '--md-filled-button-container-color': '#BA1A1A' } as any}
+            style={{ '--md-filled-button-container-color': 'var(--md-sys-color-error, #BA1A1A)', '--md-filled-button-label-text-color': 'var(--md-sys-color-on-error, #FFFFFF)' } as any}
           >
             {/* @ts-ignore */}
             <md-icon slot="start">delete</md-icon>

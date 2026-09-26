@@ -68,11 +68,12 @@ import {
   MEAL_ORDER,
   type MealMoment,
 } from '../services/nutritionService';
-import { todayIso } from '../utils/format';
+import { todayIso, formatNumber } from '../utils/format';
 import { fileToDataUrl } from '../utils/imageDataUrl';
 import { NumberField } from './NumberField';
 import { ProductSheet, type PortionChoice } from './nutrition/ProductSheet';
 import { segmentedToggleSx } from '../theme/segmentedToggle';
+import { KcalBars } from './nutrition/KcalBars';
 
 type Period = 'day' | 'week' | 'month';
 
@@ -334,7 +335,6 @@ export function NutritionPage() {
   };
   // In dag-modus tonen we het dagtotaal; anders het gemiddelde per dag
   const shown = period === 'day' ? totals : avg;
-  const maxKcal = Math.max(1, ...perDay.map((p) => p.kcal), goal?.kcal ?? 0);
 
   const openAdd = (p: FoodProduct) => {
     setSelected(p);
@@ -488,10 +488,10 @@ export function NutritionPage() {
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 1 }}>
           <Typography sx={{ fontSize: { xs: 32, md: 40 }, fontWeight: 500, lineHeight: 1.1 }}>
-            {shown.kcal}
+            {formatNumber(shown.kcal, 0)}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {goal?.kcal ? t('nutrition.summary.ofKcal', { kcal: goal.kcal }) : t('nutrition.summary.kcal')}
+            {goal?.kcal ? t('nutrition.summary.ofKcal', { kcal: formatNumber(goal.kcal, 0) }) : t('nutrition.summary.kcal')}
           </Typography>
         </Box>
         {goal?.kcal ? (
@@ -510,7 +510,7 @@ export function NutritionPage() {
                 {t(`nutrition.macros.${key}`)}
               </Typography>
               <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-                {shown[key]} g{goal && goal[key] ? ` ${t('nutrition.summary.ofGrams', { grams: goal[key] })}` : ''}
+                {formatNumber(shown[key])} g{goal && goal[key] ? ` ${t('nutrition.summary.ofGrams', { grams: formatNumber(goal[key] as number) })}` : ''}
               </Typography>
             </Box>
             {goal && goal[key] > 0 && (
@@ -562,28 +562,7 @@ export function NutritionPage() {
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                   {t('nutrition.kcalPerDay')}
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'stretch', gap: period === 'week' ? 1 : 0.4, height: 120 }}>
-                  {perDay.map((p) => (
-                    <Box key={p.date} sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', gap: 0.5, minWidth: 0, height: '100%' }}>
-                      <Box
-                        title={`${p.date}: ${p.kcal} kcal`}
-                        sx={{
-                          width: '80%',
-                          height: `${Math.round((p.kcal / maxKcal) * 100)}%`,
-                          minHeight: p.kcal > 0 ? 2 : 0,
-                          bgcolor: goal?.kcal && p.kcal > goal.kcal ? 'warning.main' : 'success.main',
-                          borderRadius: 1,
-                          transition: 'height 0.2s ease',
-                        }}
-                      />
-                      {period === 'week' && (
-                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>
-                          {p.date.slice(8)}
-                        </Typography>
-                      )}
-                    </Box>
-                  ))}
-                </Box>
+                <KcalBars days={perDay} goal={goal?.kcal ?? null} />
               </CardContent>
             </Card>
           </>
