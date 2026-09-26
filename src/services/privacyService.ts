@@ -14,7 +14,7 @@ import { withdrawHealthConsentOnServer } from './adminAccountService';
 
 /**
  * Versie van de toestemmingstekst; verhoog als de tekst wezenlijk verandert (dan wordt opnieuw gevraagd).
- * Moet gelijk zijn aan die in api/admin-account.mjs. v2: de AI-dienst (OpenAI) wordt genoemd.
+ * Moet gelijk zijn aan die in api/admin-account.mjs. v2: de AI-dienst (OpenAI) wordt genoemd, voor schema's en bodyscan-foto's.
  */
 export const HEALTH_CONSENT_VERSION = 2;
 

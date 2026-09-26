@@ -39,8 +39,8 @@ export function HealthConsentExplanation() {
       </Typography>
       <Typography variant="body2">
         Die zijn alleen zichtbaar voor jou, je trainer en je studio, en worden gebruikt om je training te begeleiden. We verkopen ze
-        niet en gebruiken ze niet voor reclame. Maakt je trainer een schema met de AI-hulp, dan gaat wat de trainer daarvoor invult
-        (zoals een blessure) naar de AI-dienst OpenAI, die het niet gebruikt om zijn AI mee te trainen.
+        niet en gebruiken ze niet voor reclame. Voor de AI-hulp (een schema laten maken, een foto van een
+        bodyscan laten uitlezen) gaat wat daarvoor nodig is naar de AI-dienst OpenAI, die het niet gebruikt om zijn AI mee te trainen.
       </Typography>
       <Typography variant="body2" sx={{ fontWeight: 500 }}>
         {HEALTH_CONSENT_WHY}
