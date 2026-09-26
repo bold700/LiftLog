@@ -8,7 +8,7 @@ import { doc, getDoc, setDoc, serverTimestamp, type Timestamp } from 'firebase/f
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
 import { callBooking } from './classService';
-import type { NotificationKind, Org, OrgBookingPolicy, OrgBranding, OrgBusiness, OrgNotificationSettings, OrgPaymentsStatus } from '../types';
+import type { NotificationKind, Org, OrgAccountRetention, OrgBookingPolicy, OrgBranding, OrgBusiness, OrgNotificationSettings, OrgPaymentsStatus } from '../types';
 
 const COLLECTION = 'orgs';
 
@@ -31,9 +31,32 @@ function toOrg(data: Record<string, unknown>, id: string): Org {
     payments: toPaymentsStatus(data.payments),
     bookingPolicy: toBookingPolicy(data.bookingPolicy),
     notifications: toNotificationSettings(data.notifications),
+    accountRetention: toAccountRetention(data.accountRetention),
     createdAt: ts(data.createdAt),
     updatedAt: ts(data.updatedAt),
   };
+}
+
+/** Grenzen van "inactieve accounts verwijderen"; gelijk aan die op de server (api/_lib/accountRetention.mjs). */
+export const RETENTION_MIN_MONTHS = 3;
+export const RETENTION_MAX_MONTHS = 120;
+
+export function toAccountRetention(raw: unknown): OrgAccountRetention | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const months = Math.round(Number(r.months));
+  if (!Number.isFinite(months)) return null;
+  return { enabled: r.enabled === true, months: Math.min(RETENTION_MAX_MONTHS, Math.max(RETENTION_MIN_MONTHS, months)) };
+}
+
+/** Alleen de eigenaar mag dit wijzigen (Firestore-regels). */
+export async function saveAccountRetention(orgId: string, value: OrgAccountRetention): Promise<void> {
+  if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
+  await setDoc(
+    doc(db, COLLECTION, orgId),
+    { accountRetention: { enabled: value.enabled, months: Math.round(value.months) }, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
 }
 
 const HEX = /^#[0-9a-f]{6}$/i;

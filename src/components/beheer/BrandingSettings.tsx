@@ -11,6 +11,7 @@ import UploadRoundedIcon from '@mui/icons-material/UploadRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { ContentCard } from '../layout';
 import { PaymentsSettings } from './PaymentsSettings';
+import { AccountRetentionSettings } from './AccountRetentionSettings';
 import { useI18n } from '../../context/I18nContext';
 import { useProfile } from '../../context/ProfileContext';
 import { useBranding } from '../../context/BrandingContext';
@@ -428,6 +429,7 @@ export function BrandingSettings() {
 
       {/* Betalingen: elk bedrijf koppelt zijn eigen Mollie-account (ontwerp "Payments — Mollie") */}
       <PaymentsSettings orgId={orgId} payments={payments} onChange={setPayments} />
+      <AccountRetentionSettings orgId={orgId} myUid={profile?.profile?.userId} />
       </Box>
 
       {/* Voorbeeld */}

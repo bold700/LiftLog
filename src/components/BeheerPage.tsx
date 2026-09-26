@@ -64,6 +64,7 @@ import { NumberField } from './NumberField';
 import { designTokens } from '../theme/designTokens';
 import { EMAIL_RE, generatePassword } from '../utils/account';
 import { MemberImportDialog } from './beheer/MemberImportDialog';
+import { LEADERBOARD_ENABLED } from '../config/features';
 
 type Section = 'leden' | 'lessoorten' | 'abonnementen' | 'huisstijl' | 'facturatie' | 'meldingen';
 /** Beheer gebruikt de hele breedte van het hoofdvlak, zoals in het ontwerp; de andere pagina's blijven op 800. */
@@ -634,11 +635,13 @@ export function BeheerPage() {
                 <NumberField label="Rusthartslag (bpm)" size="small" fullWidth value={edit.restingHr} onChange={(v) => setEdit({ ...edit, restingHr: v })} />
               )}
               <NumberField label="Doelgewicht (kg)" decimal size="small" fullWidth value={edit.weightGoalKg} onChange={(v) => setEdit({ ...edit, weightGoalKg: v })} />
-              <TextField select label="Ranglijst" size="small" fullWidth value={edit.leaderboardVisibility} onChange={(e) => setEdit({ ...edit, leaderboardVisibility: e.target.value as LeaderboardVisibility })}>
-                <MenuItem value="named">Met naam</MenuItem>
-                <MenuItem value="anonymous">Anoniem</MenuItem>
-                <MenuItem value="hidden">Niet op de ranglijst</MenuItem>
-              </TextField>
+              {LEADERBOARD_ENABLED && (
+                <TextField select label="Ranglijst" size="small" fullWidth value={edit.leaderboardVisibility} onChange={(e) => setEdit({ ...edit, leaderboardVisibility: e.target.value as LeaderboardVisibility })}>
+                  <MenuItem value="named">Met naam</MenuItem>
+                  <MenuItem value="anonymous">Anoniem</MenuItem>
+                  <MenuItem value="hidden">Niet op de ranglijst</MenuItem>
+                </TextField>
+              )}
             </Box>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
               Geboortedatum en geslacht zijn nodig voor het vetpercentage uit huidplooien; lengte voor BMI; rusthartslag voor hartslagzones op maat.

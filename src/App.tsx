@@ -29,6 +29,7 @@ const LessenPage = lazy(() => import('./components/LessenPage').then((m) => ({ d
 const ProfielPage = lazy(() => import('./components/ProfielPage').then((m) => ({ default: m.ProfielPage })));
 const NutritionPage = lazy(() => import('./components/NutritionPage').then((m) => ({ default: m.NutritionPage })));
 import { LeaderboardAutoSync } from './components/LeaderboardAutoSync';
+import { LEADERBOARD_ENABLED } from './config/features';
 import { AddFromSchemaProvider } from './context/AddFromSchemaContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProfileProvider, useProfile } from './context/ProfileContext';
@@ -423,7 +424,7 @@ function AuthedApp() {
       <BrandedTheme>
       <ViewAsProvider>
       <VerificationGate>
-      <LeaderboardAutoSync />
+      {LEADERBOARD_ENABLED && <LeaderboardAutoSync />}
       <ForegroundPushListener />
       <HealthConsentDialog />
       <AppContent />

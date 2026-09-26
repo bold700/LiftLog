@@ -6,11 +6,12 @@
  * niet, en de opslagregels staan de eigenaar toe zijn eigen bestanden te verwijderen.
  */
 import type { User } from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
 import { updateProfile } from './profileService';
 import { getMeasurementsForUser } from './measurementService';
 import { deleteAllProgressPhotos } from './progressPhotoService';
 import { deleteAvatar } from './avatarService';
-import { withdrawHealthConsentOnServer } from './adminAccountService';
+import { exportOwnData, withdrawHealthConsentOnServer } from './adminAccountService';
 
 /**
  * Versie van de toestemmingstekst; verhoog als de tekst wezenlijk verandert (dan wordt opnieuw gevraagd).
@@ -38,4 +39,26 @@ export async function withdrawHealthConsent(user: User): Promise<void> {
 export async function removeOwnFiles(uid: string): Promise<void> {
   await removeOwnProgressPhotos(uid);
   await deleteAvatar(uid);
+}
+
+/**
+ * "Download mijn gegevens": haalt alles op bij de server en biedt het aan als bestand. In de
+ * iPhone- en Android-app werkt een downloadlink niet; daar gaat het via het deelmenu van de telefoon.
+ */
+export async function downloadOwnData(user: User): Promise<void> {
+  const data = await exportOwnData(user);
+  const name = `vorm-mijn-gegevens-${new Date().toISOString().slice(0, 10)}.json`;
+  const json = JSON.stringify(data, null, 2);
+  const file = new File([json], name, { type: 'application/json' });
+  const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
+  if (Capacitor.isNativePlatform() && nav.canShare?.({ files: [file] })) {
+    await nav.share({ files: [file], title: 'Mijn gegevens' });
+    return;
+  }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

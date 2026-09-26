@@ -296,6 +296,13 @@ export interface NutritionGoal {
  * Een studio (organisatie). Alle gegevens van een studio zijn strikt gescheiden van andere studio's:
  * elk document draagt een `orgId` en de Firestore-regels dwingen af dat je alleen je eigen studio ziet.
  */
+/** Instelling "inactieve accounts verwijderen" van een studio. */
+export interface OrgAccountRetention {
+  enabled: boolean;
+  /** Na zoveel maanden zonder inloggen (3 tot 120). */
+  months: number;
+}
+
 export interface Org {
   id: string;
   /** Weergavenaam, bijv. "Van As Personal Training". */
@@ -319,6 +326,11 @@ export interface Org {
   payments: OrgPaymentsStatus;
   /** Wanneer afmelden nog gratis is (Beheer → Huisstijl). Ontbreekt dit, dan geldt het standaard aantal uur van de server. */
   bookingPolicy?: OrgBookingPolicy | null;
+  /**
+   * Accounts die lang niet zijn gebruikt automatisch verwijderen (Beheer → Huisstijl). Alleen de
+   * eigenaar zet dit aan; de dagelijkse ronde op de server doet de rest (api/_lib/accountRetention.mjs).
+   */
+  accountRetention?: OrgAccountRetention | null;
   /**
    * Mag een trainer binnen deze studio de workouts/schema's van andermans cliënten zien, niet
    * alleen de eigen? Standaard uit: elke trainer ziet dan alleen zijn eigen cliënten. Nodig voor

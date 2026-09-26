@@ -12,6 +12,7 @@ import {
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
 import { useAuth } from '../context/AuthContext';
+import { apiUrl } from '../utils/apiOrigin';
 
 /** VA-logo als inline SVG, zodat het via `currentColor` de tekstkleur van het thema volgt. */
 function VaLogo({ height = 56 }: { height?: number }) {
@@ -259,6 +260,13 @@ export function LoginPage() {
           >
             {isRegister ? 'Al een account? Inloggen' : 'Geen account? Account aanmaken'}
           </Button>
+          <Typography sx={{ mt: 2, fontSize: 12, color: 'text.secondary', textAlign: 'center' }}>
+            Hoe we met je gegevens omgaan, lees je in de{' '}
+            <Box component="a" href={apiUrl('/privacy')} target="_blank" rel="noopener" sx={{ color: 'primary.main' }}>
+              privacyverklaring
+            </Box>
+            .
+          </Typography>
         </Box>
       </Box>
     </Box>

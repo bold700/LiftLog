@@ -56,6 +56,7 @@ function query(col, filters = [], max = Infinity) {
 
 const db = {
   collection: (col) => ({ ...query(col), doc: (id) => docRef(col, id) }),
+  runTransaction: async (fn) => fn({ get: (ref) => ref.get(), set: (ref, data) => ref.set(data) }),
   batch: () => {
     const ops = [];
     return {
@@ -75,6 +76,7 @@ vi.mock('../../api/_lib/firebaseAdmin.mjs', () => ({
       deleteUser: async (uid) => {
         deletedAuthUsers.push(uid);
       },
+      getUser: async (uid) => ({ uid, email: `${uid}@example.com`, metadata: { creationTime: 'Mon, 01 Jan 2024 00:00:00 GMT' } }),
     },
     db,
   }),
@@ -190,9 +192,41 @@ describe('toestemming voor gezondheidsgegevens intrekken', () => {
   });
 });
 
+describe('mijn gegevens downloaden', () => {
+  it('geeft alles van de persoon zelf, en niets van een ander of geheime sleutels', async () => {
+    store['workouts/w1'] = { clientId: 'bas', name: 'Kracht' };
+    store['workouts/w2'] = { clientId: 'iris', name: 'Van Iris' };
+    const res = await call('export-self');
+    expect(res.statusCode).toBe(200);
+    const data = res.body.data;
+    expect(data.account.email).toBe('bas@example.com');
+    expect(data.profile.restingHrBpm).toBe(58);
+    expect(data.measurements.map((m) => m.id)).toEqual(['m1']);
+    expect(data.logs).toHaveLength(1);
+    expect(data.bookings).toHaveLength(2);
+    expect(data.charges).toHaveLength(1);
+    expect(data.workouts.map((w) => w.id)).toEqual(['w1']);
+    expect(data.messages.map((m) => m.id)).toEqual(['msg1']);
+    // Geheime koppelsleutels en pushtokens horen niet in de export.
+    expect(data.pushTokens).toBeUndefined();
+    expect(data.mcpKeys).toBeUndefined();
+    expect(data.calendarFeedTokens).toBeUndefined();
+    // Downloaden verandert niets.
+    expect(store['profiles/bas']).toBeDefined();
+    expect(deletedAuthUsers).toEqual([]);
+  });
+});
+
 describe('versie van de toestemmingstekst', () => {
   it('is in de app en op de server gelijk, anders vraagt de app na intrekken meteen opnieuw', () => {
     const version = (file) => Number(/HEALTH_CONSENT_VERSION = (\d+);/.exec(readFileSync(new URL(file, import.meta.url), 'utf8'))?.[1]);
     expect(version('../../src/services/privacyService.ts')).toBe(version('../../api/admin-account.mjs'));
+  });
+});
+
+describe('ranglijst uit', () => {
+  it('app en server zijn het eens of de ranglijst aan staat', () => {
+    const flag = (file) => /LEADERBOARD_ENABLED = (true|false);/.exec(readFileSync(new URL(file, import.meta.url), 'utf8'))?.[1];
+    expect(flag('../../src/config/features.ts')).toBe(flag('../../api/_lib/leaderboardCleanup.mjs'));
   });
 });

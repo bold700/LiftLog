@@ -1,0 +1,53 @@
+# Dagelijkse back-ups van de Firestore-database aanzetten (en controleren of ze er zijn).
+#
+# Eenmalig handmatig starten: Actions → Back-ups → Run workflow. Maakt een dagelijks back-upschema
+# aan met een bewaartermijn van 14 dagen, als dat er nog niet is. Nog een keer starten kan geen
+# kwaad: dan laat hij alleen zien welk schema er staat.
+#
+# Gebruikt hetzelfde service-account als het uitrollen van de regels (secret FIREBASE_SERVICE_ACCOUNT).
+# Dat account heeft de rol "Cloud Datastore Owner" nodig; zonder die rol meldt de job wat er moet
+# gebeuren. Back-ups vragen het Blaze-abonnement van Firebase (betalen naar gebruik).
+name: Back-ups
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backups:
+    name: Dagelijkse Firestore-back-up
+    runs-on: ubuntu-latest
+    steps:
+      - name: Service-account klaarzetten
+        id: auth
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::error::Secret FIREBASE_SERVICE_ACCOUNT ontbreekt."
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/service-account.json"
+          project="$(jq -r .project_id "$RUNNER_TEMP/service-account.json")"
+          echo "project=$project" >> "$GITHUB_OUTPUT"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/service-account.json" --quiet
+
+      - name: Back-upschema aanzetten
+        id: schedule
+        env:
+          PROJECT: ${{ steps.auth.outputs.project }}
+        run: |
+          existing="$(gcloud firestore backups schedules list --database='(default)' --project="$PROJECT" --format='value(name)')"
+          if [ -n "$existing" ]; then
+            echo "Er staat al een back-upschema:"
+          else
+            gcloud firestore backups schedules create --database='(default)' --recurrence=daily --retention=14d --project="$PROJECT"
+            echo "Dagelijks back-upschema aangemaakt (14 dagen bewaard)."
+          fi
+          gcloud firestore backups schedules list --database='(default)' --project="$PROJECT"
+          echo "Back-ups die er al zijn (de eerste komt binnen een dag):"
+          gcloud firestore backups list --project="$PROJECT" --format='table(name.basename(), state, snapshotTime)' || true
+
+      - name: Wat te doen als het misging
+        if: failure() && steps.schedule.outcome == 'failure'
+        run: |
+          echo "::warning::Ging dit mis op PERMISSION_DENIED? Geef het service-account (firebase-adminsdk-...@${{ steps.auth.outputs.project }}.iam.gserviceaccount.com) in Google Cloud → IAM de rol 'Cloud Datastore Owner' en start deze workflow opnieuw. Ging het mis op billing of FAILED_PRECONDITION? Dan staat het project nog op het gratis Spark-abonnement: zet het in de Firebase Console op Blaze."
