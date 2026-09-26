@@ -108,7 +108,7 @@ export function SessionLogDialog({
                 fontWeight: 500,
                 minHeight: 40,
                 px: 2,
-                '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' },
+                '&:hover': { bgcolor: 'action.hover' },
               }}
             >
               Annuleren
@@ -128,7 +128,7 @@ export function SessionLogDialog({
                 px: 2,
                 '&:hover': { bgcolor: 'primary.dark' },
                 '&.Mui-disabled': {
-                  bgcolor: 'rgba(0,0,0,0.12)',
+                  bgcolor: 'action.selected',
                   color: 'rgba(29,27,26,0.38)',
                 },
               }}

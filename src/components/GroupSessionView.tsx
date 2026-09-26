@@ -332,7 +332,7 @@ export function GroupSessionView({ schema, session, participants, currentUserId 
                   mb: 2,
                   p: 1,
                   borderRadius: 1,
-                  bgcolor: 'rgba(0,0,0,0.04)',
+                  bgcolor: 'action.hover',
                 }}
               >
                 <TrendingUpIcon fontSize="small" sx={{ color: 'text.secondary' }} />

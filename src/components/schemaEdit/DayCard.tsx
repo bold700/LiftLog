@@ -122,8 +122,8 @@ export function DayCard({
                   p: 1.5,
                   mb: 1,
                   borderRadius: 1,
-                  backgroundColor: 'rgba(0,0,0,0.03)',
-                  border: '1px solid rgba(0,0,0,0.06)',
+                  backgroundColor: 'action.hover',
+                  border: 1, borderColor: 'divider',
                   minWidth: 0,
                   width: '100%',
                 }}

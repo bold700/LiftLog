@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SCHEME, parseThemeBuilderExport, resolveScheme, schemeFromSeed } from '../../src/theme/brandingTheme';
+import { DEFAULT_DARK_SCHEME, DEFAULT_SCHEME, parseThemeBuilderExport, resolveScheme, schemeFromSeed } from '../../src/theme/brandingTheme';
+import { resolveColorMode } from '../../src/context/ColorModeContext';
 
 describe('schemeFromSeed', () => {
   it('levert alle rollen van theme.json, allemaal als hexkleur', () => {
@@ -66,5 +67,41 @@ describe('resolveScheme', () => {
 
   it('negeert een kapotte merkkleur', () => {
     expect(resolveScheme({ seedColor: 'blauw' })).toBe(DEFAULT_SCHEME);
+  });
+});
+
+describe('donkere modus', () => {
+  const lum = (hex: string) => parseInt(hex.slice(1, 3), 16) + parseInt(hex.slice(3, 5), 16) + parseInt(hex.slice(5, 7), 16);
+
+  it('leidt uit dezelfde merkkleur een donker schema af: donkere vlakken, lichte tekst', () => {
+    const light = schemeFromSeed('#426833');
+    const dark = schemeFromSeed('#426833', 'dark');
+    expect(Object.keys(dark).sort()).toEqual(Object.keys(light).sort());
+    expect(lum(dark.surface)).toBeLessThan(lum(light.surface));
+    expect(lum(dark.onSurface)).toBeGreaterThan(lum(dark.surface));
+    // In donker is primary een lichtere tint van hetzelfde groen, met donkere tekst erop.
+    expect(lum(dark.primary)).toBeGreaterThan(lum(light.primary));
+    expect(lum(dark.onPrimary)).toBeLessThan(lum(dark.primary));
+    // Surface-containers lopen in donker op naar lichter.
+    expect(lum(dark.surfaceContainerLow)).toBeGreaterThan(lum(dark.surface));
+    expect(lum(dark.surfaceContainerHigh)).toBeGreaterThan(lum(dark.surfaceContainer));
+  });
+
+  it('VORM zelf gebruikt in donker zijn eigen groen, niet het oude zwart-gele schema uit theme.json', () => {
+    expect(resolveScheme(null, 'dark')).toEqual(DEFAULT_DARK_SCHEME);
+    expect(DEFAULT_DARK_SCHEME.primary).toBe(schemeFromSeed('#426833', 'dark').primary);
+    expect(DEFAULT_DARK_SCHEME.primary).not.toBe('#FFFFFF');
+  });
+
+  it('een studio krijgt in donker haar eigen kleur, ook met alleen een Theme Builder-export', () => {
+    expect(resolveScheme({ seedColor: '#1E5AA8' } as never, 'dark').primary).toBe(schemeFromSeed('#1E5AA8', 'dark').primary);
+    expect(resolveScheme({ lightScheme: { primary: '#8B2E2E' } } as never, 'dark').primary).toBe(schemeFromSeed('#8B2E2E', 'dark').primary);
+  });
+
+  it('systeem volgt de telefoon, licht en donker gaan daarvoor', () => {
+    expect(resolveColorMode('system', true)).toBe('dark');
+    expect(resolveColorMode('system', false)).toBe('light');
+    expect(resolveColorMode('light', true)).toBe('light');
+    expect(resolveColorMode('dark', false)).toBe('dark');
   });
 });

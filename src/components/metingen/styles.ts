@@ -15,7 +15,7 @@ export const PRIMARY_BUTTON_SX = {
   textTransform: 'none',
   fontWeight: 600,
   '&:hover': { bgcolor: 'primary.dark' },
-  '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.12)', color: 'rgba(29,27,26,0.38)' },
+  '&.Mui-disabled': { bgcolor: 'action.disabledBackground', color: 'action.disabled' },
 } as const;
 
 /** Staande foto (3:4), afgerond, passend bijgesneden. */
@@ -23,7 +23,7 @@ export const PHOTO_IMG_SX = {
   aspectRatio: '3 / 4',
   width: '100%',
   borderRadius: 2,
-  bgcolor: 'rgba(0,0,0,0.06)',
+  bgcolor: 'action.hover',
   objectFit: 'cover',
   display: 'block',
 } as const;

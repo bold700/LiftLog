@@ -17,7 +17,7 @@ export const segmentedToggleItemSx = {
   // Zonder dit breekt een label van twee woorden ("Mijn dag") af zodra flex:1 de knop smaller
   // maakt dan de tekst breed is — de knop moet dan breder worden, niet de tekst omvouwen.
   whiteSpace: 'nowrap',
-  '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.04)' },
+  '&:hover': { bgcolor: 'action.hover' },
   '&.Mui-selected': {
     bgcolor: designTokens.secondaryContainer,
     color: designTokens.onSecondaryContainer,

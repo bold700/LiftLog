@@ -115,7 +115,7 @@ export function CardioSection({
               sx={{
                 p: 1.5,
                 borderRadius: 1,
-                bgcolor: 'rgba(0,0,0,0.03)',
+                bgcolor: 'action.hover',
               }}
             >
               <Typography variant="body2" fontWeight={600} sx={{ mb: 1.5, display: 'block' }}>
