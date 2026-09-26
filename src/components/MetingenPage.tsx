@@ -20,6 +20,7 @@ import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import { PageLayout } from './layout';
 import { designTokens } from '../theme/designTokens';
 import { WeeklyCheckinDialog } from './WeeklyCheckinDialog';
+import { GiveHealthConsentDialog, HEALTH_CONSENT_WHY } from './HealthConsentDialog';
 import { NumberField } from './NumberField';
 import { useProfile } from '../context/ProfileContext';
 import { useViewAs } from '../context/ViewAsContext';
@@ -136,6 +137,7 @@ export function MetingenPage({ openFormRequested, onConsumeOpenForm }: MetingenP
   const [saving, setSaving] = useState(false);
   const [goalOpen, setGoalOpen] = useState(false);
   const [goalInput, setGoalInput] = useState('');
+  const [consentOpen, setConsentOpen] = useState(false);
 
   const effectiveUserId = targetId || selfUid;
   const targetProfile = targetId ? sporters.find((s) => s.userId === targetId) ?? null : profileCtx?.profile ?? null;
@@ -305,7 +307,7 @@ export function MetingenPage({ openFormRequested, onConsumeOpenForm }: MetingenP
       notify.error(
         targetId
           ? 'Deze sporter heeft geen toestemming gegeven voor gezondheidsgegevens. Metingen vastleggen kan pas als die er is.'
-          : 'Je hebt geen toestemming gegeven voor gezondheidsgegevens. Zet die aan in Profiel → Account om metingen vast te leggen.'
+          : 'Je hebt geen toestemming gegeven voor gezondheidsgegevens. Zet die aan om metingen vast te leggen.'
       );
       return;
     }
@@ -426,10 +428,19 @@ export function MetingenPage({ openFormRequested, onConsumeOpenForm }: MetingenP
     <PageLayout maxWidth="none">
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
         {healthBlocked && (
-          <Alert severity="info">
+          <Alert
+            severity="info"
+            action={
+              targetId ? undefined : (
+                <Button color="inherit" size="small" sx={{ textTransform: 'none', whiteSpace: 'nowrap' }} onClick={() => setConsentOpen(true)}>
+                  Zet aan
+                </Button>
+              )
+            }
+          >
             {targetId
-              ? 'Deze sporter heeft geen toestemming gegeven voor gezondheidsgegevens. Nieuwe metingen kunnen pas worden vastgelegd als die er is.'
-              : 'Je hebt geen toestemming gegeven voor gezondheidsgegevens. Wil je metingen bijhouden? Zet het aan in Profiel → Account.'}
+              ? 'Deze sporter heeft geen toestemming gegeven voor gezondheidsgegevens, dus nieuwe metingen kunnen niet worden vastgelegd. Vraag de sporter om het aan te zetten in Profiel → Account: zonder is goede begeleiding lastig.'
+              : HEALTH_CONSENT_WHY}
           </Alert>
         )}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: { xs: 0.5, sm: 1 } }}>
@@ -676,6 +687,7 @@ export function MetingenPage({ openFormRequested, onConsumeOpenForm }: MetingenP
           onSaved={() => void load()}
         />
       )}
+      <GiveHealthConsentDialog open={consentOpen} onClose={() => setConsentOpen(false)} />
     </PageLayout>
   );
 }
