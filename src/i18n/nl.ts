@@ -243,6 +243,7 @@ export const nl = {
     renews: 'Verlengt {date} · {period}',
     validUntil: 'Geldig tot {date}',
     leftOf: '{left} van {total} over',
+    creditsOf: '{left} van {total} credits',
     unlimitedLeft: 'Onbeperkt',
   },
   billing: {

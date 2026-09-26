@@ -241,6 +241,7 @@ export const en: Messages = {
     renews: 'Renews {date} · {period}',
     validUntil: 'Valid until {date}',
     leftOf: '{left} of {total} left',
+    creditsOf: '{left} of {total} credits',
     unlimitedLeft: 'Unlimited',
   },
   billing: {

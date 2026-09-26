@@ -20,8 +20,8 @@ import type { Charge, Membership, Plan } from '../types';
 const euro = (n: number) => `€ ${new Intl.NumberFormat('nl-NL', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n)}`;
 
 /**
- * Alleen de creditsaldo-kaart (naam, balk, verlengdatum), zonder de facturenlijst — voor gebruik
- * op Profiel én bovenaan Lessen (Figma toont 'm daar ook, boven het rooster).
+ * Alleen de creditsaldo-kaart (naam, balk, verlengdatum), zonder de facturenlijst, op Profiel →
+ * Abonnement. Op de andere schermen staat het saldo compact onder je naam (zie useCreditSummary).
  */
 export function CreditBalanceCard({ userId }: { userId: string }) {
   const { t, lang } = useI18n();
