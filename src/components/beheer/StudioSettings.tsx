@@ -91,7 +91,8 @@ export function StudioSettings() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Tot hoeveel uur voor de les kan iemand gratis afmelden? Wie later afmeldt, verliest de credit, behalve binnen
             een uur na het boeken (bedenktijd). Afmelden blijft altijd mogelijk: de eerste op de wachtlijst schuift dan
-            meteen door en heeft een uur om gratis af te melden.
+            meteen door en heeft een uur om gratis af te melden. Heeft die geen credits, dan houden we de plek een uur
+            vast en krijg je een melding, zodat je zelf kunt beslissen.
           </Typography>
           <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             <TextField

@@ -33,7 +33,7 @@ export const NOTIFICATION_KIND_INFO: NotificationKindInfo[] = [
   {
     kind: 'waitlistPromoted',
     label: 'Doorgeschoven van de wachtlijst',
-    description: 'Iemand meldt zich af en de eerste op de wachtlijst schuift door. Die heeft een uur om gratis af te melden.',
+    description: 'Iemand meldt zich af en de eerste op de wachtlijst schuift door (een uur om gratis af te melden). Geen credits? Dan wordt de plek een uur vastgehouden en krijgen ook de trainer en beheer een melding.',
     to: 'Sporter',
     when: 'Direct',
   },

@@ -3,7 +3,9 @@ import {
   freeCancelHoursOf,
   refundOnCancel,
   placeNewBooking,
-  pickPromotion,
+  chooseForFreeSpot,
+  heldForSomeoneElse,
+  holdExpired,
   waitlistPosition,
   BOOKING_GRACE_MINUTES,
 } from '../../api/_lib/bookingRules.mjs';
@@ -32,15 +34,25 @@ describe('boekingsregels', () => {
     expect(placeNewBooking({ capacity: 8, bookedCount: 8 })).toBe('waitlist');
   });
 
-  it('de eerste die kan betalen schuift door; wie te weinig heeft wordt overgeslagen', () => {
-    const c = [
-      { id: 'b', createdAt: '2026-09-26T11:00:00Z', balance: 3, cost: 1 },
-      { id: 'a', createdAt: '2026-09-26T10:00:00Z', balance: 0, cost: 1 },
-      { id: 'c', createdAt: '2026-09-26T12:00:00Z', balance: 5, cost: 1 },
-    ];
-    expect(pickPromotion(c)?.id).toBe('b');
-    expect(pickPromotion([{ id: 'x', createdAt: '1', balance: 0, cost: 0 }])?.id).toBe('x');
-    expect(pickPromotion([{ id: 'y', createdAt: '1', balance: 0, cost: 1 }])).toBeNull();
+  it('vrije plek: eerste die kan betalen schuift door; eerste zonder credits krijgt een vastgehouden plek', () => {
+    const a = { id: 'a', createdAt: '2026-09-26T10:00:00Z', balance: 0, cost: 1 };
+    const b = { id: 'b', createdAt: '2026-09-26T11:00:00Z', balance: 3, cost: 1 };
+    expect(chooseForFreeSpot([b, a])).toMatchObject({ kind: 'hold', candidate: { id: 'a' } });
+    // Kans al gehad en nog steeds geen credits: overslaan.
+    expect(chooseForFreeSpot([b, { ...a, offerExpired: true }])).toMatchObject({ kind: 'promote', candidate: { id: 'b' } });
+    // Kans gehad maar nu wel credits: gewoon doorschuiven.
+    expect(chooseForFreeSpot([b, { ...a, offerExpired: true, balance: 1 }])).toMatchObject({ kind: 'promote', candidate: { id: 'a' } });
+    expect(chooseForFreeSpot([{ ...a, offerExpired: true }])).toBeNull();
+  });
+
+  it('vastgehouden plek: alleen voor die persoon, tot hij verloopt', () => {
+    const now = Date.parse('2026-09-26T20:00:00Z');
+    const cls = { holdUserId: 'u2', holdUntil: '2026-09-26T20:30:00Z' };
+    expect(heldForSomeoneElse(cls, 'u3', now)).toBe(true);
+    expect(heldForSomeoneElse(cls, 'u2', now)).toBe(false);
+    expect(holdExpired(cls, now)).toBe(false);
+    expect(holdExpired(cls, Date.parse('2026-09-26T20:31:00Z'))).toBe(true);
+    expect(heldForSomeoneElse({}, 'u3', now)).toBe(false);
   });
 
   it('positie op de wachtlijst op volgorde van aanmelden', () => {

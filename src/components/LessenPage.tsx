@@ -45,6 +45,10 @@ import {
   cancelIsFree,
   graceUntilMs,
   getWaitlistPositions,
+  activeHoldUntil,
+  settleWaitlists,
+  releaseHold,
+  grantCredits,
 } from '../services/classService';
 import { getOrg } from '../services/orgService';
 import { getColleagues } from '../services/profileService';
@@ -99,15 +103,30 @@ function weekRangeLabel(weekStrip: string[]): string {
   const startDay = start.toLocaleDateString('nl-NL', { day: 'numeric' });
   const endLabel = end.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
   const sameMonth = start.getMonth() === end.getMonth();
-  return sameMonth ? `${startDay}–${endLabel}` : `${start.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}–${endLabel}`;
+  return sameMonth
+    ? `${startDay}–${endLabel}`
+    : `${start.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}–${endLabel}`;
 }
 
 /** Sleutel om een les te koppelen aan een "elke week"-instelling: zelfde lessoort en weekmoment. */
 const standingKey = (classTypeId: string, weekday: number, startTime: string) => `${classTypeId}_${weekday}_${startTime}`;
 
 /** Bezetting op één manier, overal: hoeveel plekken er nog vrij zijn ("3/8" las als "3 vrij"). */
-function spotsLabel(cls: StudioClass, onWaitlist = false): string {
-  const free = spotOpenFor(cls, onWaitlist) ? Math.max(0, cls.capacity - cls.bookedCount) : 0;
+/** "20:45" */
+const clockOf = (ms: number) => new Date(ms).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+
+/** Naar Profiel → Abonnement, waar je credits koopt. */
+function goBuyCredits() {
+  try {
+    sessionStorage.setItem('liftlog.profielTab', 'abonnement');
+  } catch {
+    /* privémodus */
+  }
+  window.location.hash = '#profiel';
+}
+
+function spotsLabel(cls: StudioClass, mine?: Pick<Booking, 'id'> | null): string {
+  const free = spotOpenFor(cls, mine) ? Math.max(0, cls.capacity - cls.bookedCount) : 0;
   if (free === 0) return 'Vol';
   return `${free} ${free === 1 ? 'plek' : 'plekken'} vrij`;
 }
@@ -193,6 +212,17 @@ export function LessenPage() {
     void load();
   }, [load]);
 
+  // Een vastgehouden wachtlijstplek die verlopen is, gaat bij het openen van het rooster door naar de
+  // volgende (er is geen klok op de server die dat elk uur doet).
+  useEffect(() => {
+    void settleWaitlists()
+      .then((n) => {
+        if (n > 0) void load();
+      })
+      .catch(() => null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (!profileCtx?.activeOrgId) return;
     void getOrg(profileCtx.activeOrgId).then((org) => {
@@ -215,9 +245,7 @@ export function LessenPage() {
    * pauze) staat voor niemand op het rooster — die zie je op het profiel bij Vaste lessen.
    */
   const scopedClasses = useMemo(() => {
-    const visible = classes.filter(
-      (c) => !c.privateFor || (!c.autoCancelled && (isStaff || c.privateFor === me?.userId))
-    );
+    const visible = classes.filter((c) => !c.privateFor || (!c.autoCancelled && (isStaff || c.privateFor === me?.userId)));
     if (!myDayOnly || !me) return visible;
     return isStaff ? visible.filter((c) => c.trainerId === me.userId) : visible.filter((c) => myBookingByClass.has(c.id));
   }, [classes, myDayOnly, me, isStaff, myBookingByClass]);
@@ -239,7 +267,8 @@ export function LessenPage() {
   const visibleClasses = useMemo(
     () =>
       scopedClasses.filter(
-        (c) => (!roomFilter || (c.room && roomKey(c.room) === roomKey(roomFilter))) && (!kindFilter || c.sessionKind === kindFilter)
+        (c) =>
+          (!roomFilter || (c.room && roomKey(c.room) === roomKey(roomFilter))) && (!kindFilter || c.sessionKind === kindFilter)
       ),
     [scopedClasses, roomFilter, kindFilter]
   );
@@ -257,10 +286,7 @@ export function LessenPage() {
     return map;
   }, [visibleClasses, weekStrip]);
   /** Dezelfde week als gesorteerde lijst, alleen de dagen mét lessen (voor de tellingen boven het rooster). */
-  const classesByDay = useMemo(
-    () => Array.from(classesByDate.entries()).sort(([a], [b]) => a.localeCompare(b)),
-    [classesByDate]
-  );
+  const classesByDay = useMemo(() => Array.from(classesByDate.entries()).sort(([a], [b]) => a.localeCompare(b)), [classesByDate]);
   const dayClasses = useMemo(() => visibleClasses.filter((c) => c.date === selectedDate), [visibleClasses, selectedDate]);
 
   /** Weekmomenten waar al "elke week" voor aanstaat, zodat het vinkje bij een les die daarbij hoort meteen goed staat. */
@@ -295,9 +321,7 @@ export function LessenPage() {
       setBusyId(booking.classId);
       try {
         const result = await cancelBooking(booking.id);
-        notify?.success(
-          result.refunded ? 'Afgemeld, je credit staat weer op je saldo.' : 'Afgemeld. De credit is vervallen.'
-        );
+        notify?.success(result.refunded ? 'Afgemeld, je credit staat weer op je saldo.' : 'Afgemeld. De credit is vervallen.');
         await load();
       } catch (e) {
         notify?.error(e instanceof Error ? e.message : 'Afmelden mislukt');
@@ -378,7 +402,7 @@ export function LessenPage() {
       if (cls.cancelledAt) return;
       if (isStaff) setParticipantsClass(cls);
       // Een begonnen of voorbije les opent alleen de lesinformatie (zonder reserveren).
-      else if (!mine || classHasStarted(cls) || (mine.status === 'waitlist' && spotOpenFor(cls, true))) setConfirmClass(cls);
+      else if (!mine || classHasStarted(cls) || (mine.status === 'waitlist' && spotOpenFor(cls, mine))) setConfirmClass(cls);
     },
     [isStaff]
   );
@@ -392,7 +416,7 @@ export function LessenPage() {
       const mine = myBookingByClass.get(cls.id);
       // Eigen les (afmelden) of afgelaste les: naar die dag, daar staan Afmelden en Herstellen.
       // Een voorbije les opent gewoon de lesinformatie; eerst sprong je dan onverwacht naar de dagweergave.
-      const claimable = mine?.status === 'waitlist' && spotOpenFor(cls, true);
+      const claimable = mine?.status === 'waitlist' && spotOpenFor(cls, mine);
       if (cls.cancelledAt || (!isStaff && mine && !classHasStarted(cls) && !claimable)) {
         setSelectedDate(cls.date);
         setViewMode('day');
@@ -408,7 +432,7 @@ export function LessenPage() {
   const renderClassRow = (cls: StudioClass) => {
     const mine = myBookingByClass.get(cls.id);
     const onWaitlist = mine?.status === 'waitlist';
-    const full = !spotOpenFor(cls, onWaitlist);
+    const full = !spotOpenFor(cls, onWaitlist ? mine : null);
     // Op de wachtlijst en er is een plek vrij: nu aanmelden (wie het eerst is).
     const canClaim = onWaitlist && !full;
     const position = onWaitlist ? waitlistPositions[cls.id] : undefined;
@@ -423,9 +447,16 @@ export function LessenPage() {
         onClick={() => handleRowClick(cls, mine)}
         sx={{
           border: `1px solid ${designTokens.cardBorder}`,
-          borderLeft: mine ? `4px solid ${mine.status === 'booked' ? designTokens.onTertiaryContainer : designTokens.outline}` : `1px solid ${designTokens.cardBorder}`,
+          borderLeft: mine
+            ? `4px solid ${mine.status === 'booked' ? designTokens.onTertiaryContainer : designTokens.outline}`
+            : `1px solid ${designTokens.cardBorder}`,
           borderRadius: `${designTokens.cardRadius}px`,
-          bgcolor: mine?.status === 'booked' ? designTokens.tertiaryContainer : mine?.status === 'waitlist' ? designTokens.cardBackgroundHigh : designTokens.cardBackground,
+          bgcolor:
+            mine?.status === 'booked'
+              ? designTokens.tertiaryContainer
+              : mine?.status === 'waitlist'
+                ? designTokens.cardBackgroundHigh
+                : designTokens.cardBackground,
           p: 2,
           display: 'flex',
           gap: 2,
@@ -434,7 +465,16 @@ export function LessenPage() {
           cursor: cls.cancelledAt || (mine && !started && !isStaff) ? 'default' : 'pointer',
         }}
       >
-        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: SESSION_KIND_COLORS[cls.sessionKind], mt: 0.75, flexShrink: 0 }} />
+        <Box
+          sx={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            bgcolor: SESSION_KIND_COLORS[cls.sessionKind],
+            mt: 0.75,
+            flexShrink: 0,
+          }}
+        />
         <Box sx={{ flex: '1 1 auto', minWidth: 0 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
             {cls.title}
@@ -448,17 +488,23 @@ export function LessenPage() {
             {cls.room ? ` · ${cls.room}` : ''}
           </Typography>
           <Box sx={{ display: 'flex', gap: 0.75, mt: 1, flexWrap: 'wrap' }}>
-{!canClaim && (
-            <Chip
-              size="small"
-              label={spotsLabel(cls, onWaitlist)}
-              sx={full ? { bgcolor: designTokens.cardBackgroundHigh, color: 'text.secondary' } : undefined}
-            />
+            {!canClaim && (
+              <Chip
+                size="small"
+                label={spotsLabel(cls, onWaitlist ? mine : null)}
+                sx={full ? { bgcolor: designTokens.cardBackgroundHigh, color: 'text.secondary' } : undefined}
+              />
             )}
             {cls.waitlistCount > 0 && <Chip size="small" variant="outlined" label={`${cls.waitlistCount} op wachtlijst`} />}
             {cls.creditCost !== 1 && <Chip size="small" variant="outlined" label={`${cls.creditCost} credits`} />}
             {cls.cancelledAt && <Chip size="small" color="error" label="Afgelast" />}
-            {!cls.cancelledAt && started && <Chip size="small" label={classHasEnded(cls) ? 'Afgelopen' : 'Bezig'} sx={{ bgcolor: designTokens.cardBackgroundHigh, color: 'text.secondary' }} />}
+            {!cls.cancelledAt && started && (
+              <Chip
+                size="small"
+                label={classHasEnded(cls) ? 'Afgelopen' : 'Bezig'}
+                sx={{ bgcolor: designTokens.cardBackgroundHigh, color: 'text.secondary' }}
+              />
+            )}
             {/* Kleuren volgen het ontwerp: wachtlijst is neutraal (Surface Container High), geboekt is Tertiary Container. */}
             {onWaitlist && !canClaim && (
               <Chip
@@ -467,7 +513,22 @@ export function LessenPage() {
                 sx={{ bgcolor: designTokens.cardBackgroundHigh, color: 'text.secondary' }}
               />
             )}
-            {canClaim && <Chip size="small" label="Plek vrij voor jou" sx={{ bgcolor: designTokens.tertiaryContainer, color: designTokens.onTertiaryContainer, fontWeight: 600 }} />}
+            {canClaim && (
+              <Chip
+                size="small"
+                label={
+                  cls.holdBookingId === mine?.id && activeHoldUntil(cls)
+                    ? `Voor jou tot ${clockOf(activeHoldUntil(cls) as number)}`
+                    : 'Plek vrij voor jou'
+                }
+                sx={{
+                  bgcolor: designTokens.tertiaryContainer,
+                  color: designTokens.onTertiaryContainer,
+                  fontWeight: 600,
+                  maxWidth: '100%',
+                }}
+              />
+            )}
             {/* Net doorgeschoven van de wachtlijst: laat zien tot wanneer afmelden nog gratis is. */}
             {mine?.status === 'booked' && mine.promotedAt && graceUntil && (
               <Typography variant="caption" sx={{ flexBasis: '100%', fontWeight: 600, color: designTokens.onTertiaryContainer }}>
@@ -475,11 +536,20 @@ export function LessenPage() {
                 {new Date(graceUntil).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
               </Typography>
             )}
-            {mine?.status === 'booked' && <Chip size="small" label="Ingeschreven" sx={{ bgcolor: designTokens.tertiaryContainer, color: designTokens.onTertiaryContainer }} />}
+            {mine?.status === 'booked' && (
+              <Chip
+                size="small"
+                label="Ingeschreven"
+                sx={{ bgcolor: designTokens.tertiaryContainer, color: designTokens.onTertiaryContainer }}
+              />
+            )}
           </Box>
         </Box>
 
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0, alignItems: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
+        <Box
+          sx={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0, alignItems: 'flex-end' }}
+          onClick={(e) => e.stopPropagation()}
+        >
           {!cls.cancelledAt &&
             !started &&
             (mine ? (
@@ -528,7 +598,19 @@ export function LessenPage() {
         label={SESSION_KIND_LABELS[k]}
         aria-pressed={kindFilter === k}
         onClick={() => setKindFilter((cur) => (cur === k ? '' : k))}
-        icon={<Box component="span" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: SESSION_KIND_COLORS[k], ml: '10px !important', flexShrink: 0 }} />}
+        icon={
+          <Box
+            component="span"
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              bgcolor: SESSION_KIND_COLORS[k],
+              ml: '10px !important',
+              flexShrink: 0,
+            }}
+          />
+        }
         sx={filterPillSx(kindFilter === k)}
       />
     ));
@@ -568,7 +650,11 @@ export function LessenPage() {
             ))}
           </Box>
         )}
-        <Box role="group" aria-label="Soort les" sx={{ display: { xs: 'none', md: 'flex' }, gap: 1, flexWrap: 'wrap', ml: 'auto' }}>
+        <Box
+          role="group"
+          aria-label="Soort les"
+          sx={{ display: { xs: 'none', md: 'flex' }, gap: 1, flexWrap: 'wrap', ml: 'auto' }}
+        >
           {kindChips('small')}
         </Box>
         <Box sx={{ display: { xs: 'flex', md: 'none' }, ml: 'auto' }}>
@@ -643,7 +729,11 @@ export function LessenPage() {
                       color: selected ? designTokens.onPrimary : 'text.primary',
                     }}
                   >
-                    <Typography variant="caption" sx={{ display: 'block', textTransform: 'capitalize' }} color={selected ? 'inherit' : 'text.secondary'}>
+                    <Typography
+                      variant="caption"
+                      sx={{ display: 'block', textTransform: 'capitalize' }}
+                      color={selected ? 'inherit' : 'text.secondary'}
+                    >
                       {WEEKDAY_SHORT[dt.getDay()]}
                     </Typography>
                     <Typography variant="body2" fontWeight={isToday ? 700 : 400}>
@@ -665,7 +755,9 @@ export function LessenPage() {
           {dayClasses.length === 0 ? (
             <ContentCard>
               <EmptyState>
-                {myDayOnly ? `Geen lessen van jou op ${relativeDayLabel(selectedDate).toLowerCase()}.` : `Nog niets gepland op ${relativeDayLabel(selectedDate).toLowerCase()}.`}
+                {myDayOnly
+                  ? `Geen lessen van jou op ${relativeDayLabel(selectedDate).toLowerCase()}.`
+                  : `Nog niets gepland op ${relativeDayLabel(selectedDate).toLowerCase()}.`}
               </EmptyState>
             </ContentCard>
           ) : (
@@ -768,6 +860,7 @@ export function LessenPage() {
         freeCancelHours={freeCancelHours}
         busy={confirmClass != null && busyId === confirmClass.id}
         myStatus={confirmClass ? myBookingByClass.get(confirmClass.id)?.status : undefined}
+        myBookingId={confirmClass ? myBookingByClass.get(confirmClass.id)?.id : undefined}
         alreadyWeekly={
           confirmClass?.classTypeId
             ? activeStandingKeys.has(standingKey(confirmClass.classTypeId, weekdayOf(confirmClass.date), confirmClass.startTime))
@@ -852,6 +945,7 @@ function BookConfirmDialog({
   busy,
   alreadyWeekly,
   myStatus,
+  myBookingId,
   onClose,
   onConfirm,
 }: {
@@ -864,6 +958,7 @@ function BookConfirmDialog({
   alreadyWeekly: boolean;
   /** Jouw boeking voor deze les, als je er een hebt (voor een voorbije les: "Je was ingeschreven"). */
   myStatus?: Booking['status'];
+  myBookingId?: string;
   onClose: () => void;
   onConfirm: (weekly: boolean) => void;
 }) {
@@ -874,10 +969,12 @@ function BookConfirmDialog({
   }, [cls?.id, alreadyWeekly]);
 
   if (!cls) return null;
-  const full = !spotOpenFor(cls, myStatus === 'waitlist');
+  const full = !spotOpenFor(cls, myStatus === 'waitlist' && myBookingId ? { id: myBookingId } : null);
   const claim = myStatus === 'waitlist' && !full;
+  // Te weinig credits voor een vrije plek: eerst credits kopen (staf boekt altijd gratis).
   // Staf reserveert altijd gratis (server bypasst de credit-kosten), ongeacht het saldo.
   const cost = isStaff ? 0 : cls.creditCost;
+  const short = !isStaff && credits < cost;
   // Begonnen of voorbij: alleen informatie, niet meer te reserveren.
   const started = classHasStarted(cls);
 
@@ -890,7 +987,13 @@ function BookConfirmDialog({
           {cls.endTime ? `–${cls.endTime}` : ''}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          {[trainerName, cls.room, started ? `${cls.bookedCount} ${cls.bookedCount === 1 ? 'deelnemer' : 'deelnemers'}` : spotsLabel(cls, myStatus === 'waitlist')]
+          {[
+            trainerName,
+            cls.room,
+            started
+              ? `${cls.bookedCount} ${cls.bookedCount === 1 ? 'deelnemer' : 'deelnemers'}`
+              : spotsLabel(cls, myStatus === 'waitlist' && myBookingId ? { id: myBookingId } : null),
+          ]
             .filter(Boolean)
             .join(' · ')}
         </Typography>
@@ -899,15 +1002,57 @@ function BookConfirmDialog({
 
         {started && (
           <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
-            <Chip size="small" label={classHasEnded(cls) ? 'Afgelopen' : 'Bezig'} sx={{ bgcolor: designTokens.cardBackgroundHigh, color: 'text.secondary' }} />
+            <Chip
+              size="small"
+              label={classHasEnded(cls) ? 'Afgelopen' : 'Bezig'}
+              sx={{ bgcolor: designTokens.cardBackgroundHigh, color: 'text.secondary' }}
+            />
             {myStatus === 'booked' && (
-              <Chip size="small" label={classHasEnded(cls) ? 'Je was ingeschreven' : 'Ingeschreven'} sx={{ bgcolor: designTokens.tertiaryContainer, color: designTokens.onTertiaryContainer }} />
+              <Chip
+                size="small"
+                label={classHasEnded(cls) ? 'Je was ingeschreven' : 'Ingeschreven'}
+                sx={{ bgcolor: designTokens.tertiaryContainer, color: designTokens.onTertiaryContainer }}
+              />
             )}
           </Box>
         )}
 
-        {!full && !started && (
-          <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: designTokens.cardBackgroundHigh, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+        {!full && !started && short && (
+          <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: designTokens.tertiaryContainer, color: designTokens.onTertiaryContainer }}>
+            <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+              {claim && activeHoldUntil(cls)
+                ? `Deze plek wordt tot ${clockOf(activeHoldUntil(cls) as number)} voor je vastgehouden`
+                : 'Niet genoeg credits'}
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              Je hebt {credits} {credits === 1 ? 'credit' : 'credits'}; deze les kost er {cost}. Koop credits en meld je daarna
+              hier aan.
+            </Typography>
+            <Button
+              size="small"
+              variant="contained"
+              disableElevation
+              onClick={() => {
+                onClose();
+                goBuyCredits();
+              }}
+            >
+              Credits kopen
+            </Button>
+          </Box>
+        )}
+        {!full && !started && !short && (
+          <Box
+            sx={{
+              p: 1.5,
+              borderRadius: 2,
+              bgcolor: designTokens.cardBackgroundHigh,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1,
+            }}
+          >
             <Typography variant="body2" fontWeight={600}>
               {cost === 0 ? (isStaff ? 'Gratis (staf)' : 'Gratis') : cost === 1 ? 'Kost 1 credit' : `Kost ${cost} credits`}
             </Typography>
@@ -937,11 +1082,11 @@ function BookConfirmDialog({
           Sluiten
         </Button>
         {!started && (
-        <Button variant="contained" disableElevation disabled={busy} onClick={() => onConfirm(weekly)}>
-          {full
-            ? 'Op de wachtlijst'
-            : `${claim ? 'Aanmelden' : 'Reserveren'}${cost === 0 ? '' : ` · ${cost} credit${cost > 1 ? 's' : ''}`}`}
-        </Button>
+          <Button variant="contained" disableElevation disabled={busy || (!full && short)} onClick={() => onConfirm(weekly)}>
+            {full
+              ? 'Op de wachtlijst'
+              : `${claim ? 'Aanmelden' : 'Reserveren'}${cost === 0 ? '' : ` · ${cost} credit${cost > 1 ? 's' : ''}`}`}
+          </Button>
         )}
       </DialogActions>
     </Dialog>
@@ -1008,7 +1153,9 @@ function ParticipantsDialog({
     try {
       const result = await bookClass(cls.id, false, addTarget.userId);
       notify?.success(
-        result.status === 'waitlist' ? `${nameFor(addTarget.userId)} staat op de wachtlijst.` : `${nameFor(addTarget.userId)} is ingeschreven.`
+        result.status === 'waitlist'
+          ? `${nameFor(addTarget.userId)} staat op de wachtlijst.`
+          : `${nameFor(addTarget.userId)} is ingeschreven.`
       );
       setAddTarget(null);
       load();
@@ -1024,6 +1171,37 @@ function ParticipantsDialog({
 
   const bookedUserIds = new Set(rows.map((b) => b.userId));
   const addableSporters = sporters.filter((s) => !bookedUserIds.has(s.userId));
+  const holdUntilMs = activeHoldUntil(cls);
+
+  /** De trainer beslist: credit geven en inschrijven, of de plek doorgeven aan de volgende. */
+  const grantAndBook = async () => {
+    if (!cls.holdUserId) return;
+    setAdding(true);
+    try {
+      await grantCredits(cls.holdUserId, Math.max(1, cls.creditCost), `Wachtlijst: ${cls.title} ${cls.date}`);
+      await bookClass(cls.id, false, cls.holdUserId);
+      notify?.success(`${nameFor(cls.holdUserId)} is ingeschreven.`);
+      load();
+      onChanged();
+    } catch (e) {
+      notify?.error(e instanceof Error ? e.message : 'Inschrijven mislukt');
+    } finally {
+      setAdding(false);
+    }
+  };
+  const passOn = async () => {
+    setAdding(true);
+    try {
+      const r = await releaseHold(cls.id);
+      notify?.success(r.promotedUserId ? `De plek is doorgegeven aan ${nameFor(r.promotedUserId)}.` : 'De plek is vrijgegeven.');
+      load();
+      onChanged();
+    } catch (e) {
+      notify?.error(e instanceof Error ? e.message : 'Doorgeven mislukt');
+    } finally {
+      setAdding(false);
+    }
+  };
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="xs">
@@ -1033,6 +1211,33 @@ function ParticipantsDialog({
           {dayLabel(cls.date)} · {cls.startTime}
           {cls.endTime ? `–${cls.endTime}` : ''}
         </Typography>
+
+        {cls.holdUserId && holdUntilMs && (
+          <Box
+            sx={{
+              p: 1.5,
+              mb: 2,
+              borderRadius: 2,
+              bgcolor: designTokens.tertiaryContainer,
+              color: designTokens.onTertiaryContainer,
+            }}
+          >
+            <Typography variant="body2" fontWeight={600}>
+              Plek vastgehouden voor {nameFor(cls.holdUserId)} tot {clockOf(holdUntilMs)}
+            </Typography>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              Eerste op de wachtlijst, maar geen credits. Daarna gaat de plek vanzelf naar de volgende.
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Button size="small" variant="contained" disableElevation disabled={adding} onClick={() => void grantAndBook()}>
+                Credit geven en inschrijven
+              </Button>
+              <Button size="small" variant="outlined" disabled={adding} onClick={() => void passOn()}>
+                Geef plek aan volgende
+              </Button>
+            </Box>
+          </Box>
+        )}
 
         {!cls.cancelledAt && (
           <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
@@ -1063,7 +1268,16 @@ function ParticipantsDialog({
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column' }}>
             {rows.map((b) => (
-              <Box key={b.id} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1, borderTop: `1px solid ${designTokens.cardBackgroundHigh}` }}>
+              <Box
+                key={b.id}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  py: 1,
+                  borderTop: `1px solid ${designTokens.cardBackgroundHigh}`,
+                }}
+              >
                 <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>
                   {nameFor(b.userId)}
                 </Typography>

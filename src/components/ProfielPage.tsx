@@ -109,7 +109,16 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
   const { viewed } = useViewAs();
   const theme = useTheme();
   const wideTabs = useMediaQuery(theme.breakpoints.up('md'));
-  const [tab, setTab] = useState<ProfileTab>('gegevens');
+  // Vanuit Lessen ("Credits kopen") meteen naar Abonnement.
+  const [tab, setTab] = useState<ProfileTab>(() => {
+    try {
+      const wanted = sessionStorage.getItem('liftlog.profielTab');
+      sessionStorage.removeItem('liftlog.profielTab');
+      return wanted === 'abonnement' ? 'abonnement' : 'gegevens';
+    } catch {
+      return 'gegevens';
+    }
+  });
   const [displayName, setDisplayName] = useState('');
   const [leaderboardVisibility, setLeaderboardVisibility] = useState<LeaderboardVisibility>('named');
   const [heightCm, setHeightCm] = useState('');

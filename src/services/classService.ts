@@ -56,6 +56,13 @@ export interface StudioClass {
   creditCost: number;
   bookedCount: number;
   waitlistCount: number;
+  /**
+   * Plek die even wordt vastgehouden voor de eerste op de wachtlijst die nog credits moet kopen
+   * (zie api/_lib/bookingRules.mjs). Zolang hij loopt, is die plek alleen voor die persoon.
+   */
+  holdBookingId?: string | null;
+  holdUserId?: string | null;
+  holdUntil?: string | null;
   /** Optionele koppeling aan een groepsles-schema, zodat de les weet welk programma erbij hoort. */
   schemaId: string | null;
   /** Lessoort waaruit deze les is gemaakt (Beheer → Lessoorten); null bij een losse les. */
@@ -112,6 +119,9 @@ function toClass(data: Record<string, unknown>, id: string): StudioClass {
     creditCost: num(data.creditCost, 1),
     bookedCount: num(data.bookedCount),
     waitlistCount: num(data.waitlistCount),
+    holdBookingId: data.holdBookingId ? str(data.holdBookingId) : null,
+    holdUserId: data.holdUserId ? str(data.holdUserId) : null,
+    holdUntil: data.holdUntil ? str(data.holdUntil) : null,
     schemaId: data.schemaId ? str(data.schemaId) : null,
     classTypeId: typeof data.classTypeId === 'string' ? data.classTypeId : null,
     room: data.room ? str(data.room) : null,
@@ -349,12 +359,32 @@ export async function getWaitlistPositions(): Promise<Record<string, number>> {
 /** Bedenktijd na boeken (zie api/_lib/bookingRules.mjs): zo lang is afmelden altijd gratis. */
 export const BOOKING_GRACE_MINUTES = 60;
 
+/** Wordt er nu een plek vastgehouden (voor de eerste op de wachtlijst zonder credits)? Tot wanneer (ms). */
+export function activeHoldUntil(cls: StudioClass, nowMs = Date.now()): number | null {
+  if (!cls.holdUserId || !cls.holdUntil) return null;
+  const until = Date.parse(cls.holdUntil);
+  return Number.isFinite(until) && until > nowMs ? until : null;
+}
+
 /**
- * Is er een plek vrij? Staat er iemand op de wachtlijst, dan schuift die bij een afmelding meteen
- * door; een vrije plek ontstaat dan alleen als niemand op de wachtlijst genoeg credits had.
+ * Is er voor deze persoon een plek vrij? Staat er iemand op de wachtlijst, dan schuift die bij een
+ * afmelding meteen door. Een vrije plek die even voor een ander wordt vastgehouden, telt als vol.
  */
-export function spotOpenFor(cls: StudioClass, _onWaitlist = false): boolean {
-  return cls.bookedCount < cls.capacity;
+export function spotOpenFor(cls: StudioClass, mine?: Pick<Booking, 'id'> | null, nowMs = Date.now()): boolean {
+  if (cls.bookedCount >= cls.capacity) return false;
+  if (activeHoldUntil(cls, nowMs) && cls.holdBookingId !== mine?.id) return false;
+  return true;
+}
+
+/** Verlopen vastgehouden plekken laten doorgaan naar de volgende (bij het openen van het rooster). */
+export async function settleWaitlists(): Promise<number> {
+  const r = await callBooking<{ settled?: number }>({ action: 'settleWaitlists' });
+  return r.settled ?? 0;
+}
+
+/** Trainer/beheer: een vastgehouden plek meteen doorgeven aan de volgende op de wachtlijst. */
+export function releaseHold(classId: string): Promise<{ released: boolean; promotedUserId: string | null }> {
+  return callBooking({ action: 'releaseHold', classId });
 }
 
 /** Wanneer telt een boeking als geboekt voor de bedenktijd (bij doorschuiven: het moment van doorschuiven). */

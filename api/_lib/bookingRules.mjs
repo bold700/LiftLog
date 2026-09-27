@@ -8,8 +8,15 @@
  * - Bedenktijd: binnen een uur na het boeken kun je altijd gratis afmelden (per ongeluk geboekt).
  * - Valt er iemand af, dan schuift de eerste van de wachtlijst meteen door en betaalt zijn credit.
  *   Die krijgt een melding en heeft (via de bedenktijd) een uur om gratis af te melden; dan schuift
- *   de volgende door, enzovoort. Wie niet genoeg credits heeft, wordt overgeslagen.
+ *   de volgende door, enzovoort.
+ * - Heeft de eerste op de wachtlijst te weinig credits, dan wordt die niet meteen overgeslagen: de
+ *   plek wordt een uur voor hem vastgehouden (melding aan hem én aan trainer/beheer), zodat hij
+ *   credits kan kopen of de trainer kan ingrijpen. Pas daarna gaat de plek naar de volgende.
+ * Het systeem ondersteunt; de trainer beslist en kan altijd ingrijpen.
  */
+
+/** Zo lang wordt een plek vastgehouden voor de eerste op de wachtlijst die nog credits moet kopen. */
+export const HOLD_MINUTES = 60;
 
 /** Bedenktijd na het boeken (of doorschuiven): zo lang is afmelden altijd gratis. */
 export const BOOKING_GRACE_MINUTES = 60;
@@ -76,13 +83,39 @@ export function waitlistPosition(entries, bookingId) {
 }
 
 /**
- * Wie schuift er door als er een plek vrijkomt? De eerste op de wachtlijst (volgorde van aanmelden)
- * die de les kan betalen; wie te weinig credits heeft, wordt overgeslagen en blijft op de lijst.
- * candidates: [{ id, createdAt, balance, cost }]
+ * Wat gebeurt er met een vrije plek? Op volgorde van de wachtlijst:
+ * - kan betalen → doorschuiven ('promote');
+ * - kan niet betalen en had voor deze les nog geen kans → plek vasthouden ('hold');
+ * - kon eerder al niet betalen (kans verlopen) en nog steeds niet → overslaan.
+ * candidates: [{ id, createdAt, balance, cost, offerExpired }]
  */
-export function pickPromotion(candidates) {
+export function chooseForFreeSpot(candidates) {
   const sorted = [...candidates].sort(
     (a, b) => String(a.createdAt).localeCompare(String(b.createdAt)) || String(a.id).localeCompare(String(b.id))
   );
-  return sorted.find((c) => (Number(c.balance) || 0) >= (Number(c.cost) || 0)) ?? null;
+  for (const c of sorted) {
+    if ((Number(c.balance) || 0) >= (Number(c.cost) || 0)) return { kind: 'promote', candidate: c };
+    if (!c.offerExpired) return { kind: 'hold', candidate: c };
+  }
+  return null;
+}
+
+/** Tot wanneer een plek wordt vastgehouden: een uur, maar nooit na de start van de les. */
+export function holdUntil(nowMs, startsAtMs) {
+  const until = nowMs + HOLD_MINUTES * 60_000;
+  return new Date(Number.isFinite(startsAtMs) ? Math.min(until, startsAtMs) : until).toISOString();
+}
+
+/** Wordt er nu een plek vastgehouden voor iemand anders dan deze persoon? */
+export function heldForSomeoneElse(cls, userId, nowMs) {
+  if (!cls?.holdUserId) return false;
+  const until = Date.parse(String(cls.holdUntil || ''));
+  return Number.isFinite(until) && until > nowMs && cls.holdUserId !== userId;
+}
+
+/** Is de vastgehouden plek verlopen (en moet hij door naar de volgende)? */
+export function holdExpired(cls, nowMs) {
+  if (!cls?.holdUserId) return false;
+  const until = Date.parse(String(cls.holdUntil || ''));
+  return !Number.isFinite(until) || until <= nowMs;
 }
