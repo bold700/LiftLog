@@ -3,7 +3,7 @@ import {
   freeCancelHoursOf,
   refundOnCancel,
   placeNewBooking,
-  waitlistPriorityUntil,
+  pickPromotion,
   waitlistPosition,
   BOOKING_GRACE_MINUTES,
 } from '../../api/_lib/bookingRules.mjs';
@@ -27,19 +27,20 @@ describe('boekingsregels', () => {
     expect(refundOnCancel({ ...base, spent: 0, minutesSinceBooked: 10 })).toBe(false);
   });
 
-  it('een vrije plek is tijdens de voorrang alleen voor de wachtlijst', () => {
-    const now = Date.parse('2026-09-26T20:00:00Z');
-    const cls = { capacity: 8, bookedCount: 7, waitlistCount: 2, waitlistPriorityUntil: '2026-09-26T20:30:00Z' };
-    expect(placeNewBooking(cls, now)).toBe('waitlist');
-    expect(placeNewBooking({ ...cls, waitlistPriorityUntil: '2026-09-26T19:59:00Z' }, now)).toBe('booked');
-    expect(placeNewBooking({ ...cls, waitlistCount: 0 }, now)).toBe('booked');
-    expect(placeNewBooking({ ...cls, bookedCount: 8, waitlistPriorityUntil: null }, now)).toBe('waitlist');
+  it('een nieuwe boeking krijgt een plek als die er is, anders de wachtlijst', () => {
+    expect(placeNewBooking({ capacity: 8, bookedCount: 7 })).toBe('booked');
+    expect(placeNewBooking({ capacity: 8, bookedCount: 8 })).toBe('waitlist');
   });
 
-  it('voorrang duurt een uur, maar nooit langer dan tot de start', () => {
-    const now = Date.parse('2026-09-26T20:00:00Z');
-    expect(waitlistPriorityUntil(now, Date.parse('2026-09-27T09:00:00Z'))).toBe('2026-09-26T21:00:00.000Z');
-    expect(waitlistPriorityUntil(now, Date.parse('2026-09-26T20:20:00Z'))).toBe('2026-09-26T20:20:00.000Z');
+  it('de eerste die kan betalen schuift door; wie te weinig heeft wordt overgeslagen', () => {
+    const c = [
+      { id: 'b', createdAt: '2026-09-26T11:00:00Z', balance: 3, cost: 1 },
+      { id: 'a', createdAt: '2026-09-26T10:00:00Z', balance: 0, cost: 1 },
+      { id: 'c', createdAt: '2026-09-26T12:00:00Z', balance: 5, cost: 1 },
+    ];
+    expect(pickPromotion(c)?.id).toBe('b');
+    expect(pickPromotion([{ id: 'x', createdAt: '1', balance: 0, cost: 0 }])?.id).toBe('x');
+    expect(pickPromotion([{ id: 'y', createdAt: '1', balance: 0, cost: 1 }])).toBeNull();
   });
 
   it('positie op de wachtlijst op volgorde van aanmelden', () => {

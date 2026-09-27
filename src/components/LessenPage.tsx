@@ -43,6 +43,7 @@ import {
   classHasEnded,
   spotOpenFor,
   cancelIsFree,
+  graceUntilMs,
   getWaitlistPositions,
 } from '../services/classService';
 import { getOrg } from '../services/orgService';
@@ -105,7 +106,6 @@ function weekRangeLabel(weekStrip: string[]): string {
 const standingKey = (classTypeId: string, weekday: number, startTime: string) => `${classTypeId}_${weekday}_${startTime}`;
 
 /** Bezetting op één manier, overal: hoeveel plekken er nog vrij zijn ("3/8" las als "3 vrij"). */
-/** Vrije plekken zoals deze persoon ze ziet: een plek die nog even voor de wachtlijst is, telt voor een ander als vol. */
 function spotsLabel(cls: StudioClass, onWaitlist = false): string {
   const free = spotOpenFor(cls, onWaitlist) ? Math.max(0, cls.capacity - cls.bookedCount) : 0;
   if (free === 0) return 'Vol';
@@ -276,7 +276,7 @@ export function LessenPage() {
         const result = await bookClass(cls.id, weekly);
         notify?.success(
           result.status === 'waitlist'
-            ? 'Je staat op de wachtlijst. Komt er een plek vrij, dan krijg je een melding en kun je je aanmelden.'
+            ? 'Je staat op de wachtlijst. Valt er iemand af, dan schuif je vanzelf door en krijg je een melding.'
             : 'Je staat ingeschreven.'
         );
         setConfirmClass(null);
@@ -412,6 +412,7 @@ export function LessenPage() {
     // Op de wachtlijst en er is een plek vrij: nu aanmelden (wie het eerst is).
     const canClaim = onWaitlist && !full;
     const position = onWaitlist ? waitlistPositions[cls.id] : undefined;
+    const graceUntil = mine?.status === 'booked' ? graceUntilMs(mine) : null;
     const busy = busyId === cls.id;
     const started = classHasStarted(cls);
     return (
@@ -467,6 +468,13 @@ export function LessenPage() {
               />
             )}
             {canClaim && <Chip size="small" label="Plek vrij voor jou" sx={{ bgcolor: designTokens.tertiaryContainer, color: designTokens.onTertiaryContainer, fontWeight: 600 }} />}
+            {/* Net doorgeschoven van de wachtlijst: laat zien tot wanneer afmelden nog gratis is. */}
+            {mine?.status === 'booked' && mine.promotedAt && graceUntil && (
+              <Typography variant="caption" sx={{ flexBasis: '100%', fontWeight: 600, color: designTokens.onTertiaryContainer }}>
+                Doorgeschoven van de wachtlijst · gratis afmelden tot{' '}
+                {new Date(graceUntil).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
+              </Typography>
+            )}
             {mine?.status === 'booked' && <Chip size="small" label="Ingeschreven" sx={{ bgcolor: designTokens.tertiaryContainer, color: designTokens.onTertiaryContainer }} />}
           </Box>
         </Box>
@@ -732,7 +740,7 @@ export function LessenPage() {
             Je meldt je binnen {freeCancelHours} uur voor de les af. Je krijgt je credit daarom niet terug.
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Afmelden is wel fijn: wie op de wachtlijst staat krijgt meteen een melding en kan je plek nemen.
+            Afmelden is wel fijn: de eerste op de wachtlijst schuift dan meteen door.
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -866,7 +874,6 @@ function BookConfirmDialog({
   }, [cls?.id, alreadyWeekly]);
 
   if (!cls) return null;
-  // Een vrije plek die nog even voor de wachtlijst is, telt voor wie er niet op staat als vol.
   const full = !spotOpenFor(cls, myStatus === 'waitlist');
   const claim = myStatus === 'waitlist' && !full;
   // Staf reserveert altijd gratis (server bypasst de credit-kosten), ongeacht het saldo.
@@ -913,7 +920,7 @@ function BookConfirmDialog({
         {!started && (
           <Typography variant="caption" color="text.secondary">
             {full
-              ? 'De les is vol. Op de wachtlijst krijg je een melding zodra er een plek vrijkomt; wie zich dan het eerst aanmeldt, heeft de plek. Er gaat pas een credit af als je je aanmeldt.'
+              ? 'De les is vol. Valt er iemand af, dan schuif je vanzelf door: er gaat dan een credit af en je krijgt een melding. Kun je dan toch niet, meld je binnen een uur gratis af.'
               : `Gratis afmelden tot ${freeCancelHours} uur van tevoren, of binnen een uur na het boeken. Daarna kost het je de credit.`}
           </Typography>
         )}
