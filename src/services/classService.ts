@@ -56,11 +56,6 @@ export interface StudioClass {
   creditCost: number;
   bookedCount: number;
   waitlistCount: number;
-  /**
-   * Tot wanneer een vrijgekomen plek alleen voor de wachtlijst is (ISO). Iemand die niet op de
-   * wachtlijst staat, ziet de les dan nog als vol. Zie api/_lib/bookingRules.mjs.
-   */
-  waitlistPriorityUntil?: string | null;
   /** Optionele koppeling aan een groepsles-schema, zodat de les weet welk programma erbij hoort. */
   schemaId: string | null;
   /** Lessoort waaruit deze les is gemaakt (Beheer → Lessoorten); null bij een losse les. */
@@ -91,6 +86,8 @@ export interface Booking {
   createdAt: string;
   /** Moment van aanmelden vanaf de wachtlijst; telt voor de bedenktijd. */
   claimedAt?: string | null;
+  /** Moment van automatisch doorschuiven vanaf de wachtlijst; telt voor de bedenktijd. */
+  promotedAt?: string | null;
   cancelledAt?: string | null;
   refunded?: boolean;
 }
@@ -115,7 +112,6 @@ function toClass(data: Record<string, unknown>, id: string): StudioClass {
     creditCost: num(data.creditCost, 1),
     bookedCount: num(data.bookedCount),
     waitlistCount: num(data.waitlistCount),
-    waitlistPriorityUntil: data.waitlistPriorityUntil ? str(data.waitlistPriorityUntil) : null,
     schemaId: data.schemaId ? str(data.schemaId) : null,
     classTypeId: typeof data.classTypeId === 'string' ? data.classTypeId : null,
     room: data.room ? str(data.room) : null,
@@ -142,6 +138,7 @@ function toBooking(data: Record<string, unknown>, id: string): Booking {
     creditsSpent: num(data.creditsSpent),
     createdAt: str(data.createdAt),
     claimedAt: data.claimedAt ? str(data.claimedAt) : null,
+    promotedAt: data.promotedAt ? str(data.promotedAt) : null,
     cancelledAt: data.cancelledAt ? str(data.cancelledAt) : null,
     refunded: data.refunded === true,
   };
@@ -352,20 +349,25 @@ export async function getWaitlistPositions(): Promise<Record<string, number>> {
 /** Bedenktijd na boeken (zie api/_lib/bookingRules.mjs): zo lang is afmelden altijd gratis. */
 export const BOOKING_GRACE_MINUTES = 60;
 
-/** Heeft de wachtlijst nu voorrang op de vrije plekken van deze les? */
-export function waitlistHasPriority(cls: StudioClass, nowMs = Date.now()): boolean {
-  if (!(cls.waitlistCount > 0) || !cls.waitlistPriorityUntil) return false;
-  const until = Date.parse(cls.waitlistPriorityUntil);
-  return Number.isFinite(until) && until > nowMs;
+/**
+ * Is er een plek vrij? Staat er iemand op de wachtlijst, dan schuift die bij een afmelding meteen
+ * door; een vrije plek ontstaat dan alleen als niemand op de wachtlijst genoeg credits had.
+ */
+export function spotOpenFor(cls: StudioClass, _onWaitlist = false): boolean {
+  return cls.bookedCount < cls.capacity;
 }
 
-/**
- * Kan deze persoon nu direct een plek krijgen? Wie op de wachtlijst staat: als er een plek vrij is.
- * Anderen: als er een plek vrij is die niet (meer) voor de wachtlijst is.
- */
-export function spotOpenFor(cls: StudioClass, onWaitlist: boolean, nowMs = Date.now()): boolean {
-  if (cls.bookedCount >= cls.capacity) return false;
-  return onWaitlist || !waitlistHasPriority(cls, nowMs);
+/** Wanneer telt een boeking als geboekt voor de bedenktijd (bij doorschuiven: het moment van doorschuiven). */
+export function bookedAtMs(booking: Booking): number {
+  return Date.parse(booking.promotedAt || booking.claimedAt || booking.createdAt);
+}
+
+/** Tot wanneer (ms) je deze boeking gratis kunt afmelden binnen de bedenktijd; null als dat niet (meer) geldt. */
+export function graceUntilMs(booking: Booking, nowMs = Date.now()): number | null {
+  const at = bookedAtMs(booking);
+  if (!Number.isFinite(at)) return null;
+  const until = at + BOOKING_GRACE_MINUTES * 60_000;
+  return until > nowMs ? until : null;
 }
 
 /** Krijgt wie nu afmeldt de credit terug? Zelfde regel als de server (venster of bedenktijd). */
@@ -374,7 +376,7 @@ export function cancelIsFree(cls: StudioClass, booking: Booking, freeCancelHours
   const start = new Date(`${cls.date}T${cls.startTime || '00:00'}:00`).getTime();
   const hoursLeft = (start - nowMs) / 3_600_000;
   if (hoursLeft >= freeCancelHours) return true;
-  const bookedAt = Date.parse(booking.claimedAt || booking.createdAt);
+  const bookedAt = bookedAtMs(booking);
   return hoursLeft > 0 && Number.isFinite(bookedAt) && (nowMs - bookedAt) / 60_000 <= BOOKING_GRACE_MINUTES;
 }
 

@@ -6,16 +6,13 @@
  * - Te laat afmelden (binnen het gratis-venster) kost je de credit; afmelden kan wel altijd, zodat
  *   de plek vrijkomt.
  * - Bedenktijd: binnen een uur na het boeken kun je altijd gratis afmelden (per ongeluk geboekt).
- * - De wachtlijst schuift niet automatisch door. Komt er een plek vrij, dan krijgt iedereen op de
- *   wachtlijst een melding en mag zich aanmelden; wie het eerst is, heeft de plek. Een uur lang
- *   (of tot de les begint) is die plek alleen voor de wachtlijst; daarna voor iedereen.
+ * - Valt er iemand af, dan schuift de eerste van de wachtlijst meteen door en betaalt zijn credit.
+ *   Die krijgt een melding en heeft (via de bedenktijd) een uur om gratis af te melden; dan schuift
+ *   de volgende door, enzovoort. Wie niet genoeg credits heeft, wordt overgeslagen.
  */
 
-/** Bedenktijd na het boeken: zo lang is afmelden altijd gratis. */
+/** Bedenktijd na het boeken (of doorschuiven): zo lang is afmelden altijd gratis. */
 export const BOOKING_GRACE_MINUTES = 60;
-
-/** Zo lang heeft de wachtlijst voorrang op een vrijgekomen plek. */
-export const WAITLIST_PRIORITY_MINUTES = 60;
 
 /**
  * Gratis-afmeldvenster van de studio in uur. Ook 0 is een geldige keuze (tot de start gratis);
@@ -53,31 +50,15 @@ export function minutesSince(iso, nowMs) {
   return Number.isFinite(t) ? (nowMs - t) / 60_000 : Infinity;
 }
 
-/** Tot wanneer de wachtlijst voorrang heeft op een plek die nu vrijkomt: een uur, maar nooit na de start. */
-export function waitlistPriorityUntil(nowMs, startsAtMs) {
-  const until = nowMs + WAITLIST_PRIORITY_MINUTES * 60_000;
-  return new Date(Number.isFinite(startsAtMs) ? Math.min(until, startsAtMs) : until).toISOString();
-}
-
-/** Heeft de wachtlijst op dit moment voorrang op de vrije plekken van deze les? */
-export function waitlistHasPriority(cls, nowMs) {
-  if (!((Number(cls?.waitlistCount) || 0) > 0)) return false;
-  const until = Date.parse(String(cls?.waitlistPriorityUntil || ''));
-  return Number.isFinite(until) && until > nowMs;
+/** Waar komt een nieuwe reservering terecht: een plek als die er is, anders de wachtlijst. */
+export function placeNewBooking(cls) {
+  return (Number(cls?.bookedCount) || 0) >= (Number(cls?.capacity) || 0) ? 'waitlist' : 'booked';
 }
 
 /**
- * Waar komt een nieuwe reservering terecht (iemand die nog niet op de wachtlijst staat)?
- * Vol, of er is een vrije plek maar die is nu voor de wachtlijst: dan op de wachtlijst.
+ * Een vrije plek met iemand op de wachtlijst kan alleen ontstaan als niemand op de wachtlijst genoeg
+ * credits had om door te schuiven. Wie dan credits bijkoopt, kan zich alsnog aanmelden.
  */
-export function placeNewBooking(cls, nowMs) {
-  const capacity = Number(cls?.capacity) || 0;
-  const booked = Number(cls?.bookedCount) || 0;
-  if (booked >= capacity) return 'waitlist';
-  return waitlistHasPriority(cls, nowMs) ? 'waitlist' : 'booked';
-}
-
-/** Is er een plek vrij die iemand die al op de wachtlijst staat nu kan pakken? */
 export function spotFreeForWaitlister(cls) {
   return (Number(cls?.bookedCount) || 0) < (Number(cls?.capacity) || 0);
 }
@@ -92,4 +73,16 @@ export function waitlistPosition(entries, bookingId) {
   );
   const i = sorted.findIndex((e) => e.id === bookingId);
   return i >= 0 ? i + 1 : null;
+}
+
+/**
+ * Wie schuift er door als er een plek vrijkomt? De eerste op de wachtlijst (volgorde van aanmelden)
+ * die de les kan betalen; wie te weinig credits heeft, wordt overgeslagen en blijft op de lijst.
+ * candidates: [{ id, createdAt, balance, cost }]
+ */
+export function pickPromotion(candidates) {
+  const sorted = [...candidates].sort(
+    (a, b) => String(a.createdAt).localeCompare(String(b.createdAt)) || String(a.id).localeCompare(String(b.id))
+  );
+  return sorted.find((c) => (Number(c.balance) || 0) >= (Number(c.cost) || 0)) ?? null;
 }

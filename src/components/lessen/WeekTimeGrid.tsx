@@ -203,7 +203,6 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
               {singles.map(({ item: cls, startMin, endMin, lane, lanes }) => {
                 const mine = bookingByClass.get(cls.id);
                 const onWaitlist = mine?.status === 'waitlist';
-                // Een plek die nog even voor de wachtlijst is, telt voor een ander als vol.
                 const full = !spotOpenFor(cls, onWaitlist);
                 const canClaim = onWaitlist && !full;
                 const booked = mine?.status === 'booked';
