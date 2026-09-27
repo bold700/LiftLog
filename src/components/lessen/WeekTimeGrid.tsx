@@ -203,7 +203,7 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
               {singles.map(({ item: cls, startMin, endMin, lane, lanes }) => {
                 const mine = bookingByClass.get(cls.id);
                 const onWaitlist = mine?.status === 'waitlist';
-                const full = !spotOpenFor(cls, onWaitlist);
+                const full = !spotOpenFor(cls, onWaitlist ? mine : null);
                 const canClaim = onWaitlist && !full;
                 const booked = mine?.status === 'booked';
                 const started = classHasStarted(cls);

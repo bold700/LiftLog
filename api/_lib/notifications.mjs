@@ -52,6 +52,12 @@ export function shortTime(hhmm) {
 }
 
 const credits = (n) => (n === 1 ? '1 credit' : `${n} credits`);
+const CLOCK_FMT = new Intl.DateTimeFormat('nl-NL', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Amsterdam' });
+/** ISO-tijdstip → "20:45" in Nederlandse tijd. */
+const clockTime = (iso) => {
+  const t = Date.parse(String(iso || ''));
+  return Number.isFinite(t) ? CLOCK_FMT.format(new Date(t)) : '';
+};
 const when = (cls) => [dayLabel(cls?.date), shortTime(cls?.startTime)].filter(Boolean).join(' ');
 
 export const messages = {
@@ -67,6 +73,20 @@ export const messages = {
     return {
       title: 'Je bent ingeschreven!',
       body: `Er viel iemand af bij ${cls?.title || 'de les'} (${when(cls)}); je schoof door van de wachtlijst.${cost > 0 ? ` Er is ${credits(cost)} afgeschreven.` : ''} Kun of wil je niet? Meld je binnen een uur gratis af, dan gaat de plek naar de volgende.`,
+    };
+  },
+  /** Eerste op de wachtlijst, maar geen credits: de plek wordt even vastgehouden. */
+  waitlistHold(cls, until) {
+    return {
+      title: 'Plek vrij, maar je credits zijn op',
+      body: `Er viel iemand af bij ${cls?.title || 'de les'} (${when(cls)}) en jij bent de eerste op de wachtlijst. Koop credits en meld je aan in de app${until ? ` vóór ${clockTime(until)}` : ''}, anders gaat de plek naar de volgende.`,
+    };
+  },
+  /** Voor trainer en beheer: iemand zonder credits staat eerst op de wachtlijst. */
+  waitlistHoldStaff(name, cls, until) {
+    return {
+      title: 'Wachtlijst: geen credits',
+      body: `${name} is de eerste op de wachtlijst voor ${cls?.title || 'de les'} (${when(cls)}), maar heeft geen credits. De plek wordt vastgehouden${until ? ` tot ${clockTime(until)}` : ''}; daarna gaat hij naar de volgende. Geef credits of geef de plek door in de deelnemerslijst.`,
     };
   },
   creditsLow(balance) {

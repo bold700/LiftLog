@@ -417,40 +417,74 @@ describe('afmelden', () => {
     expect(store['classes/c1'].waitlistCount).toBe(0);
   });
 
-  it('wie te weinig credits heeft wordt overgeslagen; de volgende schuift door', async () => {
+  /** sporter1 geboekt; sporter2 (eerst) en sporter3 (daarna) op de wachtlijst. */
+  const fullWithTwoWaiting = async () => {
     addSporter3();
     const eerste = await post({ action: 'book', classId: 'c1' }, 'sporter1');
     const tweede = await post({ action: 'book', classId: 'c1' }, 'sporter2');
     store[`bookings/${tweede.body.bookingId}`].createdAt = '2026-09-01T10:00:00.000Z';
     const derde = await post({ action: 'book', classId: 'c1' }, 'sporter3');
     store[`bookings/${derde.body.bookingId}`].createdAt = '2026-09-01T11:00:00.000Z';
+    return { eerste, tweede, derde };
+  };
+
+  it('eerste op de wachtlijst zonder credits: de plek wordt een uur voor die persoon vastgehouden', async () => {
+    const { eerste } = await fullWithTwoWaiting();
     store['creditAccounts/vanas__sporter2'].balance = 0;
 
     const res = await post({ action: 'cancel', bookingId: eerste.body.bookingId }, 'sporter1');
-    expect(res.body.promotedUserId).toBe('sporter3');
-    expect(bookingOf('sporter2').status).toBe('waitlist');
-    expect(store['classes/c1'].bookedCount).toBe(1);
-    expect(store['classes/c1'].waitlistCount).toBe(1);
-  });
-
-  it('niemand kan betalen: de plek komt vrij; na bijkopen kun je je alsnog aanmelden', async () => {
-    const eerste = await post({ action: 'book', classId: 'c1' }, 'sporter1');
-    await post({ action: 'book', classId: 'c1' }, 'sporter2');
-    store['creditAccounts/vanas__sporter2'].balance = 0;
-
-    await post({ action: 'cancel', bookingId: eerste.body.bookingId }, 'sporter1');
+    expect(res.body.promotedUserId).toBeNull();
+    expect(store['classes/c1'].holdUserId).toBe('sporter2');
+    expect(Date.parse(store['classes/c1'].holdUntil)).toBeGreaterThan(Date.now() + 50 * 60_000);
     expect(store['classes/c1'].bookedCount).toBe(0);
     expect(bookingOf('sporter2').status).toBe('waitlist');
+    expect(bookingOf('sporter3').status).toBe('waitlist');
 
-    const zonder = await post({ action: 'book', classId: 'c1' }, 'sporter2');
-    expect(zonder.statusCode).toBe(409);
-    expect(zonder.body.error).toMatch(/geen credits/i);
+    // De volgende op de wachtlijst kan de plek niet pakken zolang hij vastgehouden wordt.
+    const derde = await post({ action: 'book', classId: 'c1' }, 'sporter3');
+    expect(derde.statusCode).toBe(409);
+    expect(derde.body.error).toMatch(/vastgehouden/i);
+  });
+
+  it('wie de plek vastgehouden kreeg, koopt credits en meldt zich aan', async () => {
+    const { eerste } = await fullWithTwoWaiting();
+    store['creditAccounts/vanas__sporter2'].balance = 0;
+    await post({ action: 'cancel', bookingId: eerste.body.bookingId }, 'sporter1');
 
     store['creditAccounts/vanas__sporter2'].balance = 2;
-    const met = await post({ action: 'book', classId: 'c1' }, 'sporter2');
-    expect(met.body.status).toBe('booked');
+    const res = await post({ action: 'book', classId: 'c1' }, 'sporter2');
+    expect(res.body.status).toBe('booked');
     expect(store['classes/c1'].bookedCount).toBe(1);
-    expect(store['classes/c1'].waitlistCount).toBe(0);
+    expect(store['classes/c1'].holdUserId).toBeNull();
+  });
+
+  it('verloopt de vastgehouden plek, dan schuift de volgende door; de eerste blijft op de wachtlijst', async () => {
+    const { eerste } = await fullWithTwoWaiting();
+    store['creditAccounts/vanas__sporter2'].balance = 0;
+    await post({ action: 'cancel', bookingId: eerste.body.bookingId }, 'sporter1');
+    store['classes/c1'].holdUntil = new Date(Date.now() - 60_000).toISOString();
+
+    const res = await post({ action: 'settleWaitlists' }, 'sporter1');
+    expect(res.body.settled).toBe(1);
+    expect(bookingOf('sporter3').status).toBe('booked');
+    expect(store['creditAccounts/vanas__sporter3'].balance).toBe(2);
+    expect(bookingOf('sporter2')).toMatchObject({ status: 'waitlist' });
+    expect(bookingOf('sporter2').offerExpiredAt).toBeTruthy();
+    expect(store['classes/c1'].holdUserId).toBeNull();
+    expect(store['classes/c1'].bookedCount).toBe(1);
+  });
+
+  it('de trainer kan een vastgehouden plek meteen doorgeven aan de volgende', async () => {
+    const { eerste } = await fullWithTwoWaiting();
+    store['creditAccounts/vanas__sporter2'].balance = 0;
+    await post({ action: 'cancel', bookingId: eerste.body.bookingId }, 'sporter1');
+
+    const weiger = await post({ action: 'releaseHold', classId: 'c1' }, 'sporter3');
+    expect(weiger.statusCode).toBe(403);
+
+    const res = await post({ action: 'releaseHold', classId: 'c1' }, 'trainer1');
+    expect(res.body.promotedUserId).toBe('sporter3');
+    expect(bookingOf('sporter3').status).toBe('booked');
   });
 
   it('staf op de wachtlijst schuift gratis door', async () => {
@@ -1574,6 +1608,17 @@ describe('meldingen bij boeken en afmelden', () => {
     expect(titlesFor('tok_sporter2')).toEqual(['Je bent ingeschreven!']);
     expect(sentPushes.find((p) => p.tokens.includes('tok_sporter2')).notification.body).toContain('binnen een uur gratis af');
     expect(sentPushes.find((p) => p.tokens.includes('tok_sporter1')).notification.body).toContain('Je credit staat weer op je saldo.');
+  });
+
+  it('geen credits op de wachtlijst: melding aan de sporter én aan de trainer', async () => {
+    const booked = await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    await post({ action: 'book', classId: 'c1' }, 'sporter2');
+    store['creditAccounts/vanas__sporter2'].balance = 0;
+    store['pushTokens/tok_trainer1'] = { userId: 'trainer1', orgId: 'vanas', platform: 'web' };
+    sentPushes = [];
+    await post({ action: 'cancel', bookingId: booked.body.bookingId }, 'sporter1');
+    expect(titlesFor('tok_sporter2')).toEqual(['Plek vrij, maar je credits zijn op']);
+    expect(titlesFor('tok_trainer1')).toEqual(['Wachtlijst: geen credits']);
   });
 
   it('wie zichzelf afmeldt, krijgt geen "Les geannuleerd"', async () => {

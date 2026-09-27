@@ -107,9 +107,12 @@ import {
 } from './_lib/classSchedule.mjs';
 import {
   bookedAtOf,
+  chooseForFreeSpot,
   freeCancelHoursOf,
+  heldForSomeoneElse,
+  holdExpired,
+  holdUntil,
   minutesSince,
-  pickPromotion,
   placeNewBooking,
   refundOnCancel,
   spotFreeForWaitlister,
@@ -214,6 +217,11 @@ export default async function handler(req, res) {
         return await cancel(res, db, uid, myOrgs, isStaff, String(body.bookingId ?? '').trim());
       case 'waitlistPositions':
         return await waitlistPositions(res, db, uid, myOrgs);
+      case 'settleWaitlists':
+        return json(res, 200, { settled: await settleExpiredHolds(db, myOrgs), build: BUILD });
+      case 'releaseHold':
+        if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan een plek vrijgeven.', build: BUILD });
+        return await releaseHold(res, db, uid, myOrgs, String(body.classId ?? '').trim());
       case 'setStandingBooking':
         return await setStandingBooking(res, db, uid, myOrgs, isStaff, String(body.standingBookingId ?? '').trim(), body.active === true);
       case 'addStandingBooking':
@@ -309,6 +317,13 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
     beneficiaryIsStaff = target.role === 'trainer' || target.role === 'admin';
   }
 
+  // Een verlopen vastgehouden plek eerst doorgeven aan de volgende, zodat iedereen eerlijk zijn beurt krijgt.
+  const holdSnap = await db.collection('classes').doc(classId).get();
+  if (holdSnap.exists && holdExpired(holdSnap.data(), Date.now())) {
+    const r = await settleHold(db, classId).catch(() => null);
+    if (r) await notifyFreeSpot(db, r.orgId, r.cls, r);
+  }
+
   // Eerst het eigen abonnement bijwerken (verlenging die nog openstond), dan pas reserveren.
   // Onbeperkt plan: de les kost niets.
   const preSnap = await db.collection('classes').doc(classId).get();
@@ -353,12 +368,17 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
     }
     // Al op de wachtlijst: met een vrije plek is dit aanmelden (de plek pakken), anders niets te doen.
     const claim = active.find((d) => d.data().status === 'waitlist') ?? null;
+    // Een plek die voor een ander wordt vastgehouden, is voor jou (nog) niet vrij.
+    const heldForOther = heldForSomeoneElse(cls, beneficiaryUid, Date.now());
+    if (claim && heldForOther) {
+      throw refuse('Deze plek wordt nog even vastgehouden voor de eerste op de wachtlijst.');
+    }
     if (claim && !spotFreeForWaitlister(cls)) {
       throw refuse(beneficiaryUid === uid ? 'Je staat al op de wachtlijst. Valt er iemand af, dan schuif je vanzelf door.' : 'Deze sporter staat al op de wachtlijst.');
     }
 
     const cost = unlimited || beneficiaryIsStaff ? 0 : Number(cls.creditCost ?? 1) || 0;
-    const onWaitlist = claim ? false : placeNewBooking(cls) === 'waitlist';
+    const onWaitlist = claim ? false : heldForOther || placeNewBooking(cls) === 'waitlist';
 
     const accountRef = db.collection('creditAccounts').doc(accountId(orgId, beneficiaryUid));
     const accountSnap = await tx.get(accountRef);
@@ -397,7 +417,16 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
     if (onWaitlist) {
       tx.set(classRef, { waitlistCount: FieldValue.increment(1), ...reopened }, { merge: true });
     } else if (claim) {
-      tx.set(classRef, { bookedCount: FieldValue.increment(1), waitlistCount: FieldValue.increment(-1) }, { merge: true });
+      // Aangemeld: een plek die voor jou werd vastgehouden, is nu van jou.
+      tx.set(
+        classRef,
+        {
+          bookedCount: FieldValue.increment(1),
+          waitlistCount: FieldValue.increment(-1),
+          ...(cls.holdUserId === beneficiaryUid ? { holdBookingId: null, holdUserId: null, holdUntil: null } : {}),
+        },
+        { merge: true }
+      );
     } else {
       tx.set(classRef, { bookedCount: FieldValue.increment(1), ...reopened }, { merge: true });
     }
@@ -492,13 +521,13 @@ async function notifyAfterCancel(db, uid, notice, result) {
         data: { kind: 'classCancelled' },
       });
     }
-    // Doorgeschoven van de wachtlijst: ingeschreven, credit eraf, en een uur om gratis af te melden.
-    if (result.promotedUserId && notificationEnabled(org, 'waitlistPromoted')) {
-      await sendPushToUser(db, result.promotedUserId, {
-        ...pushMessages.waitlistPromoted(notice.cls, notice.promotedCost),
-        data: { kind: 'waitlistPromoted' },
-      });
-    }
+    // Vrije plek: doorgeschoven, of vastgehouden voor iemand zonder credits (zie notifyFreeSpot).
+    await notifyFreeSpot(db, notice.orgId, notice.cls, {
+      promotedUserId: result.promotedUserId,
+      promotedCost: notice.promotedCost,
+      heldUserId: notice.heldUserId,
+      holdUntil: notice.holdUntil,
+    });
   } catch (e) {
     console.error('[booking] melding na afmelden mislukt', e);
   }
@@ -530,16 +559,13 @@ async function waitlistPositions(res, db, uid, myOrgs) {
  * onbeperkt abonnement. Buiten de transactie opgezocht (abonnementen zijn queries); de transactie
  * leest daarna zelf de actuele wachtlijst en saldo's.
  */
-async function promotionCosts(db, bookingId) {
-  const snap = await db.collection('bookings').doc(bookingId).get();
-  if (!snap.exists) return {};
-  const b = snap.data();
-  if (b.status !== 'booked') return {};
-  const orgId = orgIdOf(b.orgId);
-  const clsSnap = await db.collection('classes').doc(String(b.classId)).get();
+async function waitlistCosts(db, classId) {
+  const clsSnap = await db.collection('classes').doc(classId).get();
   if (!clsSnap.exists) return {};
-  const baseCost = Number(clsSnap.data().creditCost ?? 1) || 0;
-  const waiting = await db.collection('bookings').where('classId', '==', String(b.classId)).where('status', '==', 'waitlist').get();
+  const cls = clsSnap.data();
+  const orgId = orgIdOf(cls.orgId);
+  const baseCost = Number(cls.creditCost ?? 1) || 0;
+  const waiting = await db.collection('bookings').where('classId', '==', classId).where('status', '==', 'waitlist').get();
   const costs = {};
   for (const d of waiting.docs) {
     const userId = String(d.data().userId);
@@ -560,9 +586,71 @@ async function promotionCosts(db, bookingId) {
   return costs;
 }
 
+/** In een transactie: wie staat er op de wachtlijst en wat kan ieder betalen. Alleen lezen. */
+async function readWaitlistCandidates(tx, db, orgId, cls, classId, costs) {
+  const waiting = await tx.get(db.collection('bookings').where('classId', '==', classId).where('status', '==', 'waitlist'));
+  const candidates = [];
+  for (const d of waiting.docs) {
+    const w = d.data();
+    const userId = String(w.userId);
+    const cost = costs[userId] ?? (Number(cls.creditCost ?? 1) || 0);
+    const accountRef = db.collection('creditAccounts').doc(accountId(orgId, userId));
+    const account = await tx.get(accountRef);
+    const balance = Number(account.exists ? account.data().balance : 0) || 0;
+    candidates.push({ id: d.id, ref: d.ref, userId, createdAt: w.createdAt, balance, cost, accountRef, offerExpired: !!w.offerExpiredAt });
+  }
+  return candidates;
+}
+
+const NO_HOLD = { holdBookingId: null, holdUserId: null, holdUntil: null };
+
+/**
+ * Eén vrije plek invullen (alleen schrijven). `fromCancel`: de plek komt vrij doordat iemand met een
+ * plek afmeldt; bij doorschuiven blijft het aantal bezette plekken dan gelijk.
+ */
+function applyFreeSpot(tx, db, { choice, classRef, orgId, classId, nowIso, startsAtMs, byUserId, fromCancel }) {
+  const nowMs = Date.parse(nowIso);
+  if (choice?.kind === 'promote') {
+    const c = choice.candidate;
+    tx.set(c.ref, { status: 'booked', creditsSpent: c.cost, promotedAt: nowIso, updatedAt: nowIso }, { merge: true });
+    tx.set(
+      classRef,
+      { waitlistCount: FieldValue.increment(-1), ...(fromCancel ? {} : { bookedCount: FieldValue.increment(1) }), ...NO_HOLD },
+      { merge: true }
+    );
+    if (c.cost > 0) {
+      tx.set(c.accountRef, { orgId, userId: c.userId, balance: c.balance - c.cost, updatedAt: nowIso }, { merge: true });
+      tx.set(db.collection('creditLedger').doc(newId('cl')), {
+        orgId,
+        userId: c.userId,
+        delta: -c.cost,
+        reason: 'booking',
+        classId,
+        byUserId,
+        createdAt: nowIso,
+      });
+    }
+    return { promotedUserId: c.userId, promotedCost: c.cost };
+  }
+  if (choice?.kind === 'hold') {
+    const c = choice.candidate;
+    const until = holdUntil(nowMs, startsAtMs);
+    tx.set(c.ref, { offeredAt: nowIso, offerUntil: until }, { merge: true });
+    tx.set(
+      classRef,
+      { holdBookingId: c.id, holdUserId: c.userId, holdUntil: until, ...(fromCancel ? { bookedCount: FieldValue.increment(-1) } : {}) },
+      { merge: true }
+    );
+    return { heldUserId: c.userId, holdUntil: until };
+  }
+  tx.set(classRef, { ...(fromCancel ? { bookedCount: FieldValue.increment(-1) } : {}), ...NO_HOLD }, { merge: true });
+  return {};
+}
+
 /** Het eigenlijke afmelden, ook gebruikt bij het stoppen of pauzeren van een vaste les. */
 async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
-  const costs = await promotionCosts(db, bookingId);
+  const pre = await db.collection('bookings').doc(bookingId).get();
+  const costs = pre.exists ? await waitlistCosts(db, String(pre.data().classId)) : {};
   return db.runTransaction(async (tx) => {
     // Firestore: eerst alles lezen, dan pas schrijven.
     const bookingRef = db.collection('bookings').doc(bookingId);
@@ -576,7 +664,8 @@ async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
     if (booking.userId !== uid && !isStaff) throw refuse('Je kunt alleen je eigen reservering afzeggen.');
     if (!['booked', 'waitlist'].includes(String(booking.status))) throw refuse('Deze reservering staat al open.');
 
-    const classRef = db.collection('classes').doc(String(booking.classId));
+    const classId = String(booking.classId);
+    const classRef = db.collection('classes').doc(classId);
     const classSnap = await tx.get(classRef);
     const cls = classSnap.exists ? classSnap.data() : null;
 
@@ -587,7 +676,8 @@ async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
 
     const nowMs = Date.now();
     const startsAt = cls ? classStartsAt(cls) : null;
-    const hoursLeft = startsAt ? (startsAt.getTime() - nowMs) / 3_600_000 : Infinity;
+    const startsAtMs = startsAt ? startsAt.getTime() : NaN;
+    const hoursLeft = startsAt ? (startsAtMs - nowMs) / 3_600_000 : Infinity;
     const spent = Number(booking.creditsSpent) || 0;
     // Te laat is te laat, behalve bij een afgelaste les of binnen de bedenktijd na boeken/doorschuiven.
     const refund = refundOnCancel({
@@ -598,23 +688,18 @@ async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
       minutesSinceBooked: minutesSince(bookedAtOf(booking), nowMs),
     });
 
-    // Valt er een plek vrij: de eerste op de wachtlijst die kan betalen schuift meteen door.
-    let promoted = null;
-    if (booking.status === 'booked' && cls && !cls.cancelledAt && hoursLeft > 0) {
-      const waiting = await tx.get(
-        db.collection('bookings').where('classId', '==', String(booking.classId)).where('status', '==', 'waitlist')
-      );
-      const candidates = [];
-      for (const d of waiting.docs) {
-        const w = d.data();
-        const userId = String(w.userId);
-        const cost = costs[userId] ?? (Number(cls.creditCost ?? 1) || 0);
-        const accountRef = db.collection('creditAccounts').doc(accountId(orgId, userId));
-        const account = await tx.get(accountRef);
-        const balance = Number(account.exists ? account.data().balance : 0) || 0;
-        candidates.push({ id: d.id, createdAt: w.createdAt, userId, balance, cost, ref: d.ref, accountRef });
-      }
-      promoted = pickPromotion(candidates);
+    // Komt er een plek vrij? Bij afmelden met een plek, of als degene voor wie een plek werd
+    // vastgehouden van de wachtlijst gaat.
+    const isHolder = booking.status === 'waitlist' && cls?.holdBookingId === bookingId;
+    const spotFrees = cls && !cls.cancelledAt && hoursLeft > 0 && (booking.status === 'booked' || isHolder);
+    let choice = null;
+    if (spotFrees) {
+      const holdActive = !isHolder && !!cls.holdUserId && !holdExpired(cls, nowMs);
+      const candidates = (await readWaitlistCandidates(tx, db, orgId, cls, classId, costs))
+        .filter((c) => c.id !== bookingId && !(holdActive && c.id === cls.holdBookingId))
+        // Er wordt al een plek vastgehouden: deze plek gaat alleen naar iemand die kan betalen.
+        .map((c) => (holdActive ? { ...c, offerExpired: true } : c));
+      choice = chooseForFreeSpot(candidates);
     }
 
     const now = new Date(nowMs).toISOString();
@@ -634,49 +719,146 @@ async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
       });
     }
 
+    let outcome = {};
     if (booking.status === 'waitlist') {
-      tx.set(classRef, { waitlistCount: FieldValue.increment(-1) }, { merge: true });
-    } else if (promoted) {
-      // De plek gaat direct naar de wachtlijst: bezet blijft bezet, de wachtlijst wordt één korter.
-      tx.set(promoted.ref, { status: 'booked', creditsSpent: promoted.cost, promotedAt: now, updatedAt: now }, { merge: true });
-      tx.set(classRef, { waitlistCount: FieldValue.increment(-1) }, { merge: true });
-      if (promoted.cost > 0) {
-        tx.set(promoted.accountRef, { orgId, userId: promoted.userId, balance: promoted.balance - promoted.cost, updatedAt: now }, { merge: true });
-        tx.set(db.collection('creditLedger').doc(newId('cl')), {
-          orgId,
-          userId: promoted.userId,
-          delta: -promoted.cost,
-          reason: 'booking',
-          classId: booking.classId,
-          byUserId: uid,
-          createdAt: now,
-        });
-      }
+      tx.set(classRef, { waitlistCount: FieldValue.increment(-1), ...(isHolder ? NO_HOLD : {}) }, { merge: true });
+      if (spotFrees) outcome = applyFreeSpot(tx, db, { choice, classRef, orgId, classId, nowIso: now, startsAtMs, byUserId: uid, fromCancel: false });
+    } else if (spotFrees) {
+      outcome = applyFreeSpot(tx, db, { choice, classRef, orgId, classId, nowIso: now, startsAtMs, byUserId: uid, fromCancel: true });
     } else {
       tx.set(classRef, { bookedCount: FieldValue.increment(-1) }, { merge: true });
     }
 
     // Privé-les (vaste PT) waar nu niemand meer op staat: van het rooster van de trainer af. De
     // credit-regel hierboven keek nog naar de les zoals hij was, dus dit geeft geen gratis afmelding.
+    const promotedHere = !!outcome.promotedUserId && booking.status === 'booked';
     const emptied = privateClassEmptyAfter(cls, {
-      bookedDelta: booking.status === 'booked' && !promoted ? -1 : 0,
-      waitlistDelta: booking.status === 'waitlist' || promoted ? -1 : 0,
+      bookedDelta: booking.status === 'booked' && !promotedHere ? -1 : 0,
+      waitlistDelta: booking.status === 'waitlist' || promotedHere ? -1 : 0,
     });
     if (emptied) tx.set(classRef, { cancelledAt: now, autoCancelled: true }, { merge: true });
 
     return {
       cancelled: true,
       refunded: refund,
-      promotedUserId: promoted ? promoted.userId : null,
+      promotedUserId: outcome.promotedUserId ?? null,
       // Alleen voor de meldingen hierna; gaat niet mee in het antwoord.
       notice: {
         orgId,
         bookingUserId: String(booking.userId),
-        cls: cls ? { title: cls.title, date: cls.date, startTime: cls.startTime } : null,
-        promotedCost: promoted ? promoted.cost : 0,
+        cls: cls ? { title: cls.title, date: cls.date, startTime: cls.startTime, trainerId: cls.trainerId ?? null } : null,
+        promotedCost: outcome.promotedCost ?? 0,
+        heldUserId: outcome.heldUserId ?? null,
+        holdUntil: outcome.holdUntil ?? null,
       },
     };
   });
+}
+
+/**
+ * Een vastgehouden plek afronden: verlopen (of door de trainer vrijgegeven met `force`), dan gaat de
+ * plek naar de volgende op de wachtlijst. Degene voor wie hij werd vastgehouden blijft op de
+ * wachtlijst, maar krijgt voor deze les geen tweede keer voorrang zonder credits.
+ */
+async function settleHold(db, classId, { force = false, byUserId = 'system' } = {}) {
+  const costs = await waitlistCosts(db, classId);
+  return db.runTransaction(async (tx) => {
+    const classRef = db.collection('classes').doc(classId);
+    const snap = await tx.get(classRef);
+    if (!snap.exists) return null;
+    const cls = snap.data();
+    const nowMs = Date.now();
+    if (!cls.holdUserId) return null;
+    if (!force && !holdExpired(cls, nowMs)) return null;
+
+    const orgId = orgIdOf(cls.orgId);
+    const startsAt = classStartsAt(cls);
+    const startsAtMs = startsAt ? startsAt.getTime() : NaN;
+    const open = !cls.cancelledAt && !(startsAtMs <= nowMs);
+    const holderRef = cls.holdBookingId ? db.collection('bookings').doc(String(cls.holdBookingId)) : null;
+    const holderSnap = holderRef ? await tx.get(holderRef) : null;
+    const candidates = open
+      ? (await readWaitlistCandidates(tx, db, orgId, cls, classId, costs)).map((c) => (c.id === cls.holdBookingId ? { ...c, offerExpired: true } : c))
+      : [];
+    const choice = open && (Number(cls.bookedCount) || 0) < (Number(cls.capacity) || 0) ? chooseForFreeSpot(candidates) : null;
+
+    const nowIso = new Date(nowMs).toISOString();
+    if (holderSnap?.exists && holderSnap.data().status === 'waitlist') tx.set(holderRef, { offerExpiredAt: nowIso }, { merge: true });
+    tx.set(classRef, NO_HOLD, { merge: true });
+    const outcome = open ? applyFreeSpot(tx, db, { choice, classRef, orgId, classId, nowIso, startsAtMs, byUserId, fromCancel: false }) : {};
+    return {
+      orgId,
+      cls: { title: cls.title, date: cls.date, startTime: cls.startTime, trainerId: cls.trainerId ?? null },
+      ...outcome,
+    };
+  });
+}
+
+/** Alle verlopen vastgehouden plekken afronden (bij het openen van het rooster, en in de dagelijkse crons). */
+async function settleExpiredHolds(db, myOrgs = null) {
+  const nowIso = new Date().toISOString();
+  const snap = await db.collection('classes').where('holdUntil', '<=', nowIso).get();
+  let settled = 0;
+  for (const d of snap.docs) {
+    const c = d.data();
+    if (!c.holdUserId) continue;
+    if (myOrgs && !myOrgs.includes(orgIdOf(c.orgId))) continue;
+    const r = await settleHold(db, d.id).catch((e) => {
+      console.error('[booking] vastgehouden plek afronden mislukt', e);
+      return null;
+    });
+    if (r) {
+      settled++;
+      await notifyFreeSpot(db, r.orgId, r.cls, r);
+    }
+  }
+  return settled;
+}
+
+/** Trainer/beheerder geeft een vastgehouden plek meteen door aan de volgende. */
+async function releaseHold(res, db, uid, myOrgs, classId) {
+  if (!classId) return json(res, 400, { error: 'Geen les opgegeven.', build: BUILD });
+  const snap = await db.collection('classes').doc(classId).get();
+  if (!snap.exists || !myOrgs.includes(orgIdOf(snap.data().orgId))) return json(res, 404, { error: 'Deze les bestaat niet (meer).', build: BUILD });
+  const r = await settleHold(db, classId, { force: true, byUserId: uid });
+  if (r) await notifyFreeSpot(db, r.orgId, r.cls, r);
+  return json(res, 200, { released: !!r, promotedUserId: r?.promotedUserId ?? null, build: BUILD });
+}
+
+/**
+ * Meldingen bij een vrije plek: doorgeschoven ("Je bent ingeschreven!"), of een plek vastgehouden
+ * voor iemand zonder credits (melding aan die persoon én aan de trainer van de les en de beheerders,
+ * zodat zij kunnen ingrijpen). Nooit laten mislukken.
+ */
+async function notifyFreeSpot(db, orgId, cls, outcome) {
+  try {
+    if (!outcome?.promotedUserId && !outcome?.heldUserId) return;
+    if (!(await orgNotificationEnabled(db, orgId, 'waitlistPromoted'))) return;
+    if (outcome.promotedUserId) {
+      await sendPushToUser(db, outcome.promotedUserId, {
+        ...pushMessages.waitlistPromoted(cls, outcome.promotedCost ?? 0),
+        data: { kind: 'waitlistPromoted' },
+      });
+    }
+    if (outcome.heldUserId) {
+      await sendPushToUser(db, outcome.heldUserId, { ...pushMessages.waitlistHold(cls, outcome.holdUntil), data: { kind: 'waitlistHold' } });
+      const holderSnap = await db.collection('profiles').doc(outcome.heldUserId).get();
+      const holderName = (holderSnap.exists && (holderSnap.data().displayName || holderSnap.data().email)) || 'Iemand';
+      const staff = new Set();
+      if (cls?.trainerId) staff.add(String(cls.trainerId));
+      const admins = await db.collection('profiles').where('orgIds', 'array-contains', orgId).get();
+      for (const a of admins.docs) if (a.data().role === 'admin') staff.add(a.id);
+      staff.delete(outcome.heldUserId);
+      for (const staffId of staff) {
+        await sendPushToUser(db, staffId, {
+          ...pushMessages.waitlistHoldStaff(holderName, cls, outcome.holdUntil),
+          data: { kind: 'waitlistHoldStaff' },
+        }).catch(() => null);
+      }
+    }
+  } catch (e) {
+    console.error('[booking] melding vrije plek mislukt', e);
+  }
 }
 
 /**
@@ -1594,6 +1776,9 @@ async function eveningRun(req, res, db) {
   } catch (e) {
     console.error('[eveningRun] ranglijst opruimen mislukte:', e);
   }
+  // Vangnet: vastgehouden wachtlijstplekken die niemand meer heeft afgerond (normaal gebeurt dat
+  // zodra iemand het rooster opent, boekt of afmeldt).
+  report.holdsSettled = await settleExpiredHolds(db).catch(() => 0);
   return json(res, 200, { ...report, build: BUILD });
 }
 
@@ -1690,6 +1875,7 @@ async function cancelBroadcast(res, db, myOrgs, broadcastId) {
 
 async function generateClasses(req, res, db) {
   if (!cronAuthorized(req, res)) return;
+  await settleExpiredHolds(db).catch(() => 0);
 
   const typesSnap = await db.collection('classTypes').get();
   const totals = { created: 0, autoBooked: 0, autoWaitlisted: 0, autoSkippedNoCredits: 0 };
