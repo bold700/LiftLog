@@ -3,7 +3,7 @@
  * (ExercisePicker), sets/reps/rust, en bij Formule 7 ook %1RM, max en doelgewicht.
  * Gebruikt in het dagenblok en in Formule 7 routekaart sectie 3.
  */
-import { Card, CardContent, Box, IconButton, TextField, Tooltip } from '@mui/material';
+import { Card, CardContent, Box, IconButton, MenuItem, TextField, Tooltip } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import type { SchemaDay, SchemaExercise, Formule7StrengthGoal } from '../../types';
@@ -41,6 +41,8 @@ export interface DayCardProps {
   isFormule7Template: boolean;
   /** Knop "Dag verwijderen" uitschakelen (laatste dag). */
   removeDayDisabled: boolean;
+  /** Weekdagen (maandag eerst) met wat er die dag is; null = geen weekplanning (groepsles). */
+  weekdayOptions?: string[] | null;
   nmtPreset: NmtPreset | null;
   exerciseOptions: string[];
   equipmentFilter: ExerciseDbEquipmentFilter;
@@ -60,6 +62,7 @@ export function DayCard({
   dayIndex,
   isFormule7Template,
   removeDayDisabled,
+  weekdayOptions = null,
   nmtPreset,
   exerciseOptions,
   equipmentFilter,
@@ -86,7 +89,7 @@ export function DayCard({
         }}
       >
         <CardContent sx={{ p: 2, '&:last-child': { pb: 2 }, minWidth: 0 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 2 }}>
             <TextField
               label="Dag (bijv. Maandag of Dag A)"
               value={day.dayLabel}
@@ -95,6 +98,27 @@ export function DayCard({
               fullWidth
               sx={{ minWidth: 0, flex: 1 }}
             />
+            {weekdayOptions && (
+              <TextField
+                select
+                label="Vaste dag"
+                size="small"
+                value={typeof day.weekday === 'number' ? day.weekday : ''}
+                onChange={(e) => updateDay(dayIndex, { weekday: e.target.value === '' ? null : Number(e.target.value) })}
+                sx={{ width: { xs: '100%', sm: 240 }, flexShrink: 0, order: { xs: 3, sm: 0 } }}
+                slotProps={{
+                  select: { displayEmpty: true, renderValue: (v) => (v === '' ? 'Geen' : weekdayOptions[Number(v)]) },
+                  inputLabel: { shrink: true },
+                }}
+              >
+                <MenuItem value="">Geen vaste dag</MenuItem>
+                {weekdayOptions.map((label, i) => (
+                  <MenuItem key={i} value={i}>
+                    {label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
             {!isFormule7Template && (
               <IconButton
                 size="small"
