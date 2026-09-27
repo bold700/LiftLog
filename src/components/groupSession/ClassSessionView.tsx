@@ -26,13 +26,15 @@ import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import { PageLayout, HeaderActions } from '../layout';
 import { ExerciseDbDemo } from '../ExerciseDbDemo';
-import { ExerciseInfoButton } from '../exercises/ExerciseInfoButton';
+import { ExerciseInfoButton, useExerciseNotes } from '../exercises/ExerciseInfoButton';
 import { NumberField } from '../NumberField';
 import { useNotify } from '../../context/NotifyContext';
 import { usePageTitle } from '../../context/PageTitleContext';
 import { getLogsForSession, getLogsForUserInOrg, saveExerciseLog } from '../../services/logService';
 import { checkExerciseAgainstLimitations, describeLimitation } from '../../utils/exerciseLimitations';
 import { designTokens } from '../../theme/designTokens';
+import { exerciseKey } from '../../utils/exerciseKey';
+import { alternativeForLimitation } from '../../utils/exerciseAlternatives';
 import type { ClassPlan, ClassPlanExercise } from '../../services/classPlanService';
 import type { StudioClass } from '../../services/classService';
 import type { ExerciseLog, GroupSession, Profile } from '../../types';
@@ -90,6 +92,8 @@ export function ClassSessionView({
   const [selected, setSelected] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  // Bibliotheek van de studio: voor het alternatief bij een beperking van een sporter.
+  const notes = useExerciseNotes();
 
   const weekday = new Date(`${cls.date}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short' });
   usePageTitle(`${cls.title} · ${weekday} ${cls.startTime}`);
@@ -421,7 +425,12 @@ export function ClassSessionView({
                   sx={{ display: 'block', color: check.level === 'vermijden' ? 'error.main' : 'warning.main' }}
                 >
                   {check.level === 'vermijden' ? 'Liever niet: ' : 'Let op: '}
-                  {check.hits.map((h) => `${describeLimitation(h)}${h.alternative ? ` → ${h.alternative}` : ''}`).join('; ')}
+                  {check.hits
+                    .map((h) => {
+                      const alt = alternativeForLimitation(ex.name, h, notes?.get(exerciseKey(ex.name)) ?? null);
+                      return `${describeLimitation(h)}${alt ? ` → ${alt}` : ''}`;
+                    })
+                    .join('; ')}
                 </Typography>
               ) : null;
             const avatar = (

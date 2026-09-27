@@ -7,6 +7,8 @@ import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, where } fro
 import { auth, db, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
 import { exerciseKey } from '../utils/exerciseKey';
+import { apiUrl } from '../utils/apiOrigin';
+import { authHeaders } from '../utils/authHeaders';
 
 const COLLECTION = 'exerciseNotes';
 
@@ -93,4 +95,29 @@ export async function saveExerciseNote(
 export async function deleteExerciseNote(exerciseName: string): Promise<void> {
   if (!isFirebaseConfigured() || !db) return;
   await deleteDoc(doc(db, COLLECTION, noteId(requireOrgId(), exerciseName)));
+}
+
+/**
+ * Slim voorstel (AI) voor een oefening, eventueel voor één klacht. Via /api/generate-workout
+ * (mode "exercise_advice"), alleen voor staf.
+ */
+export async function suggestExerciseAdvice(
+  exerciseName: string,
+  complaint?: string
+): Promise<Pick<ExerciseNote, 'regressions' | 'progressions' | 'alternatives'>> {
+  const response = await fetch(apiUrl('/api/generate-workout'), {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ prompt: exerciseName, mode: 'exercise_advice', complaint: complaint ?? '' }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(typeof payload?.error === 'string' ? payload.error : 'Voorstel ophalen mislukt.');
+  const a = payload?.advice ?? {};
+  return {
+    regressions: list(a.regressions),
+    progressions: list(a.progressions),
+    alternatives: (Array.isArray(a.alternatives) ? a.alternatives : [])
+      .map((x: Record<string, unknown>) => ({ reason: str(x?.reason), exercise: str(x?.exercise) }))
+      .filter((x: ExerciseAlternative) => x.exercise.trim()),
+  };
 }

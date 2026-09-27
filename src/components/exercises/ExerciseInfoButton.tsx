@@ -8,6 +8,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import {
   Box,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -22,6 +23,7 @@ import {
 import SwapVertRoundedIcon from '@mui/icons-material/SwapVertRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
+import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import { useNotify } from '../../context/NotifyContext';
 import { useProfile } from '../../context/ProfileContext';
 import {
@@ -29,10 +31,18 @@ import {
   getExerciseNotes,
   noteHasContent,
   saveExerciseNote,
+  suggestExerciseAdvice,
   type ExerciseAlternative,
   type ExerciseNote,
 } from '../../services/exerciseNoteService';
 import { exerciseKey } from '../../utils/exerciseKey';
+import {
+  COMPLAINT_LABELS,
+  complaintKeyOf,
+  standardAdvice,
+  standardAlternative,
+  type ComplaintKey,
+} from '../../data/exerciseProgressions';
 import { designTokens } from '../../theme/designTokens';
 
 // Eén keer per sessie de hele bibliotheek ophalen; alle knopjes lezen daaruit.
@@ -179,6 +189,145 @@ function LinesEditor({
   );
 }
 
+/** Unieke regels samenvoegen (hoofdletterongevoelig), lege weg. */
+function mergeLines(a: string[], b: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const x of [...a, ...b]) {
+    const t = x.trim();
+    if (!t || seen.has(t.toLowerCase())) continue;
+    seen.add(t.toLowerCase());
+    out.push(t);
+  }
+  return out;
+}
+function mergeAlternatives(a: ExerciseAlternative[], b: ExerciseAlternative[]): ExerciseAlternative[] {
+  const out = a.filter((x) => x.exercise.trim() || x.reason.trim());
+  for (const x of b) {
+    const i = out.findIndex((y) => y.reason.trim().toLowerCase() === x.reason.trim().toLowerCase());
+    if (i >= 0 && !out[i].exercise.trim()) out[i] = { ...out[i], exercise: x.exercise };
+    else if (i < 0) out.push(x);
+  }
+  return out;
+}
+
+/** Het standaardvoorstel van het systeem als lijst met alternatieven per klacht. */
+function standardAsNote(exerciseName: string) {
+  const std = standardAdvice(exerciseName);
+  if (!std) return null;
+  return {
+    family: std.family,
+    regressions: std.regressions,
+    progressions: std.progressions,
+    alternatives: (Object.keys(std.alternatives) as ComplaintKey[]).map((k) => ({
+      reason: COMPLAINT_LABELS[k],
+      exercise: std.alternatives[k] as string,
+    })),
+  };
+}
+
+function AlternativesList({ items }: { items: ExerciseAlternative[] }) {
+  if (items.length === 0) return null;
+  return (
+    <Box sx={{ mb: 2 }}>
+      <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 2 }}>
+        Alternatieven bij klachten
+      </Typography>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+        {items.map((a, i) => (
+          <Box key={i} sx={{ display: 'flex', gap: 1, alignItems: 'baseline' }}>
+            {a.reason && (
+              <Box
+                sx={{
+                  px: 1,
+                  py: 0.25,
+                  borderRadius: 999,
+                  typography: 'caption',
+                  fontWeight: 600,
+                  bgcolor: designTokens.tertiaryContainer,
+                  color: designTokens.onTertiaryContainer,
+                  flexShrink: 0,
+                }}
+              >
+                {a.reason}
+              </Box>
+            )}
+            <Typography variant="body2">{a.exercise}</Typography>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
+/**
+ * "Klacht van de sporter?": typ een klacht en het systeem geeft een alternatief. Eerst wat de
+ * studio zelf vastlegde, dan de ingebouwde standaard, en anders een slim voorstel (AI).
+ */
+function ComplaintLookup({ exerciseName, note }: { exerciseName: string; note: ExerciseNote | null }) {
+  const [complaint, setComplaint] = useState('');
+  const [answer, setAnswer] = useState<{ text: string; source: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const lookup = async () => {
+    const c = complaint.trim();
+    if (!c) return;
+    const key = complaintKeyOf(c);
+    const own = note?.alternatives.find(
+      (a) => a.reason.trim().toLowerCase() === c.toLowerCase() || (key && complaintKeyOf(a.reason) === key)
+    );
+    if (own) return setAnswer({ text: own.exercise, source: 'Van de studio' });
+    const std = standardAlternative(exerciseName, c);
+    if (std) return setAnswer({ text: std, source: 'Standaard van het systeem' });
+    setBusy(true);
+    try {
+      const ai = await suggestExerciseAdvice(exerciseName, c);
+      const alt = ai.alternatives[0]?.exercise;
+      setAnswer(
+        alt ? { text: alt, source: 'Slim voorstel (AI), check het even' } : { text: 'Geen voorstel gevonden.', source: '' }
+      );
+    } catch (e) {
+      setAnswer({ text: e instanceof Error ? e.message : 'Voorstel ophalen mislukt.', source: '' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Box sx={{ p: 1.5, mb: 2, borderRadius: 2, bgcolor: designTokens.cardBackgroundHigh }}>
+      <Box sx={{ display: 'flex', gap: 1 }}>
+        <TextField
+          size="small"
+          fullWidth
+          label="Klacht van de sporter?"
+          placeholder="Bijv. knie, lage rug, zwanger, achillespees"
+          value={complaint}
+          onChange={(e) => {
+            setComplaint(e.target.value);
+            setAnswer(null);
+          }}
+          onKeyDown={(e) => e.key === 'Enter' && void lookup()}
+        />
+        <Button variant="contained" disableElevation onClick={() => void lookup()} disabled={busy || !complaint.trim()}>
+          {busy ? <CircularProgress size={18} color="inherit" /> : 'Alternatief'}
+        </Button>
+      </Box>
+      {answer && (
+        <Box sx={{ mt: 1 }}>
+          <Typography variant="body2" fontWeight={600}>
+            {answer.text}
+          </Typography>
+          {answer.source && (
+            <Typography variant="caption" color="text.secondary">
+              {answer.source}
+            </Typography>
+          )}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 export function ExerciseInfoDialog({
   exerciseName,
   note,
@@ -193,12 +342,61 @@ export function ExerciseInfoDialog({
   const notify = useNotify();
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
-  const [editing, setEditing] = useState(startEditing || !noteHasContent(note));
+  const standard = standardAsNote(exerciseName);
+  const hasOwn = noteHasContent(note);
+  const [editing, setEditing] = useState(startEditing || (!hasOwn && !standard));
   const [regressions, setRegressions] = useState<string[]>(note?.regressions ?? []);
   const [progressions, setProgressions] = useState<string[]>(note?.progressions ?? []);
   const [alternatives, setAlternatives] = useState<ExerciseAlternative[]>(note?.alternatives ?? []);
   const [tip, setTip] = useState(note?.tip ?? '');
   const [busy, setBusy] = useState(false);
+  const [suggesting, setSuggesting] = useState<number | 'all' | null>(null);
+
+  const fillStandard = () => {
+    if (!standard) return;
+    setRegressions((r) => mergeLines(r, standard.regressions));
+    setProgressions((p) => mergeLines(p, standard.progressions));
+    setAlternatives((a) => mergeAlternatives(a, standard.alternatives));
+  };
+
+  const askAi = async () => {
+    setSuggesting('all');
+    try {
+      const ai = await suggestExerciseAdvice(exerciseName);
+      setRegressions((r) => mergeLines(r, ai.regressions));
+      setProgressions((p) => mergeLines(p, ai.progressions));
+      setAlternatives((a) => mergeAlternatives(a, ai.alternatives));
+      notify?.success('Voorstel toegevoegd. Pas aan wat niet klopt en sla op.');
+    } catch (e) {
+      notify?.error(e instanceof Error ? e.message : 'Voorstel ophalen mislukt');
+    } finally {
+      setSuggesting(null);
+    }
+  };
+
+  /** Klacht ingevuld maar nog geen alternatief: standaard, anders slim voorstel. */
+  const suggestFor = async (index: number, rows: ExerciseAlternative[]) => {
+    const reason = rows[index]?.reason.trim();
+    if (!reason || rows[index].exercise.trim()) return;
+    const std = standardAlternative(exerciseName, reason);
+    if (std) {
+      setAlternatives(rows.map((x, j) => (j === index ? { ...x, exercise: std } : x)));
+      return;
+    }
+    setSuggesting(index);
+    try {
+      const ai = await suggestExerciseAdvice(exerciseName, reason);
+      const alt = ai.alternatives[0]?.exercise;
+      if (alt)
+        setAlternatives((cur) =>
+          (cur.length ? cur : rows).map((x, j) => (j === index && !x.exercise.trim() ? { ...x, exercise: alt } : x))
+        );
+    } catch (e) {
+      notify?.error(e instanceof Error ? e.message : 'Voorstel ophalen mislukt');
+    } finally {
+      setSuggesting(null);
+    }
+  };
 
   const save = async () => {
     setBusy(true);
@@ -228,13 +426,19 @@ export function ExerciseInfoDialog({
     }
   };
 
-  const altRows = alternatives.length ? alternatives : [{ reason: '', exercise: '' }];
-  const view = {
-    regressions: note?.regressions ?? [],
-    progressions: note?.progressions ?? [],
-    alternatives: note?.alternatives ?? [],
-    tip: note?.tip ?? '',
+  /** Overnemen: het standaardvoorstel in de velden, zodat de trainer het kan aanpassen en bewaren. */
+  const adopt = () => {
+    if (!hasOwn) fillStandard();
+    setEditing(true);
   };
+
+  const altRows = alternatives.length ? alternatives : [{ reason: '', exercise: '' }];
+  // Wat we in de leesweergave tonen: wat de studio vastlegde, anders de standaard van het systeem.
+  const shown = hasOwn
+    ? { regressions: note!.regressions, progressions: note!.progressions, alternatives: note!.alternatives, tip: note!.tip }
+    : standard
+      ? { regressions: standard.regressions, progressions: standard.progressions, alternatives: standard.alternatives, tip: '' }
+      : null;
 
   return (
     <Dialog
@@ -248,60 +452,57 @@ export function ExerciseInfoDialog({
       <DialogTitle sx={{ pb: 0.5 }}>{exerciseName}</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Oefeningenbibliotheek · alleen zichtbaar voor trainers
+          {hasOwn
+            ? 'Oefeningenbibliotheek van de studio'
+            : standard
+              ? `Standaard van het systeem · ${standard.family}`
+              : 'Oefeningenbibliotheek'}{' '}
+          · alleen zichtbaar voor trainers
         </Typography>
 
         {!editing ? (
-          noteHasContent(note) ? (
-            <>
-              <Section title="Makkelijker (regressie)" items={view.regressions} />
-              <Section title="Zwaarder (progressie)" items={view.progressions} />
-              {view.alternatives.length > 0 && (
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 2 }}>
-                    Alternatieven
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-                    {view.alternatives.map((a, i) => (
-                      <Box key={i} sx={{ display: 'flex', gap: 1, alignItems: 'baseline' }}>
-                        {a.reason && (
-                          <Box
-                            sx={{
-                              px: 1,
-                              py: 0.25,
-                              borderRadius: 999,
-                              typography: 'caption',
-                              fontWeight: 600,
-                              bgcolor: designTokens.tertiaryContainer,
-                              color: designTokens.onTertiaryContainer,
-                              flexShrink: 0,
-                            }}
-                          >
-                            {a.reason}
-                          </Box>
-                        )}
-                        <Typography variant="body2">{a.exercise}</Typography>
-                      </Box>
-                    ))}
+          <>
+            <ComplaintLookup exerciseName={exerciseName} note={note} />
+            {shown ? (
+              <>
+                <Section title="Makkelijker (regressie)" items={shown.regressions} />
+                <Section title="Zwaarder (progressie)" items={shown.progressions} />
+                <AlternativesList items={shown.alternatives} />
+                {shown.tip && (
+                  <Box sx={{ mb: 1 }}>
+                    <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 2 }}>
+                      Coachtip
+                    </Typography>
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                      {shown.tip}
+                    </Typography>
                   </Box>
-                </Box>
-              )}
-              {view.tip && (
-                <Box sx={{ mb: 1 }}>
-                  <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 2 }}>
-                    Coachtip
-                  </Typography>
-                  <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                    {view.tip}
-                  </Typography>
-                </Box>
-              )}
-            </>
-          ) : (
-            <Typography color="text.secondary">Nog niets vastgelegd voor deze oefening.</Typography>
-          )
+                )}
+              </>
+            ) : (
+              <Typography color="text.secondary">
+                Nog niets vastgelegd, en het systeem herkent deze oefening niet. Vraag een slim voorstel of vul het zelf in.
+              </Typography>
+            )}
+          </>
         ) : (
           <>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+              {standard && (
+                <Button size="small" variant="outlined" onClick={fillStandard}>
+                  Standaard invullen
+                </Button>
+              )}
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={suggesting === 'all' ? <CircularProgress size={14} /> : <AutoAwesomeRoundedIcon />}
+                onClick={() => void askAi()}
+                disabled={suggesting !== null}
+              >
+                Slim voorstel
+              </Button>
+            </Box>
             <LinesEditor
               label="Makkelijker (regressie)"
               placeholder="Bijv. glute bridge op de grond"
@@ -318,6 +519,9 @@ export function ExerciseInfoDialog({
               <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 2 }}>
                 Alternatieven per klacht
               </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                Vul een klacht in; het systeem stelt het alternatief voor.
+              </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 {altRows.map((a, i) => (
                   <Box key={i} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
@@ -326,15 +530,32 @@ export function ExerciseInfoDialog({
                       placeholder="Klacht, bijv. rug"
                       value={a.reason}
                       onChange={(e) => setAlternatives(altRows.map((x, j) => (j === i ? { ...x, reason: e.target.value } : x)))}
+                      onBlur={() => void suggestFor(i, altRows)}
                       sx={{ width: { xs: 110, sm: 150 }, flexShrink: 0 }}
                     />
                     <TextField
                       size="small"
                       fullWidth
-                      placeholder="Wat dan, bijv. met resistance band"
+                      placeholder={suggesting === i ? 'Voorstel ophalen…' : 'Wat dan, bijv. met resistance band'}
                       value={a.exercise}
                       onChange={(e) => setAlternatives(altRows.map((x, j) => (j === i ? { ...x, exercise: e.target.value } : x)))}
                     />
+                    <Tooltip title="Voorstel van het systeem">
+                      <span>
+                        <IconButton
+                          size="small"
+                          aria-label="Voorstel voor deze klacht"
+                          disabled={!a.reason.trim() || suggesting !== null}
+                          onClick={() => {
+                            const rows = altRows.map((x, j) => (j === i ? { ...x, exercise: '' } : x));
+                            setAlternatives(rows);
+                            void suggestFor(i, rows);
+                          }}
+                        >
+                          {suggesting === i ? <CircularProgress size={16} /> : <AutoAwesomeRoundedIcon fontSize="small" />}
+                        </IconButton>
+                      </span>
+                    </Tooltip>
                     {altRows.length > 1 && (
                       <IconButton
                         size="small"
@@ -376,7 +597,7 @@ export function ExerciseInfoDialog({
                 Verwijderen
               </Button>
             )}
-            <Button onClick={() => (noteHasContent(note) ? setEditing(false) : onClose())} disabled={busy}>
+            <Button onClick={() => (hasOwn || standard ? setEditing(false) : onClose())} disabled={busy}>
               Annuleren
             </Button>
             <Button variant="contained" disableElevation onClick={() => void save()} disabled={busy}>
@@ -385,8 +606,8 @@ export function ExerciseInfoDialog({
           </>
         ) : (
           <>
-            <Button onClick={() => setEditing(true)} sx={{ mr: 'auto' }}>
-              Bewerken
+            <Button onClick={adopt} sx={{ mr: 'auto' }}>
+              {hasOwn ? 'Bewerken' : standard ? 'Overnemen en aanpassen' : 'Invullen'}
             </Button>
             <Button variant="contained" disableElevation onClick={onClose}>
               Sluiten
