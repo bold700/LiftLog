@@ -26,6 +26,7 @@ import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import { PageLayout, HeaderActions } from '../layout';
 import { ExerciseDbDemo } from '../ExerciseDbDemo';
+import { ExerciseInfoButton } from '../exercises/ExerciseInfoButton';
 import { NumberField } from '../NumberField';
 import { useNotify } from '../../context/NotifyContext';
 import { usePageTitle } from '../../context/PageTitleContext';
@@ -297,7 +298,7 @@ export function ClassSessionView({
         }}
       >
         <ExerciseDbDemo exerciseName={ex.name} variant="aside" />
-        <Box sx={{ minWidth: 0 }}>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography sx={{ fontSize: 16, fontWeight: 600, lineHeight: '22px' }}>{ex.name}</Typography>
           <Typography variant="body2" color="text.secondary">
             {ex.sets > 0 && ex.reps > 0 ? `${ex.sets} × ${ex.reps} · ` : ''}
@@ -309,6 +310,7 @@ export function ClassSessionView({
             </Typography>
           )}
         </Box>
+        <ExerciseInfoButton exerciseName={ex.name} size="medium" />
       </Box>
 
       {plan.note && exIndex === 0 && (

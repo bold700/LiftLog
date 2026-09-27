@@ -12,6 +12,7 @@ import type { Profile, Schema, SchemaExercise } from '../../types';
 import { designTokens } from '../../theme/designTokens';
 import { HeaderActions } from '../layout';
 import { ExerciseDbDemo } from '../ExerciseDbDemo';
+import { ExerciseInfoButton } from '../exercises/ExerciseInfoButton';
 import { SchemaPeriodSummary } from './SchemaPeriodSummary';
 import { audiencePill, schemaEndLabel } from './SchemaListCard';
 import { getLastSessionDateForDay, formatLastTrained } from '../../utils/schemaSessionUtils';
@@ -290,7 +291,7 @@ export function SchemaDetailView({
               return (
                 <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, bgcolor: designTokens.cardBackground, borderRadius: 3, p: 1.75 }}>
                   <ExerciseDbDemo exerciseName={ex.exerciseName} variant="thumb" />
-                  <Box sx={{ minWidth: 0 }}>
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Typography sx={{ fontSize: 15, fontWeight: 500, lineHeight: '20px' }}>{ex.exerciseName}</Typography>
                     <Typography sx={{ fontSize: 12, lineHeight: '16px', color: 'text.secondary' }}>
                       {[setsReps(ex), ex.targetWeight ? target(ex) : null, ex.restSeconds ? `${ex.restSeconds}s rust` : null].filter(Boolean).join(' · ')}
@@ -298,6 +299,7 @@ export function SchemaDetailView({
                     {ex.notes && <Typography sx={{ fontSize: 12, lineHeight: '16px', color: 'text.secondary', fontStyle: 'italic' }}>{ex.notes}</Typography>}
                     {prog && <Typography sx={{ fontSize: 11, lineHeight: '16px', color: 'text.secondary' }}>{prog}</Typography>}
                   </Box>
+                  <ExerciseInfoButton exerciseName={ex.exerciseName} />
                 </Box>
               );
             })
@@ -480,7 +482,10 @@ export function SchemaDetailView({
                     </Box>
                     <Typography sx={{ fontSize: 13, lineHeight: '18px' }}>{setsReps(ex)}</Typography>
                     <Typography sx={{ fontSize: 13, lineHeight: '18px' }}>{target(ex)}</Typography>
-                    <Typography sx={{ fontSize: 13, lineHeight: '18px' }}>{rest(ex)}</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                      <Typography sx={{ fontSize: 13, lineHeight: '18px' }}>{rest(ex)}</Typography>
+                      <ExerciseInfoButton exerciseName={ex.exerciseName} />
+                    </Box>
                   </Box>
                 );
               })
