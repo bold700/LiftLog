@@ -13,6 +13,7 @@ import {
   Box,
   Button,
   ButtonBase,
+  Chip,
   CircularProgress,
   IconButton,
   Menu,
@@ -24,6 +25,7 @@ import {
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
+import SwapHorizRoundedIcon from '@mui/icons-material/SwapHorizRounded';
 import { PageLayout, HeaderActions } from '../layout';
 import { ExerciseDbDemo } from '../ExerciseDbDemo';
 import { ExerciseInfoButton, useExerciseNotes } from '../exercises/ExerciseInfoButton';
@@ -34,7 +36,9 @@ import { getLogsForSession, getLogsForUserInOrg, saveExerciseLog } from '../../s
 import { checkExerciseAgainstLimitations, describeLimitation } from '../../utils/exerciseLimitations';
 import { designTokens } from '../../theme/designTokens';
 import { exerciseKey } from '../../utils/exerciseKey';
-import { alternativeForLimitation } from '../../utils/exerciseAlternatives';
+import { alternativeForLimitation, plannedNameOfLog } from '../../utils/exerciseAlternatives';
+import { refText } from '../../data/exerciseProgressions';
+import { SubstituteDialog } from './SubstituteDialog';
 import type { ClassPlan, ClassPlanExercise } from '../../services/classPlanService';
 import type { StudioClass } from '../../services/classService';
 import type { ExerciseLog, GroupSession, Profile } from '../../types';
@@ -86,7 +90,11 @@ export function ClassSessionView({
   const exercises: ClassPlanExercise[] = plan.exercises;
   const [exIndex, setExIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [previous, setPrevious] = useState<Record<string, ExerciseLog | null>>({});
+  // Alle logs per deelnemer, voor "vorige keer" (ook van een alternatief dat in de les gekozen wordt).
+  const [history, setHistory] = useState<Record<string, ExerciseLog[]>>({});
+  // Per deelnemer en geplande oefening: de oefening die de deelnemer in plaats daarvan doet.
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [substituteFor, setSubstituteFor] = useState<Profile | null>(null);
   const [current, setCurrent] = useState<Record<string, ExerciseLog>>({});
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [selected, setSelected] = useState<string | null>(null);
@@ -107,20 +115,24 @@ export function ClassSessionView({
         ...participants.map((p) => getLogsForUserInOrg(p.userId).catch(() => [] as ExerciseLog[])),
       ]);
       if (cancelled) return;
+      // Een log van een alternatief hoort bij de geplande oefening waarvoor het gedaan werd.
       const cur: Record<string, ExerciseLog> = {};
+      const subs: Record<string, string> = {};
       for (const log of sessionLogs) {
-        const k = rowKey(log.userId, log.exerciseName);
-        if (!cur[k] || log.date > cur[k].date) cur[k] = log;
-      }
-      const prev: Record<string, ExerciseLog | null> = {};
-      participants.forEach((p, i) => {
-        for (const ex of exercises) {
-          prev[rowKey(p.userId, ex.name)] =
-            perUser[i].find((l) => l.exerciseName === ex.name && l.sessionId !== session.id) ?? null;
+        const k = rowKey(log.userId, plannedNameOfLog(log));
+        if (!cur[k] || log.date > cur[k].date) {
+          cur[k] = log;
+          if (log.substituteFor) subs[k] = log.exerciseName;
+          else delete subs[k];
         }
+      }
+      const hist: Record<string, ExerciseLog[]> = {};
+      participants.forEach((p, i) => {
+        hist[p.userId] = perUser[i].filter((l) => l.sessionId !== session.id);
       });
       setCurrent(cur);
-      setPrevious(prev);
+      setOverrides(subs);
+      setHistory(hist);
       setLoading(false);
     })();
     return () => {
@@ -129,6 +141,11 @@ export function ClassSessionView({
   }, [session.id, participants, exercises]);
 
   const ex = exercises[exIndex];
+  /** Welke oefening doet deze deelnemer nu: de geplande, of het gekozen alternatief. */
+  const doingOf = (userId: string) => overrides[rowKey(userId, ex.name)] ?? ex.name;
+  /** Laatste log van deze deelnemer op deze oefening, buiten deze les (logs staan nieuwste eerst). */
+  const previousOf = (userId: string, name: string) =>
+    history[userId]?.find((l) => exerciseKey(l.exerciseName) === exerciseKey(name)) ?? null;
   const loggedCount = useCallback(
     (e: ClassPlanExercise) => participants.filter((p) => current[rowKey(p.userId, e.name)]).length,
     [participants, current]
@@ -138,8 +155,10 @@ export function ClassSessionView({
   const draftOf = (userId: string): Draft => {
     const k = rowKey(userId, ex.name);
     if (drafts[k]) return drafts[k];
-    const c = current[k];
-    const pr = previous[k];
+    const doing = doingOf(userId);
+    // Een log die nog onder een andere oefening staat, telt niet mee voor de vakjes.
+    const c = current[k]?.exerciseName === doing ? current[k] : undefined;
+    const pr = previousOf(userId, doing);
     return {
       weight: c?.weight != null ? String(c.weight) : pr?.weight != null ? String(pr.weight) : '',
       reps: c?.reps != null ? String(c.reps) : ex.reps > 0 ? String(ex.reps) : '',
@@ -164,7 +183,8 @@ export function ClassSessionView({
         userId: p.userId,
         loggedBy: currentUserId,
         trainerId: p.trainerId ?? null,
-        exerciseName: ex.name,
+        exerciseName: doingOf(p.userId),
+        substituteFor: overrides[k] ? ex.name : null,
         exerciseId: null,
         weight: num(d.weight),
         sets: num(d.sets) ?? (ex.sets || null),
@@ -190,6 +210,25 @@ export function ClassSessionView({
     } finally {
       setSavingKey(null);
     }
+  };
+
+  /** Alternatief kiezen (of terug naar de geplande oefening met null). */
+  const chooseSubstitute = (p: Profile, name: string | null) => {
+    const k = rowKey(p.userId, ex.name);
+    setOverrides((o) => {
+      const copy = { ...o };
+      if (name) copy[k] = name;
+      else delete copy[k];
+      return copy;
+    });
+    // Het gewicht van de oude oefening past niet meer: opnieuw invullen vanaf vorige keer.
+    setDrafts((all) => {
+      const copy = { ...all };
+      delete copy[k];
+      return copy;
+    });
+    setSelected(p.userId);
+    setSubstituteFor(null);
   };
 
   const totalLogged = useMemo(() => Object.keys(current).length, [current]);
@@ -354,7 +393,11 @@ export function ClassSessionView({
             const k = rowKey(p.userId, ex.name);
             const logged = !!current[k];
             const isSel = selected === p.userId;
-            const prevLog = previous[k];
+            const doing = doingOf(p.userId);
+            const swapped = doing !== ex.name;
+            // Opgeslagen onder een andere oefening dan nu gekozen: nog een keer ✓ om bij te werken.
+            const stale = logged && current[k].exerciseName !== doing;
+            const prevLog = previousOf(p.userId, doing);
             const prevDate = prevLog?.date
               ? new Date(prevLog.date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })
               : null;
@@ -365,6 +408,32 @@ export function ClassSessionView({
                 ? `gelogd${prevDate ? ` ${prevDate}` : ''}`
                 : null;
             const check = checkExerciseAgainstLimitations(ex.name, p.limitations);
+            const swapButton = (
+              <Button
+                size="small"
+                startIcon={<SwapHorizRoundedIcon fontSize="small" />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSubstituteFor(p);
+                }}
+                sx={{ px: 1, minWidth: 0, color: 'text.secondary' }}
+              >
+                Andere oefening
+              </Button>
+            );
+            const swapChip = swapped ? (
+              <Chip
+                size="small"
+                icon={<SwapHorizRoundedIcon />}
+                label={`Doet: ${doing}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSubstituteFor(p);
+                }}
+                onDelete={() => chooseSubstitute(p, null)}
+                sx={{ mt: 0.5, maxWidth: '100%', bgcolor: designTokens.cardBackgroundHigh }}
+              />
+            ) : null;
             const d = draftOf(p.userId);
             const saving = savingKey === k;
             const doneButton = (
@@ -378,9 +447,9 @@ export function ClassSessionView({
                 sx={{
                   width: 36,
                   height: 36,
-                  bgcolor: logged ? designTokens.primary : designTokens.cardBackgroundHigh,
-                  color: logged ? designTokens.onPrimary : 'text.secondary',
-                  '&:hover': { bgcolor: logged ? designTokens.primary : designTokens.secondaryContainer },
+                  bgcolor: logged && !stale ? designTokens.primary : designTokens.cardBackgroundHigh,
+                  color: logged && !stale ? designTokens.onPrimary : 'text.secondary',
+                  '&:hover': { bgcolor: logged && !stale ? designTokens.primary : designTokens.secondaryContainer },
                 }}
               >
                 {saving ? <CircularProgress size={16} color="inherit" /> : <CheckRoundedIcon fontSize="small" />}
@@ -428,7 +497,7 @@ export function ClassSessionView({
                   {check.hits
                     .map((h) => {
                       const alt = alternativeForLimitation(ex.name, h, notes?.get(exerciseKey(ex.name)) ?? null);
-                      return `${describeLimitation(h)}${alt ? ` → ${alt}` : ''}`;
+                      return `${describeLimitation(h)}${alt ? ` → ${refText(alt)}` : ''}`;
                     })
                     .join('; ')}
                 </Typography>
@@ -479,10 +548,11 @@ export function ClassSessionView({
                         {nameOf(p)}
                       </Typography>
                       {warning}
+                      {swapChip ?? swapButton}
                     </Box>
                   </Box>
                   <Typography variant="body2" color="text.secondary">
-                    {prevText ?? 'Eerste keer'}
+                    {prevText ?? (swapped ? 'Eerste keer deze oefening' : 'Eerste keer')}
                   </Typography>
                   {fields}
                   {doneButton}
@@ -502,23 +572,41 @@ export function ClassSessionView({
                       {nameOf(p)}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" component="div">
-                      {logged
+                      {logged && !stale
                         ? `Nu ${describeLog(current[k]) ?? 'gelogd'}`
                         : prevText
                           ? `Vorige keer ${prevText}`
                           : 'Eerste keer deze oefening'}
                     </Typography>
                     {warning}
+                    {swapChip}
                   </Box>
                   {doneButton}
                 </Box>
                 {isSel && (
-                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 1, mt: 1.5 }}>{fields}</Box>
+                  <>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 1, mt: 1.5 }}>
+                      {fields}
+                    </Box>
+                    {!swapped && <Box sx={{ mt: 1 }}>{swapButton}</Box>}
+                  </>
                 )}
               </Box>
             );
           })}
         </Box>
+      )}
+
+      {substituteFor && (
+        <SubstituteDialog
+          participantName={nameOf(substituteFor)}
+          planned={ex.name}
+          current={overrides[rowKey(substituteFor.userId, ex.name)] ?? null}
+          limitations={substituteFor.limitations ?? []}
+          note={notes?.get(exerciseKey(ex.name)) ?? null}
+          onPick={(name) => chooseSubstitute(substituteFor, name)}
+          onClose={() => setSubstituteFor(null)}
+        />
       )}
 
       <Box sx={{ display: { xs: 'flex', md: 'none' }, flexDirection: 'column', gap: 1, mt: 3, mb: 12 }}>

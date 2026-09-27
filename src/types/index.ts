@@ -50,6 +50,8 @@ export interface ExerciseLog {
   schemaDayIndex?: number | null;
   /** Koppeling aan een groepssessie (optioneel). */
   sessionId?: string | null;
+  /** In een les: de geplande oefening waarvoor de sporter deze oefening deed (alternatief). */
+  substituteFor?: string | null;
   createdAt: string;
 }
 
@@ -143,21 +145,9 @@ export interface SchemaDay {
 
 export type Formule7MoverType = 'Non' | 'Low' | 'High';
 
-export type Formule7Goal =
-  | 'G'
-  | 'U'
-  | 'S'
-  | 'GU'
-  | 'GS'
-  | 'US'
-  | 'GUS';
+export type Formule7Goal = 'G' | 'U' | 'S' | 'GU' | 'GS' | 'US' | 'GUS';
 
-export type Formule7Organisation =
-  | 'FIETSEN'
-  | 'LOPEN'
-  | 'ROEIEN'
-  | 'CROSSTRAINEN'
-  | 'ANDERS';
+export type Formule7Organisation = 'FIETSEN' | 'LOPEN' | 'ROEIEN' | 'CROSSTRAINEN' | 'ANDERS';
 
 export interface Formule7Warmup {
   organisation: Formule7Organisation | null;
@@ -719,4 +709,3 @@ export interface Schema {
    */
   formule7AssistMode?: 'manual' | 'ai';
 }
-
