@@ -43,6 +43,7 @@ export const en: Messages = {
       members: 'Members',
       classTypes: 'Class types',
       classPlanning: 'Class planning',
+      exercises: 'Exercises',
       waitlists: 'Waitlists',
       subscriptions: 'Subscriptions',
       branding: 'Branding',

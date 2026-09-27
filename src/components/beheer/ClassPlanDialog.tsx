@@ -29,6 +29,7 @@ import type { StudioClass } from '../../services/classService';
 import { orderForClass } from '../../utils/classPlanSuggest';
 import { designTokens } from '../../theme/designTokens';
 import { ExerciseDbDemo } from '../ExerciseDbDemo';
+import { ExerciseInfoButton } from '../exercises/ExerciseInfoButton';
 import type { Schema } from '../../types';
 
 const dayOf = (date: string) =>
@@ -48,7 +49,7 @@ export function ExerciseLines({ exercises }: { exercises: ClassPlanExercise[] })
           sx={{ display: 'flex', alignItems: 'center', gap: 1.5, bgcolor: designTokens.cardBackground, borderRadius: 3, p: 1.25 }}
         >
           <ExerciseDbDemo exerciseName={e.name} variant="thumb" />
-          <Box sx={{ minWidth: 0 }}>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
             <Typography sx={{ fontSize: 15, fontWeight: 500, lineHeight: '20px' }}>{e.name}</Typography>
             {e.sets > 0 && e.reps > 0 && (
               <Typography sx={{ fontSize: 12, lineHeight: '16px', color: 'text.secondary' }}>
@@ -61,6 +62,7 @@ export function ExerciseLines({ exercises }: { exercises: ClassPlanExercise[] })
               </Typography>
             )}
           </Box>
+          <ExerciseInfoButton exerciseName={e.name} />
         </Box>
       ))}
     </Box>

@@ -476,6 +476,20 @@ await t('trainer vraagt de logs van een les op (verder waar de les was) → mag'
 await t('sporter vraagt de logs van een ander lid op → geweigerd', false, getDocs(query(collection(as('sporter2'), 'logs'), where('orgId', '==', 'vanas'), where('userId', '==', 'sporter3'))));
 await t('trainer studio B vraagt de logs van een lid in studio A op → geweigerd', false, getDocs(query(collection(as('trainerB'), 'logs'), where('orgId', '==', 'vanas'), where('userId', '==', 'sporter3'))));
 
+console.log('Oefeningenbibliotheek');
+const noot = (extra = {}) => ({ orgId: 'vanas', exerciseName: 'Hip Thrust', key: 'hip-thrust', regressions: ['Glute bridge'], progressions: ['Single leg hip thrust'], alternatives: [{ reason: 'Zwanger', exercise: 'Met resistance band' }], tip: '', ...extra });
+await t('trainer legt een oefening vast → mag', true, setDoc(doc(as('trainer1'), 'exerciseNotes/vanas__hip-thrust'), noot()));
+await t('beheerder leest de bibliotheek van de studio → mag', true, getDocs(query(collection(as('admin1'), 'exerciseNotes'), where('orgId', '==', 'vanas'))));
+await t('sporter leest een oefening uit de bibliotheek → geweigerd', false, getDoc(doc(as('sporter2'), 'exerciseNotes/vanas__hip-thrust')));
+await t('sporter vraagt de bibliotheek op → geweigerd', false, getDocs(query(collection(as('sporter2'), 'exerciseNotes'), where('orgId', '==', 'vanas'))));
+await t('sporter legt een oefening vast → geweigerd', false, setDoc(doc(as('sporter2'), 'exerciseNotes/vanas__squat'), noot({ exerciseName: 'Squat', key: 'squat' })));
+await t('trainer studio B leest de bibliotheek van studio A → geweigerd', false, getDoc(doc(as('trainerB'), 'exerciseNotes/vanas__hip-thrust')));
+await t('trainer studio B schrijft in de bibliotheek van studio A → geweigerd', false, setDoc(doc(as('trainerB'), 'exerciseNotes/vanas__deadlift'), noot({ exerciseName: 'Deadlift', key: 'deadlift' })));
+await t('oefening onder het id van een andere studio → geweigerd', false, setDoc(doc(as('trainer1'), 'exerciseNotes/studiob__squat'), noot({ exerciseName: 'Squat', key: 'squat' })));
+await t('oefening zonder naam → geweigerd', false, setDoc(doc(as('trainer1'), 'exerciseNotes/vanas__leeg'), noot({ exerciseName: '' })));
+await t('trainer werkt een oefening bij → mag', true, updateDoc(doc(as('trainer1'), 'exerciseNotes/vanas__hip-thrust'), { tip: 'Kin naar de borst' }));
+await t('trainer haalt een oefening weg → mag', true, deleteDoc(doc(as('trainer1'), 'exerciseNotes/vanas__hip-thrust')));
+
 await env.cleanup();
 console.log(`\n${passed} geslaagd, ${failed} mislukt`);
 process.exit(failed ? 1 : 0);

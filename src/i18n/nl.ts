@@ -45,6 +45,7 @@ export const nl = {
       members: 'Leden',
       classTypes: 'Lessoorten',
       classPlanning: 'Lesplanning',
+      exercises: 'Oefeningen',
       waitlists: 'Wachtlijsten',
       subscriptions: 'Abonnementen',
       branding: 'Huisstijl',

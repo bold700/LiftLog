@@ -535,6 +535,19 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Oefeningenbibliotheek (Beheer → Oefeningen): per oefening regressie, progressie en
+    // alternatieven per klacht, als naslag voor de trainer. Alleen staf van de studio; sporters
+    // zien dit niet. Document-id: `{orgId}__{oefening}`.
+    match /exerciseNotes/{noteId} {
+      allow read: if isStaffInSameOrg();
+      allow create: if isStaffInSameOrgForNew()
+        && request.resource.data.exerciseName is string
+        && request.resource.data.exerciseName.size() > 0
+        && noteId.matches(request.resource.data.orgId + '__.+');
+      allow update: if isStaffInSameOrg() && writesMyOrg() && noteId.matches(request.resource.data.orgId + '__.+');
+      allow delete: if isStaffInSameOrg();
+    }
+
     // Lesplanning (Beheer → Lesplanning): welke training er in een les gegeven wordt, met een
     // notitie voor de trainer. Alleen voor trainers en beheerders van de studio: sporters mogen
     // vooraf niet zien welke training er komt (dan zeggen ze af). Het document-id is het les-id.
