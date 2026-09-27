@@ -28,26 +28,40 @@ import {
 import type { StudioClass } from '../../services/classService';
 import { orderForClass } from '../../utils/classPlanSuggest';
 import { designTokens } from '../../theme/designTokens';
+import { ExerciseDbDemo } from '../ExerciseDbDemo';
 import type { Schema } from '../../types';
 
 const dayOf = (date: string) =>
   new Date(`${date}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
 
-/** Oefeningen van een planning als korte regels: "Squat 3×10 · rustig zakken". */
+/**
+ * Oefeningen van een planning als dezelfde kaarten als op de workoutdag (plaatje, naam, sets × reps,
+ * aanwijzing), zodat de trainer in de les precies ziet wat er in de workout staat.
+ */
 export function ExerciseLines({ exercises }: { exercises: ClassPlanExercise[] }) {
   if (exercises.length === 0) return null;
   return (
-    <Box component="ol" sx={{ m: 0, pl: 2.5, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
       {exercises.map((e, i) => (
-        <Typography component="li" variant="body2" key={`${e.name}-${i}`}>
-          {e.name}
-          {e.sets > 0 && e.reps > 0 ? ` ${e.sets}×${e.reps}` : ''}
-          {e.notes ? (
-            <Typography component="span" variant="body2" color="text.secondary">
-              {` · ${e.notes}`}
-            </Typography>
-          ) : null}
-        </Typography>
+        <Box
+          key={`${e.name}-${i}`}
+          sx={{ display: 'flex', alignItems: 'center', gap: 1.5, bgcolor: designTokens.cardBackground, borderRadius: 3, p: 1.25 }}
+        >
+          <ExerciseDbDemo exerciseName={e.name} variant="thumb" />
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontSize: 15, fontWeight: 500, lineHeight: '20px' }}>{e.name}</Typography>
+            {e.sets > 0 && e.reps > 0 && (
+              <Typography sx={{ fontSize: 12, lineHeight: '16px', color: 'text.secondary' }}>
+                {e.sets} × {e.reps}
+              </Typography>
+            )}
+            {e.notes && (
+              <Typography sx={{ fontSize: 12, lineHeight: '16px', color: 'text.secondary', fontStyle: 'italic' }}>
+                {e.notes}
+              </Typography>
+            )}
+          </Box>
+        </Box>
       ))}
     </Box>
   );
@@ -173,7 +187,7 @@ export function ClassPlanDialog({
         )}
 
         {exercises.length > 0 && (
-          <Box sx={{ mt: 2, p: 1.5, borderRadius: 2, bgcolor: designTokens.cardBackgroundHigh }}>
+          <Box sx={{ mt: 2 }}>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
               {unreadable ? `${plan?.schemaName ?? 'Workout'} (bewaard bij het plannen)` : 'Oefeningen'}
             </Typography>

@@ -88,6 +88,26 @@ export async function getLogsForUser(userId: string): Promise<ExerciseLog[]> {
   return snap.docs.map((d) => toLog(d.data(), d.id)).sort((a, b) => (b.date > a.date ? 1 : -1));
 }
 
+/**
+ * Alle logs van een persoon binnen de actieve studio (nieuwste eerst). Voor staf: de regels laten een
+ * trainer de logs van een lid alleen zien binnen de eigen studio, en een lijstvraag moet dat al in de
+ * vraag zelf vastleggen. Oude logs zonder studio komen met de gewone vraag mee als die lukt.
+ */
+export async function getLogsForUserInOrg(userId: string): Promise<ExerciseLog[]> {
+  if (!isFirebaseConfigured() || !db) return [];
+  const [inOrg, legacy] = await Promise.allSettled([
+    getDocs(query(collection(db, COLLECTION), where('orgId', '==', requireOrgId()), where('userId', '==', userId))),
+    getDocs(query(collection(db, COLLECTION), where('userId', '==', userId))),
+  ]);
+  const byId = new Map<string, ExerciseLog>();
+  for (const r of [inOrg, legacy]) {
+    if (r.status !== 'fulfilled') continue;
+    for (const d of r.value.docs) byId.set(d.id, toLog(d.data(), d.id));
+  }
+  if (byId.size === 0 && inOrg.status === 'rejected' && legacy.status === 'rejected') throw inOrg.reason;
+  return Array.from(byId.values()).sort((a, b) => (b.date > a.date ? 1 : -1));
+}
+
 /** Alle logs van een persoon voor één oefening (nieuwste eerst). */
 export async function getLogsForUserExercise(userId: string, exerciseName: string): Promise<ExerciseLog[]> {
   if (!isFirebaseConfigured() || !db) return [];
