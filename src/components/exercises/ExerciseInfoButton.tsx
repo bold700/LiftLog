@@ -6,6 +6,7 @@
  */
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import {
+  Autocomplete,
   Box,
   Button,
   CircularProgress,
@@ -260,6 +261,16 @@ function AlternativesList({ items }: { items: ExerciseAlternative[] }) {
   );
 }
 
+/** Klachten om uit te kiezen: de vaste lijst plus wat de studio zelf gebruikte. Typen mag ook. */
+function complaintOptions(note: ExerciseNote | null): string[] {
+  const out: string[] = Object.values(COMPLAINT_LABELS);
+  for (const a of note?.alternatives ?? []) {
+    const r = a.reason.trim();
+    if (r && !out.some((x) => x.toLowerCase() === r.toLowerCase())) out.push(r);
+  }
+  return out;
+}
+
 /**
  * "Klacht van de sporter?": typ een klacht en het systeem geeft een alternatief. Eerst wat de
  * studio zelf vastlegde, dan de ingebouwde standaard, en anders een slim voorstel (AI).
@@ -269,8 +280,8 @@ function ComplaintLookup({ exerciseName, note }: { exerciseName: string; note: E
   const [answer, setAnswer] = useState<{ text: string; source: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const lookup = async () => {
-    const c = complaint.trim();
+  const lookup = async (value: string = complaint) => {
+    const c = value.trim();
     if (!c) return;
     const key = complaintKeyOf(c);
     const own = note?.alternatives.find(
@@ -296,17 +307,25 @@ function ComplaintLookup({ exerciseName, note }: { exerciseName: string; note: E
   return (
     <Box sx={{ p: 1.5, mb: 2, borderRadius: 2, bgcolor: designTokens.cardBackgroundHigh }}>
       <Box sx={{ display: 'flex', gap: 1 }}>
-        <TextField
-          size="small"
+        <Autocomplete
+          freeSolo
           fullWidth
-          label="Klacht van de sporter?"
-          placeholder="Bijv. knie, lage rug, zwanger, achillespees"
-          value={complaint}
-          onChange={(e) => {
-            setComplaint(e.target.value);
-            setAnswer(null);
+          size="small"
+          options={complaintOptions(note)}
+          inputValue={complaint}
+          onInputChange={(_, v, reason) => {
+            setComplaint(v);
+            if (reason === 'input' || reason === 'clear') setAnswer(null);
           }}
-          onKeyDown={(e) => e.key === 'Enter' && void lookup()}
+          onChange={(_, v) => {
+            if (typeof v === 'string' && v.trim()) {
+              setComplaint(v);
+              void lookup(v);
+            }
+          }}
+          renderInput={(params) => (
+            <TextField {...params} label="Klacht van de sporter?" placeholder="Kies of typ, bijv. knie of achillespees" />
+          )}
         />
         <Button variant="contained" disableElevation onClick={() => void lookup()} disabled={busy || !complaint.trim()}>
           {busy ? <CircularProgress size={18} color="inherit" /> : 'Alternatief'}
@@ -525,13 +544,21 @@ export function ExerciseInfoDialog({
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 {altRows.map((a, i) => (
                   <Box key={i} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                    <TextField
+                    <Autocomplete
+                      freeSolo
                       size="small"
-                      placeholder="Klacht, bijv. rug"
-                      value={a.reason}
-                      onChange={(e) => setAlternatives(altRows.map((x, j) => (j === i ? { ...x, reason: e.target.value } : x)))}
+                      options={complaintOptions(note)}
+                      inputValue={a.reason}
+                      onInputChange={(_, v) => setAlternatives(altRows.map((x, j) => (j === i ? { ...x, reason: v } : x)))}
+                      onChange={(_, v) => {
+                        if (typeof v !== 'string' || !v.trim()) return;
+                        const rows = altRows.map((x, j) => (j === i ? { ...x, reason: v } : x));
+                        setAlternatives(rows);
+                        void suggestFor(i, rows);
+                      }}
                       onBlur={() => void suggestFor(i, altRows)}
-                      sx={{ width: { xs: 110, sm: 150 }, flexShrink: 0 }}
+                      sx={{ width: { xs: 130, sm: 170 }, flexShrink: 0 }}
+                      renderInput={(params) => <TextField {...params} placeholder="Klacht" />}
                     />
                     <TextField
                       size="small"
