@@ -682,7 +682,7 @@ export default async function handler(req, res) {
         return json(res, 403, { error: 'Alleen voor trainers.' });
       }
       if (!(await enforceRateLimit(user.db, res, user.uid, 'exercise-advice', ADVICE_LIMIT_PER_DAY, DAY_MS))) return;
-      const parsed = await callOpenAI(EXERCISE_ADVICE_SYSTEM, buildExerciseAdvicePrompt(prompt, req.body?.complaint), 700);
+      const parsed = await callOpenAI(EXERCISE_ADVICE_SYSTEM, buildExerciseAdvicePrompt(prompt, req.body?.complaint, exerciseCatalog.names), 900);
       return json(res, 200, { advice: normalizeExerciseAdvice(parsed) });
     }
 

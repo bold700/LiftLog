@@ -2,16 +2,7 @@
  * Cloud-logs per persoon per oefening. Firestore-collectie `logs`.
  * Basis voor groepsles-loggen en per-klant "vorige keer" / progressie.
  */
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  doc,
-  setDoc,
-  deleteDoc,
-  serverTimestamp,
-} from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
 import type { ExerciseLog } from '../types';
@@ -40,8 +31,13 @@ function toLog(data: Record<string, unknown>, id: string): ExerciseLog {
     date: typeof data.date === 'string' ? data.date : new Date().toISOString(),
     schemaId: str(data.schemaId),
     schemaDayIndex:
-      typeof data.schemaDayIndex === 'number' ? data.schemaDayIndex : data.schemaDayIndex != null ? Number(data.schemaDayIndex) : null,
+      typeof data.schemaDayIndex === 'number'
+        ? data.schemaDayIndex
+        : data.schemaDayIndex != null
+          ? Number(data.schemaDayIndex)
+          : null,
     sessionId: str(data.sessionId),
+    substituteFor: str(data.substituteFor),
     createdAt: typeof data.createdAt === 'string' ? data.createdAt : new Date().toISOString(),
   };
 }
@@ -112,11 +108,7 @@ export async function getLogsForUserInOrg(userId: string): Promise<ExerciseLog[]
 export async function getLogsForUserExercise(userId: string, exerciseName: string): Promise<ExerciseLog[]> {
   if (!isFirebaseConfigured() || !db) return [];
   // Alleen equality-filters → geen composite index nodig; sorteren doen we client-side.
-  const q = query(
-    collection(db, COLLECTION),
-    where('userId', '==', userId),
-    where('exerciseName', '==', exerciseName)
-  );
+  const q = query(collection(db, COLLECTION), where('userId', '==', userId), where('exerciseName', '==', exerciseName));
   const snap = await getDocs(q);
   return snap.docs.map((d) => toLog(d.data(), d.id)).sort((a, b) => (b.date > a.date ? 1 : -1));
 }

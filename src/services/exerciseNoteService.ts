@@ -7,24 +7,24 @@ import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, where } fro
 import { auth, db, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
 import { exerciseKey } from '../utils/exerciseKey';
+import type { ExerciseRef } from '../data/exerciseProgressions';
 import { apiUrl } from '../utils/apiOrigin';
 import { authHeaders } from '../utils/authHeaders';
 
 const COLLECTION = 'exerciseNotes';
 
-export interface ExerciseAlternative {
+export interface ExerciseAlternative extends ExerciseRef {
   /** Voor wie of waarom, bijv. "Rug", "Knie", "Zwanger". */
   reason: string;
-  /** Wat die persoon in plaats daarvan doet. */
-  exercise: string;
 }
 
 export interface ExerciseNote {
   orgId: string;
   exerciseName: string;
   key: string;
-  regressions: string[];
-  progressions: string[];
+  /** Oefeningen uit de database (met gifje), elk met een korte aanwijzing. */
+  regressions: ExerciseRef[];
+  progressions: ExerciseRef[];
   alternatives: ExerciseAlternative[];
   tip: string;
   updatedBy: string | null;
@@ -32,17 +32,28 @@ export interface ExerciseNote {
 }
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
-const list = (v: unknown) => (Array.isArray(v) ? v.map(str).filter((x) => x.trim()) : []);
+
+/** Een regel uit Firestore of van de AI: een object { exercise, note } of (oud) losse tekst. */
+function toRef(v: unknown): ExerciseRef {
+  if (typeof v === 'string') return { exercise: v.trim(), note: '' };
+  const o = (v ?? {}) as Record<string, unknown>;
+  return { exercise: str(o.exercise).trim(), note: str(o.note).trim() };
+}
+const hasRef = (r: ExerciseRef) => !!(r.exercise || r.note);
+export const refList = (v: unknown): ExerciseRef[] => (Array.isArray(v) ? v.map(toRef).filter(hasRef) : []);
+export const altList = (v: unknown): ExerciseAlternative[] =>
+  (Array.isArray(v) ? (v as Record<string, unknown>[]) : [])
+    .map((a) => ({ reason: str(a?.reason).trim(), ...toRef(a) }))
+    .filter(hasRef);
 
 function toNote(d: Record<string, unknown>): ExerciseNote {
-  const alts = Array.isArray(d.alternatives) ? (d.alternatives as Record<string, unknown>[]) : [];
   return {
     orgId: str(d.orgId),
     exerciseName: str(d.exerciseName),
     key: str(d.key),
-    regressions: list(d.regressions),
-    progressions: list(d.progressions),
-    alternatives: alts.map((a) => ({ reason: str(a.reason), exercise: str(a.exercise) })).filter((a) => a.exercise.trim()),
+    regressions: refList(d.regressions),
+    progressions: refList(d.progressions),
+    alternatives: altList(d.alternatives),
     tip: str(d.tip),
     updatedBy: d.updatedBy ? str(d.updatedBy) : null,
     updatedAt: str(d.updatedAt),
@@ -74,16 +85,13 @@ export async function saveExerciseNote(
 ): Promise<ExerciseNote> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
   const orgId = requireOrgId();
-  const clean = (xs: string[]) => xs.map((x) => x.trim()).filter(Boolean);
   const note: ExerciseNote = {
     orgId,
     exerciseName: input.exerciseName.trim(),
     key: exerciseKey(input.exerciseName),
-    regressions: clean(input.regressions),
-    progressions: clean(input.progressions),
-    alternatives: input.alternatives
-      .map((a) => ({ reason: a.reason.trim(), exercise: a.exercise.trim() }))
-      .filter((a) => a.exercise),
+    regressions: refList(input.regressions),
+    progressions: refList(input.progressions),
+    alternatives: altList(input.alternatives),
     tip: input.tip.trim(),
     updatedBy: auth?.currentUser?.uid ?? null,
     updatedAt: new Date().toISOString(),
@@ -113,11 +121,5 @@ export async function suggestExerciseAdvice(
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(typeof payload?.error === 'string' ? payload.error : 'Voorstel ophalen mislukt.');
   const a = payload?.advice ?? {};
-  return {
-    regressions: list(a.regressions),
-    progressions: list(a.progressions),
-    alternatives: (Array.isArray(a.alternatives) ? a.alternatives : [])
-      .map((x: Record<string, unknown>) => ({ reason: str(x?.reason), exercise: str(x?.exercise) }))
-      .filter((x: ExerciseAlternative) => x.exercise.trim()),
-  };
+  return { regressions: refList(a.regressions), progressions: refList(a.progressions), alternatives: altList(a.alternatives) };
 }
