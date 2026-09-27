@@ -487,6 +487,32 @@ describe('afmelden', () => {
     expect(bookingOf('sporter3').status).toBe('booked');
   });
 
+  it('de trainer zet iemand van de wachtlijst er extra bij, ook als de les vol zit', async () => {
+    await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    await post({ action: 'book', classId: 'c1' }, 'sporter2');
+
+    const weiger = await post({ action: 'book', classId: 'c1', userId: 'sporter2', extra: true }, 'sporter1');
+    expect(weiger.statusCode).toBe(403);
+
+    const res = await post({ action: 'book', classId: 'c1', userId: 'sporter2', extra: true }, 'trainer1');
+    expect(res.body.status).toBe('booked');
+    expect(bookingOf('sporter2')).toMatchObject({ status: 'booked', creditsSpent: 1 });
+    expect(store['classes/c1'].bookedCount).toBe(2);
+    expect(store['classes/c1'].waitlistCount).toBe(0);
+    expect(store['creditAccounts/vanas__sporter2'].balance).toBe(2);
+  });
+
+  it('extra erbij zetten gaat ook voor een plek die voor een ander wordt vastgehouden', async () => {
+    const { eerste } = await fullWithTwoWaiting();
+    store['creditAccounts/vanas__sporter2'].balance = 0;
+    await post({ action: 'cancel', bookingId: eerste.body.bookingId }, 'sporter1');
+
+    const res = await post({ action: 'book', classId: 'c1', userId: 'sporter3', extra: true }, 'trainer1');
+    expect(res.body.status).toBe('booked');
+    // De vastgehouden plek blijft voor de eerste op de wachtlijst.
+    expect(store['classes/c1'].holdUserId).toBe('sporter2');
+  });
+
   it('staf op de wachtlijst schuift gratis door', async () => {
     const eerste = await post({ action: 'book', classId: 'c1' }, 'sporter1');
     await post({ action: 'book', classId: 'c1' }, 'trainer1');

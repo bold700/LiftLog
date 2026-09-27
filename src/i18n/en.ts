@@ -42,6 +42,7 @@ export const en: Messages = {
     tabs: {
       members: 'Members',
       classTypes: 'Class types',
+      waitlists: 'Waitlists',
       subscriptions: 'Subscriptions',
       branding: 'Branding',
       settings: 'Settings',
