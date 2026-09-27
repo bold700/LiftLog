@@ -225,6 +225,9 @@ export function ClassSessionView({
         </Box>
         {` › ${weekday} ${cls.startTime} ${cls.title} › Sessie`}
       </Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, mt: -1 }}>
+        Wat je hier opslaat, komt in de logs van de sporter (Inzichten) en is volgende keer "vorige keer".
+      </Typography>
 
       {/* Oefening wisselen: pijltjes of tikken voor de lijst. */}
       <Box
@@ -345,7 +348,16 @@ export function ClassSessionView({
             const k = rowKey(p.userId, ex.name);
             const logged = !!current[k];
             const isSel = selected === p.userId;
-            const prev = describeLog(previous[k]);
+            const prevLog = previous[k];
+            const prevDate = prevLog?.date
+              ? new Date(prevLog.date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })
+              : null;
+            const prev = describeLog(prevLog);
+            const prevText = prev
+              ? `${prev}${prevDate ? ` · ${prevDate}` : ''}`
+              : prevLog
+                ? `gelogd${prevDate ? ` ${prevDate}` : ''}`
+                : null;
             const check = checkExerciseAgainstLimitations(ex.name, p.limitations);
             const d = draftOf(p.userId);
             const saving = savingKey === k;
@@ -459,7 +471,7 @@ export function ClassSessionView({
                     </Box>
                   </Box>
                   <Typography variant="body2" color="text.secondary">
-                    {prev ?? '—'}
+                    {prevText ?? 'Eerste keer'}
                   </Typography>
                   {fields}
                   {doneButton}
@@ -481,9 +493,9 @@ export function ClassSessionView({
                     <Typography variant="caption" color="text.secondary" component="div">
                       {logged
                         ? `Nu ${describeLog(current[k]) ?? 'gelogd'}`
-                        : prev
-                          ? `Vorige keer ${prev}`
-                          : 'Nog niet eerder gelogd'}
+                        : prevText
+                          ? `Vorige keer ${prevText}`
+                          : 'Eerste keer deze oefening'}
                     </Typography>
                     {warning}
                   </Box>
