@@ -60,7 +60,10 @@ import { WeekTimeGrid } from './lessen/WeekTimeGrid';
 import { ClassPlanDialog, ExerciseLines } from './beheer/ClassPlanDialog';
 import { getClassPlan, type ClassPlan } from '../services/classPlanService';
 import { getPlannableWorkouts } from '../services/workoutFirestore';
-import type { Profile, Schema, SessionKind, StandingBooking } from '../types';
+import { createGroupSession } from '../services/groupSessionService';
+import { ClassSessionView } from './groupSession/ClassSessionView';
+import { useShowBackButton } from '../context/TopBarBackContext';
+import type { GroupSession, Profile, Schema, SessionKind, StandingBooking } from '../types';
 
 /** Zonder eigen instelling geldt dit aantal uur, zoals de server standaard hanteert. */
 const DEFAULT_FREE_CANCEL_HOURS = 12;
@@ -159,6 +162,46 @@ export function LessenPage() {
   const [confirmClass, setConfirmClass] = useState<StudioClass | null>(null);
   const [cancelConfirmClass, setCancelConfirmClass] = useState<StudioClass | null>(null);
   const [participantsClass, setParticipantsClass] = useState<StudioClass | null>(null);
+  // Les geven: het groepsles-scherm met de ingeschreven sporters (Figma "Group session").
+  const [live, setLive] = useState<{ cls: StudioClass; plan: ClassPlan; session: GroupSession; participants: Profile[] } | null>(
+    null
+  );
+  useShowBackButton(!!live);
+  // Terug (pijl in de bovenbalk, veeggebaar, Android-terugknop) sluit het lesscherm.
+  useEffect(() => {
+    if (!live) return;
+    const onPop = () => setLive(null);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [live]);
+
+  const startClass = useCallback(
+    async (cls: StudioClass, plan: ClassPlan, bookedUserIds: string[]) => {
+      if (!me) return;
+      try {
+        // Eén vaste sessie per les: opnieuw openen gaat verder waar de les gebleven was.
+        const session = await createGroupSession({
+          id: `class_${cls.id}`,
+          trainerId: me.userId,
+          schemaId: plan.schemaId ?? '',
+          schemaName: plan.schemaName ?? cls.title,
+          dayIndex: plan.dayIndex ?? 0,
+          date: cls.date,
+          participantIds: bookedUserIds,
+        });
+        const people = profileCtx?.allSporters ?? [];
+        const participants = bookedUserIds
+          .map((id) => people.find((p) => p.userId === id))
+          .filter((p): p is Profile => !!p);
+        setParticipantsClass(null);
+        window.history.pushState({ liftlogClassSession: cls.id }, '');
+        setLive({ cls, plan, session, participants });
+      } catch (e) {
+        notify?.error(e instanceof Error ? e.message : 'Les starten mislukt');
+      }
+    },
+    [me, profileCtx?.allSporters, notify]
+  );
   const [freeCancelHours, setFreeCancelHours] = useState(DEFAULT_FREE_CANCEL_HOURS);
   /** Positie op de wachtlijst per les (alleen je eigen plek, niet wie er voor of na je staat). */
   const [waitlistPositions, setWaitlistPositions] = useState<Record<string, number>>({});
@@ -618,6 +661,22 @@ export function LessenPage() {
       />
     ));
 
+  if (live && me) {
+    return (
+      <ClassSessionView
+        cls={live.cls}
+        plan={live.plan}
+        session={live.session}
+        participants={live.participants}
+        currentUserId={me.userId}
+        onFinish={() => {
+          notify?.success('Les afgerond. De logs staan bij de sporters.');
+          window.history.back();
+        }}
+      />
+    );
+  }
+
   return (
     <PageLayout maxWidth="none">
       {/* Figma "Schedule": weergave, ruimtes en legenda op één regel. Op de telefoon blijft alleen
@@ -878,6 +937,7 @@ export function LessenPage() {
         sporters={profileCtx?.allSporters ?? []}
         onClose={() => setParticipantsClass(null)}
         onChanged={() => void load()}
+        onStart={(cls, plan, ids) => void startClass(cls, plan, ids)}
       />
 
       <CancelClassDialog
@@ -1105,11 +1165,13 @@ function ParticipantsDialog({
   sporters,
   onClose,
   onChanged,
+  onStart,
 }: {
   cls: StudioClass | null;
   sporters: Profile[];
   onClose: () => void;
   onChanged: () => void;
+  onStart: (cls: StudioClass, plan: ClassPlan, bookedUserIds: string[]) => void;
 }) {
   const notify = useNotify();
   const [rows, setRows] = useState<Booking[]>([]);
@@ -1250,6 +1312,17 @@ function ParticipantsDialog({
               {plan ? 'Bewerken' : 'Voorbereiden'}
             </Button>
           </Box>
+          {plan && plan.exercises.length > 0 && !cls.cancelledAt && (
+            <Button
+              fullWidth
+              variant="contained"
+              disableElevation
+              sx={{ my: 1 }}
+              onClick={() => onStart(cls, plan, rows.filter((b) => b.status === 'booked' || b.status === 'attended').map((b) => b.userId))}
+            >
+              Start les · {rows.filter((b) => b.status === 'booked' || b.status === 'attended').length} deelnemers
+            </Button>
+          )}
           {plan ? (
             <>
               {plan.schemaName && (
