@@ -26,7 +26,7 @@ import {
   type ClassPlanExercise,
 } from '../../services/classPlanService';
 import type { StudioClass } from '../../services/classService';
-import { orderForClass } from '../../utils/classPlanSuggest';
+import { autoPlanForClass, dayIndexForClass, orderForClass } from '../../utils/classPlanSuggest';
 import { designTokens } from '../../theme/designTokens';
 import { ExerciseDbDemo } from '../ExerciseDbDemo';
 import { ExerciseInfoButton } from '../exercises/ExerciseInfoButton';
@@ -90,11 +90,13 @@ export function ClassPlanDialog({
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // PT-moment zonder planning: meteen de workout van het lid op de dag van de weekplanning.
+  const auto = useMemo(() => (!plan && cls ? autoPlanForClass(workouts, cls) : null), [plan, cls, workouts]);
   useEffect(() => {
-    setSchemaId(plan?.schemaId ?? null);
-    setDayIndex(plan?.dayIndex ?? 0);
+    setSchemaId(plan?.schemaId ?? auto?.schema.id ?? null);
+    setDayIndex(plan?.dayIndex ?? auto?.dayIndex ?? 0);
     setNote(plan?.note ?? '');
-  }, [plan, cls]);
+  }, [plan, cls, auto]);
 
   const options = useMemo(() => (cls ? orderForClass(workouts, cls) : []), [workouts, cls]);
   const selected = workouts.find((w) => w.id === schemaId) ?? null;
@@ -160,9 +162,9 @@ export function ClassPlanDialog({
           value={selectedOption}
           onChange={(_, v) => {
             setSchemaId(v?.schema.id ?? null);
-            setDayIndex(0);
+            setDayIndex(v && cls ? dayIndexForClass(v.schema, cls.date) : 0);
           }}
-          groupBy={(o) => (o.suggested ? 'Past bij deze les' : 'Alle workouts')}
+          groupBy={(o) => (o.suggested ? (cls.privateFor ? 'Workout van dit lid' : 'Past bij deze les') : 'Alle workouts')}
           getOptionLabel={(o) => o.schema.name}
           isOptionEqualToValue={(a, b) => a.schema.id === b.schema.id}
           renderInput={(params) => (
@@ -170,6 +172,14 @@ export function ClassPlanDialog({
           )}
           noOptionsText="Geen workouts gevonden"
         />
+
+        {!plan && auto && schemaId === auto.schema.id && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+            Voorstel: de workout van dit lid
+            {auto.schema.days[auto.dayIndex]?.weekday != null ? ', de dag die op deze weekdag staat' : ''}. Pas aan als je iets
+            anders wilt doen.
+          </Typography>
+        )}
 
         {selected && selected.days.length > 1 && (
           <TextField

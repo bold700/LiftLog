@@ -17,6 +17,8 @@ import { SchemaPeriodSummary } from './SchemaPeriodSummary';
 import { audiencePill, schemaEndLabel } from './SchemaListCard';
 import { getLastSessionDateForDay, formatLastTrained } from '../../utils/schemaSessionUtils';
 import { getExerciseProgressInPeriod } from '../../utils/schemaProgressUtils';
+import { useFixedMoments } from '../../hooks/useFixedMoments';
+import { WEEKDAY_NAMES, WEEKDAY_SHORT, dayIndexForWeekday, hasWeekPlan, weekdayOfDate, weekdayText } from '../../utils/weekPlan';
 import { formatWarmupSummary, formatCardioSummary, formatCooldownSummary, formatStretchingSummary } from '../../utils/format';
 
 interface SchemaDetailViewProps {
@@ -41,7 +43,13 @@ interface SchemaDetailViewProps {
   onBack: () => void;
 }
 
-const dayLabelOf = (schema: Schema, i: number) => schema.days[i]?.dayLabel || `Dag ${i + 1}`;
+const dayLabelOf = (schema: Schema, i: number) => {
+  const d = schema.days[i];
+  const label = d?.dayLabel || `Dag ${i + 1}`;
+  // Met een vaste weekdag staat die ervoor, tenzij het label al zo heet ("Dinsdag").
+  if (typeof d?.weekday !== 'number' || label.toLowerCase().startsWith(WEEKDAY_NAMES[d.weekday].toLowerCase())) return label;
+  return `${WEEKDAY_SHORT[d.weekday]} · ${label}`;
+};
 const countLabel = (n: number) => `${n} ${n === 1 ? 'oefening' : 'oefeningen'}`;
 const setsReps = (ex: SchemaExercise) => `${ex.setsTarget} × ${ex.repsTarget}`;
 const target = (ex: SchemaExercise) => (ex.targetWeight != null && ex.targetWeight > 0 ? `${String(ex.targetWeight).replace('.', ',')} kg` : '–');
@@ -85,9 +93,9 @@ const pillSx = (bg: string, fg: string, outlined?: boolean) => ({
 });
 
 /** Functie, geen constante: designTokens volgt het actieve thema en moet bij elke render gelezen worden. */
-const weekBadge = () => (
+const weekBadge = (text = 'Deze week') => (
   <Box component="span" sx={{ ...pillSx(designTokens.primary, designTokens.onPrimary), fontSize: 10, lineHeight: '16px', px: 0.75, ml: 1 }}>
-    Deze week
+    {text}
   </Box>
 );
 
@@ -117,6 +125,11 @@ export function SchemaDetailView({
   const pill = audiencePill(schema, assigneeOf(schema), isStaff);
   const extras = extraSections(schema, dayIndex);
   const last = day ? getLastSessionDateForDay(schema.id, dayIndex) : null;
+  // Weekplanning: welke dag is vandaag, en wat is er op de weekdag van deze dag (PT, les of thuis).
+  const weekPlan = hasWeekPlan(schema);
+  const todayIndex = weekPlan ? dayIndexForWeekday(schema, weekdayOfDate(new Date())) : null;
+  const moments = useFixedMoments(weekPlan && (schema.audience ?? 'single') === 'single' ? schema.clientId : null);
+  const isToday = (i: number) => todayIndex === i;
 
   const listed = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -174,6 +187,12 @@ export function SchemaDetailView({
     <>
       {day?.notes && (
         <Typography sx={{ fontSize: 13, lineHeight: '18px', fontStyle: 'italic', mb: 0.5 }}>{day.notes}</Typography>
+      )}
+      {typeof day?.weekday === 'number' && (
+        <Typography sx={{ fontSize: 13, lineHeight: '18px', fontWeight: 500, mb: 0.25 }}>
+          {isToday(dayIndex) ? 'Vandaag · ' : ''}
+          {WEEKDAY_NAMES[day.weekday]} · {weekdayText(day.weekday, moments)}
+        </Typography>
       )}
       <Typography sx={{ fontSize: 12, lineHeight: '16px', color: 'text.secondary', mb: 1.5 }}>
         {last ? `Laatst getraind: ${formatLastTrained(last)}` : 'Nog niet getraind'}
@@ -406,7 +425,7 @@ export function SchemaDetailView({
                 >
                   <Typography sx={{ fontSize: 14, fontWeight: 500, lineHeight: '20px' }} noWrap>
                     {dayLabelOf(schema, i)}
-                    {isCurrentWeekDay(i) && weekBadge()}
+                    {isToday(i) ? weekBadge('Vandaag') : isCurrentWeekDay(i) && weekBadge()}
                   </Typography>
                   <Typography sx={{ fontSize: 12, lineHeight: '16px', opacity: 0.8 }} noWrap>
                     {countLabel(schema.days[i]?.exercises.length ?? 0)}

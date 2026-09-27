@@ -18,6 +18,7 @@ import {
   getCurrentWeekDayIndex,
   isWeeklyGroupSchema,
 } from '../utils/schemaSessionUtils';
+import { hasWeekPlan, nextPlannedDayIndex, weekPlanOrder } from '../utils/weekPlan';
 import { todayIso } from '../utils/format';
 import { Schema } from '../types';
 import type { GroupSession } from '../types';
@@ -586,9 +587,11 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
                 allSchemas={schemas}
                 assigneeOf={assigneeSummary}
                 isStaff={isTrainer}
-                dayOrder={getSortedDayIndices(selectedSchema)}
+                dayOrder={hasWeekPlan(selectedSchema) ? weekPlanOrder(selectedSchema) : getSortedDayIndices(selectedSchema)}
                 initialDayIndex={
-                  isWeeklyGroupSchema(selectedSchema)
+                  hasWeekPlan(selectedSchema)
+                    ? (nextPlannedDayIndex(selectedSchema) ?? 0)
+                    : isWeeklyGroupSchema(selectedSchema)
                     ? getCurrentWeekDayIndex(selectedSchema) ?? getSortedDayIndices(selectedSchema)[0] ?? 0
                     : getSortedDayIndices(selectedSchema)[0] ?? 0
                 }

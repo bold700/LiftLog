@@ -6,6 +6,7 @@ import {
   TextField,
   Autocomplete,
   MenuItem,
+  Button,
 } from '@mui/material';
 import { Schema, SchemaDay, SchemaExercise, Formule7Routekaart } from '../types';
 import type { Profile, SchemaAudience } from '../types';
@@ -16,6 +17,8 @@ import { Formule7RoutekaartForm } from './Formule7RoutekaartForm';
 import { useExerciseDbSearch, type ExerciseDbEquipmentFilter } from '../hooks/useExerciseDbSearch';
 import { addWeeks } from '../utils/format';
 import { PageLayout, ContentCard } from './layout';
+import { useFixedMoments } from '../hooks/useFixedMoments';
+import { WEEKDAY_NAMES, WEEKDAY_SHORT, momentText, suggestWeekdays, weekdayText } from '../utils/weekPlan';
 import {
   defaultSchemaExercise,
   getDayCountFromSessions,
@@ -204,6 +207,7 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
           dayLabel,
           exercises,
         };
+        if (typeof d.weekday === 'number') cleaned.weekday = d.weekday;
         if (d.notes && d.notes.trim()) cleaned.notes = d.notes.trim();
         if (d.warmup != null) cleaned.warmup = d.warmup;
         if (d.cardio != null) cleaned.cardio = d.cardio;
@@ -324,6 +328,40 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
       ? NMT_PRESETS_BY_GOAL[formule7.neuromuscular.goal as Formule7StrengthGoal]
       : null;
 
+  // Weekplanning: bij een persoonlijke workout de dagen koppelen aan de vaste momenten van de
+  // sporter (PT, vaste les) en thuisdagen. Niet bij groepslessen: die volgen het lesrooster.
+  const weekPlanOn = audience !== 'group';
+  const moments = useFixedMoments(weekPlanOn && audience === 'single' ? clientId : null);
+  const clientName = sporters.find((s) => s.userId === clientId)?.displayName?.trim() || 'deze sporter';
+  const weekdayOptions = useMemo(
+    () =>
+      WEEKDAY_NAMES.map((name, i) =>
+        audience === 'single' && clientId ? `${name} · ${weekdayText(i, moments)}` : name
+      ),
+    [audience, clientId, moments]
+  );
+  const spreadOverWeek = () => {
+    const plan = suggestWeekdays(days.length, moments);
+    setDays((prev) => prev.map((d, i) => ({ ...d, weekday: plan[i] ?? null })));
+  };
+  const weekPlanBar = weekPlanOn ? (
+    <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: 'action.hover' }}>
+      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+        Weekplanning
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        {audience === 'single' && clientId
+          ? moments.length
+            ? `Vaste momenten van ${clientName}: ${moments.map((m) => `${WEEKDAY_SHORT[m.weekday]} ${momentText(m)}`).join(' · ')}. Geef elke dag een vaste weekdag; de rest is thuis of zelf.`
+            : `${clientName} heeft nog geen vaste momenten. Je kunt de dagen wel over de week verdelen, bijv. voor thuis.`
+          : 'Geef elke dag een vaste weekdag, dan opent de workout op de dag van vandaag.'}
+      </Typography>
+      <Button size="small" variant="outlined" onClick={spreadOverWeek}>
+        {moments.length ? 'Koppel aan vaste momenten' : 'Verdeel over de week'}
+      </Button>
+    </Box>
+  ) : null;
+
   /** Eén trainingsdagkaart (label + oefeningen). Gebruikt in schemaDaysBlock en in Formule7 routekaart sectie 3. */
   const renderDayCard = (dayIndex: number) => {
     const day = days[dayIndex];
@@ -334,6 +372,7 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
         dayIndex={dayIndex}
         isFormule7Template={isF7}
         removeDayDisabled={days.length <= 1}
+        weekdayOptions={weekPlanOn ? weekdayOptions : null}
         nmtPreset={nmtPreset}
         exerciseOptions={exerciseOptions}
         equipmentFilter={equipmentFilter}
@@ -352,6 +391,7 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
 
   const schemaDaysBlock = (
     <>
+      {weekPlanBar}
       {days.map((_, dayIndex) => (
         <Box key={dayIndex}>{renderDayCard(dayIndex)}</Box>
       ))}
