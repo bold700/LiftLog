@@ -122,6 +122,28 @@ export async function getWorkoutsForUser(uid: string, role: ProfileRole): Promis
 }
 
 /**
+ * Workouts waaruit een trainer een les kan voorbereiden (Beheer → Lesplanning): de eigen workouts,
+ * de groepsles-workouts van de studio (ook die van collega's) en de open workouts.
+ */
+export async function getPlannableWorkouts(uid: string): Promise<Schema[]> {
+  if (!isFirebaseConfigured() || !db) return [];
+  const orgId = requireOrgId();
+  const queries = [
+    query(collection(db, COLLECTION), where('orgId', '==', orgId), where('trainerId', '==', uid)),
+    query(collection(db, COLLECTION), where('orgId', '==', orgId), where('audience', '==', 'group')),
+    query(collection(db, COLLECTION), where('orgId', '==', orgId), where('audience', '==', 'open')),
+  ];
+  const results = await Promise.allSettled(queries.map((q) => getDocs(q)));
+  const byId = new Map<string, Schema>();
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue;
+    for (const d of result.value.docs) byId.set(d.id, toSchema(d.data(), d.id));
+  }
+  if (byId.size === 0 && results.every((r) => r.status === 'rejected')) throw results[0].reason;
+  return Array.from(byId.values());
+}
+
+/**
  * "Bekijk als": wat ziet sporter `targetUid`, opgevraagd door een trainer/beheerder (`viewerUid`).
  *
  * De opvraging loopt met de rechten van de trainer, niet van de sporter. Een lijstvraag als

@@ -44,6 +44,7 @@ export const nl = {
     tabs: {
       members: 'Leden',
       classTypes: 'Lessoorten',
+      classPlanning: 'Lesplanning',
       waitlists: 'Wachtlijsten',
       subscriptions: 'Abonnementen',
       branding: 'Huisstijl',

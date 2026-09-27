@@ -60,6 +60,7 @@ import { SubscriptionsPanel } from './beheer/SubscriptionsPanel';
 import { BillingPanel } from './beheer/BillingPanel';
 import { NotificationsPanel } from './beheer/NotificationsPanel';
 import { WaitlistsPanel } from './beheer/WaitlistsPanel';
+import { ClassPlanningPanel } from './beheer/ClassPlanningPanel';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import { assignPlan, getActiveMembershipsForOrg, getPlans, renewDue, unassignPlan } from '../services/planService';
 import { getCreditBalancesForOrg, grantCredits } from '../services/classService';
@@ -70,7 +71,7 @@ import { MemberImportDialog } from './beheer/MemberImportDialog';
 import { LEADERBOARD_ENABLED } from '../config/features';
 import { tabsOverflowHintSx } from '../theme/tabs';
 
-type Section = 'leden' | 'lessoorten' | 'wachtlijsten' | 'abonnementen' | 'huisstijl' | 'instellingen' | 'facturatie' | 'meldingen';
+type Section = 'leden' | 'lessoorten' | 'lesplanning' | 'wachtlijsten' | 'abonnementen' | 'huisstijl' | 'instellingen' | 'facturatie' | 'meldingen';
 /** Beheer gebruikt de hele breedte van het hoofdvlak, zoals in het ontwerp; de andere pagina's blijven op 800. */
 const ADMIN_MAX_WIDTH = 'none';
 
@@ -153,7 +154,7 @@ export function BeheerPage() {
       /* privémodus */
     }
   }, []);
-  // Een trainer ziet alleen Leden, Wachtlijsten en Meldingen; een onthouden tab van de beheerder valt terug op Leden.
+  // Een trainer ziet alleen Leden, Lesplanning, Wachtlijsten en Meldingen; een onthouden tab van de beheerder valt terug op Leden.
   const sections = isAdmin ? SECTIONS : STAFF_SECTIONS;
   const section: Section = sections.includes(storedSection) ? storedSection : 'leden';
   // Kop-knop op Lessoorten: elke klik telt op, het paneel opent dan een lege lessoort.
@@ -468,6 +469,8 @@ export function BeheerPage() {
             <StudioSettings />
           ) : section === 'lessoorten' ? (
             <ClassTypesPanel staff={trainers} createSignal={newTypeSignal} />
+          ) : section === 'lesplanning' ? (
+            <ClassPlanningPanel profiles={profiles} selfId={selfId} />
           ) : section === 'wachtlijsten' ? (
             <WaitlistsPanel profiles={profiles} credits={credits} memberships={memberships} plans={plans} onChanged={load} />
           ) : section === 'abonnementen' ? (
@@ -832,16 +835,17 @@ export function BeheerPage() {
   );
 }
 
-const SECTIONS: Section[] = ['leden', 'lessoorten', 'wachtlijsten', 'abonnementen', 'meldingen', 'facturatie', 'huisstijl', 'instellingen'];
-/** Wat een trainer ziet: de leden, de wachtlijsten en berichten sturen. De rest is aan de eigenaar. */
-const STAFF_SECTIONS: Section[] = ['leden', 'wachtlijsten', 'meldingen'];
+const SECTIONS: Section[] = ['leden', 'lessoorten', 'lesplanning', 'wachtlijsten', 'abonnementen', 'meldingen', 'facturatie', 'huisstijl', 'instellingen'];
+/** Wat een trainer ziet: de leden, de lesplanning, de wachtlijsten en berichten sturen. De rest is aan de eigenaar. */
+const STAFF_SECTIONS: Section[] = ['leden', 'lesplanning', 'wachtlijsten', 'meldingen'];
 const SECTION_STORAGE_KEY = 'vorm.beheer.section';
 const SECTION_KEY: Record<
   Section,
-  'members' | 'classTypes' | 'waitlists' | 'subscriptions' | 'branding' | 'settings' | 'billing' | 'notifications'
+  'members' | 'classTypes' | 'classPlanning' | 'waitlists' | 'subscriptions' | 'branding' | 'settings' | 'billing' | 'notifications'
 > = {
   leden: 'members',
   lessoorten: 'classTypes',
+  lesplanning: 'classPlanning',
   wachtlijsten: 'waitlists',
   abonnementen: 'subscriptions',
   huisstijl: 'branding',
@@ -850,7 +854,7 @@ const SECTION_KEY: Record<
   meldingen: 'notifications',
 };
 
-/** De tabs uit het ontwerp. De eigenaar ziet ze allemaal; een trainer alleen Leden, Wachtlijsten en Meldingen. */
+/** De tabs uit het ontwerp. De eigenaar ziet ze allemaal; een trainer alleen Leden, Lesplanning, Wachtlijsten en Meldingen. */
 function SectionTabs({ sections, value, onChange }: { sections: Section[]; value: Section; onChange: (v: Section) => void }) {
   const { t } = useI18n();
   const theme = useTheme();
