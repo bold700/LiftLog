@@ -1,6 +1,7 @@
 import { applyCors } from './_lib/cors.mjs';
 import { requireUser, enforceRateLimit } from './_lib/requireUser.mjs';
 import { getExerciseCatalog } from './_lib/exerciseCatalog.mjs';
+import { EXERCISE_ADVICE_SYSTEM, buildExerciseAdvicePrompt, normalizeExerciseAdvice } from './_lib/exerciseAdvice.mjs';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
 // Robuust tegen onbedoelde extra tekst in .env (bijv. "gpt-4.1-mini (optioneel)")
@@ -641,6 +642,8 @@ function normalizeDayFormule7(day, index) {
 
 /** Maximaal aantal AI-generaties per gebruiker per dag (vragen ophalen telt niet mee). */
 const RATE_LIMIT_PER_DAY = 40;
+/** Voorstellen voor de oefeningenbibliotheek zijn klein; ruimere daglimiet per trainer. */
+const ADVICE_LIMIT_PER_DAY = 150;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export default async function handler(req, res) {
@@ -665,11 +668,24 @@ export default async function handler(req, res) {
 
   const modeRaw = String(req.body?.mode ?? 'free');
   const mode =
-    modeRaw === 'formule7' || modeRaw === 'formule7_questions'
+    modeRaw === 'formule7' || modeRaw === 'formule7_questions' || modeRaw === 'exercise_advice'
       ? modeRaw
       : 'free';
 
   try {
+    // Oefeningenbibliotheek: voorstel voor regressie, progressie en een alternatief bij een klacht.
+    // Alleen staf; `prompt` is de naam van de oefening, `complaint` een optionele klacht.
+    if (mode === 'exercise_advice') {
+      const me = await user.db.collection('profiles').doc(user.uid).get();
+      const role = String(me.exists ? me.data()?.role : '');
+      if (role !== 'trainer' && role !== 'admin') {
+        return json(res, 403, { error: 'Alleen voor trainers.' });
+      }
+      if (!(await enforceRateLimit(user.db, res, user.uid, 'exercise-advice', ADVICE_LIMIT_PER_DAY, DAY_MS))) return;
+      const parsed = await callOpenAI(EXERCISE_ADVICE_SYSTEM, buildExerciseAdvicePrompt(prompt, req.body?.complaint), 700);
+      return json(res, 200, { advice: normalizeExerciseAdvice(parsed) });
+    }
+
     if (mode === 'formule7_questions') {
       const existingAnswers =
         req.body?.existingAnswers && typeof req.body.existingAnswers === 'object'
