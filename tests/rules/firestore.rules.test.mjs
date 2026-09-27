@@ -467,6 +467,15 @@ await t('sporter leest die groepsles-workout (geen deelnemer) → geweigerd', fa
 await t('trainer studio B leest die groepsles-workout → geweigerd', false, getDoc(doc(as('trainerB'), 'workouts/wGroepA')));
 await t('trainer leest nog steeds geen cliëntworkout van een collega → geweigerd', false, getDoc(doc(as('trainer1'), 'workouts/wAdminBas')));
 
+console.log('Groepsles: logs opvragen');
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'logs/lSess1'), { orgId: 'vanas', userId: 'sporter3', loggedBy: 'admin1', trainerId: null, exerciseName: 'Squat', sessionId: 'class_c1' });
+});
+await t('trainer vraagt de logs van een lid op (vorige keer in de les) → mag', true, getDocs(query(collection(as('trainer1'), 'logs'), where('orgId', '==', 'vanas'), where('userId', '==', 'sporter3'))));
+await t('trainer vraagt de logs van een les op (verder waar de les was) → mag', true, getDocs(query(collection(as('trainer1'), 'logs'), where('orgId', '==', 'vanas'), where('sessionId', '==', 'class_c1'))));
+await t('sporter vraagt de logs van een ander lid op → geweigerd', false, getDocs(query(collection(as('sporter2'), 'logs'), where('orgId', '==', 'vanas'), where('userId', '==', 'sporter3'))));
+await t('trainer studio B vraagt de logs van een lid in studio A op → geweigerd', false, getDocs(query(collection(as('trainerB'), 'logs'), where('orgId', '==', 'vanas'), where('userId', '==', 'sporter3'))));
+
 await env.cleanup();
 console.log(`\n${passed} geslaagd, ${failed} mislukt`);
 process.exit(failed ? 1 : 0);
