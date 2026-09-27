@@ -446,6 +446,27 @@ await t('andere sporter leest die kalenderfeed-sleutel → geweigerd', false, ge
 await t('andere sporter verwijdert die kalenderfeed-sleutel → geweigerd', false, deleteDoc(doc(as('sporter3'), 'calendarFeedTokens/hash1')));
 await t('sporter verwijdert eigen kalenderfeed-sleutel → mag', true, deleteDoc(doc(as('sporter2'), 'calendarFeedTokens/hash1')));
 
+console.log('Lesplanning');
+const lesplan = (extra = {}) => ({ orgId: 'vanas', classId: 'cp1', date: '2026-10-04', schemaId: 'wGroepA', schemaName: 'Week 13', note: 'Buik maakt niet uit', ...extra });
+await t('trainer plant een les → mag', true, setDoc(doc(as('trainer1'), 'classPlans/cp1'), lesplan()));
+await t('beheerder leest de lesplanning → mag', true, getDoc(doc(as('admin1'), 'classPlans/cp1')));
+await t('trainer leest de lesplanning van de studio → mag', true, getDocs(query(collection(as('trainer1'), 'classPlans'), where('orgId', '==', 'vanas'))));
+await t('sporter leest de lesplanning → geweigerd', false, getDoc(doc(as('sporter2'), 'classPlans/cp1')));
+await t('sporter vraagt de lesplanning van de studio op → geweigerd', false, getDocs(query(collection(as('sporter2'), 'classPlans'), where('orgId', '==', 'vanas'))));
+await t('sporter plant een les → geweigerd', false, setDoc(doc(as('sporter2'), 'classPlans/cp2'), lesplan({ classId: 'cp2' })));
+await t('trainer studio B leest de lesplanning van studio A → geweigerd', false, getDoc(doc(as('trainerB'), 'classPlans/cp1')));
+await t('trainer studio B plant een les in studio A → geweigerd', false, setDoc(doc(as('trainerB'), 'classPlans/cp3'), lesplan({ classId: 'cp3' })));
+await t('planning onder een ander les-id → geweigerd', false, setDoc(doc(as('trainer1'), 'classPlans/cp4'), lesplan({ classId: 'andere' })));
+await t('trainer werkt de planning bij → mag', true, updateDoc(doc(as('trainer1'), 'classPlans/cp1'), { note: 'Rug: geen deadlift' }));
+await t('trainer haalt de planning weg → mag', true, deleteDoc(doc(as('trainer1'), 'classPlans/cp1')));
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'workouts/wGroepA'), { orgId: 'vanas', trainerId: 'admin1', clientId: null, audience: 'group', participantIds: [], name: 'Groepsles week 13' });
+});
+await t('trainer leest de groepsles-workout van een collega → mag', true, getDoc(doc(as('trainer1'), 'workouts/wGroepA')));
+await t('sporter leest die groepsles-workout (geen deelnemer) → geweigerd', false, getDoc(doc(as('sporter2'), 'workouts/wGroepA')));
+await t('trainer studio B leest die groepsles-workout → geweigerd', false, getDoc(doc(as('trainerB'), 'workouts/wGroepA')));
+await t('trainer leest nog steeds geen cliëntworkout van een collega → geweigerd', false, getDoc(doc(as('trainer1'), 'workouts/wAdminBas')));
+
 await env.cleanup();
 console.log(`\n${passed} geslaagd, ${failed} mislukt`);
 process.exit(failed ? 1 : 0);

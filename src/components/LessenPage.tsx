@@ -57,7 +57,10 @@ import { segmentedToggleSx, filterPillSx } from '../theme/segmentedToggle';
 import { FilterGroup, FilterSheet } from './FilterSheet';
 import { addWeeks, todayIso } from '../utils/format';
 import { WeekTimeGrid } from './lessen/WeekTimeGrid';
-import type { Profile, SessionKind, StandingBooking } from '../types';
+import { ClassPlanDialog, ExerciseLines } from './beheer/ClassPlanDialog';
+import { getClassPlan, type ClassPlan } from '../services/classPlanService';
+import { getPlannableWorkouts } from '../services/workoutFirestore';
+import type { Profile, Schema, SessionKind, StandingBooking } from '../types';
 
 /** Zonder eigen instelling geldt dit aantal uur, zoals de server standaard hanteert. */
 const DEFAULT_FREE_CANCEL_HOURS = 12;
@@ -1114,6 +1117,32 @@ function ParticipantsDialog({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [addTarget, setAddTarget] = useState<Profile | null>(null);
   const [adding, setAdding] = useState(false);
+  // Lesvoorbereiding (alleen staf opent dit venster): welke training, met notitie.
+  const myId = useProfile()?.profile?.userId ?? null;
+  const [plan, setPlan] = useState<ClassPlan | null>(null);
+  const [planWorkouts, setPlanWorkouts] = useState<Schema[] | null>(null);
+  const [planOpen, setPlanOpen] = useState(false);
+
+  useEffect(() => {
+    setPlan(null);
+    if (!cls) return;
+    let alive = true;
+    getClassPlan(cls.id)
+      .then((p) => alive && setPlan(p))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [cls]);
+
+  const openPlan = () => {
+    setPlanOpen(true);
+    if (planWorkouts === null && myId) {
+      getPlannableWorkouts(myId)
+        .then(setPlanWorkouts)
+        .catch(() => setPlanWorkouts([]));
+    }
+  };
 
   const load = useCallback(() => {
     if (!cls) return;
@@ -1212,6 +1241,37 @@ function ParticipantsDialog({
           {cls.endTime ? `–${cls.endTime}` : ''}
         </Typography>
 
+        <Box sx={{ p: 1.5, mb: 2, borderRadius: 2, border: `1px solid ${designTokens.cardBorder}` }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="body2" fontWeight={600} sx={{ flex: 1 }}>
+              Voorbereiding
+            </Typography>
+            <Button size="small" onClick={openPlan}>
+              {plan ? 'Bewerken' : 'Voorbereiden'}
+            </Button>
+          </Box>
+          {plan ? (
+            <>
+              {plan.schemaName && (
+                <Typography variant="body2" sx={{ color: designTokens.primary, mb: 0.5 }}>
+                  {plan.schemaName}
+                  {plan.dayLabel ? ` · ${plan.dayLabel}` : ''}
+                </Typography>
+              )}
+              <ExerciseLines exercises={plan.exercises} />
+              {plan.note && (
+                <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-line' }}>
+                  {plan.note}
+                </Typography>
+              )}
+            </>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Nog geen training gekozen. Alleen trainers zien dit.
+            </Typography>
+          )}
+        </Box>
+
         {cls.holdUserId && holdUntilMs && (
           <Box
             sx={{
@@ -1293,6 +1353,18 @@ function ParticipantsDialog({
       <DialogActions>
         <Button onClick={onClose}>Sluiten</Button>
       </DialogActions>
+      {planOpen && (
+        <ClassPlanDialog
+          cls={cls}
+          plan={plan}
+          workouts={planWorkouts ?? []}
+          onClose={() => setPlanOpen(false)}
+          onSaved={(saved) => {
+            setPlan(saved);
+            setPlanOpen(false);
+          }}
+        />
+      )}
     </Dialog>
   );
 }

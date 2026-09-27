@@ -242,6 +242,9 @@ service cloud.firestore {
             || resource.data.clientId == request.auth.uid
             || request.auth.uid in resource.data.get('participantIds', [])
             || resource.data.get('audience', 'single') == 'open'
+            // Groepslessen zijn lesstof van de studio, geen cliëntdossier: elke trainer van de
+            // studio mag ze lezen om een les voor te bereiden (Beheer → Lesplanning).
+            || (isTrainerOrAdmin() && resource.data.get('audience', 'single') == 'group')
             || (isTrainerOrAdmin() && orgAllowsStaffFullClientAccess()));
       allow create: if isSignedIn()
         && writesMyOrg()
@@ -530,6 +533,16 @@ service cloud.firestore {
       allow read: if isSignedIn()
         && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
       allow write: if false;
+    }
+
+    // Lesplanning (Beheer → Lesplanning): welke training er in een les gegeven wordt, met een
+    // notitie voor de trainer. Alleen voor trainers en beheerders van de studio: sporters mogen
+    // vooraf niet zien welke training er komt (dan zeggen ze af). Het document-id is het les-id.
+    match /classPlans/{classId} {
+      allow read: if isStaffInSameOrg();
+      allow create: if isStaffInSameOrgForNew() && request.resource.data.classId == classId;
+      allow update: if isStaffInSameOrg() && writesMyOrg() && request.resource.data.classId == classId;
+      allow delete: if isStaffInSameOrg();
     }
 
     // Lessoorten (Beheer → Lessoorten): de vaste vormen waaruit een les op het rooster wordt gemaakt.
