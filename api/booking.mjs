@@ -211,7 +211,8 @@ export default async function handler(req, res) {
           String(body.classId ?? '').trim(),
           body.weekly === true,
           isStaff,
-          body.userId ? String(body.userId).trim() : null
+          body.userId ? String(body.userId).trim() : null,
+          body.extra === true
         );
       case 'cancel':
         return await cancel(res, db, uid, myOrgs, isStaff, String(body.bookingId ?? '').trim());
@@ -299,7 +300,11 @@ function refuse(message, status) {
  * als je doorschuift). Sta je al op de wachtlijst en is er toch een plek vrij (niemand kon
  * doorschuiven, bijv. te weinig credits), dan meld je je hiermee alsnog aan.
  */
-async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId) {
+/**
+ * extra: alleen staf. De trainer beslist dat iemand er nog bij kan, ook als de les vol zit of de
+ * plek even voor een ander wordt vastgehouden (een extra plek boven het maximum).
+ */
+async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId, extra = false) {
   if (!classId) return json(res, 400, { error: 'Geen les opgegeven.', build: BUILD });
 
   // Staf kan iemand anders inschrijven (bijv. een sporter die via WhatsApp afmeldde er weer bij
@@ -316,6 +321,7 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
     beneficiaryUid = targetUserId;
     beneficiaryIsStaff = target.role === 'trainer' || target.role === 'admin';
   }
+  if (extra && !isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan iemand er extra bij zetten.', build: BUILD });
 
   // Een verlopen vastgehouden plek eerst doorgeven aan de volgende, zodat iedereen eerlijk zijn beurt krijgt.
   const holdSnap = await db.collection('classes').doc(classId).get();
@@ -369,16 +375,16 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
     // Al op de wachtlijst: met een vrije plek is dit aanmelden (de plek pakken), anders niets te doen.
     const claim = active.find((d) => d.data().status === 'waitlist') ?? null;
     // Een plek die voor een ander wordt vastgehouden, is voor jou (nog) niet vrij.
-    const heldForOther = heldForSomeoneElse(cls, beneficiaryUid, Date.now());
+    const heldForOther = !extra && heldForSomeoneElse(cls, beneficiaryUid, Date.now());
     if (claim && heldForOther) {
       throw refuse('Deze plek wordt nog even vastgehouden voor de eerste op de wachtlijst.');
     }
-    if (claim && !spotFreeForWaitlister(cls)) {
+    if (claim && !extra && !spotFreeForWaitlister(cls)) {
       throw refuse(beneficiaryUid === uid ? 'Je staat al op de wachtlijst. Valt er iemand af, dan schuif je vanzelf door.' : 'Deze sporter staat al op de wachtlijst.');
     }
 
     const cost = unlimited || beneficiaryIsStaff ? 0 : Number(cls.creditCost ?? 1) || 0;
-    const onWaitlist = claim ? false : heldForOther || placeNewBooking(cls) === 'waitlist';
+    const onWaitlist = claim || extra ? false : heldForOther || placeNewBooking(cls) === 'waitlist';
 
     const accountRef = db.collection('creditAccounts').doc(accountId(orgId, beneficiaryUid));
     const accountSnap = await tx.get(accountRef);

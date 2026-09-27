@@ -414,13 +414,17 @@ export function cancelIsFree(cls: StudioClass, booking: Booking, freeCancelHours
  * Reserveren. Zit de les vol, dan kom je op de wachtlijst en gaat er (nog) geen credit af.
  * `weekly`: ook dit weekmoment van de lessoort voortaan automatisch meeboeken ("elke week inschrijven").
  */
-/** userId: alleen voor staf, om een andere sporter in te schrijven (diens credit gaat eraf). */
+/**
+ * userId: alleen voor staf, om een andere sporter in te schrijven (diens credit gaat eraf).
+ * extra: alleen voor staf, iemand er toch bij zetten als de les vol zit (boven het maximum).
+ */
 export function bookClass(
   classId: string,
   weekly = false,
-  userId?: string
+  userId?: string,
+  extra = false
 ): Promise<{ bookingId: string; status: BookingStatus; balance: number }> {
-  return callBooking({ action: 'book', classId, weekly, userId });
+  return callBooking({ action: 'book', classId, weekly, userId, ...(extra ? { extra: true } : {}) });
 }
 
 /** Afmelden. Binnen de annuleertermijn krijg je de credit terug. */
