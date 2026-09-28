@@ -689,6 +689,8 @@ export const TrainingSessionView = ({
 
       {/* ---------- Telefoon ---------- */}
       <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+        {/* Voortgang en de open oefening blijven bovenin staan; de lijst eronder scrolt. */}
+        <Box sx={{ position: 'sticky', top: 0, zIndex: 2, bgcolor: 'background.default', pt: 1, pb: 1, mt: -1 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
           <Typography sx={{ fontSize: 12, fontWeight: 500 }}>
             {ex ? `Oefening ${current + 1} van ${day.exercises.length}` : progressLabel}
@@ -708,6 +710,7 @@ export const TrainingSessionView = ({
         </Box>
         {currentPanel}
         {restCard}
+        </Box>
         {next && (
           <Typography sx={{ fontSize: 12, mt: 1.5, px: 0.5 }}>
             <Box component="span" sx={{ fontWeight: 600, mr: 1.5 }}>
@@ -741,7 +744,7 @@ export const TrainingSessionView = ({
             <AppleHealthWorkoutCard storedSummary={healthSummary} onSummarySaved={onHealthSummarySaved} onSummaryCleared={onHealthSummaryCleared} />
           </Box>
         </Box>
-        <Box sx={{ minWidth: 0, mt: 3 }}>
+        <Box sx={{ minWidth: 0, mt: 3, position: 'sticky', top: 24 }}>
           {currentPanel ?? (
             <Typography variant="body2" color="text.secondary">
               Geen oefeningen op deze dag.
