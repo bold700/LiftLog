@@ -8,6 +8,7 @@ import {
   computeOverviewStats,
   computePlanCompletion,
   formatVolume,
+  volumeComparison,
   getRecentLogs,
   isWithinLastDays,
 } from '../utils/insightsOverview';
@@ -26,9 +27,11 @@ interface StatTileProps {
   label: string;
   /** Alleen op desktop achter het label; op mobiel is daar geen ruimte voor (Figma: drie smalle tegels). */
   period?: string;
+  /** Kleine regel eronder, bijv. het volume vergeleken met iets tastbaars. */
+  note?: string | null;
 }
 
-function StatTile({ value, label, period }: StatTileProps) {
+function StatTile({ value, label, period, note }: StatTileProps) {
   return (
     <Box
       sx={{
@@ -46,6 +49,11 @@ function StatTile({ value, label, period }: StatTileProps) {
       {period && (
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} noWrap>
           {period}
+        </Typography>
+      )}
+      {note && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: 11, lineHeight: '14px', mt: 0.25, opacity: 0.85 }}>
+          {note}
         </Typography>
       )}
     </Box>
@@ -114,7 +122,7 @@ export function OverzichtPage({ onOpenMuscles, onOpenLogs }: OverzichtPageProps)
         }}
       >
         <StatTile value={String(stats.sessions)} label="Trainingen" period={`Afgelopen ${OVERVIEW_PERIOD_DAYS} dagen`} />
-        <StatTile value={formatVolume(stats.volumeKg)} label="Volume" period={`Afgelopen ${OVERVIEW_PERIOD_DAYS} dagen`} />
+        <StatTile value={formatVolume(stats.volumeKg)} label="Volume" period={`Afgelopen ${OVERVIEW_PERIOD_DAYS} dagen`} note={volumeComparison(stats.volumeKg)} />
         <StatTile value={String(stats.streakWeeks)} label={stats.streakWeeks === 1 ? 'Week op rij' : 'Weken op rij'} period="Elke week getraind" />
         <StatTile value={plan == null ? '–' : `${plan}%`} label="Schema" period="Gedaan deze week" />
       </Box>

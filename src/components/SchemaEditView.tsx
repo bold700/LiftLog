@@ -16,7 +16,7 @@ import type { Formule7StrengthGoal } from '../types';
 import { Formule7RoutekaartForm } from './Formule7RoutekaartForm';
 import { useExerciseDbSearch, type ExerciseDbEquipmentFilter } from '../hooks/useExerciseDbSearch';
 import { addWeeks } from '../utils/format';
-import { PageLayout, ContentCard } from './layout';
+import { PageLayout } from './layout';
 import { useFixedMoments } from '../hooks/useFixedMoments';
 import { WEEKDAY_NAMES, WEEKDAY_SHORT, momentText, suggestWeekdays, weekdayText } from '../utils/weekPlan';
 import {
@@ -433,7 +433,8 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
 
   return (
     <PageLayout maxWidth="none">
-      <ContentCard>
+      {/* Geen kaart om het formulier: de dagkaarten en oefeningen hebben dan de volle breedte. */}
+      <Box sx={{ mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
             <Typography variant="h5" sx={{ fontWeight: 600 }}>
               {showFormule7AiWizard ? 'Workout met AI (Formule 7)' : 'Workout bewerken'}
@@ -600,7 +601,7 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
               {saving ? 'Opslaan…' : 'Opslaan'}
             </md-filled-button>
           </Box>
-      </ContentCard>
+      </Box>
     </PageLayout>
   );
 };

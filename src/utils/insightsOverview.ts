@@ -188,3 +188,33 @@ export function formatVolume(kg: number): string {
   const t = kg / 1000;
   return t < 10 ? `${t.toFixed(1).replace('.', ',')} ton` : `${Math.round(t)} ton`;
 }
+
+/** Dingen om het volume mee te vergelijken, zwaarste eerst: [enkelvoud, meervoud, gewicht in kg]. */
+const VOLUME_COMPARISONS: [string, string, number][] = [
+  ['Eiffeltoren', 'Eiffeltorens', 7_300_000],
+  ['blauwe vinvis', 'blauwe vinvissen', 150_000],
+  ['bultrug', 'bultruggen', 30_000],
+  ['stadsbus', 'stadsbussen', 12_000],
+  ['olifant', 'olifanten', 6_000],
+  ['neushoorn', 'neushoorns', 2_300],
+  ['auto', "auto's", 1_300],
+  ['witte haai', 'witte haaien', 1_000],
+  ['koe', 'koeien', 700],
+  ['vleugelpiano', "vleugelpiano's", 400],
+  ['gorilla', "gorilla's", 160],
+  ['wasmachine', 'wasmachines', 70],
+  ['zak cement', 'zakken cement', 25],
+];
+
+/**
+ * Het volume in iets wat je voor je ziet: "zo zwaar als 7 bultruggen". Het zwaarste ding dat er
+ * minstens twee keer in past, zodat het getal klein en tastbaar blijft. Null zonder volume.
+ */
+export function volumeComparison(kg: number): string | null {
+  if (!(kg > 0)) return null;
+  const pick = VOLUME_COMPARISONS.find(([, , w]) => kg / w >= 2) ?? VOLUME_COMPARISONS.find(([, , w]) => kg / w >= 1);
+  if (!pick) return null;
+  const [one, many, w] = pick;
+  const n = Math.round(kg / w);
+  return `zo zwaar als ${n} ${n === 1 ? one : many}`;
+}
