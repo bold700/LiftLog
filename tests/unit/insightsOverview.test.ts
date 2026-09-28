@@ -8,6 +8,7 @@ import {
   formatVolume,
   getRecentLogs,
   isWithinLastDays,
+  volumeComparison,
 } from '../../src/utils/insightsOverview';
 
 // Woensdag 23 september 2026, 10:00 lokale tijd.
@@ -135,5 +136,19 @@ describe('opmaak', () => {
     const recent = getRecentLogs(logs, 2, NOW);
     expect(recent.map((r) => r.name)).toEqual(['Nieuw', 'Gisteren']);
     expect(recent[0]).toMatchObject({ details: '80 kg · 4 × 8', day: 'Vandaag', time: '07:12' });
+  });
+});
+
+describe('volume vergelijken met iets tastbaars', () => {
+  it('kiest het zwaarste ding dat er minstens twee keer in past', () => {
+    expect(volumeComparison(199_000)).toBe('zo zwaar als 7 bultruggen');
+    expect(volumeComparison(48_000)).toBe('zo zwaar als 4 stadsbussen');
+    expect(volumeComparison(20_000_000)).toBe('zo zwaar als 3 Eiffeltorens');
+    expect(volumeComparison(850)).toBe("zo zwaar als 2 vleugelpiano's");
+  });
+  it('klein volume: één ding, niets bij nul', () => {
+    expect(volumeComparison(30)).toBe('zo zwaar als 1 zak cement');
+    expect(volumeComparison(10)).toBeNull();
+    expect(volumeComparison(0)).toBeNull();
   });
 });

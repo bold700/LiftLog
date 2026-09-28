@@ -88,7 +88,7 @@ export function DayCard({
           overflow: 'hidden',
         }}
       >
-        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 }, minWidth: 0 }}>
+        <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } }, minWidth: 0 }}>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 2 }}>
             <TextField
               label="Dag (bijv. Maandag of Dag A)"
@@ -143,11 +143,10 @@ export function DayCard({
               <Box
                 key={exIndex}
                 sx={{
-                  p: 1.5,
+                  p: { xs: 1.25, sm: 1.5 },
                   mb: 1,
                   borderRadius: 1,
                   backgroundColor: 'action.hover',
-                  border: 1, borderColor: 'divider',
                   minWidth: 0,
                   width: '100%',
                 }}
