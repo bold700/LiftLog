@@ -8,7 +8,7 @@ import { ContentCard } from '../layout';
 import { AccountRetentionSettings } from './AccountRetentionSettings';
 import { useProfile } from '../../context/ProfileContext';
 import { useNotify } from '../../context/NotifyContext';
-import { getOrg, saveOrgBookingPolicy, saveOrgStaffAccess } from '../../services/orgService';
+import { getOrg, saveOrgBookingPolicy, saveOrgShowTrainerNames, saveOrgStaffAccess } from '../../services/orgService';
 
 /** Standaard bij een studio die het nog niet heeft ingesteld: zelfde aantal uur als de server. */
 const DEFAULT_FREE_CANCEL_HOURS = 12;
@@ -24,6 +24,8 @@ export function StudioSettings() {
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [staffAccess, setStaffAccess] = useState(false);
   const [savingAccess, setSavingAccess] = useState(false);
+  const [showNames, setShowNames] = useState(false);
+  const [savingNames, setSavingNames] = useState(false);
 
   useEffect(() => {
     if (!orgId) return;
@@ -34,6 +36,7 @@ export function StudioSettings() {
       setFreeCancelHours(hours);
       setSavedHours(hours);
       setStaffAccess(org.staffFullClientAccess);
+      setShowNames(org.showTrainerNames);
       setLoaded(true);
     });
     return () => {
@@ -81,6 +84,20 @@ export function StudioSettings() {
     }
   };
 
+  const toggleNames = async (next: boolean) => {
+    setShowNames(next);
+    setSavingNames(true);
+    try {
+      await saveOrgShowTrainerNames(orgId, next);
+      notify.success(next ? 'Sporters zien nu de naam van de trainer.' : 'Sporters zien de naam van de trainer niet meer.');
+    } catch (e) {
+      setShowNames(!next);
+      notify.error('Opslaan mislukt.', e);
+    } finally {
+      setSavingNames(false);
+    }
+  };
+
   return (
     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) minmax(0, 1fr)' }, gap: 2, alignItems: 'start', '& .MuiCard-root': { mb: 0 } }}>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
@@ -122,6 +139,20 @@ export function StudioSettings() {
           <FormControlLabel
             control={<Switch checked={staffAccess} disabled={savingAccess} onChange={(e) => void toggleAccess(e.target.checked)} />}
             label="Trainers mogen elkaars cliënten zien"
+          />
+        </ContentCard>
+
+        <ContentCard>
+          <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+            Naam van de trainer
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Aan: sporters zien bij de lessen en bij hun PT-moment wie de trainer is. Uit: sporters zien geen trainersnaam.
+            Trainers en beheerders zien de naam altijd.
+          </Typography>
+          <FormControlLabel
+            control={<Switch checked={showNames} disabled={savingNames} onChange={(e) => void toggleNames(e.target.checked)} />}
+            label="Naam van de trainer tonen aan sporters"
           />
         </ContentCard>
       </Box>

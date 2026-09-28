@@ -335,6 +335,11 @@ export interface Org {
    */
   staffFullClientAccess: boolean;
   /**
+   * Zien sporters de naam van de trainer bij de lessen en PT-momenten? Sommige studio's willen
+   * dat, andere niet; standaard uit. De server geeft de namen alleen door als dit aan staat.
+   */
+  showTrainerNames: boolean;
+  /**
    * Beheerde lijst van ruimtenamen (Beheer → Lessoorten), zodat een lessoort of losse les een
    * ruimte kiest in plaats van vrij te typen. Voorkomt dat "Boven" en "boven" als twee losse
    * ruimtes eindigen door een typfout. Leeg = nog niets aangemaakt.

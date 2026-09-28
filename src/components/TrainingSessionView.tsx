@@ -51,6 +51,7 @@ import { usePageTitle } from '../context/PageTitleContext';
 import { formatLogDetails } from '../utils/insightsOverview';
 import { AppleHealthWorkoutCard } from './AppleHealthWorkoutCard';
 import { ExerciseDbDemo } from './ExerciseDbDemo';
+import { ExerciseInfoButton } from './exercises/ExerciseInfoButton';
 import {
   healthSummaryKeyForSchema,
   getStoredHealthSummary,
@@ -476,7 +477,13 @@ export const TrainingSessionView = ({
       <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
         <ExerciseDbDemo exerciseName={ex.exerciseName} variant="aside" />
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography sx={{ fontSize: { xs: 18, md: 22 }, fontWeight: 500, lineHeight: { xs: '24px', md: '28px' } }}>{ex.exerciseName}</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+            <Typography sx={{ fontSize: { xs: 18, md: 22 }, fontWeight: 500, lineHeight: { xs: '24px', md: '28px' }, flex: 1, minWidth: 0 }}>
+              {ex.exerciseName}
+            </Typography>
+            {/* Makkelijker, zwaarder en alternatieven bij een klacht; alleen voor trainers (knop verbergt zich anders). */}
+            <ExerciseInfoButton exerciseName={ex.exerciseName} size="medium" />
+          </Box>
           <Typography sx={{ fontSize: 13, lineHeight: '18px', color: 'text.secondary', mt: 0.25 }}>{prescription(ex)}</Typography>
           {ex.notes && (
             <Typography sx={{ fontSize: 12, lineHeight: '16px', color: 'text.secondary', fontStyle: 'italic', mt: 0.5 }}>{ex.notes}</Typography>
