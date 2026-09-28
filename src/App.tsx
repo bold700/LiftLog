@@ -352,8 +352,9 @@ function AppContent() {
               // zie AppShell). Die veilige-zone-marge hier nóg eens optellen gaf een dubbele, te grote
               // witte strook boven elke pagina zodra iOS écht een safe-area-waarde ging teruggeven.
               paddingTop: { md: 0 },
-              overflow: 'auto',
-              scrollbarGutter: 'stable',
+              // 'clip' en geen 'auto': met 'auto' werd dit vak een eigen scrollcontainer (die nooit scrolt),
+              // waardoor position: sticky in de pagina's niet werkte. Wat te breed is, knippen we af.
+              overflowX: 'clip',
             }}
           >
             {profile?.error && (
