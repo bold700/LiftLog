@@ -37,12 +37,15 @@ export function freeCancelHoursOf(policy, fallback) {
  * - Niets betaald: niets terug te geven.
  * - Les afgelast: altijd terug.
  * - Ruim op tijd (meer uren dan het venster): terug.
+ * - De studio meldt iemand af en heeft "credit altijd terug bij afmelden door de studio" aan: terug
+ *   (zolang de les nog niet begonnen is). Standaard uit: dan geldt hetzelfde als voor de sporter.
  * - Anders alleen binnen de bedenktijd na het boeken, en alleen als de les nog niet begonnen is.
  */
-export function refundOnCancel({ spent, classCancelled, hoursLeft, freeCancelHours, minutesSinceBooked }) {
+export function refundOnCancel({ spent, classCancelled, hoursLeft, freeCancelHours, minutesSinceBooked, byStudio = false, studioCancelRefund = false }) {
   if (!(spent > 0)) return false;
   if (classCancelled) return true;
   if (hoursLeft >= freeCancelHours) return true;
+  if (byStudio && studioCancelRefund && hoursLeft > 0) return true;
   return hoursLeft > 0 && minutesSinceBooked >= 0 && minutesSinceBooked <= BOOKING_GRACE_MINUTES;
 }
 

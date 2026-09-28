@@ -769,6 +769,9 @@ async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
       hoursLeft,
       freeCancelHours,
       minutesSinceBooked: minutesSince(bookedAtOf(booking), nowMs),
+      // Afgemeld door de studio (niet door de sporter zelf): de studio bepaalt of de credit dan terug gaat.
+      byStudio: isStaff && String(booking.userId) !== uid,
+      studioCancelRefund: orgSnap.data()?.studioCancelRefund === true,
     });
 
     // Komt er een plek vrij? Bij afmelden met een plek, of als degene voor wie een plek werd

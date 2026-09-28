@@ -1813,3 +1813,36 @@ describe('hele les afgelasten', () => {
     expect(store['classes/c1'].cancelledAt).toBeUndefined();
   });
 });
+
+describe('trainer meldt één sporter af, binnen de afmeldtermijn', () => {
+  const lateBooking = async () => {
+    store['classes/c1'] = { ...store['classes/c1'], ...amsterdamWallClock(new Date(Date.now() + 2 * 3_600_000)) };
+    const booked = await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    // Buiten de bedenktijd van een uur na het boeken.
+    const key = `bookings/${booked.body.bookingId}`;
+    store[key] = { ...store[key], createdAt: new Date(Date.now() - 3 * 3_600_000).toISOString() };
+    return booked.body.bookingId;
+  };
+
+  it('standaard vervalt de credit, net als wanneer de sporter het zelf doet', async () => {
+    const id = await lateBooking();
+    const res = await post({ action: 'cancel', bookingId: id }, 'trainer1');
+    expect(res.body.refunded).toBe(false);
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(2);
+  });
+
+  it('met "credit terug bij afmelden door de studio" aan krijgt de sporter hem terug', async () => {
+    store['orgs/vanas'] = { name: 'Van As', studioCancelRefund: true };
+    const id = await lateBooking();
+    const res = await post({ action: 'cancel', bookingId: id }, 'trainer1');
+    expect(res.body.refunded).toBe(true);
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(3);
+  });
+
+  it('de instelling geldt niet als de sporter zichzelf afmeldt', async () => {
+    store['orgs/vanas'] = { name: 'Van As', studioCancelRefund: true };
+    const id = await lateBooking();
+    const res = await post({ action: 'cancel', bookingId: id }, 'sporter1');
+    expect(res.body.refunded).toBe(false);
+  });
+});

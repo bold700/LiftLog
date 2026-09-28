@@ -340,6 +340,11 @@ export interface Org {
    */
   showTrainerNames: boolean;
   /**
+   * Meldt een trainer/beheerder iemand af binnen de afmeldtermijn: krijgt die dan toch zijn credit
+   * terug? Standaard uit: dan geldt dezelfde regel als wanneer de sporter zichzelf afmeldt.
+   */
+  studioCancelRefund: boolean;
+  /**
    * Beheerde lijst van ruimtenamen (Beheer → Lessoorten), zodat een lessoort of losse les een
    * ruimte kiest in plaats van vrij te typen. Voorkomt dat "Boven" en "boven" als twee losse
    * ruimtes eindigen door een typfout. Leeg = nog niets aangemaakt.

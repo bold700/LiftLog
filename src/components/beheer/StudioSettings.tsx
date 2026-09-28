@@ -8,7 +8,13 @@ import { ContentCard } from '../layout';
 import { AccountRetentionSettings } from './AccountRetentionSettings';
 import { useProfile } from '../../context/ProfileContext';
 import { useNotify } from '../../context/NotifyContext';
-import { getOrg, saveOrgBookingPolicy, saveOrgShowTrainerNames, saveOrgStaffAccess } from '../../services/orgService';
+import {
+  getOrg,
+  saveOrgBookingPolicy,
+  saveOrgShowTrainerNames,
+  saveOrgStaffAccess,
+  saveOrgStudioCancelRefund,
+} from '../../services/orgService';
 
 /** Standaard bij een studio die het nog niet heeft ingesteld: zelfde aantal uur als de server. */
 const DEFAULT_FREE_CANCEL_HOURS = 12;
@@ -25,6 +31,8 @@ export function StudioSettings() {
   const [staffAccess, setStaffAccess] = useState(false);
   const [savingAccess, setSavingAccess] = useState(false);
   const [showNames, setShowNames] = useState(false);
+  const [studioRefund, setStudioRefund] = useState(false);
+  const [savingRefund, setSavingRefund] = useState(false);
   const [savingNames, setSavingNames] = useState(false);
 
   useEffect(() => {
@@ -37,6 +45,7 @@ export function StudioSettings() {
       setSavedHours(hours);
       setStaffAccess(org.staffFullClientAccess);
       setShowNames(org.showTrainerNames);
+      setStudioRefund(org.studioCancelRefund);
       setLoaded(true);
     });
     return () => {
@@ -84,6 +93,24 @@ export function StudioSettings() {
     }
   };
 
+  const toggleRefund = async (next: boolean) => {
+    setStudioRefund(next);
+    setSavingRefund(true);
+    try {
+      await saveOrgStudioCancelRefund(orgId, next);
+      notify.success(
+        next
+          ? 'Meldt de studio iemand af, dan krijgt die altijd de credit terug.'
+          : 'Meldt de studio iemand te laat af, dan vervalt de credit, net als bij zelf afmelden.'
+      );
+    } catch (e) {
+      setStudioRefund(!next);
+      notify.error('Opslaan mislukt.', e);
+    } finally {
+      setSavingRefund(false);
+    }
+  };
+
   const toggleNames = async (next: boolean) => {
     setShowNames(next);
     setSavingNames(true);
@@ -126,6 +153,15 @@ export function StudioSettings() {
               {savingPolicy ? 'Bezig…' : 'Opslaan'}
             </Button>
           </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2.5, mb: 0.5 }}>
+            Meldt een trainer iemand af (via Deelnemers → Verwijderen)? Uit: dezelfde regel als hierboven, dus binnen de
+            termijn vervalt de credit. Aan: de sporter krijgt de credit altijd terug. Een hele les afgelasten geeft altijd
+            alle credits terug.
+          </Typography>
+          <FormControlLabel
+            control={<Switch checked={studioRefund} disabled={savingRefund} onChange={(e) => void toggleRefund(e.target.checked)} />}
+            label="Credit terug als de studio iemand afmeldt"
+          />
         </ContentCard>
 
         <ContentCard>
