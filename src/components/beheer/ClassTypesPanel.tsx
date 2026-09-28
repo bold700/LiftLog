@@ -37,6 +37,7 @@ import {
 } from '../../services/classTypeService';
 import { getWorkoutsForUser } from '../../services/workoutFirestore';
 import { getOrg, saveOrgRooms } from '../../services/orgService';
+import { sortClassTypesByWeek } from '../../utils/classTypeOrder';
 import { NumberField } from '../NumberField';
 import { designTokens } from '../../theme/designTokens';
 import type { ClassScheduleSlot, ClassType, Profile, Schema, SessionKind } from '../../types';
@@ -132,7 +133,7 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
       const role = profile?.profile?.role ?? 'sporter';
       const [list, mine] = await Promise.all([getClassTypes(), uid ? getWorkoutsForUser(uid, role).catch(() => []) : Promise.resolve([])]);
       // Vaste PT-momenten van één lid beheer je op diens profiel, niet hier.
-      setTypes(list.filter((t) => !t.privateFor));
+      setTypes(sortClassTypesByWeek(list.filter((t) => !t.privateFor)));
       setSchemas(mine);
     } catch (e) {
       notify.error(t('classTypes.saveFailed'), e);
