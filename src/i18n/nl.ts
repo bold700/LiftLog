@@ -124,6 +124,7 @@ export const nl = {
     noLimit: 'Geen limiet',
     defaultTrainer: 'Vaste trainer',
     anyTrainer: 'Geen vaste trainer',
+    unknownTrainer: 'Trainer niet gevonden',
     linkedWorkout: 'Gekoppeld schema',
     noWorkout: 'Geen schema',
     delete: 'Verwijderen',
