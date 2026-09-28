@@ -4,7 +4,7 @@
  * tikken opent het paneel als dialoog. De knop "Nieuwe lessoort" staat in de kop van Beheer en
  * geeft via `createSignal` door dat er een lege lessoort open moet.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
@@ -13,6 +13,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   IconButton,
   MenuItem,
   TextField,
@@ -37,6 +38,7 @@ import {
 } from '../../services/classTypeService';
 import { getWorkoutsForUser } from '../../services/workoutFirestore';
 import { getOrg, saveOrgRooms } from '../../services/orgService';
+import { sortClassTypesByWeek } from '../../utils/classTypeOrder';
 import { NumberField } from '../NumberField';
 import { designTokens } from '../../theme/designTokens';
 import type { ClassScheduleSlot, ClassType, Profile, Schema, SessionKind } from '../../types';
@@ -102,6 +104,9 @@ const toDraft = (c: ClassType): Draft => ({
   createdAt: c.createdAt || undefined,
 });
 
+/** Waarde van de keuze "+ Nieuwe ruimte…" in de ruimtelijst. */
+const NEW_ROOM = '__new_room__';
+
 export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
   const { t, lang } = useI18n();
   const notify = useNotify();
@@ -119,10 +124,8 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
   const isAdmin = profile?.profile?.role === 'admin';
   const orgId = profile?.activeOrgId ?? null;
   const [rooms, setRooms] = useState<string[]>([]);
-  const roomsRef = useRef<string[]>([]);
-  roomsRef.current = rooms;
-  const [newRoom, setNewRoom] = useState('');
-  const [savingRoom, setSavingRoom] = useState(false);
+  /** Een nieuwe ruimte typen in plaats van er een uit de lijst te kiezen. */
+  const [typingRoom, setTypingRoom] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -131,7 +134,7 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
       const role = profile?.profile?.role ?? 'sporter';
       const [list, mine] = await Promise.all([getClassTypes(), uid ? getWorkoutsForUser(uid, role).catch(() => []) : Promise.resolve([])]);
       // Vaste PT-momenten van één lid beheer je op diens profiel, niet hier.
-      setTypes(list.filter((t) => !t.privateFor));
+      setTypes(sortClassTypesByWeek(list.filter((t) => !t.privateFor)));
       setSchemas(mine);
     } catch (e) {
       notify.error(t('classTypes.saveFailed'), e);
@@ -155,55 +158,7 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
     void getOrg(orgId).then((org) => setRooms(org?.rooms ?? []));
   }, [orgId]);
 
-  const addRoom = async () => {
-    const name = newRoom.trim();
-    if (!name || !orgId) return;
-    if (rooms.some((r) => r.toLowerCase() === name.toLowerCase())) {
-      notify.error(t('classTypes.rooms.duplicate'));
-      return;
-    }
-    setSavingRoom(true);
-    try {
-      const updated = [...rooms, name].sort((a, b) => a.localeCompare(b));
-      await saveOrgRooms(orgId, updated);
-      setRooms(updated);
-      setNewRoom('');
-    } catch (e) {
-      notify.error(t('classTypes.saveFailed'), e);
-    } finally {
-      setSavingRoom(false);
-    }
-  };
 
-  const removeRoom = async (name: string) => {
-    if (!orgId) return;
-    setSavingRoom(true);
-    try {
-      const updated = rooms.filter((r) => r !== name);
-      await saveOrgRooms(orgId, updated);
-      setRooms(updated);
-      // Eén tik op het kruisje wiste de ruimte meteen; nu met een weg terug (M3: ongedaan maken i.p.v. extra vraag).
-      notify.undo(t('classTypes.rooms.removed', { name }), async () => {
-        // Uit de actuele lijst in het scherm (ref), niet opnieuw uit de database: dan telt een ruimte
-        // die je intussen hebt toegevoegd mee en hangt het terugzetten niet af van een extra leesactie.
-        const current = roomsRef.current;
-        if (current.some((r) => r.toLowerCase() === name.toLowerCase())) return;
-        const restored = [...current, name].sort((a, b) => a.localeCompare(b));
-        setRooms(restored);
-        try {
-          await saveOrgRooms(orgId, restored);
-          notify.success(t('classTypes.rooms.restored', { name }));
-        } catch (e) {
-          setRooms(current);
-          notify.error(t('classTypes.saveFailed'), e);
-        }
-      });
-    } catch (e) {
-      notify.error(t('classTypes.saveFailed'), e);
-    } finally {
-      setSavingRoom(false);
-    }
-  };
 
   // Kop-knop "Nieuwe lessoort": een lege lessoort openen.
   useEffect(() => {
@@ -254,6 +209,10 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
 
   const isNew = useMemo(() => !!draft && !types.some((c) => c.id === draft.id), [draft, types]);
 
+  // Ook een ruimte die (nog) niet in de lijst staat tonen, bijv. door een trainer ingevuld.
+  const roomOptions = draft?.room.trim() && !rooms.some((r) => r.toLowerCase() === draft.room.trim().toLowerCase()) && !typingRoom ? [...rooms, draft.room.trim()] : rooms;
+  useEffect(() => setTypingRoom(false), [draft?.id]);
+
   const save = async () => {
     if (!draft) return;
     const name = draft.name.trim();
@@ -261,6 +220,9 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
     const creditCost = Number(draft.creditCost);
     if (!name) return setError(t('classTypes.nameRequired'));
     if (draft.schedule.some((s) => s.endTime <= s.startTime)) return setError(t('classTypes.schedule.timeInvalid'));
+    // Bestaat de ruimte al (andere hoofdletters)? Dan die schrijfwijze, zodat "boven" geen tweede ruimte wordt.
+    const typedRoom = draft.room.trim();
+    const roomName = rooms.find((r) => r.toLowerCase() === typedRoom.toLowerCase()) ?? typedRoom;
     setSaving(true);
     setError(null);
     try {
@@ -272,7 +234,7 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         defaultTrainerId: draft.defaultTrainerId || null,
         schemaId: draft.schemaId || null,
         schedule: draft.schedule,
-        room: draft.room.trim() || null,
+        room: roomName || null,
         sessionKind: draft.sessionKind,
         description: draft.description.trim() || null,
         createdAt: draft.createdAt,
@@ -285,6 +247,14 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         notify.error(t('classTypes.schedule.generateFailed'), e);
         return null;
       });
+      // Een nieuw getypte ruimte komt in de lijst van de studio (alleen een beheerder mag die lijst wijzigen).
+      if (roomName && orgId && isAdmin && !rooms.includes(roomName)) {
+        const updated = [...rooms, roomName].sort((a, b) => a.localeCompare(b));
+        await saveOrgRooms(orgId, updated)
+          .then(() => setRooms(updated))
+          .catch((e) => notify.error(t('classTypes.saveFailed'), e));
+      }
+      setTypingRoom(false);
       notify.success(t('classTypes.saved'));
       warnStaleKept(synced?.staleWithBookings);
       await load();
@@ -353,58 +323,6 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
       setSaving(false);
     }
   };
-
-  /**
-   * Ruimtelijst: beheerd i.p.v. vrije tekst, zodat een lessoort/losse les uit deze lijst kiest
-   * (zie de select hieronder bij `classTypes.room`) en typfouten geen twee "ruimtes" meer maken.
-   * Alleen een beheerder kan wijzigen (Firestore-regels staan alleen admin toe op `orgs`).
-   */
-  const roomsManager = (
-    <Box sx={{ p: 2, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground, mb: 2 }}>
-      <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 0.5 }}>
-        {t('classTypes.rooms.title')}
-      </Typography>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-        {isAdmin ? t('classTypes.rooms.help') : t('classTypes.rooms.adminOnly')}
-      </Typography>
-      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: isAdmin ? 1.5 : 0 }}>
-        {rooms.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            {t('classTypes.rooms.empty')}
-          </Typography>
-        ) : (
-          rooms.map((r) => (
-            <Chip
-              key={r}
-              label={r}
-              size="small"
-              onDelete={isAdmin ? () => void removeRoom(r) : undefined}
-              disabled={savingRoom}
-              aria-label={isAdmin ? t('classTypes.rooms.remove') : undefined}
-            />
-          ))
-        )}
-      </Box>
-      {isAdmin && (
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <TextField
-            size="small"
-            label={t('classTypes.rooms.newLabel')}
-            placeholder={t('classTypes.rooms.placeholder')}
-            value={newRoom}
-            onChange={(e) => setNewRoom(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void addRoom();
-            }}
-            disabled={savingRoom}
-          />
-          <Button size="small" variant="outlined" onClick={() => void addRoom()} disabled={savingRoom || !newRoom.trim()}>
-            {t('classTypes.rooms.add')}
-          </Button>
-        </Box>
-      )}
-    </Box>
-  );
 
   const list = (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1, minWidth: 0 }}>
@@ -486,14 +404,44 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
             </MenuItem>
           ))}
         </TextField>
-        <TextField select label={t('classTypes.room')} size="small" fullWidth value={draft.room} onChange={(e) => setDraft({ ...draft, room: e.target.value })}>
-          <MenuItem value="">{t('classTypes.noRoom')}</MenuItem>
-          {rooms.map((r) => (
-            <MenuItem key={r} value={r}>
-              {r}
+        {typingRoom ? (
+          <TextField
+            label={t('classTypes.rooms.newLabel')}
+            placeholder={t('classTypes.rooms.placeholder')}
+            size="small"
+            fullWidth
+            autoFocus
+            value={draft.room}
+            onChange={(e) => setDraft({ ...draft, room: e.target.value })}
+            onBlur={() => !draft.room.trim() && setTypingRoom(false)}
+            helperText={t('classTypes.rooms.newHelp')}
+          />
+        ) : (
+          <TextField
+            select
+            label={t('classTypes.room')}
+            size="small"
+            fullWidth
+            value={draft.room}
+            onChange={(e) => {
+              // Nieuwe ruimte: typen in plaats van kiezen; bij Opslaan komt hij in de lijst van de studio.
+              if (e.target.value === NEW_ROOM) {
+                setTypingRoom(true);
+                setDraft({ ...draft, room: '' });
+              } else setDraft({ ...draft, room: e.target.value });
+            }}
+          >
+            <MenuItem value="">{t('classTypes.noRoom')}</MenuItem>
+            {roomOptions.map((r) => (
+              <MenuItem key={r} value={r}>
+                {r}
+              </MenuItem>
+            ))}
+            <MenuItem value={NEW_ROOM} sx={{ color: 'primary.main', fontWeight: 500 }}>
+              {t('classTypes.rooms.addNew')}
             </MenuItem>
-          ))}
-        </TextField>
+          </TextField>
+        )}
       </Box>
       <TextField
         label={t('classTypes.description')}
@@ -550,6 +498,8 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 1.5 }}>
           {draft.schedule.map((slot, i) => (
             <Box key={i} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* Lijn tussen twee weekmomenten, zodat duidelijk is welke tijden bij welke dag horen. */}
+              {i > 0 && <Divider sx={{ mb: 0.5 }} />}
               <TextField
                 select
                 size="small"
@@ -644,7 +594,6 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
   if (!wide) {
     return (
       <>
-        {roomsManager}
         {list}
         <Dialog open={!!draft} onClose={() => setDraft(null)} fullScreen>
           <FullScreenDialogTitle title={isNew ? t('classTypes.newType') : draft?.name ?? ''} onClose={() => setDraft(null)} />
@@ -661,7 +610,6 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
 
   return (
     <>
-      {roomsManager}
       <Box sx={{ display: 'flex', gap: 2.5, alignItems: 'flex-start' }}>
         {list}
         <Box sx={{ width: 400, flexShrink: 0, p: 3, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground, position: 'sticky', top: 24 }}>

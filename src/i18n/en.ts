@@ -157,6 +157,8 @@ export const en: Messages = {
       removed: 'Room "{name}" deleted.',
       restored: 'Room "{name}" restored.',
       newLabel: 'New room',
+      addNew: '+ New room…',
+      newHelp: "Added to your studio's rooms when you save.",
     },
     schedule: {
       title: 'Recurring',

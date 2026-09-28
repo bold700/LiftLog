@@ -159,6 +159,8 @@ export const nl = {
       removed: 'Ruimte "{name}" verwijderd.',
       restored: 'Ruimte "{name}" teruggezet.',
       newLabel: 'Nieuwe ruimte',
+      addNew: '+ Nieuwe ruimte…',
+      newHelp: 'Komt bij de ruimtes van je studio zodra je opslaat.',
     },
     schedule: {
       title: 'Terugkerend',
