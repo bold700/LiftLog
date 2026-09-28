@@ -24,6 +24,7 @@ function toOrg(data: Record<string, unknown>, id: string): Org {
     allowSelfSignup: data.allowSelfSignup === true,
     staffFullClientAccess: data.staffFullClientAccess === true,
     showTrainerNames: data.showTrainerNames === true,
+    studioCancelRefund: data.studioCancelRefund === true,
     rooms: Array.isArray(data.rooms)
       ? Array.from(new Set(data.rooms.filter((r): r is string => typeof r === 'string' && r.trim() !== '').map((r) => r.trim())))
       : [],
@@ -167,6 +168,14 @@ export async function saveOrgStaffAccess(orgId: string, staffFullClientAccess: b
   const id = orgId.trim();
   if (!id) throw new Error('Studio-id ontbreekt');
   await setDoc(doc(db, COLLECTION, id), { staffFullClientAccess: staffFullClientAccess === true, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+/** Credit terug als de studio iemand te laat afmeldt (Beheer → Instellingen → Boekingsbeleid). */
+export async function saveOrgStudioCancelRefund(orgId: string, refund: boolean): Promise<void> {
+  if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
+  const id = orgId.trim();
+  if (!id) throw new Error('Studio-id ontbreekt');
+  await setDoc(doc(db, COLLECTION, id), { studioCancelRefund: refund === true, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 /** Naam van de trainer tonen aan sporters (Beheer → Instellingen). */

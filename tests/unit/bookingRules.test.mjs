@@ -66,3 +66,15 @@ describe('boekingsregels', () => {
     expect(waitlistPosition(entries, 'x')).toBeNull();
   });
 });
+
+describe('afmelden door de studio', () => {
+  const late = { spent: 1, classCancelled: false, hoursLeft: 2, freeCancelHours: 12, minutesSinceBooked: 600 };
+  it('standaard geldt hetzelfde als voor de sporter: te laat is de credit kwijt', () => {
+    expect(refundOnCancel({ ...late, byStudio: true })).toBe(false);
+  });
+  it('met de studio-instelling aan gaat de credit terug, maar alleen bij afmelden door de studio', () => {
+    expect(refundOnCancel({ ...late, byStudio: true, studioCancelRefund: true })).toBe(true);
+    expect(refundOnCancel({ ...late, byStudio: false, studioCancelRefund: true })).toBe(false);
+    expect(refundOnCancel({ ...late, hoursLeft: -1, byStudio: true, studioCancelRefund: true })).toBe(false);
+  });
+});

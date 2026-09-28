@@ -1254,9 +1254,17 @@ function ParticipantsDialog({
   const remove = async (booking: Booking) => {
     setBusyId(booking.id);
     try {
-      await cancelBooking(booking.id);
+      const r = await cancelBooking(booking.id);
       setRows((prev) => prev.filter((b) => b.id !== booking.id));
       onChanged();
+      // Zeg erbij wat er met de credit gebeurde: binnen de afmeldtermijn vervalt die (tenzij de studio anders instelde).
+      if (booking.status === 'booked' && (Number(booking.creditsSpent) || 0) > 0) {
+        notify?.success(
+          r.refunded
+            ? `${nameFor(booking.userId)} afgemeld. De credit staat weer op het saldo.`
+            : `${nameFor(booking.userId)} afgemeld. Binnen de afmeldtermijn, dus de credit vervalt.`
+        );
+      }
     } catch (e) {
       notify?.error(e instanceof Error ? e.message : 'Verwijderen mislukt');
     } finally {
