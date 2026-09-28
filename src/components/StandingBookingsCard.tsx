@@ -42,6 +42,7 @@ import {
   cancelBooking,
   getMyBookings,
   getMyStandingBookings,
+  getTrainerNames,
   getUpcomingClasses,
   pauseStandingBooking,
   setStandingBookingActive,
@@ -99,6 +100,8 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
   const [ptOpen, setPtOpen] = useState(false);
   const [pauseFor, setPauseFor] = useState<StandingBooking | null>(null);
   const [skip, setSkip] = useState<{ booking: Booking; cls: StudioClass } | null>(null);
+  /** Sporter: namen van de server, alleen als de studio "naam van de trainer tonen" aan heeft. */
+  const [memberNames, setMemberNames] = useState<Record<string, string>>({});
 
   const today = todayIso();
   const load = useCallback(async () => {
@@ -119,6 +122,17 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (asStaff) return;
+    let cancelled = false;
+    getTrainerNames()
+      .then((names) => !cancelled && setMemberNames(names))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [asStaff]);
+
   /** Server-actie uitvoeren, samenvatting tonen en opnieuw laden. */
   const run = async (fn: () => Promise<Parameters<typeof describeStandingResult>[0]>) => {
     setBusy(true);
@@ -135,7 +149,8 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
 
   const typeById = useMemo(() => new Map(types.map((c) => [c.id, c])), [types]);
   const publicTypes = useMemo(() => types.filter((c) => !c.privateFor), [types]);
-  const trainerName = (id: string | null | undefined) => (id ? trainers.find((tr) => tr.userId === id)?.name : undefined);
+  const trainerName = (id: string | null | undefined) =>
+    id ? (trainers.find((tr) => tr.userId === id)?.name ?? memberNames[id]) : undefined;
   const weekdayLabel = (wd: number) => t(`classTypes.schedule.weekdayLabels.${WEEKDAY_KEYS[wd]}`);
   const slotLabel = (s: Pick<StandingBooking, 'classTypeId' | 'weekday' | 'startTime'>) => {
     const slot = typeById.get(s.classTypeId)?.schedule.find((sl) => sl.weekday === s.weekday && sl.startTime === s.startTime);

@@ -218,6 +218,8 @@ export default async function handler(req, res) {
         return await cancel(res, db, uid, myOrgs, isStaff, String(body.bookingId ?? '').trim());
       case 'waitlistPositions':
         return await waitlistPositions(res, db, uid, myOrgs);
+      case 'trainerNames':
+        return await trainerNames(res, db, myOrgs, isStaff, orgIdOf(body.orgId ?? meData.orgId));
       case 'settleWaitlists':
         return json(res, 200, { settled: await settleExpiredHolds(db, myOrgs), build: BUILD });
       case 'releaseHold':
@@ -537,6 +539,28 @@ async function notifyAfterCancel(db, uid, notice, result) {
   } catch (e) {
     console.error('[booking] melding na afmelden mislukt', e);
   }
+}
+
+/**
+ * Namen van de trainers van een studio ({ [uid]: naam }), voor bij de lessen. Een lid mag de
+ * profielen van trainers niet lezen (firestore.rules); daarom geeft de server alleen de naam, en
+ * alleen als de beheerder "Naam van de trainer tonen aan sporters" aan heeft gezet. Nooit een
+ * e-mailadres: zonder naam blijft de trainer naamloos.
+ */
+async function trainerNames(res, db, myOrgs, isStaff, orgId) {
+  if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Geen lid van deze studio.', build: BUILD });
+  const orgSnap = await db.collection('orgs').doc(orgId).get();
+  const show = isStaff || orgSnap.data()?.showTrainerNames === true;
+  if (!show) return json(res, 200, { names: {}, build: BUILD });
+  const members = await db.collection('profiles').where('orgIds', 'array-contains', orgId).get();
+  const names = {};
+  for (const d of members.docs) {
+    const p = d.data();
+    const role = String(p.role ?? 'sporter');
+    const name = typeof p.displayName === 'string' ? p.displayName.trim() : '';
+    if ((role === 'trainer' || role === 'admin') && name) names[d.id] = name;
+  }
+  return json(res, 200, { names, build: BUILD });
 }
 
 /**

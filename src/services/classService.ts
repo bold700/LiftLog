@@ -351,6 +351,15 @@ export const CREDITS_CHANGED_EVENT = 'liftlog:credits-changed';
 const READ_ONLY_ACTIONS = new Set(['waitlistPositions', 'mailStatus', 'listBroadcasts']);
 
 /** Op welke plek sta je op de wachtlijst, per les ({ [classId]: 2 }); zonder namen. */
+/**
+ * Namen van de trainers ({ [uid]: naam }) voor bij de lessen. Voor een sporter alleen als de
+ * beheerder dat aan heeft gezet (Beheer → Instellingen); anders een lege lijst.
+ */
+export async function getTrainerNames(): Promise<Record<string, string>> {
+  const r = await callBooking<{ names?: Record<string, string> }>({ action: 'trainerNames', orgId: requireOrgId() });
+  return r.names ?? {};
+}
+
 export async function getWaitlistPositions(): Promise<Record<string, number>> {
   const r = await callBooking<{ positions?: Record<string, number> }>({ action: 'waitlistPositions' });
   return r.positions ?? {};

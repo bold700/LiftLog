@@ -1757,3 +1757,30 @@ describe('berichten van de studio', () => {
     expect(res.body.broadcasts.map((b) => b.title)).toEqual(['Andere zaal', 'Oud']);
   });
 });
+
+describe('naam van de trainer voor sporters', () => {
+  beforeEach(() => {
+    store['profiles/trainer1'] = { ...store['profiles/trainer1'], displayName: 'Jesse', email: 'jesse@x.nl' };
+    store['profiles/admin1'] = { userId: 'admin1', orgIds: ['vanas'], role: 'admin', email: 'zonder-naam@x.nl' };
+    store['profiles/trainerB'] = { userId: 'trainerB', orgIds: ['studiob'], role: 'trainer', displayName: 'Bo' };
+  });
+
+  it('geeft een sporter geen namen zolang de studio het niet aan heeft', async () => {
+    store['orgs/vanas'] = { name: 'Van As' };
+    const res = await post({ action: 'trainerNames', orgId: 'vanas' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.names).toEqual({});
+  });
+
+  it('geeft alleen namen van trainers van de eigen studio, nooit een e-mailadres', async () => {
+    store['orgs/vanas'] = { name: 'Van As', showTrainerNames: true };
+    const res = await post({ action: 'trainerNames', orgId: 'vanas' });
+    expect(res.body.names).toEqual({ trainer1: 'Jesse' });
+  });
+
+  it('staf ziet de namen altijd; een andere studio vragen mag niet', async () => {
+    store['orgs/vanas'] = { name: 'Van As' };
+    expect((await post({ action: 'trainerNames', orgId: 'vanas' }, 'trainer1')).body.names).toEqual({ trainer1: 'Jesse' });
+    expect((await post({ action: 'trainerNames', orgId: 'studiob' })).statusCode).toBe(403);
+  });
+});

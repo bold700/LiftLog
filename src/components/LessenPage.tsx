@@ -28,6 +28,7 @@ import {
   getUpcomingClasses,
   getMyBookings,
   getMyStandingBookings,
+  getTrainerNames,
   getBookingsForClass,
   getCreditBalance,
   bookClass,
@@ -209,8 +210,8 @@ export function LessenPage() {
   const [lateCancel, setLateCancel] = useState<Booking | null>(null);
   /**
    * Naam per trainerId, voor de trainernaam op de rij en in de reserveer-dialoog (Figma toont
-   * "Kenny" onder de lestitel). Alleen voor staf: een sporter mag niet elk trainerprofiel lezen
-   * (firestore.rules), dus voor sporters blijft dit leeg en tonen we simpelweg geen naam.
+   * "Kenny" onder de lestitel). Een sporter mag geen trainerprofielen lezen (firestore.rules); die
+   * krijgt de namen van de server, alleen als de studio "naam van de trainer tonen" aan heeft staan.
    */
   const [trainerNames, setTrainerNames] = useState<Record<string, string>>({});
 
@@ -245,6 +246,9 @@ export function LessenPage() {
         const names: Record<string, string> = { [me.userId]: me.displayName?.trim() || me.email || me.userId };
         for (const c of colleagues) names[c.userId] = c.displayName?.trim() || c.email || c.userId;
         setTrainerNames(names);
+      } else {
+        // Sporter: de namen komen van de server, en alleen als de studio dat aan heeft gezet.
+        setTrainerNames(await getTrainerNames().catch(() => ({})));
       }
     } catch (e) {
       notify?.error(e instanceof Error ? e.message : 'Rooster laden mislukt');
