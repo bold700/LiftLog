@@ -13,6 +13,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   IconButton,
   MenuItem,
   TextField,
@@ -497,6 +498,8 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 1.5 }}>
           {draft.schedule.map((slot, i) => (
             <Box key={i} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* Lijn tussen twee weekmomenten, zodat duidelijk is welke tijden bij welke dag horen. */}
+              {i > 0 && <Divider sx={{ mb: 0.5 }} />}
               <TextField
                 select
                 size="small"
