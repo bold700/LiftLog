@@ -60,6 +60,10 @@ const SESSION_KINDS: SessionKind[] = ['1on1', 'duo', 'group', 'concept'];
 interface ClassTypesPanelProps {
   /** Trainers en beheerders van de studio, voor "Vaste trainer". */
   staff: Profile[];
+  /** Alle profielen van de studio: een vaste trainer die geen trainer meer is, houdt zo zijn naam. */
+  profiles: Profile[];
+  /** Profielen worden nog geladen: dan nog geen naam (en zeker geen gebruikers-id) tonen. */
+  profilesLoading: boolean;
   /** Telt op bij elke klik op "Nieuwe lessoort" in de kop. */
   createSignal: number;
 }
@@ -107,7 +111,7 @@ const toDraft = (c: ClassType): Draft => ({
 /** Waarde van de keuze "+ Nieuwe ruimte…" in de ruimtelijst. */
 const NEW_ROOM = '__new_room__';
 
-export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
+export function ClassTypesPanel({ staff, profiles, profilesLoading, createSignal }: ClassTypesPanelProps) {
   const { t, lang } = useI18n();
   const notify = useNotify();
   const profile = useProfile();
@@ -158,8 +162,6 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
     void getOrg(orgId).then((org) => setRooms(org?.rooms ?? []));
   }, [orgId]);
 
-
-
   // Kop-knop "Nieuwe lessoort": een lege lessoort openen.
   useEffect(() => {
     if (createSignal > 0) {
@@ -171,10 +173,11 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
   const staffName = useCallback(
     (id: string | null) => {
       if (!id) return t('classTypes.anyTrainer');
-      const p = staff.find((s) => s.userId === id);
-      return p ? p.displayName?.trim() || p.email || id : id;
+      const p = staff.find((s) => s.userId === id) ?? profiles.find((s) => s.userId === id);
+      if (p) return p.displayName?.trim() || p.email || t('classTypes.unknownTrainer');
+      return profilesLoading ? null : t('classTypes.unknownTrainer');
     },
-    [staff, t]
+    [staff, profiles, profilesLoading, t]
   );
 
   const summary = useCallback(
@@ -475,9 +478,13 @@ export function ClassTypesPanel({ staff, createSignal }: ClassTypesPanelProps) {
         <MenuItem value="">{t('classTypes.anyTrainer')}</MenuItem>
         {staff.map((p) => (
           <MenuItem key={p.userId} value={p.userId}>
-            {p.displayName?.trim() || p.email || p.userId}
+            {p.displayName?.trim() || p.email || t('classTypes.unknownTrainer')}
           </MenuItem>
         ))}
+        {/* Vaste trainer die geen trainer meer is (of niet meer bij de studio): blijft zichtbaar tot je een ander kiest. */}
+        {draft.defaultTrainerId && !staff.some((p) => p.userId === draft.defaultTrainerId) && (
+          <MenuItem value={draft.defaultTrainerId}>{staffName(draft.defaultTrainerId) ?? '…'}</MenuItem>
+        )}
       </TextField>
       <TextField select label={t('classTypes.linkedWorkout')} size="small" fullWidth value={draft.schemaId} onChange={(e) => setDraft({ ...draft, schemaId: e.target.value })}>
         <MenuItem value="">{t('classTypes.noWorkout')}</MenuItem>

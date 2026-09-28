@@ -469,7 +469,7 @@ export function BeheerPage() {
           ) : section === 'instellingen' ? (
             <StudioSettings />
           ) : section === 'lessoorten' ? (
-            <ClassTypesPanel staff={trainers} createSignal={newTypeSignal} />
+            <ClassTypesPanel staff={trainers} profiles={profiles} profilesLoading={loading} createSignal={newTypeSignal} />
           ) : section === 'lesplanning' ? (
             <ClassPlanningPanel profiles={profiles} selfId={selfId} />
           ) : section === 'oefeningen' ? (

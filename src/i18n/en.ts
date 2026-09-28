@@ -122,6 +122,7 @@ export const en: Messages = {
     noLimit: 'No limit',
     defaultTrainer: 'Default trainer',
     anyTrainer: 'No fixed trainer',
+    unknownTrainer: 'Trainer not found',
     linkedWorkout: 'Linked workout',
     noWorkout: 'No workout',
     delete: 'Delete',
