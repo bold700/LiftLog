@@ -68,6 +68,15 @@ export const messages = {
       body: `Je plek bij ${cls?.title || 'de les'} (${when(cls)}) is geannuleerd door de studio.${refunded ? ' Je credit staat weer op je saldo.' : ''}`,
     };
   },
+  /** De studio gelast de hele les af: niemand hoeft iets te doen, een betaalde credit staat terug. */
+  classCancelledByStudio(cls, { refunded = false, waitlist = false } = {}) {
+    return {
+      title: 'Les afgelast',
+      body: `${cls?.title || 'De les'} (${when(cls)}) gaat niet door.${
+        waitlist ? ' Je stond op de wachtlijst; die is vervallen.' : refunded ? ' Je credit staat weer op je saldo.' : ''
+      }`,
+    };
+  },
   /** Doorgeschoven van de wachtlijst: je staat ingeschreven, en hebt een uur om gratis af te melden. */
   waitlistPromoted(cls, cost) {
     return {

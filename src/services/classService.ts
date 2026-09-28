@@ -317,6 +317,14 @@ export async function cancelClass(classId: string): Promise<void> {
   await setDoc(doc(db, CLASSES, classId), { cancelledAt: new Date().toISOString(), updatedAt: serverTimestamp() }, { merge: true });
 }
 
+/**
+ * Een les met ingeschreven sporters afgelasten: de server meldt iedereen af, zet betaalde credits
+ * terug (ook kort van tevoren), laat niemand van de wachtlijst doorschuiven en stuurt een melding.
+ */
+export function cancelClassForEveryone(classId: string): Promise<{ cancelled: number; refunded: number; failed: number }> {
+  return callBooking({ action: 'cancelClass', classId });
+}
+
 /** Een per ongeluk afgelasten les terugzetten: `cancelledAt` weer wissen. */
 export async function restoreClass(classId: string): Promise<void> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');

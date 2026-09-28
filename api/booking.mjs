@@ -216,6 +216,9 @@ export default async function handler(req, res) {
         );
       case 'cancel':
         return await cancel(res, db, uid, myOrgs, isStaff, String(body.bookingId ?? '').trim());
+      case 'cancelClass':
+        if (!isStaff) return json(res, 403, { error: 'Alleen trainers en beheerders kunnen een les afgelasten.', build: BUILD });
+        return await cancelWholeClass(res, db, uid, myOrgs, String(body.classId ?? '').trim());
       case 'waitlistPositions':
         return await waitlistPositions(res, db, uid, myOrgs);
       case 'trainerNames':
@@ -512,6 +515,56 @@ async function cancel(res, db, uid, myOrgs, isStaff, bookingId) {
   const { notice, ...result } = await cancelBookingCore(db, uid, myOrgs, isStaff, bookingId);
   await notifyAfterCancel(db, uid, notice, result);
   return json(res, 200, { ...result, build: BUILD });
+}
+
+/**
+ * Een hele les afgelasten (trainer ziek, zaal dicht). De les gaat eerst op afgelast, zodat iedereen
+ * daarna afgemeld wordt mét zijn credit terug (een afgelaste les telt nooit als te laat afmelden)
+ * en er niemand van de wachtlijst doorschuift. Elke ingeschrevene en wachtende krijgt een melding.
+ */
+async function cancelWholeClass(res, db, uid, myOrgs, classId) {
+  if (!classId) return json(res, 400, { error: 'Geen les opgegeven.', build: BUILD });
+  const classRef = db.collection('classes').doc(classId);
+  const snap = await classRef.get();
+  if (!snap.exists) return json(res, 404, { error: 'Deze les bestaat niet (meer).', build: BUILD });
+  const cls = snap.data();
+  const orgId = orgIdOf(cls.orgId);
+  if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Deze les hoort niet bij jouw studio.', build: BUILD });
+
+  const nowIso = new Date().toISOString();
+  // autoCancelled uit: de vaste-PT-planning mag een les die de studio zelf afgelastte niet heropenen.
+  await classRef.set({ cancelledAt: cls.cancelledAt || nowIso, autoCancelled: false, ...NO_HOLD, updatedAt: nowIso }, { merge: true });
+
+  const bookings = await db.collection('bookings').where('classId', '==', classId).get();
+  const open = bookings.docs.filter((d) => ['booked', 'waitlist'].includes(String(d.data().status)));
+  const orgSnap = await db.collection('orgs').doc(orgId).get();
+  const notify = notificationEnabled(orgSnap.exists ? orgSnap.data() : null, 'classCancelled');
+  let cancelled = 0;
+  let refunded = 0;
+  for (const d of open) {
+    const waitlist = d.data().status === 'waitlist';
+    try {
+      const result = await cancelBookingCore(db, uid, myOrgs, true, d.id);
+      cancelled += 1;
+      if (result.refunded) refunded += 1;
+      const userId = String(d.data().userId);
+      if (notify && userId !== uid) {
+        try {
+          await sendPushToUser(db, userId, {
+            ...pushMessages.classCancelledByStudio(cls, { refunded: result.refunded, waitlist }),
+            data: { kind: 'classCancelled' },
+          });
+        } catch (e) {
+          console.warn('[booking] melding afgelaste les mislukt:', e?.message ?? e);
+        }
+      }
+    } catch (e) {
+      console.warn('[booking] afmelden bij afgelaste les mislukt:', d.id, e?.message ?? e);
+    }
+  }
+  // Tellers netjes op nul, ook als er onderweg iets niet lukte en opnieuw geprobeerd wordt.
+  if (cancelled === open.length) await classRef.set({ bookedCount: 0, waitlistCount: 0 }, { merge: true });
+  return json(res, 200, { cancelled, refunded, failed: open.length - cancelled, build: BUILD });
 }
 
 /**

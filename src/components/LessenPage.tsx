@@ -29,6 +29,7 @@ import {
   getMyBookings,
   getMyStandingBookings,
   getTrainerNames,
+  cancelClassForEveryone,
   getBookingsForClass,
   getCreditBalance,
   bookClass,
@@ -397,11 +398,23 @@ export function LessenPage() {
 
   const handleDelete = useCallback(
     async (cls: StudioClass) => {
-      if (cls.bookedCount > 0) {
-        notify?.error('Er staan mensen ingeschreven. Meld die eerst af.');
+      setCancelConfirmClass(null);
+      if (cls.bookedCount > 0 || cls.waitlistCount > 0) {
+        // Met deelnemers: de server meldt iedereen af, met credit terug en een melding.
+        setBusyId(cls.id);
+        try {
+          const r = await cancelClassForEveryone(cls.id);
+          await load();
+          const who = r.cancelled === 1 ? '1 persoon' : `${r.cancelled} personen`;
+          if (r.failed > 0) notify?.error(`${cls.title} afgelast, maar ${r.failed} afmelding(en) lukten niet. Probeer het nog eens.`);
+          else notify?.success(`${cls.title} afgelast. ${who} afgemeld${r.refunded ? `, ${r.refunded} credit${r.refunded === 1 ? '' : 's'} teruggezet` : ''}.`);
+        } catch (e) {
+          notify?.error(e instanceof Error ? e.message : 'Les afgelasten mislukt');
+        } finally {
+          setBusyId(null);
+        }
         return;
       }
-      setCancelConfirmClass(null);
       setBusyId(cls.id);
       try {
         // Een les uit een terugkerende lessoort afgelasten in plaats van verwijderen: anders zet de
@@ -972,6 +985,8 @@ function CancelClassDialog({
 }) {
   if (!cls) return null;
   const recurring = !!cls.classTypeId;
+  const people = cls.bookedCount + cls.waitlistCount;
+  const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="xs">
@@ -982,9 +997,16 @@ function CancelClassDialog({
           {cls.endTime ? `–${cls.endTime}` : ''} · {cls.title}
         </Typography>
         <Typography variant="body2" sx={{ mt: 1.5 }}>
-          {recurring
-            ? 'Sporters die al ingeschreven waren zien de les als afgelast. Je kunt dit hierna nog herstellen.'
-            : 'Dit is een losse les; ze wordt definitief verwijderd en kan niet worden hersteld.'}
+          {people > 0
+            ? `${[
+                cls.bookedCount > 0 ? count(cls.bookedCount, 'ingeschrevene', 'ingeschrevenen') : null,
+                cls.waitlistCount > 0 ? `${cls.waitlistCount} op de wachtlijst` : null,
+              ]
+                .filter(Boolean)
+                .join(' en ')} worden afgemeld en krijgen een melding. Betaalde credits gaan terug, ook als het kort van tevoren is. Dit kun je niet terugdraaien.`
+            : recurring
+              ? 'Er staat nog niemand ingeschreven. Je kunt dit hierna nog herstellen.'
+              : 'Dit is een losse les; ze wordt definitief verwijderd en kan niet worden hersteld.'}
         </Typography>
       </DialogContent>
       <DialogActions>
@@ -992,7 +1014,7 @@ function CancelClassDialog({
           Annuleren
         </Button>
         <Button variant="contained" color="error" disabled={busy} onClick={onConfirm}>
-          {recurring ? 'Ja, afgelasten' : 'Ja, verwijderen'}
+          {recurring || people > 0 ? 'Ja, afgelasten' : 'Ja, verwijderen'}
         </Button>
       </DialogActions>
     </Dialog>

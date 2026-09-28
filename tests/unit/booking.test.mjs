@@ -1784,3 +1784,32 @@ describe('naam van de trainer voor sporters', () => {
     expect((await post({ action: 'trainerNames', orgId: 'studiob' })).statusCode).toBe(403);
   });
 });
+
+describe('hele les afgelasten', () => {
+  const soon = () => amsterdamWallClock(new Date(Date.now() + 2 * 3_600_000));
+
+  it('meldt iedereen af, geeft de credit terug (ook kort van tevoren) en schuift niemand door', async () => {
+    store['classes/c1'] = { ...store['classes/c1'], ...soon() };
+    await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    await post({ action: 'book', classId: 'c1' }, 'sporter2');
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(2);
+
+    const res = await post({ action: 'cancelClass', classId: 'c1' }, 'trainer1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ cancelled: 2, refunded: 1, failed: 0 });
+
+    const bookings = Object.entries(store).filter(([k]) => k.startsWith('bookings/')).map(([, v]) => v);
+    expect(bookings.every((b) => b.status === 'cancelled')).toBe(true);
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(3);
+    expect(store['creditAccounts/vanas__sporter2'].balance).toBe(3);
+    expect(store['classes/c1']).toMatchObject({ bookedCount: 0, waitlistCount: 0, autoCancelled: false });
+    expect(store['classes/c1'].cancelledAt).toBeTruthy();
+  });
+
+  it('mag alleen door staf, en alleen in de eigen studio', async () => {
+    expect((await post({ action: 'cancelClass', classId: 'c1' }, 'sporter1')).statusCode).toBe(403);
+    store['profiles/trainerB'] = { userId: 'trainerB', orgId: 'studiob', orgIds: ['studiob'], role: 'trainer' };
+    expect((await post({ action: 'cancelClass', classId: 'c1' }, 'trainerB')).statusCode).toBe(403);
+    expect(store['classes/c1'].cancelledAt).toBeUndefined();
+  });
+});
