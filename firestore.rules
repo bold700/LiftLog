@@ -129,7 +129,7 @@ service cloud.firestore {
      */
     function touchesProtectedProfileFields() {
       return request.resource.data.diff(resource.data).affectedKeys()
-        .hasAny(['role', 'orgRoles', 'inactiveOrgs', 'createdByAdmin', 'orgId', 'orgIds', 'platformAdmin', 'userId']);
+        .hasAny(['role', 'orgRoles', 'inactiveOrgs', 'trainsAsMemberOrgs', 'createdByAdmin', 'orgId', 'orgIds', 'platformAdmin', 'userId']);
     }
     /**
      * Wat je op je eigen profiel nooit zelf mag zetten. Naast het bovenstaande ook `trainerId`:
@@ -230,7 +230,8 @@ service cloud.firestore {
             && request.resource.data.get('orgIds', [request.resource.data.get('orgId', defaultOrg())])
                  .hasOnly([request.resource.data.get('orgId', defaultOrg())])
             && !('orgRoles' in request.resource.data)
-            && !('inactiveOrgs' in request.resource.data))
+            && !('inactiveOrgs' in request.resource.data)
+            && !('trainsAsMemberOrgs' in request.resource.data))
         || (isSignedIn()
             && request.auth.uid == userId
             && request.resource.data.get('role', 'sporter') == 'sporter'
@@ -238,6 +239,7 @@ service cloud.firestore {
             && request.resource.data.get('platformAdmin', false) == false
             && !('orgRoles' in request.resource.data)
             && !('inactiveOrgs' in request.resource.data)
+            && !('trainsAsMemberOrgs' in request.resource.data)
             // Je meldt je aan bij één studio; lid worden van een tweede doet een beheerder daar.
             && request.resource.data.get('orgIds', [request.resource.data.get('orgId', defaultOrg())])
                  .hasOnly([request.resource.data.get('orgId', defaultOrg())])
@@ -254,8 +256,9 @@ service cloud.firestore {
              // van het account zelf alleen bij wie maar bij één studio hoort: anders zou een
              // beheerder hier de rol in een andere studio meeveranderen.
              // Actief/inactief ook alleen via de server (api/booking.mjs, actie setMemberActive):
-             // die ruimt ook de reserveringen en het abonnement op.
-             && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['orgRoles', 'inactiveOrgs'])
+             // die ruimt ook de reserveringen en het abonnement op. Meetrainen als lid ook (actie
+             // setTrainsAsMember): daarmee gaat staf credits betalen.
+             && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['orgRoles', 'inactiveOrgs', 'trainsAsMemberOrgs'])
              && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])
                  || resource.data.get('orgIds', [orgOf(resource.data)]).size() == 1)
              && (request.auth.uid == userId || !touchesHealthConsent()))

@@ -19,7 +19,7 @@ import {
 import { db, isFirebaseConfigured } from '../firebase/config';
 import type { HealthConsent, Profile, ProfileRole, LeaderboardVisibility, Limitation, LimitationArea } from '../types';
 import { DEFAULT_ORG_ID, getCurrentOrgId, orgIdOf, orgIdsOf, requireOrgId } from './orgContext';
-import { cleanRole, isInactiveInOrg, parseOrgRoles, roleInOrg } from '../utils/orgRoles';
+import { cleanRole, isInactiveInOrg, parseOrgRoles, roleInOrg, trainsAsMemberInOrg } from '../utils/orgRoles';
 
 const COLLECTION = 'profiles';
 
@@ -69,6 +69,7 @@ function toProfile(data: Record<string, unknown>, userId: string): Profile {
   const accountRole = cleanRole(data.role) ?? 'sporter';
   const orgRoles = parseOrgRoles(data.orgRoles);
   const inactiveOrgs = Array.isArray(data.inactiveOrgs) ? data.inactiveOrgs.map(String) : [];
+  const trainsAsMemberOrgs = Array.isArray(data.trainsAsMemberOrgs) ? data.trainsAsMemberOrgs.map(String) : [];
   const rawVis = data.leaderboardVisibility;
   const leaderboardVisibility: LeaderboardVisibility =
     rawVis === 'anonymous' || rawVis === 'named' || rawVis === 'hidden' ? rawVis : 'named';
@@ -86,6 +87,8 @@ function toProfile(data: Record<string, unknown>, userId: string): Profile {
     orgRoles,
     inactiveOrgs,
     inactive: isInactiveInOrg({ inactiveOrgs }, viewOrg),
+    trainsAsMemberOrgs,
+    trainsAsMember: trainsAsMemberInOrg({ trainsAsMemberOrgs }, viewOrg),
     email: toStr(data.email),
     displayName: toStr(data.displayName),
     photoURL: toStr(data.photoURL),

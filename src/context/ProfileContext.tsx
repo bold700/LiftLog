@@ -6,7 +6,7 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
-import { isInactiveInOrg, roleInOrg } from '../utils/orgRoles';
+import { isInactiveInOrg, roleInOrg, trainsAsMemberInOrg } from '../utils/orgRoles';
 import { useAuth } from './AuthContext';
 import {
   getProfile,
@@ -100,7 +100,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setCurrentOrgId(active);
       setActiveOrgId(active);
       // De rol hoort bij de actieve studio (getProfile las het profiel nog vóór het vastzetten).
-      if (p) p = { ...p, role: roleInOrg(p, active), inactive: isInactiveInOrg(p, active) };
+      if (p) p = { ...p, role: roleInOrg(p, active), inactive: isInactiveInOrg(p, active), trainsAsMember: trainsAsMemberInOrg(p, active) };
       setProfile(p);
       if (p?.role === 'trainer' || p?.role === 'admin') {
         // De ledenlijst apart afvangen: mislukt die, dan blijft het profiel (en dus de rol) staan.
@@ -113,7 +113,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           ]);
           const others = sortByName(everyone.filter((m) => m.userId !== auth.user?.uid));
           setSporters(mySporters);
-          setAllSporters(sortByName(everyone.filter((m) => m.role === 'sporter')));
+          // Sporters, plus staf die ook als lid meetraint (die kun je inschrijven en een schema geven).
+          setAllSporters(sortByName(everyone.filter((m) => m.role === 'sporter' || (m.trainsAsMember && m.userId !== auth.user?.uid))));
           setMembers(others);
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);

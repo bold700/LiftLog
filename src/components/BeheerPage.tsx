@@ -21,6 +21,8 @@ import {
   Tab,
   useMediaQuery,
   useTheme,
+  FormControlLabel,
+  Switch,
 } from '@mui/material';
 import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
 import UploadFileRoundedIcon from '@mui/icons-material/UploadFileRounded';
@@ -64,7 +66,8 @@ import { ClassPlanningPanel } from './beheer/ClassPlanningPanel';
 import { ExerciseLibraryPanel } from './beheer/ExerciseLibraryPanel';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import { assignPlan, getActiveMembershipsForOrg, getPlans, renewDue, unassignPlan } from '../services/planService';
-import { getCreditBalancesForOrg, grantCredits, setMemberActive } from '../services/classService';
+import { getCreditBalancesForOrg, grantCredits, setMemberActive, setTrainsAsMember } from '../services/classService';
+import { paysAsMember } from '../utils/orgRoles';
 import { NumberField } from './NumberField';
 import { designTokens } from '../theme/designTokens';
 import { EMAIL_RE, generatePassword } from '../utils/account';
@@ -91,6 +94,8 @@ interface EditState {
   healthRefused: boolean;
   /** Actief abonnement (planId), '' = geen. */
   planId: string;
+  /** Trainer/beheerder traint ook mee als lid bij deze studio (credits, abonnement, facturen). */
+  trainsAsMember: boolean;
 }
 
 function toEditState(p: Profile, planId = ''): EditState {
@@ -107,6 +112,7 @@ function toEditState(p: Profile, planId = ''): EditState {
     limitations: p.limitations ?? [],
     healthRefused: p.healthConsent?.given === false,
     planId,
+    trainsAsMember: !!p.trainsAsMember,
   };
 }
 
@@ -369,7 +375,7 @@ export function BeheerPage() {
       // profielgegevens; hier alleen rol en abonnement.
       if (target.orgId === profileCtx?.activeOrgId) await updateProfile(target.userId, {
         displayName: edit.displayName.trim() || null,
-        trainerId: edit.role === 'sporter' ? edit.trainerId || null : null,
+        trainerId: paysAsMember(edit) ? edit.trainerId || null : null,
         heightCm: num(edit.heightCm),
         birthDate: edit.birthDate || null,
         gender: edit.gender || null,
@@ -383,6 +389,10 @@ export function BeheerPage() {
       if (edit.planId !== hadPlan) {
         if (edit.planId) await assignPlan(target.userId, edit.planId);
         else await unassignPlan(target.userId);
+      }
+      // Meetrainen als lid (staf): na het abonnement, want uitzetten kan pas zonder abonnement.
+      if (edit.role !== 'sporter' && edit.trainsAsMember !== !!target.trainsAsMember) {
+        await setTrainsAsMember(target.userId, edit.trainsAsMember);
       }
       await load();
       await profileCtx?.refreshProfile();
@@ -629,10 +639,10 @@ export function BeheerPage() {
                 label="Trainer"
                 size="small"
                 fullWidth
-                value={edit.role === 'sporter' ? edit.trainerId || 'none' : 'none'}
+                value={paysAsMember(edit) ? edit.trainerId || 'none' : 'none'}
                 onChange={(e) => setEdit({ ...edit, trainerId: e.target.value === 'none' ? '' : e.target.value })}
-                disabled={edit.role !== 'sporter'}
-                helperText={edit.role !== 'sporter' ? 'Alleen voor sporters.' : ' '}
+                disabled={!paysAsMember(edit)}
+                helperText={!paysAsMember(edit) ? 'Alleen voor wie als lid traint.' : ' '}
               >
                 <MenuItem value="none">Geen trainer</MenuItem>
                 {trainers.map((tr) => (
@@ -641,6 +651,20 @@ export function BeheerPage() {
                   </MenuItem>
                 ))}
               </TextField>
+              {/* Staf die zelf ook lessen volgt: betaalt dan credits en krijgt abonnement en facturen. */}
+              {edit.role !== 'sporter' && (isAdmin || edit.trainsAsMember) && (
+                <Box sx={{ gridColumn: { sm: '1 / -1' }, mt: -1 }}>
+                  <FormControlLabel
+                    control={<Switch checked={edit.trainsAsMember} disabled={!isAdmin} onChange={(e) => setEdit({ ...edit, trainsAsMember: e.target.checked })} />}
+                    label="Traint ook mee als lid"
+                  />
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    {edit.trainsAsMember
+                      ? 'Boeken kost credits, en abonnement en facturen werken zoals bij een sporter.'
+                      : 'Uit: boekt gratis mee als trainer, zonder abonnement of facturen.'}
+                  </Typography>
+                </Box>
+              )}
               <TextField
                 select
                 label={t('plans.membership')}
@@ -648,8 +672,9 @@ export function BeheerPage() {
                 fullWidth
                 value={edit.planId}
                 onChange={(e) => setEdit({ ...edit, planId: e.target.value })}
-                disabled={edit.role !== 'sporter'}
-                helperText={edit.role !== 'sporter' ? 'Alleen voor sporters.' : ' '}
+                // Een lopend abonnement kun je altijd nog stoppen (nodig voordat meetrainen uit kan).
+                disabled={!paysAsMember(edit) && !edit.planId}
+                helperText={!paysAsMember(edit) ? (edit.planId ? 'Zet op geen abonnement om meetrainen uit te zetten.' : 'Alleen voor wie als lid traint.') : ' '}
                 sx={{ gridColumn: { sm: '1 / -1' } }}
               >
                 <MenuItem value="">{t('plans.none')}</MenuItem>
@@ -661,7 +686,7 @@ export function BeheerPage() {
                     </MenuItem>
                   ))}
               </TextField>
-              {edit.role === 'sporter' && (
+              {paysAsMember(edit) && (
                 <Box
                   sx={{
                     gridColumn: { sm: '1 / -1' },
@@ -686,7 +711,7 @@ export function BeheerPage() {
                 </Box>
               )}
               {/* Vaste lessen van dit lid: de trainer zet een klant vast in (bijv. elke zaterdag HIIT). */}
-              {edit.role === 'sporter' && target.role === 'sporter' && (
+              {paysAsMember(edit) && paysAsMember(target) && (
                 <Box sx={{ gridColumn: { sm: '1 / -1' }, p: 2, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackgroundHigh }}>
                   <StandingBookingsCard
                     userId={target.userId}
