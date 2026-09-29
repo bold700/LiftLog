@@ -7,7 +7,7 @@
  */
 import { collection, deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from '../firebase/config';
-import { requireOrgId } from './orgContext';
+import { getCurrentOrgId, requireOrgId } from './orgContext';
 import { apiUrl } from '../utils/apiOrigin';
 import type { SessionKind, StandingBooking, StandingBookingOutcome } from '../types';
 
@@ -344,7 +344,8 @@ export async function callBooking<T>(body: Record<string, unknown>): Promise<T> 
   const res = await fetch(apiUrl('/api/booking'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(body),
+    // De studio die in beeld is: de server rekent met je rol in precies die studio.
+    body: JSON.stringify({ ...body, actingOrgId: getCurrentOrgId() }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string })?.error || 'Er ging iets mis.');

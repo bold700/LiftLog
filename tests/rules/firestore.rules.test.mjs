@@ -490,6 +490,34 @@ await t('oefening zonder naam → geweigerd', false, setDoc(doc(as('trainer1'), 
 await t('trainer werkt een oefening bij → mag', true, updateDoc(doc(as('trainer1'), 'exerciseNotes/vanas__hip-thrust'), { tip: 'Kin naar de borst' }));
 await t('trainer haalt een oefening weg → mag', true, deleteDoc(doc(as('trainer1'), 'exerciseNotes/vanas__hip-thrust')));
 
+console.log('Rol per studio');
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore();
+  // Beheerder bij B, via een uitnodiging sporter bij A: de rol staat per studio.
+  await setDoc(doc(db, 'profiles/mix'), { userId: 'mix', orgId: 'studiob', orgIds: ['studiob', 'vanas'], role: 'admin', orgRoles: { studiob: 'admin', vanas: 'sporter' }, trainerId: null, displayName: 'Mix' });
+  await setDoc(doc(db, 'profiles/lidA'), { userId: 'lidA', orgId: 'vanas', orgIds: ['vanas'], role: 'sporter', trainerId: null });
+  await setDoc(doc(db, 'classTypes/ctRol'), { orgId: 'vanas', name: 'Bootcamp', creditCost: 1, capacity: 10, schedule: [] });
+  await setDoc(doc(db, 'classTypes/ctRolB'), { orgId: 'studiob', name: 'Spinning', creditCost: 1, capacity: 10, schedule: [] });
+});
+await t('beheerder B (sporter bij A) vraagt ledenlijst A op → geweigerd', false, leden('mix', 'vanas'));
+await t('beheerder B (sporter bij A) vraagt ledenlijst B op → mag', true, leden('mix', 'studiob'));
+await t('beheerder B (sporter bij A) leest een lid van A → geweigerd', false, getDoc(doc(as('mix'), 'profiles/lidA')));
+await t('beheerder B (sporter bij A) wijzigt een lessoort van A → geweigerd', false, updateDoc(doc(as('mix'), 'classTypes/ctRol'), { name: 'Overgenomen' }));
+await t('beheerder B (sporter bij A) wijzigt een lessoort van B → mag', true, updateDoc(doc(as('mix'), 'classTypes/ctRolB'), { name: 'Spinning+' }));
+await t('beheerder B (sporter bij A) werkt studio A bij → geweigerd', false, updateDoc(doc(as('mix'), 'orgs/vanas'), { name: 'Overgenomen' }));
+await t('lid van twee studio\'s leest de tweede studio → mag', true, getDoc(doc(as('mix'), 'orgs/vanas')));
+await t('beheerder A leest het profiel van zijn lid mix → mag', true, getDoc(doc(as('admin1'), 'profiles/mix')));
+await t('beheerder A zet orgRoles van een lid → geweigerd', false, updateDoc(doc(as('admin1'), 'profiles/lidA'), { orgRoles: { vanas: 'admin' } }));
+await t('beheerder B verandert de rol van een lid van twee studio\'s → geweigerd', false, updateDoc(doc(as('adminB'), 'profiles/mix'), { role: 'sporter' }));
+await t('beheerder B zet orgRoles van een lid → geweigerd', false, updateDoc(doc(as('adminB'), 'profiles/mix'), { orgRoles: { studiob: 'sporter', vanas: 'admin' } }));
+await t('lid zet eigen orgRoles → geweigerd', false, updateDoc(doc(as('mix'), 'profiles/mix'), { orgRoles: { studiob: 'admin', vanas: 'admin' } }));
+await t('registratie met orgRoles → geweigerd', false, setDoc(doc(as('nieuwRol'), 'profiles/nieuwRol'), { userId: 'nieuwRol', role: 'sporter', trainerId: null, orgRoles: { vanas: 'admin' } }));
+await t('beheerder B maakt account aan dat ook bij A hoort → geweigerd', false,
+  setDoc(doc(as('adminB'), 'profiles/nieuwB2'), { userId: 'nieuwB2', orgId: 'studiob', orgIds: ['studiob', 'vanas'], role: 'sporter', trainerId: null }));
+await t('beheerder B maakt account aan in B → mag', true,
+  setDoc(doc(as('adminB'), 'profiles/nieuwB3'), { userId: 'nieuwB3', orgId: 'studiob', orgIds: ['studiob'], role: 'sporter', trainerId: null }));
+await t('oude trainer van twee studio\'s (alleen role) blijft trainer in beide', true, leden('duo', 'vanas'));
+
 await env.cleanup();
 console.log(`\n${passed} geslaagd, ${failed} mislukt`);
 process.exit(failed ? 1 : 0);

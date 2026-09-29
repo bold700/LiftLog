@@ -13,12 +13,21 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function myRole() {
-      return firestore.get(/databases/(default)/documents/profiles/$(request.auth.uid)).data.role;
+    function me() {
+      return firestore.get(/databases/(default)/documents/profiles/$(request.auth.uid)).data;
     }
 
-    function isTrainerOrAdmin() {
-      return signedIn() && (myRole() == 'trainer' || myRole() == 'admin');
+    /**
+     * Rol per studio, net als profileRoleIn() in firestore.rules: `orgRoles[studio]` gaat voor, anders
+     * de rol van het account. Alleen voor studio's waar ik lid van ben.
+     */
+    function isStaffIn(org) {
+      return signedIn() && org in orgIdsOf(me())
+        && me().get('orgRoles', {}).get(org, me().get('role', 'sporter')) in ['trainer', 'admin'];
+    }
+    function isAdminIn(org) {
+      return signedIn() && org in orgIdsOf(me())
+        && me().get('orgRoles', {}).get(org, me().get('role', 'sporter')) == 'admin';
     }
 
     function isImageUnder(maxBytes) {
@@ -31,10 +40,6 @@ service firebase.storage {
       allow write: if false;
     }
 
-    function myOrgId() {
-      return firestore.get(/databases/(default)/documents/profiles/$(request.auth.uid)).data.orgId;
-    }
-
     // Voor cross-studio isolatie bij `progress` hieronder: welke studio's iemand meetelt, net als
     // `myOrgs()`/`sameOrg()` in firestore.rules. Zonder dit zou een trainer van studio B de
     // voortgangsfoto's van een sporter in studio A kunnen lezen zolang hij het pad kent — dat mag
@@ -45,31 +50,37 @@ service firebase.storage {
     function orgIdsOf(profileData) {
       return profileData.get('orgIds', [profileData.get('orgId', defaultOrg())]);
     }
+    /** Trainer of beheerder in een studio waar deze persoon (ook) bij hoort. Max. vijf studio's. */
+    function isStaffInAnyOf(orgs) {
+      return (orgs.size() > 0 && isStaffIn(orgs[0]))
+        || (orgs.size() > 1 && isStaffIn(orgs[1]))
+        || (orgs.size() > 2 && isStaffIn(orgs[2]))
+        || (orgs.size() > 3 && isStaffIn(orgs[3]))
+        || (orgs.size() > 4 && isStaffIn(orgs[4]));
+    }
     function isStaffInSameOrgAs(uid) {
-      return isTrainerOrAdmin()
-        && orgIdsOf(firestore.get(/databases/(default)/documents/profiles/$(request.auth.uid)).data)
-             .hasAny(orgIdsOf(firestore.get(/databases/(default)/documents/profiles/$(uid)).data));
+      return isStaffInAnyOf(orgIdsOf(firestore.get(/databases/(default)/documents/profiles/$(uid)).data));
     }
 
     // Studiologo: publiek leesbaar (staat straks ook op de inlogpagina), alleen een beheerder van
     // díe studio schrijft. Een logo is klein; 2 MB is ruim.
     match /orgLogos/{orgId} {
       allow read: if true;
-      allow write: if signedIn() && myRole() == 'admin' && myOrgId() == orgId
+      allow write: if isAdminIn(orgId)
         && (request.resource == null || isImageUnder(2 * 1024 * 1024));
     }
 
     // Drukversie van het logo (PNG) voor facturen en mail; de app maakt hem zelf bij het uploaden.
     match /orgLogos/print/{orgId} {
       allow read: if true;
-      allow write: if signedIn() && myRole() == 'admin' && myOrgId() == orgId
+      allow write: if isAdminIn(orgId)
         && (request.resource == null || isImageUnder(2 * 1024 * 1024));
     }
 
     // Eigen logo voor de donkere modus (optioneel; zonder maakt de app er zelf een).
     match /orgLogos/dark/{orgId} {
       allow read: if true;
-      allow write: if signedIn() && myRole() == 'admin' && myOrgId() == orgId
+      allow write: if isAdminIn(orgId)
         && (request.resource == null || isImageUnder(2 * 1024 * 1024));
     }
 

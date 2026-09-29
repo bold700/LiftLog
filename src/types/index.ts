@@ -470,7 +470,15 @@ export interface Profile {
    * daartussen in de app. Documenten horen altijd bij precies één studio.
    */
   orgIds: string[];
+  /**
+   * Rol in de studio die nu in beeld is (zie utils/orgRoles.ts). Per studio kan die verschillen:
+   * trainer bij de ene, sporter bij de andere.
+   */
   role: ProfileRole;
+  /** De rol zoals hij op het account staat (`role` in Firestore); geldt voor studio's zonder eigen regel. */
+  accountRole?: ProfileRole;
+  /** Rol per studio (studio-id → rol). Alleen de server schrijft dit. */
+  orgRoles?: Record<string, ProfileRole>;
   email: string | null;
   displayName: string | null;
   /** Profielfoto (download-URL uit Firebase Storage). */

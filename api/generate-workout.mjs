@@ -1,4 +1,5 @@
 import { applyCors } from './_lib/cors.mjs';
+import { isStaffAnywhere } from './_lib/orgRoles.mjs';
 import { requireUser, enforceRateLimit } from './_lib/requireUser.mjs';
 import { getExerciseCatalog } from './_lib/exerciseCatalog.mjs';
 import { EXERCISE_ADVICE_SYSTEM, buildExerciseAdvicePrompt, normalizeExerciseAdvice } from './_lib/exerciseAdvice.mjs';
@@ -677,8 +678,7 @@ export default async function handler(req, res) {
     // Alleen staf; `prompt` is de naam van de oefening, `complaint` een optionele klacht.
     if (mode === 'exercise_advice') {
       const me = await user.db.collection('profiles').doc(user.uid).get();
-      const role = String(me.exists ? me.data()?.role : '');
-      if (role !== 'trainer' && role !== 'admin') {
+      if (!me.exists || !isStaffAnywhere(me.data())) {
         return json(res, 403, { error: 'Alleen voor trainers.' });
       }
       if (!(await enforceRateLimit(user.db, res, user.uid, 'exercise-advice', ADVICE_LIMIT_PER_DAY, DAY_MS))) return;

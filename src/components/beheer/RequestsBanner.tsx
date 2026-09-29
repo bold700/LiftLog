@@ -8,6 +8,8 @@ import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Typogra
 import { useI18n } from '../../context/I18nContext';
 import { useNotify } from '../../context/NotifyContext';
 import { updateProfile } from '../../services/profileService';
+import { setMemberRole } from '../../services/adminAccountService';
+import { useAuth } from '../../context/AuthContext';
 import { getPendingWorkoutRequests, resolveWorkoutRequest, type WorkoutRequest } from '../../services/workoutRequestService';
 import { designTokens } from '../../theme/designTokens';
 import type { Profile } from '../../types';
@@ -19,6 +21,7 @@ interface RequestsBannerProps {
 }
 
 export function RequestsBanner({ profiles, onChanged }: RequestsBannerProps) {
+  const auth = useAuth();
   const { t } = useI18n();
   const notify = useNotify();
   const [workoutRequests, setWorkoutRequests] = useState<WorkoutRequest[]>([]);
@@ -43,7 +46,12 @@ export function RequestsBanner({ profiles, onChanged }: RequestsBannerProps) {
     async (p: Profile, approve: boolean) => {
       setBusy(p.userId);
       try {
-        await updateProfile(p.userId, approve ? { role: 'trainer', trainerRequested: false } : { trainerRequested: false });
+        // De rol staat per studio en loopt via de server; daarna de aanvraag wegstrepen.
+        if (approve) {
+          if (!auth?.user) throw new Error('Je bent niet ingelogd.');
+          await setMemberRole(auth.user, p.userId, 'trainer');
+        }
+        await updateProfile(p.userId, { trainerRequested: false });
         await onChanged();
       } catch (err) {
         notify.error(t('admin.requests.failed'), err);
@@ -51,7 +59,7 @@ export function RequestsBanner({ profiles, onChanged }: RequestsBannerProps) {
         setBusy(null);
       }
     },
-    [notify, onChanged, t]
+    [auth?.user, notify, onChanged, t]
   );
 
   const finishWorkout = useCallback(

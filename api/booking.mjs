@@ -70,6 +70,7 @@ import { getAdmin, getStorageBucket } from './_lib/firebaseAdmin.mjs';
 import { runAccountRetention } from './_lib/accountRetention.mjs';
 import { clearPublishedLeaderboard } from './_lib/leaderboardCleanup.mjs';
 import { orgIdOf, newId } from './_lib/liftlogData.mjs';
+import { actingOrg, isAdminIn, isStaffAnywhere, isStaffIn, roleIn } from './_lib/orgRoles.mjs';
 import { randomBytes } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { activeMembership, newCharge, newMembership, settleMembership } from './_lib/subscriptions.mjs';
@@ -199,8 +200,11 @@ export default async function handler(req, res) {
   const meSnap = await db.collection('profiles').doc(uid).get();
   if (!meSnap.exists) return json(res, 401, { error: 'Profiel niet gevonden.', build: BUILD });
   const meData = meSnap.data() ?? {};
-  const myOrgs = Array.isArray(meData.orgIds) && meData.orgIds.length ? meData.orgIds.map(String) : [orgIdOf(meData.orgId)];
-  const myRole = String(meData.role ?? 'sporter');
+  // Elk verzoek handelt in één studio: die de app als actief meestuurt (mits je daar lid bent).
+  // Je rol is die in díe studio; trainer bij de ene studio geeft geen rechten bij een andere.
+  const actOrg = actingOrg(meData, body?.actingOrgId);
+  const myOrgs = [actOrg];
+  const myRole = roleIn(meData, actOrg);
   const isStaff = myRole === 'trainer' || myRole === 'admin';
 
   try {
@@ -324,7 +328,7 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
     const targetOrgs = Array.isArray(target.orgIds) && target.orgIds.length ? target.orgIds.map(String) : [orgIdOf(target.orgId)];
     if (!myOrgs.some((o) => targetOrgs.includes(o))) return json(res, 403, { error: 'Deze sporter zit niet in jouw studio.', build: BUILD });
     beneficiaryUid = targetUserId;
-    beneficiaryIsStaff = target.role === 'trainer' || target.role === 'admin';
+    beneficiaryIsStaff = isStaffIn(target, myOrgs[0]);
   }
   if (extra && !isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan iemand er extra bij zetten.', build: BUILD });
 
@@ -609,9 +613,8 @@ async function trainerNames(res, db, myOrgs, isStaff, orgId) {
   const names = {};
   for (const d of members.docs) {
     const p = d.data();
-    const role = String(p.role ?? 'sporter');
     const name = typeof p.displayName === 'string' ? p.displayName.trim() : '';
-    if ((role === 'trainer' || role === 'admin') && name) names[d.id] = name;
+    if (isStaffIn(p, orgId) && name) names[d.id] = name;
   }
   return json(res, 200, { names, build: BUILD });
 }
@@ -655,8 +658,7 @@ async function waitlistCosts(db, classId) {
     if (userId in costs) continue;
     let cost = baseCost;
     const prof = await db.collection('profiles').doc(userId).get();
-    const role = prof.exists ? prof.data().role : null;
-    if (role === 'trainer' || role === 'admin') cost = 0;
+    if (prof.exists && isStaffIn(prof.data(), orgId)) cost = 0;
     else if (cost > 0) {
       const m = await activeMembership(db, orgId, userId).catch(() => null);
       if (m) {
@@ -933,7 +935,7 @@ async function notifyFreeSpot(db, orgId, cls, outcome) {
       const staff = new Set();
       if (cls?.trainerId) staff.add(String(cls.trainerId));
       const admins = await db.collection('profiles').where('orgIds', 'array-contains', orgId).get();
-      for (const a of admins.docs) if (a.data().role === 'admin') staff.add(a.id);
+      for (const a of admins.docs) if (isAdminIn(a.data(), orgId)) staff.add(a.id);
       staff.delete(outcome.heldUserId);
       for (const staffId of staff) {
         await sendPushToUser(db, staffId, {
@@ -1141,7 +1143,7 @@ async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
     const tSnap = await db.collection('profiles').doc(trainerId).get();
     const tr = tSnap.exists ? tSnap.data() : null;
     const trOrgs = tr ? (Array.isArray(tr.orgIds) && tr.orgIds.length ? tr.orgIds.map(String) : [orgIdOf(tr.orgId)]) : [];
-    if (!tr || !['trainer', 'admin'].includes(String(tr.role)) || !trOrgs.includes(orgId)) {
+    if (!tr || !isStaffIn(tr, orgId) || !trOrgs.includes(orgId)) {
       return json(res, 400, { error: 'Deze trainer hoort niet bij jouw studio.', build: BUILD });
     }
   }
@@ -1760,7 +1762,7 @@ async function calendarFeed(res, db, token) {
   const profileSnap = userId ? await db.collection('profiles').doc(userId).get() : null;
   if (!profileSnap?.exists) return plain(404, 'Kalenderfeed niet gevonden.');
   const profile = profileSnap.data();
-  if (kind === 'trainer' && profile.role !== 'trainer' && profile.role !== 'admin') return plain(404, 'Kalenderfeed niet gevonden.');
+  if (kind === 'trainer' && !isStaffAnywhere(profile)) return plain(404, 'Kalenderfeed niet gevonden.');
   const orgIds = Array.isArray(profile.orgIds) && profile.orgIds.length ? profile.orgIds : [profile.orgId || 'vanas'];
 
   const classesSnaps = await Promise.all(orgIds.map((orgId) => db.collection('classes').where('orgId', '==', orgId).get()));

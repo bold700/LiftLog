@@ -4,6 +4,7 @@
  */
 import type { User } from 'firebase/auth';
 import { apiUrl } from '../utils/apiOrigin';
+import { getCurrentOrgId } from './orgContext';
 
 /**
  * Verwijdert login-account, profiel, persoonlijke data en ranglijstdocument definitief. De server
@@ -15,7 +16,7 @@ export async function deleteAccountAsAdmin(caller: User, targetUid: string): Pro
   const res = await fetch(apiUrl('/api/admin-account'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ action: 'delete', targetUid }),
+    body: JSON.stringify({ actingOrgId: getCurrentOrgId(), action: 'delete', targetUid }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string })?.error || 'Verwijderen mislukt.');
@@ -30,7 +31,7 @@ export async function deleteOwnAccount(caller: User): Promise<void> {
   const res = await fetch(apiUrl('/api/admin-account'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ action: 'delete-self' }),
+    body: JSON.stringify({ actingOrgId: getCurrentOrgId(), action: 'delete-self' }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string })?.error || 'Account verwijderen mislukt.');
@@ -50,7 +51,7 @@ export async function updateMemberCredentials(
   const res = await fetch(apiUrl('/api/admin-account'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ action: 'updateCredentials', targetUid, ...updates }),
+    body: JSON.stringify({ actingOrgId: getCurrentOrgId(), action: 'updateCredentials', targetUid, ...updates }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string })?.error || 'Wijzigen van accountgegevens mislukt.');
@@ -66,7 +67,7 @@ export async function withdrawHealthConsentOnServer(caller: User): Promise<void>
   const res = await fetch(apiUrl('/api/admin-account'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ action: 'withdraw-health-consent' }),
+    body: JSON.stringify({ actingOrgId: getCurrentOrgId(), action: 'withdraw-health-consent' }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string })?.error || 'Toestemming intrekken mislukt.');
@@ -80,9 +81,76 @@ export async function exportOwnData(caller: User): Promise<unknown> {
   const res = await fetch(apiUrl('/api/admin-account'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ action: 'export-self' }),
+    body: JSON.stringify({ actingOrgId: getCurrentOrgId(), action: 'export-self' }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string })?.error || 'Je gegevens ophalen mislukte.');
   return (data as { data?: unknown }).data;
+}
+
+/**
+ * Rol van een lid in de actieve studio (sporter, trainer of beheerder). Loopt via de server: de rol
+ * staat per studio (`orgRoles`) en die mag de app zelf niet schrijven. Alleen een beheerder.
+ */
+export async function setMemberRole(caller: User, targetUid: string, role: 'sporter' | 'trainer' | 'admin'): Promise<void> {
+  const token = await caller.getIdToken();
+  const res = await fetch(apiUrl('/api/admin-account'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ actingOrgId: getCurrentOrgId(), action: 'setRole', targetUid, role }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string })?.error || 'Rol wijzigen mislukt.');
+}
+
+export type InviteResult = { status: 'no-account' | 'already-member' | 'invited'; orgName?: string };
+
+/**
+ * Iemand met een bestaand VORM-account uitnodigen bij de actieve studio. Heeft dit e-mailadres nog
+ * geen account, dan { status: 'no-account' } en maakt de app gewoon een nieuw account aan.
+ */
+export async function inviteMember(caller: User, email: string, role: 'sporter' | 'trainer' | 'admin'): Promise<InviteResult> {
+  const token = await caller.getIdToken();
+  const res = await fetch(apiUrl('/api/admin-account'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ actingOrgId: getCurrentOrgId(), action: 'invite', email, role }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string })?.error || 'Uitnodigen mislukt.');
+  return data as InviteResult;
+}
+
+export interface OrgInvite {
+  id: string;
+  orgId: string;
+  orgName: string;
+  role: 'sporter' | 'trainer' | 'admin';
+  invitedByName: string | null;
+}
+
+/** Openstaande uitnodigingen van andere studio's voor jou. */
+export async function getMyInvites(caller: User): Promise<OrgInvite[]> {
+  const token = await caller.getIdToken();
+  const res = await fetch(apiUrl('/api/admin-account'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ action: 'myInvites' }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string })?.error || 'Uitnodigingen ophalen mislukt.');
+  return (data as { invites?: OrgInvite[] }).invites ?? [];
+}
+
+/** Uitnodiging accepteren of weigeren. Pas na accepteren hoor je bij die studio. */
+export async function answerInvite(caller: User, inviteId: string, accept: boolean): Promise<string | null> {
+  const token = await caller.getIdToken();
+  const res = await fetch(apiUrl('/api/admin-account'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ action: accept ? 'acceptInvite' : 'declineInvite', inviteId }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string })?.error || 'Uitnodiging verwerken mislukt.');
+  return (data as { orgId?: string }).orgId ?? null;
 }

@@ -16,7 +16,7 @@
 import { Capacitor } from '@capacitor/core';
 import { deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, where, collection } from 'firebase/firestore';
 import { auth, db, firebaseApp, firebaseConfig, isFirebaseConfigured } from '../firebase/config';
-import { requireOrgId } from './orgContext';
+import { getCurrentOrgId, requireOrgId } from './orgContext';
 import { apiUrl } from '../utils/apiOrigin';
 
 const COLLECTION = 'pushTokens';
@@ -223,7 +223,7 @@ export async function notifyUser(kind: PushKind, recipientId: string, preview?: 
     await fetch(apiUrl('/api/notify'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ kind, recipientId, preview }),
+      body: JSON.stringify({ kind, recipientId, preview, actingOrgId: getCurrentOrgId() }),
     });
   } catch {
     /* melding overslaan is niet erg; de actie zelf is al gelukt */

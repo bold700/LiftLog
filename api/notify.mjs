@@ -1,4 +1,5 @@
 import { applyCors } from './_lib/cors.mjs';
+import { actingOrg, orgsOf, roleIn } from './_lib/orgRoles.mjs';
 /**
  * Verstuurt een pushnotificatie namens de ingelogde gebruiker.
  *
@@ -19,7 +20,6 @@ import { applyCors } from './_lib/cors.mjs';
  *    (een beheerder aan iedereen binnen de studio).
  */
 import { getAdmin } from './_lib/firebaseAdmin.mjs';
-import { orgIdOf } from './_lib/liftlogData.mjs';
 import { enforceRateLimit } from './_lib/requireUser.mjs';
 import { sendPushToUser } from './_lib/pushSend.mjs';
 import { orgNotificationEnabled } from './_lib/notifications.mjs';
@@ -56,14 +56,18 @@ async function readBody(req) {
   return raw ? JSON.parse(raw) : {};
 }
 
-/** Mag deze afzender de ontvanger een melding sturen? */
-function mayNotify(sender, recipient, kind) {
-  if (orgIdOf(sender.orgId) !== orgIdOf(recipient.orgId)) return false;
-  if (sender.role === 'admin') return true;
-  if (sender.role === 'trainer') {
+/**
+ * Mag deze afzender de ontvanger een melding sturen? Beiden moeten bij `org` horen (de studio
+ * waarin de afzender werkt), en de rollen tellen zoals ze in díe studio zijn.
+ */
+function mayNotify(sender, recipient, kind, org) {
+  if (!orgsOf(sender.data).includes(org) || !orgsOf(recipient.data).includes(org)) return false;
+  const senderRole = roleIn(sender.data, org);
+  if (senderRole === 'admin') return true;
+  if (senderRole === 'trainer') {
     // Elke trainer mag een schema aan elke sporter in de studio toewijzen; dan hoort de melding
     // daarover ook te mogen. Voor al het andere blijft het bij de eigen sporters.
-    if (kind === 'workout' && recipient.role === 'sporter') return true;
+    if (kind === 'workout' && roleIn(recipient.data, org) === 'sporter') return true;
     return recipient.trainerId === sender.userId || recipient.userId === sender.userId;
   }
   // Sporter: alleen naar de eigen trainer.
@@ -118,7 +122,7 @@ export default async function handler(req, res) {
     return {
       userId,
       orgId: d.orgId,
-      role: d.role,
+      data: { orgId: d.orgId, orgIds: d.orgIds, role: d.role, orgRoles: d.orgRoles },
       trainerId: typeof d.trainerId === 'string' ? d.trainerId : null,
       displayName: d.displayName,
       email: d.email,
@@ -126,9 +130,10 @@ export default async function handler(req, res) {
   };
   const sender = pick(senderSnap, uid);
   const recipient = pick(recipientSnap, recipientId);
-  if (!mayNotify(sender, recipient, String(body.kind))) return json(res, 403, { error: 'Geen toestemming.', build: BUILD });
+  const org = actingOrg(sender.data, body.actingOrgId);
+  if (!mayNotify(sender, recipient, String(body.kind), org)) return json(res, 403, { error: 'Geen toestemming.', build: BUILD });
   // De studio kan deze soort melding uitzetten (Beheer → Meldingen); dan stil niets versturen.
-  if (!(await orgNotificationEnabled(admin.db, recipient.orgId, String(body.kind)))) {
+  if (!(await orgNotificationEnabled(admin.db, org, String(body.kind)))) {
     return json(res, 200, { sent: 0, disabled: true, build: BUILD });
   }
 

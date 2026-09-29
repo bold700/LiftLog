@@ -6,6 +6,7 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
+import { roleInOrg } from '../utils/orgRoles';
 import { useAuth } from './AuthContext';
 import {
   getProfile,
@@ -98,6 +99,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       const active = p ? preferredOrgId(p.orgId, orgIds) : null;
       setCurrentOrgId(active);
       setActiveOrgId(active);
+      // De rol hoort bij de actieve studio (getProfile las het profiel nog vóór het vastzetten).
+      if (p) p = { ...p, role: roleInOrg(p, active) };
       setProfile(p);
       if (p?.role === 'trainer' || p?.role === 'admin') {
         // De ledenlijst apart afvangen: mislukt die, dan blijft het profiel (en dus de rol) staan.

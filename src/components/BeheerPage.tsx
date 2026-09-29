@@ -30,7 +30,7 @@ import { useProfile } from '../context/ProfileContext';
 import { useI18n } from '../context/I18nContext';
 import { useAuth } from '../context/AuthContext';
 import { assignTrainerToSporter, getAllProfiles, getProfileByEmail, updateProfile } from '../services/profileService';
-import { deleteAccountAsAdmin } from '../services/adminAccountService';
+import { deleteAccountAsAdmin, inviteMember, setMemberRole } from '../services/adminAccountService';
 import type { LeaderboardVisibility, Membership, Plan, Profile, ProfileRole, Limitation } from '../types';
 import { PageLayout, ContentCard, HeaderActions } from './layout';
 import { BrandingSettings } from './beheer/BrandingSettings';
@@ -285,6 +285,23 @@ export function BeheerPage() {
         await load();
         return;
       }
+      // Heeft dit e-mailadres een account bij een andere studio? Dan een uitnodiging: het lid
+      // beslist zelf of het er bij deze studio bij komt. Eén account, meerdere studio's.
+      if (auth.user) {
+        const invite = await inviteMember(auth.user, mail, newAccount.role);
+        if (invite.status !== 'no-account') {
+          setMessage({
+            type: 'success',
+            text:
+              invite.status === 'already-member'
+                ? `${mail} hoort al bij deze studio.`
+                : `${mail} heeft al een VORM-account. Er is een uitnodiging verstuurd; zodra die is geaccepteerd, staat deze persoon in je ledenlijst.`,
+          });
+          setNewAccount(null);
+          await load();
+          return;
+        }
+      }
       if (newAccount.password.length < 6) {
         setCreateError('Het tijdelijke wachtwoord moet minstens 6 tekens zijn.');
         return;
@@ -343,9 +360,15 @@ export function BeheerPage() {
     setSaving(true);
     try {
       const roleChanged = edit.role !== target.role;
-      await updateProfile(target.userId, {
+      // De rol geldt per studio en loopt via de server.
+      if (roleChanged) {
+        if (!auth?.user) throw new Error('Je bent niet ingelogd.');
+        await setMemberRole(auth.user, target.userId, edit.role);
+      }
+      // Hoort dit lid (ook) bij een andere thuisstudio, dan beheert die studio (of het lid zelf) de
+      // profielgegevens; hier alleen rol en abonnement.
+      if (target.orgId === profileCtx?.activeOrgId) await updateProfile(target.userId, {
         displayName: edit.displayName.trim() || null,
-        ...(roleChanged ? { role: edit.role } : {}),
         trainerId: edit.role === 'sporter' ? edit.trainerId || null : null,
         heightCm: num(edit.heightCm),
         birthDate: edit.birthDate || null,

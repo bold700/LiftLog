@@ -63,15 +63,46 @@ service cloud.firestore {
             && get(/databases/$(database)/documents/orgs/$(orgId)).data.get('allowSelfSignup', false) == true);
     }
 
-    function isAdmin() {
-      return isSignedIn() && myProfile().role == 'admin';
+    /**
+     * Rol per studio (zie api/_lib/orgRoles.mjs). `orgRoles[studio]` gaat voor; profielen van vóór
+     * de rol per studio hebben alleen `role`, die dan geldt voor elke studio zonder eigen regel.
+     * Wie bij een tweede studio komt, krijgt voor elke studio een eigen regel (de server doet dat),
+     * zodat beheerder bij de ene studio nooit via `role` beheerder wordt bij de andere.
+     */
+    function profileRoleIn(p, org) {
+      return p.get('orgRoles', {}).get(org, p.get('role', 'sporter'));
     }
-    function isTrainerOrAdmin() {
-      return isSignedIn() && (myProfile().role == 'trainer' || myProfile().role == 'admin');
+    /** Mijn rol in deze studio, maar alleen als ik daar lid van ben. */
+    function isAdminIn(org) {
+      return isSignedIn() && org in myOrgs() && profileRoleIn(myProfile(), org) == 'admin';
+    }
+    function isStaffIn(org) {
+      return isSignedIn() && org in myOrgs() && profileRoleIn(myProfile(), org) in ['trainer', 'admin'];
+    }
+    /** Trainer of beheerder in de studio van het bestaande document. */
+    function isStaffForDoc() {
+      return isStaffIn(orgOf(resource.data));
+    }
+    /** Trainer of beheerder in de studio van het binnenkomende document. */
+    function isStaffForNew() {
+      return isStaffIn(request.resource.data.get('orgId', defaultOrg()));
+    }
+    /**
+     * De studio's waar ik trainer of beheerder ben. Als lijst, zodat een query op `orgIds` (de
+     * ledenlijst) te bewijzen is met `hasAny`, net als bij `memberOfMyOrg()`. Regels kennen geen
+     * lus; vijf studio's per account is ruim.
+     */
+    function myStaffOrgs() {
+      let orgs = myOrgs();
+      return (orgs.size() > 0 && isStaffIn(orgs[0]) ? [orgs[0]] : [])
+        .concat(orgs.size() > 1 && isStaffIn(orgs[1]) ? [orgs[1]] : [])
+        .concat(orgs.size() > 2 && isStaffIn(orgs[2]) ? [orgs[2]] : [])
+        .concat(orgs.size() > 3 && isStaffIn(orgs[3]) ? [orgs[3]] : [])
+        .concat(orgs.size() > 4 && isStaffIn(orgs[4]) ? [orgs[4]] : []);
     }
     /** Trainer of beheerder binnen dezelfde studio als het bestaande document. */
     function isStaffInSameOrg() {
-      return isTrainerOrAdmin() && sameOrg();
+      return isStaffForDoc();
     }
     /**
      * Heeft de studio van het bestaande document expliciet aangezet dat elke trainer/beheerder
@@ -89,7 +120,7 @@ service cloud.firestore {
 
     /** Idem, maar voor een document dat nog niet bestaat: dan telt de studio in de aanvraag. */
     function isStaffInSameOrgForNew() {
-      return isTrainerOrAdmin() && writesMyOrg();
+      return isStaffForNew() && writesMyOrg();
     }
     /**
      * Velden die alleen een beheerder mag zetten: rol en de verificatie-bypass.
@@ -98,7 +129,7 @@ service cloud.firestore {
      */
     function touchesProtectedProfileFields() {
       return request.resource.data.diff(resource.data).affectedKeys()
-        .hasAny(['role', 'createdByAdmin', 'orgId', 'orgIds', 'platformAdmin', 'userId']);
+        .hasAny(['role', 'orgRoles', 'createdByAdmin', 'orgId', 'orgIds', 'platformAdmin', 'userId']);
     }
     /**
      * Wat je op je eigen profiel nooit zelf mag zetten. Naast het bovenstaande ook `trainerId`:
@@ -142,11 +173,17 @@ service cloud.firestore {
 
     // Studio's zelf. Lezen mag binnen je eigen studio (naam tonen); beheren alleen de beheerder
     // van díe studio. Nieuwe studio's worden met het beheerscript (Admin SDK) aangemaakt.
+    // Uitnodigingen voor een (volgende) studio: alleen de server leest en schrijft ze
+    // (api/admin-account.mjs). Het lid ziet ze via de server, en beslist daar ook.
+    match /orgInvites/{inviteId} {
+      allow read, write: if false;
+    }
+
     match /orgs/{orgId} {
-      allow read: if isSignedIn() && orgId == myOrg();
+      allow read: if isSignedIn() && orgId in myOrgs();
       // "Inactieve accounts verwijderen" is een beslissing van de eigenaar, niet van elke beheerder.
       // Heeft de studio (nog) geen eigenaar, dan mag een beheerder het.
-      allow update: if isAdmin() && orgId == myOrg()
+      allow update: if isAdminIn(orgId)
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['accountRetention'])
             || resource.data.get('ownerId', null) == null
             || resource.data.get('ownerId', null) == request.auth.uid);
@@ -183,15 +220,22 @@ service cloud.firestore {
         && (request.auth.uid == userId
             || (memberOfMyOrg()
                 && (resource.data.trainerId == request.auth.uid
-                    || isTrainerOrAdmin()
+                    || resource.data.get('orgIds', [orgOf(resource.data)]).hasAny(myStaffOrgs())
                     // Je eigen trainer mag je zien: zonder dit blijft de berichtenlijst leeg.
                     || myProfile().get('trainerId', '') == userId)));
-      allow create: if (isAdmin() && writesMyOrg())
+      // Een beheerder maakt een account aan in zijn eigen studio, en alleen daarin; de rol per
+      // studio (`orgRoles`) zet uitsluitend de server.
+      allow create: if (isAdminIn(request.resource.data.get('orgId', defaultOrg()))
+            && writesMyOrg()
+            && request.resource.data.get('orgIds', [request.resource.data.get('orgId', defaultOrg())])
+                 .hasOnly([request.resource.data.get('orgId', defaultOrg())])
+            && !('orgRoles' in request.resource.data))
         || (isSignedIn()
             && request.auth.uid == userId
             && request.resource.data.get('role', 'sporter') == 'sporter'
             && request.resource.data.get('createdByAdmin', false) == false
             && request.resource.data.get('platformAdmin', false) == false
+            && !('orgRoles' in request.resource.data)
             // Je meldt je aan bij één studio; lid worden van een tweede doet een beheerder daar.
             && request.resource.data.get('orgIds', [request.resource.data.get('orgId', defaultOrg())])
                  .hasOnly([request.resource.data.get('orgId', defaultOrg())])
@@ -202,12 +246,18 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && !touchesPlatformAdmin()
         && !addsHealthDataWithoutConsent()
-        && ((isAdmin() && sameOrg() && writesMyOrg()
+        && ((isAdminIn(orgOf(resource.data)) && writesMyOrg()
              && request.resource.data.get('orgIds', [myOrg()]).hasAny(myOrgs())
+             // Rol per studio alleen via de server (api/admin-account.mjs, actie setRole). De rol
+             // van het account zelf alleen bij wie maar bij één studio hoort: anders zou een
+             // beheerder hier de rol in een andere studio meeveranderen.
+             && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['orgRoles'])
+             && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])
+                 || resource.data.get('orgIds', [orgOf(resource.data)]).size() == 1)
              && (request.auth.uid == userId || !touchesHealthConsent()))
             || (request.auth.uid == userId && !touchesProtectedSelfFields())
             || (isStaffInSameOrg()
-                && resource.data.role == 'sporter'
+                && profileRoleIn(resource.data, orgOf(resource.data)) == 'sporter'
                 && !touchesProtectedProfileFields()
                 && !touchesHealthConsent()));
       // Bewust niemand: verwijderen loopt via api/admin-account.mjs met de Admin SDK, dat het
@@ -244,8 +294,8 @@ service cloud.firestore {
             || resource.data.get('audience', 'single') == 'open'
             // Groepslessen zijn lesstof van de studio, geen cliëntdossier: elke trainer van de
             // studio mag ze lezen om een les voor te bereiden (Beheer → Lesplanning).
-            || (isTrainerOrAdmin() && resource.data.get('audience', 'single') == 'group')
-            || (isTrainerOrAdmin() && orgAllowsStaffFullClientAccess()));
+            || (isStaffForDoc() && resource.data.get('audience', 'single') == 'group')
+            || (isStaffForDoc() && orgAllowsStaffFullClientAccess()));
       allow create: if isSignedIn()
         && writesMyOrg()
         && request.resource.data.trainerId == request.auth.uid;
@@ -290,12 +340,12 @@ service cloud.firestore {
       allow read: if isSignedIn()
         && (resource.data.userId == request.auth.uid
             || (sameOrg()
-                && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin())));
+                && (resource.data.trainerId == request.auth.uid || isStaffForDoc())));
       allow create: if isSignedIn()
         && writesMyOrg()
         && !refusedHealthData(request.resource.data.userId)
         && (request.resource.data.userId == request.auth.uid
-            || (isTrainerOrAdmin() && request.resource.data.loggedBy == request.auth.uid));
+            || (isStaffForNew() && request.resource.data.loggedBy == request.auth.uid));
       // `writesMyOrg()` staat er ook bij update: zonder dat kan iemand het `orgId` van een
       // bestaand document naar een andere studio schrijven en het daarmee overhevelen.
       allow update: if isSignedIn()
@@ -313,12 +363,12 @@ service cloud.firestore {
       allow read: if isSignedIn()
         && (resource.data.userId == request.auth.uid
             || (sameOrg()
-                && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin())));
+                && (resource.data.trainerId == request.auth.uid || isStaffForDoc())));
       allow create: if isSignedIn()
         && writesMyOrg()
         && !refusedHealthData(request.resource.data.userId)
         && (request.resource.data.userId == request.auth.uid
-            || (isTrainerOrAdmin() && request.resource.data.loggedBy == request.auth.uid));
+            || (isStaffForNew() && request.resource.data.loggedBy == request.auth.uid));
       // `writesMyOrg()` staat er ook bij update: zonder dat kan iemand het `orgId` van een
       // bestaand document naar een andere studio schrijven en het daarmee overhevelen.
       allow update: if isSignedIn()
@@ -334,12 +384,12 @@ service cloud.firestore {
       allow read: if isSignedIn()
         && (resource.data.userId == request.auth.uid
             || (sameOrg()
-                && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin())));
+                && (resource.data.trainerId == request.auth.uid || isStaffForDoc())));
       allow create: if isSignedIn()
         && writesMyOrg()
         && !refusedHealthData(request.resource.data.userId)
         && (request.resource.data.userId == request.auth.uid
-            || (isTrainerOrAdmin() && request.resource.data.loggedBy == request.auth.uid));
+            || (isStaffForNew() && request.resource.data.loggedBy == request.auth.uid));
       // `writesMyOrg()` staat er ook bij update: zonder dat kan iemand het `orgId` van een
       // bestaand document naar een andere studio schrijven en het daarmee overhevelen.
       allow update: if isSignedIn()
@@ -355,12 +405,12 @@ service cloud.firestore {
       allow read: if isSignedIn()
         && (resource.data.userId == request.auth.uid
             || (sameOrg()
-                && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin())));
+                && (resource.data.trainerId == request.auth.uid || isStaffForDoc())));
       allow create: if isSignedIn()
         && writesMyOrg()
         && !refusedHealthData(request.resource.data.userId)
         && (request.resource.data.userId == request.auth.uid
-            || (isTrainerOrAdmin() && request.resource.data.loggedBy == request.auth.uid));
+            || (isStaffForNew() && request.resource.data.loggedBy == request.auth.uid));
       // `writesMyOrg()` staat er ook bij update: zonder dat kan iemand het `orgId` van een
       // bestaand document naar een andere studio schrijven en het daarmee overhevelen.
       allow update: if isSignedIn()
@@ -461,9 +511,10 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && sameOrg()
         && writesMyOrg()
-        && isTrainerOrAdmin()
+        && isStaffForDoc()
+        && isStaffForNew()
         && !touchesCounters();
-      allow delete: if isSignedIn() && sameOrg() && isTrainerOrAdmin();
+      allow delete: if isSignedIn() && sameOrg() && isStaffForDoc();
     }
 
     // Reserveringen. Alleen te lezen door de sporter zelf en door de staf van die studio.
@@ -503,8 +554,8 @@ service cloud.firestore {
         && request.resource.data.price is number
         && request.resource.data.price >= 0
         && validVatRate();
-      allow update: if isSignedIn() && sameOrg() && writesMyOrg() && isTrainerOrAdmin() && validVatRate();
-      allow delete: if isSignedIn() && sameOrg() && isTrainerOrAdmin();
+      allow update: if isSignedIn() && sameOrg() && writesMyOrg() && isStaffForDoc() && isStaffForNew() && validVatRate();
+      allow delete: if isSignedIn() && sameOrg() && isStaffForDoc();
     }
 
     // Lidmaatschappen: wie welk abonnement heeft en wanneer het verlengt. Lezen: jezelf of de
@@ -567,8 +618,8 @@ service cloud.firestore {
         && request.resource.data.name.size() > 0
         && request.resource.data.creditCost is int
         && request.resource.data.creditCost >= 0;
-      allow update: if isSignedIn() && sameOrg() && writesMyOrg() && isTrainerOrAdmin();
-      allow delete: if isSignedIn() && sameOrg() && isTrainerOrAdmin();
+      allow update: if isSignedIn() && sameOrg() && writesMyOrg() && isStaffForDoc() && isStaffForNew();
+      allow delete: if isSignedIn() && sameOrg() && isStaffForDoc();
     }
 
     // Groepsles-sessies. Trainer beheert; deelnemers mogen hun sessie lezen. Altijd binnen één studio.
@@ -577,17 +628,17 @@ service cloud.firestore {
         && sameOrg()
         && (resource.data.trainerId == request.auth.uid
             || request.auth.uid in resource.data.participantIds
-            || isTrainerOrAdmin());
+            || isStaffForDoc());
       allow create: if isSignedIn()
         && writesMyOrg()
         && request.resource.data.trainerId == request.auth.uid;
       allow update: if isSignedIn()
         && sameOrg()
         && writesMyOrg()
-        && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin());
+        && (resource.data.trainerId == request.auth.uid || isStaffForDoc());
       allow delete: if isSignedIn()
         && sameOrg()
-        && (resource.data.trainerId == request.auth.uid || isTrainerOrAdmin());
+        && (resource.data.trainerId == request.auth.uid || isStaffForDoc());
     }
   }
 }

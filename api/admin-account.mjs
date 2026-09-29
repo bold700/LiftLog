@@ -14,6 +14,15 @@ import { applyCors } from './_lib/cors.mjs';
  *  - { action: 'withdraw-health-consent' }
  *                                       toestemming voor gezondheidsgegevens intrekken: metingen weg,
  *                                       rusthartslag en blessures van het profiel, toestemming op nee.
+ *  - { action: 'invite', email, role } nodigt iemand met een bestaand account uit bij de studio van
+ *                                       de beller. Geen account? Dan { status: 'no-account' } en maakt
+ *                                       de app gewoon een nieuw account aan.
+ *  - { action: 'myInvites' }            openstaande uitnodigingen voor de beller.
+ *  - { action: 'acceptInvite', inviteId } / { action: 'declineInvite', inviteId }
+ *                                       de uitgenodigde beslist; pas bij accepteren hoort hij erbij.
+ *  - { action: 'setRole', targetUid, role }
+ *                                       zet de rol van een lid in de studio van de beheerder
+ *                                       (`orgRoles`; bij één studio ook `role`).
  *  - { action: 'updateCredentials', targetUid, email?, password? }
  *                                       wijzigt het e-mailadres en/of wachtwoord van een sporter uit
  *                                       eigen studio, direct en zonder diens huidige wachtwoord (voor
@@ -22,8 +31,13 @@ import { applyCors } from './_lib/cors.mjs';
  *
  * Beveiliging:
  *  - Vereist een geldig Firebase ID-token in de Authorization-header (Bearer).
- *  - 'delete' vereist de rol 'admin'; 'updateCredentials' vereist 'trainer' of 'admin' én dat de
- *    sporter in dezelfde studio zit.
+ *  - Rollen gelden per studio (_lib/orgRoles.mjs). Het verzoek handelt in de studio die de app als
+ *    actief meestuurt (`actingOrgId`), mits de beller daar lid van is.
+ *  - 'delete' en 'setRole' vereisen beheerder in die studio, en dat het lid bij die studio hoort.
+ *    Hoort iemand ook bij een andere studio, dan haalt 'delete' hem alleen uit deze studio.
+ *  - 'updateCredentials' vereist trainer of beheerder in die studio, een sporter uit die studio, en
+ *    dat die sporter bij geen andere studio hoort (anders zou de ene studio het account van de
+ *    andere kunnen overnemen).
  *
  * Vereist env-var FIREBASE_SERVICE_ACCOUNT: de JSON van een Firebase service-account
  * (als string). Zonder deze var geeft het endpoint een nette foutmelding.
@@ -31,6 +45,9 @@ import { applyCors } from './_lib/cors.mjs';
 import { getAdmin } from './_lib/firebaseAdmin.mjs';
 import { deleteQueryInBatches, deleteUserData, exportUserData } from './_lib/accountData.mjs';
 import { enforceRateLimit } from './_lib/requireUser.mjs';
+import { actingOrg, isAdminIn, isStaffIn, orgsOf, roleIn } from './_lib/orgRoles.mjs';
+import { FieldValue } from 'firebase-admin/firestore';
+import { sendPushToUser } from './_lib/pushSend.mjs';
 
 /** Versie van de toestemmingstekst voor gezondheidsgegevens (zie src/components/HealthConsentDialog.tsx). */
 const HEALTH_CONSENT_VERSION = 2;
@@ -157,6 +174,103 @@ export default async function handler(req, res) {
     }
   }
 
+  // Uitnodigingen voor een tweede (of derde) studio. Eén account, meerdere studio's: de studio vraagt,
+  // het lid beslist. Uitnodigingen staan in `orgInvites` en alleen de server leest en schrijft ze.
+  if (action === 'invite') {
+    const callerSnap = await db.collection('profiles').doc(callerUid).get();
+    const callerData = callerSnap.exists ? callerSnap.data() : null;
+    const org = callerData ? actingOrg(callerData, body?.actingOrgId) : null;
+    const role = String(body?.role ?? 'sporter').trim();
+    if (!['sporter', 'trainer', 'admin'].includes(role)) return json(res, 400, { error: 'Onbekende rol.' });
+    // Een sporter uitnodigen mag de staf; trainer of beheerder maken alleen een beheerder.
+    if (!callerData || !isStaffIn(callerData, org) || (role !== 'sporter' && !isAdminIn(callerData, org))) {
+      return json(res, 403, { error: 'Alleen een beheerder kan een trainer of beheerder uitnodigen.' });
+    }
+    const email = String(body?.email ?? '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json(res, 400, { error: 'Vul een geldig e-mailadres in.' });
+    if (!(await enforceRateLimit(db, res, callerUid, 'invite', 100, 24 * 60 * 60 * 1000))) return;
+    const user = await auth.getUserByEmail(email).catch(() => null);
+    if (!user) return json(res, 200, { status: 'no-account' });
+    const targetSnap = await db.collection('profiles').doc(user.uid).get();
+    if (targetSnap.exists && orgsOf(targetSnap.data()).includes(org)) return json(res, 200, { status: 'already-member' });
+    const orgSnap = await db.collection('orgs').doc(org).get();
+    const orgName = (orgSnap.exists && orgSnap.data()?.name) || 'een studio';
+    const inviteId = `${org}__${user.uid}`;
+    await db.collection('orgInvites').doc(inviteId).set({
+      orgId: org,
+      orgName,
+      uid: user.uid,
+      email,
+      role,
+      invitedBy: callerUid,
+      invitedByName: String(callerData.displayName || callerData.email || ''),
+      status: 'pending',
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    await sendPushToUser(db, user.uid, {
+      title: `Uitnodiging van ${orgName}`,
+      body: 'Open VORM om de uitnodiging te accepteren.',
+      data: { kind: 'orgInvite' },
+    }).catch(() => 0);
+    return json(res, 200, { status: 'invited', orgName });
+  }
+
+  if (action === 'myInvites') {
+    const snap = await db.collection('orgInvites').where('uid', '==', callerUid).where('status', '==', 'pending').get();
+    const invites = snap.docs.map((d) => {
+      const x = d.data();
+      return { id: d.id, orgId: x.orgId, orgName: x.orgName, role: x.role, invitedByName: x.invitedByName || null };
+    });
+    return json(res, 200, { invites });
+  }
+
+  if (action === 'acceptInvite' || action === 'declineInvite') {
+    const inviteId = String(body?.inviteId ?? '').trim();
+    if (!inviteId) return json(res, 400, { error: 'Geen uitnodiging opgegeven.' });
+    const inviteRef = db.collection('orgInvites').doc(inviteId);
+    const profileRef = db.collection('profiles').doc(callerUid);
+    try {
+      const orgId = await db.runTransaction(async (tx) => {
+        const [inviteSnap, profileSnap] = await Promise.all([tx.get(inviteRef), tx.get(profileRef)]);
+        const invite = inviteSnap.exists ? inviteSnap.data() : null;
+        if (!invite || invite.uid !== callerUid || invite.status !== 'pending') {
+          const err = new Error('Deze uitnodiging bestaat niet (meer).');
+          err.status = 404;
+          throw err;
+        }
+        const decidedAt = FieldValue.serverTimestamp();
+        if (action === 'declineInvite') {
+          tx.update(inviteRef, { status: 'declined', decidedAt });
+          return invite.orgId;
+        }
+        if (!profileSnap.exists) {
+          const err = new Error('Profiel niet gevonden.');
+          err.status = 404;
+          throw err;
+        }
+        const profile = profileSnap.data();
+        const orgs = orgsOf(profile);
+        // Elke studio krijgt een eigen rol. De bestaande studio's houden de rol die ze nu hebben;
+        // zo wordt een beheerder elders nooit via de algemene `role` beheerder bij deze studio.
+        const orgRoles = {};
+        for (const o of orgs) orgRoles[o] = roleIn(profile, o);
+        orgRoles[invite.orgId] = invite.role;
+        tx.update(profileRef, {
+          orgIds: orgs.includes(invite.orgId) ? orgs : [...orgs, invite.orgId],
+          orgRoles,
+          updatedAt: decidedAt,
+        });
+        tx.update(inviteRef, { status: 'accepted', decidedAt });
+        return invite.orgId;
+      });
+      return json(res, 200, { ok: true, orgId });
+    } catch (e) {
+      if (e?.status) return json(res, e.status, { error: e.message });
+      console.error('[admin-account] uitnodiging verwerken mislukte:', e);
+      return json(res, 500, { error: 'Uitnodiging verwerken mislukt. Probeer het opnieuw.' });
+    }
+  }
+
   // Inloggegevens van een sporter wijzigen (Profiel → "Bekijk als"): een trainer of beheerder mag
   // zonder het huidige wachtwoord van de sporter zelf diens e-mailadres en/of wachtwoord zetten,
   // zolang het om een sporter in de eigen studio gaat. Anders dan de gewone flow (auth.changeEmail/
@@ -164,7 +278,8 @@ export default async function handler(req, res) {
   if (action === 'updateCredentials') {
     const callerSnap = await db.collection('profiles').doc(callerUid).get();
     const callerData = callerSnap.exists ? callerSnap.data() : null;
-    if (!callerData || (callerData.role !== 'trainer' && callerData.role !== 'admin')) {
+    const org = callerData ? actingOrg(callerData, body?.actingOrgId) : null;
+    if (!callerData || !isStaffIn(callerData, org)) {
       return json(res, 403, { error: 'Alleen trainers en beheerders mogen accountgegevens van een sporter wijzigen.' });
     }
     const targetUid = String(body?.targetUid || '').trim();
@@ -172,13 +287,14 @@ export default async function handler(req, res) {
     if (targetUid === callerUid) return json(res, 400, { error: 'Gebruik je eigen profiel om je eigen gegevens te wijzigen.' });
 
     const targetSnap = await db.collection('profiles').doc(targetUid).get();
-    if (!targetSnap.exists || targetSnap.data()?.role !== 'sporter') {
-      return json(res, 404, { error: 'Sporter niet gevonden.' });
-    }
-    const callerOrgIds = callerData.orgIds ?? [callerData.orgId].filter(Boolean);
-    const targetOrgIds = targetSnap.data()?.orgIds ?? [targetSnap.data()?.orgId].filter(Boolean);
-    if (!callerOrgIds.some((id) => targetOrgIds.includes(id))) {
+    const target = targetSnap.exists ? targetSnap.data() : null;
+    if (!target || !orgsOf(target).includes(org)) {
       return json(res, 403, { error: 'Deze sporter zit niet in jouw studio.' });
+    }
+    if (roleIn(target, org) !== 'sporter') return json(res, 404, { error: 'Sporter niet gevonden.' });
+    // Eén login voor meerdere studio's: dan beslist alleen de sporter zelf over e-mail en wachtwoord.
+    if (orgsOf(target).length > 1) {
+      return json(res, 403, { error: 'Deze sporter zit ook bij een andere studio. Alleen de sporter zelf kan e-mail of wachtwoord wijzigen.' });
     }
 
     const email = typeof body?.email === 'string' ? body.email.trim() : undefined;
@@ -214,18 +330,58 @@ export default async function handler(req, res) {
     return json(res, 200, { ok: true });
   }
 
-  // 3) Alle overige acties: alleen een beheerder.
+  // 3) Alle overige acties: alleen een beheerder van de studio waarin het verzoek handelt.
   const callerSnap = await db.collection('profiles').doc(callerUid).get();
-  if (!callerSnap.exists || callerSnap.data()?.role !== 'admin') {
-    return json(res, 403, { error: 'Alleen beheerders mogen accounts verwijderen.' });
+  const callerData = callerSnap.exists ? callerSnap.data() : null;
+  const org = callerData ? actingOrg(callerData, body?.actingOrgId) : null;
+  if (!callerData || !isAdminIn(callerData, org)) {
+    return json(res, 403, { error: 'Alleen beheerders mogen dit.' });
   }
 
   const targetUid = String(body?.targetUid || '').trim();
-  if (action !== 'delete' || !targetUid) {
+  if ((action !== 'delete' && action !== 'setRole') || !targetUid) {
     return json(res, 400, { error: 'Ongeldige actie of ontbrekende targetUid.' });
   }
   if (targetUid === callerUid) {
-    return json(res, 400, { error: 'Je kunt je eigen account niet verwijderen.' });
+    return json(res, 400, { error: action === 'delete' ? 'Je kunt je eigen account niet verwijderen.' : 'Je kunt je eigen rol niet wijzigen.' });
+  }
+  const targetSnap = await db.collection('profiles').doc(targetUid).get();
+  const target = targetSnap.exists ? targetSnap.data() : null;
+  // Alleen leden van je eigen studio; een beheerder van de ene studio komt nooit aan een ander.
+  if (!target || !orgsOf(target).includes(org)) {
+    return json(res, 404, { error: 'Dit lid hoort niet bij jouw studio.' });
+  }
+
+  if (action === 'setRole') {
+    const role = String(body?.role ?? '').trim();
+    if (!['sporter', 'trainer', 'admin'].includes(role)) return json(res, 400, { error: 'Onbekende rol.' });
+    const update = { [`orgRoles.${org}`]: role, updatedAt: FieldValue.serverTimestamp() };
+    // Eén studio: de rol van het account loopt gelijk (oude app-versies lezen alleen `role`).
+    if (orgsOf(target).length === 1) update.role = role;
+    if (role !== 'sporter' && orgsOf(target).length === 1) update.trainerId = null;
+    await db.collection('profiles').doc(targetUid).update(update);
+    return json(res, 200, { ok: true, role });
+  }
+
+  // Hoort dit lid ook bij een andere studio, dan alleen uit déze studio halen: het account en de
+  // gegevens bij de andere studio blijven staan.
+  if (orgsOf(target).length > 1) {
+    const rest = orgsOf(target).filter((o) => o !== org);
+    const home = String(target.orgId ?? '') === org ? rest[0] : String(target.orgId ?? rest[0]);
+    // Hangt dit lid aan een trainer die alleen bij déze studio hoort, dan valt die koppeling weg.
+    let clearTrainer = false;
+    if (target.trainerId) {
+      const tr = await db.collection('profiles').doc(String(target.trainerId)).get();
+      clearTrainer = !tr.exists || !orgsOf(tr.data()).some((o) => rest.includes(o));
+    }
+    await db.collection('profiles').doc(targetUid).update({
+      orgIds: rest,
+      orgId: home,
+      [`orgRoles.${org}`]: FieldValue.delete(),
+      ...(clearTrainer ? { trainerId: null } : {}),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return json(res, 200, { ok: true, removedFromOrg: org });
   }
 
   // 4) Auth-account verwijderen (negeer als het al weg is)
