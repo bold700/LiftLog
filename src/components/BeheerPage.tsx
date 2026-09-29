@@ -59,6 +59,7 @@ import {
 } from '../utils/memberTable';
 import { ClassTypesPanel } from './beheer/ClassTypesPanel';
 import { SubscriptionsPanel } from './beheer/SubscriptionsPanel';
+import { GroupsPanel } from './beheer/GroupsPanel';
 import { BillingPanel } from './beheer/BillingPanel';
 import { NotificationsPanel } from './beheer/NotificationsPanel';
 import { WaitlistsPanel } from './beheer/WaitlistsPanel';
@@ -75,7 +76,7 @@ import { MemberImportDialog } from './beheer/MemberImportDialog';
 import { LEADERBOARD_ENABLED } from '../config/features';
 import { tabsOverflowHintSx } from '../theme/tabs';
 
-type Section = 'leden' | 'lessoorten' | 'lesplanning' | 'oefeningen' | 'wachtlijsten' | 'abonnementen' | 'huisstijl' | 'instellingen' | 'facturatie' | 'meldingen';
+type Section = 'leden' | 'groepen' | 'lessoorten' | 'lesplanning' | 'oefeningen' | 'wachtlijsten' | 'abonnementen' | 'huisstijl' | 'instellingen' | 'facturatie' | 'meldingen';
 /** Beheer gebruikt de hele breedte van het hoofdvlak, zoals in het ontwerp; de andere pagina's blijven op 800. */
 const ADMIN_MAX_WIDTH = 'none';
 
@@ -172,6 +173,7 @@ export function BeheerPage() {
   const [memberships, setMemberships] = useState<Record<string, Membership>>({});
   const [plans, setPlans] = useState<Plan[]>([]);
   const [newPlanSignal, setNewPlanSignal] = useState(0);
+  const [newGroupSignal, setNewGroupSignal] = useState(0);
   const [exportSignal, setExportSignal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [memberFilter, setMemberFilter] = useState<MemberFilter>(DEFAULT_MEMBER_FILTER);
@@ -485,6 +487,10 @@ export function BeheerPage() {
       <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewTypeSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
         {t('classTypes.newType')}
       </Button>
+    ) : section === 'groepen' ? (
+      <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewGroupSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
+        Groep toevoegen
+      </Button>
     ) : section === 'abonnementen' ? (
       <Button variant="contained" disableElevation startIcon={<AddRoundedIcon />} onClick={() => setNewPlanSignal((n) => n + 1)} sx={{ flexShrink: 0 }}>
         {t('plans.newPlan')}
@@ -537,6 +543,8 @@ export function BeheerPage() {
             <ExerciseLibraryPanel />
           ) : section === 'wachtlijsten' ? (
             <WaitlistsPanel profiles={profiles} credits={credits} memberships={memberships} plans={plans} onChanged={load} />
+          ) : section === 'groepen' ? (
+            <GroupsPanel profiles={profiles} plans={plans} memberships={memberships} credits={credits} createSignal={newGroupSignal} onChanged={load} />
           ) : section === 'abonnementen' ? (
             <SubscriptionsPanel memberships={memberships} credits={credits} createSignal={newPlanSignal} onChanged={load} />
           ) : section === 'meldingen' ? (
@@ -961,15 +969,16 @@ export function BeheerPage() {
   );
 }
 
-const SECTIONS: Section[] = ['leden', 'lessoorten', 'lesplanning', 'oefeningen', 'wachtlijsten', 'abonnementen', 'meldingen', 'facturatie', 'huisstijl', 'instellingen'];
+const SECTIONS: Section[] = ['leden', 'groepen', 'lessoorten', 'lesplanning', 'oefeningen', 'wachtlijsten', 'abonnementen', 'meldingen', 'facturatie', 'huisstijl', 'instellingen'];
 /** Wat een trainer ziet: de leden, de lesplanning, de oefeningen, de wachtlijsten en berichten sturen. De rest is aan de eigenaar. */
 const STAFF_SECTIONS: Section[] = ['leden', 'lesplanning', 'oefeningen', 'wachtlijsten', 'meldingen'];
 const SECTION_STORAGE_KEY = 'vorm.beheer.section';
 const SECTION_KEY: Record<
   Section,
-  'members' | 'classTypes' | 'classPlanning' | 'exercises' | 'waitlists' | 'subscriptions' | 'branding' | 'settings' | 'billing' | 'notifications'
+  'members' | 'groups' | 'classTypes' | 'classPlanning' | 'exercises' | 'waitlists' | 'subscriptions' | 'branding' | 'settings' | 'billing' | 'notifications'
 > = {
   leden: 'members',
+  groepen: 'groups',
   lessoorten: 'classTypes',
   lesplanning: 'classPlanning',
   oefeningen: 'exercises',
@@ -991,11 +1000,13 @@ function SectionTabs({ sections, value, onChange }: { sections: Section[]; value
       value={value}
       onChange={(_, v: Section) => onChange(v)}
       aria-label={t('admin.title')}
-      variant={wide ? 'fullWidth' : 'scrollable'}
+      // Past alles naast elkaar, dan over de hele breedte; met meer tabs (eigenaar) schuifbaar, anders
+      // worden lange namen als "Abonnementen" afgekapt.
+      variant={wide && sections.length <= 10 ? 'fullWidth' : 'scrollable'}
       scrollButtons={false}
       allowScrollButtonsMobile
       sx={{
-          ...(!wide ? tabsOverflowHintSx : {}), minHeight: 44, mb: 2, borderBottom: '1px solid', borderColor: 'divider', '& .MuiTab-root': { minHeight: 44, textTransform: 'none', fontWeight: 600, px: 2 } }}
+          ...(!wide || sections.length > 10 ? tabsOverflowHintSx : {}), minHeight: 44, mb: 2, borderBottom: '1px solid', borderColor: 'divider', '& .MuiTab-root': { minHeight: 44, textTransform: 'none', fontWeight: 600, px: 2 } }}
     >
       {sections.map((sec) => (
         <Tab key={sec} value={sec} label={t(`admin.tabs.${SECTION_KEY[sec]}`)} />

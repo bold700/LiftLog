@@ -427,6 +427,25 @@ await t('beheerder zet een saldo buiten de server om → geweigerd', false, setD
 await t('sporter leest zijn eigen grootboek → mag', true, getDoc(doc(as('sporter2'), 'creditLedger/le1')));
 await t('grootboekregel toevoegen buiten de server om → geweigerd', false, setDoc(doc(as('sporter2'), 'creditLedger/leZelf'), { orgId: 'vanas', userId: 'sporter2', delta: 50, reason: 'manual' }));
 
+console.log('Groepen');
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore();
+  await setDoc(doc(db, 'groups/g1'), { id: 'g1', orgId: 'vanas', name: 'Pouw', kind: 'gezin', memberIds: ['sporter2', 'sporter3'], payerId: 'sporter2' });
+  await setDoc(doc(db, 'creditAccounts/vanas__grp_g1'), { orgId: 'vanas', userId: 'grp_g1', groupId: 'g1', memberIds: ['sporter2', 'sporter3'], unit: 'eur', balance: 340 });
+  await setDoc(doc(db, 'memberships/mbG1'), { orgId: 'vanas', userId: 'grp_g1', groupId: 'g1', billToUserId: 'sporter2', planId: 'pl1', status: 'active' });
+});
+await t('lid van de groep leest de groep → mag', true, getDoc(doc(as('sporter3'), 'groups/g1')));
+await t('trainer leest de groep → mag', true, getDoc(doc(as('trainer1'), 'groups/g1')));
+await t('beheerder vraagt de groepen van de studio op → mag', true, getDocs(query(collection(as('admin1'), 'groups'), where('orgId', '==', 'vanas'))));
+await t('beheerder vraagt de groepstegoeden van de studio op → mag', true, getDocs(query(collection(as('admin1'), 'creditAccounts'), where('orgId', '==', 'vanas'))));
+await t('staf van een andere studio leest de groep → geweigerd', false, getDoc(doc(as('adminB'), 'groups/g1')));
+await t('beheerder schrijft een groep buiten de server om → geweigerd', false, setDoc(doc(as('admin1'), 'groups/g2'), { orgId: 'vanas', name: 'X', memberIds: ['sporter2'], payerId: 'sporter2' }));
+await t('lid zet zichzelf in een groep → geweigerd', false, updateDoc(doc(as('sporter2'), 'groups/g1'), { memberIds: ['sporter2', 'sporter3', 'sporterB'] }));
+await t('lid van de groep leest het groepstegoed → mag', true, getDoc(doc(as('sporter3'), 'creditAccounts/vanas__grp_g1')));
+await t('iemand buiten de groep leest het groepstegoed → geweigerd', false, getDoc(doc(as('sporterB'), 'creditAccounts/vanas__grp_g1')));
+await t('hoofdprofiel leest het groepsabonnement → mag', true, getDoc(doc(as('sporter2'), 'memberships/mbG1')));
+await t('ander groepslid leest het groepsabonnement → geweigerd', false, getDoc(doc(as('sporter3'), 'memberships/mbG1')));
+
 console.log('"Elke week inschrijven"');
 await env.withSecurityRulesDisabled(async (ctx) => {
   const db = ctx.firestore();

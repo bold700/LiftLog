@@ -43,6 +43,7 @@ export const nl = {
     title: 'Beheer',
     tabs: {
       members: 'Leden',
+      groups: 'Groepen',
       classTypes: 'Lessoorten',
       classPlanning: 'Lesplanning',
       exercises: 'Oefeningen',

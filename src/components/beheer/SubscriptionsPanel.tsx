@@ -24,6 +24,7 @@ import { FullScreenDialogTitle } from './FullScreenDialogTitle';
 import { useNotify } from '../../context/NotifyContext';
 import { deletePlan, getPlans, newPlanId, savePlan } from '../../services/planService';
 import { NumberField } from '../NumberField';
+import { isGroupHolder } from '../../utils/groupPricing';
 import { designTokens } from '../../theme/designTokens';
 import { DEFAULT_VAT_RATE, VAT_RATES, type Membership, type Plan, type VatRate } from '../../types';
 
@@ -120,7 +121,8 @@ export function SubscriptionsPanel({ memberships, credits, createSignal, onChang
       const p = planById.get(m.planId);
       return p && p.period === 'month' ? sum + p.price : sum;
     }, 0);
-    const outstanding = Object.values(credits).reduce((a, b) => a + b, 0);
+    // Groepstegoed (grp_…) is in euro's, niet in credits: niet meetellen.
+    const outstanding = Object.entries(credits).reduce((a, [id, b]) => (isGroupHolder(id) ? a : a + b), 0);
     const week = Date.now() + 7 * 24 * 3600 * 1000;
     const expiring = active.filter((m) => m.expiresAt && new Date(m.expiresAt).getTime() <= week).length;
     return { members: active.length, monthly, outstanding, expiring, byPlan };
