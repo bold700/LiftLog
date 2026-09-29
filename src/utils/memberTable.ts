@@ -9,14 +9,18 @@ export type RoleFilter = 'all' | 'sporter' | 'staff';
 /** Abonnementfilter: iedereen, zonder abonnement, of een plan-id. */
 export const NO_PLAN = '__geen__';
 
+/** Statusfilter: standaard alleen actieve leden; inactief = gestopt of gepauzeerd bij deze studio. */
+export type StatusFilter = 'active' | 'inactive' | 'all';
+
 export interface MemberFilter {
   query: string;
   role: RoleFilter;
+  status: StatusFilter;
   /** '' = alle; `NO_PLAN` = sporters zonder abonnement; anders een plan-id. */
   plan: string;
 }
 
-export const DEFAULT_MEMBER_FILTER: MemberFilter = { query: '', role: 'all', plan: '' };
+export const DEFAULT_MEMBER_FILTER: MemberFilter = { query: '', role: 'all', status: 'active', plan: '' };
 
 export type MemberSortKey = 'name' | 'email' | 'role' | 'subscription' | 'credits';
 export interface MemberSort {
@@ -39,6 +43,8 @@ const ROLE_ORDER: Record<string, number> = { admin: 0, trainer: 1, sporter: 2 };
 export function filterMembers(profiles: Profile[], filter: MemberFilter, ctx: MemberContext): Profile[] {
   const q = filter.query.trim().toLowerCase();
   return profiles.filter((p) => {
+    if (filter.status === 'active' && p.inactive) return false;
+    if (filter.status === 'inactive' && !p.inactive) return false;
     if (filter.role === 'sporter' && p.role !== 'sporter') return false;
     if (filter.role === 'staff' && p.role === 'sporter') return false;
     if (filter.plan) {

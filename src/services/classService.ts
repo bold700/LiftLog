@@ -325,6 +325,22 @@ export function cancelClassForEveryone(classId: string): Promise<{ cancelled: nu
   return callBooking({ action: 'cancelClass', classId });
 }
 
+export interface MemberActiveResult {
+  active: boolean;
+  standingPaused?: number;
+  standingRestored?: number;
+  bookingsCancelled?: number;
+  membershipStopped?: boolean;
+}
+
+/**
+ * Lid (de)activeren bij de actieve studio (alleen beheerder). Deactiveren meldt komende lessen af,
+ * zet vaste lessen uit en stopt het abonnement; activeren zet de vaste lessen terug.
+ */
+export function setMemberActive(userId: string, active: boolean): Promise<MemberActiveResult> {
+  return callBooking({ action: 'setMemberActive', userId, active });
+}
+
 /** Een per ongeluk afgelasten les terugzetten: `cancelledAt` weer wissen. */
 export async function restoreClass(classId: string): Promise<void> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');

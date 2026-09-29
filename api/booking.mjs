@@ -70,7 +70,7 @@ import { getAdmin, getStorageBucket } from './_lib/firebaseAdmin.mjs';
 import { runAccountRetention } from './_lib/accountRetention.mjs';
 import { clearPublishedLeaderboard } from './_lib/leaderboardCleanup.mjs';
 import { orgIdOf, newId } from './_lib/liftlogData.mjs';
-import { actingOrg, isAdminIn, isStaffAnywhere, isStaffIn, roleIn } from './_lib/orgRoles.mjs';
+import { actingOrg, isAdminIn, isInactiveIn, isStaffAnywhere, isStaffIn, orgsOf, roleIn } from './_lib/orgRoles.mjs';
 import { randomBytes } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { activeMembership, newCharge, newMembership, settleMembership } from './_lib/subscriptions.mjs';
@@ -206,9 +206,17 @@ export default async function handler(req, res) {
   const myOrgs = [actOrg];
   const myRole = roleIn(meData, actOrg);
   const isStaff = myRole === 'trainer' || myRole === 'admin';
+  // Inactief lid bij deze studio: kijken mag (eigen geschiedenis, facturen), boeken en kopen niet.
+  const INACTIVE_BLOCKED = new Set(['book', 'purchasePlan', 'addStandingBooking']);
+  if (isInactiveIn(meData, actOrg) && INACTIVE_BLOCKED.has(String(body?.action)) && !(isStaff && body?.userId && body.userId !== uid)) {
+    return json(res, 403, { error: 'Je lidmaatschap bij deze studio staat op inactief. Neem contact op met de studio.', build: BUILD });
+  }
 
   try {
     switch (body?.action) {
+      case 'setMemberActive':
+        if (myRole !== 'admin') return json(res, 403, { error: 'Alleen een beheerder kan leden (de)activeren.', build: BUILD });
+        return await setMemberActive(res, db, uid, actOrg, String(body.userId ?? '').trim(), body.active === true);
       case 'book':
         return await book(
           res, db, uid, myOrgs,
@@ -295,6 +303,62 @@ export default async function handler(req, res) {
   }
 }
 
+/**
+ * Lid (de)activeren in de studio van de beheerder (Beheer → lid → Deactiveren/Activeren).
+ *
+ * Deactiveren: het lid komt op `inactiveOrgs`. Wat nog openstaat bij deze studio wordt opgeruimd:
+ * komende reserveringen en wachtlijstplekken worden afgemeld (als afmelding door de studio, dus
+ * volgens het creditbeleid van de studio), vaste lessen gaan uit en het abonnement stopt, zodat er
+ * niet meer gefactureerd wordt. Account, geschiedenis, metingen en facturen blijven staan.
+ * Activeren: van de lijst af, en de vaste lessen die door het deactiveren uit gingen staan weer aan.
+ * Een abonnement kent de beheerder daarna zelf opnieuw toe.
+ */
+async function setMemberActive(res, db, adminUid, orgId, userId, active) {
+  if (!userId) return json(res, 400, { error: 'Geen lid opgegeven.', build: BUILD });
+  if (userId === adminUid) return json(res, 400, { error: 'Je kunt jezelf niet (de)activeren.', build: BUILD });
+  const ref = db.collection('profiles').doc(userId);
+  const snap = await ref.get();
+  const target = snap.exists ? snap.data() : null;
+  if (!target || !orgsOf(target).includes(orgId)) return json(res, 404, { error: 'Dit lid hoort niet bij jouw studio.', build: BUILD });
+  const nowIso = new Date().toISOString();
+  const inactive = Array.isArray(target.inactiveOrgs) ? target.inactiveOrgs.map(String) : [];
+  const standingRef = (id) => db.collection('standingBookings').doc(id);
+
+  if (active) {
+    await ref.set({ inactiveOrgs: inactive.filter((o) => o !== orgId), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    const paused = await db.collection('standingBookings').where('orgId', '==', orgId).where('userId', '==', userId).where('pausedByInactive', '==', true).get();
+    for (const d of paused.docs) await standingRef(d.id).set({ active: true, pausedByInactive: FieldValue.delete(), updatedAt: nowIso }, { merge: true });
+    return json(res, 200, { active: true, standingRestored: paused.docs.length, build: BUILD });
+  }
+
+  await ref.set({ inactiveOrgs: [...new Set([...inactive, orgId])], updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  // Vaste lessen uit (onthouden welke, zodat activeren ze terugzet).
+  const standing = await db.collection('standingBookings').where('orgId', '==', orgId).where('userId', '==', userId).where('active', '==', true).get();
+  for (const d of standing.docs) await standingRef(d.id).set({ active: false, pausedByInactive: true, updatedAt: nowIso }, { merge: true });
+  // Komende reserveringen en wachtlijstplekken afmelden.
+  const today = todayIso();
+  const open = await db.collection('bookings').where('orgId', '==', orgId).where('userId', '==', userId).get();
+  let cancelled = 0;
+  for (const d of open.docs) {
+    const b = d.data();
+    if (!['booked', 'waitlist'].includes(String(b.status))) continue;
+    const cls = await db.collection('classes').doc(String(b.classId)).get();
+    if (cls.exists && String(cls.data().date ?? '') < today) continue;
+    const r = await cancelBookingCore(db, adminUid, [orgId], true, d.id).catch(() => null);
+    if (!r) continue;
+    cancelled++;
+    // Kwam er een plek vrij, dan hoort de wachtlijst dat net als bij een gewone afmelding.
+    const { notice, ...result } = r;
+    await notifyAfterCancel(db, adminUid, notice, result).catch(() => null);
+  }
+  // Abonnement stoppen: een inactief lid wordt niet meer gefactureerd.
+  const membership = await activeMembership(db, orgId, userId).catch(() => null);
+  if (membership) {
+    await db.collection('memberships').doc(membership.id).set({ status: 'cancelled', cancelledAt: nowIso, byUserId: adminUid, updatedAt: nowIso }, { merge: true });
+  }
+  return json(res, 200, { active: false, standingPaused: standing.docs.length, bookingsCancelled: cancelled, membershipStopped: !!membership, build: BUILD });
+}
+
 /** Weigering die de gebruiker moet zien (geen plek, geen saldo) — geen serverfout. */
 function refuse(message, status) {
   const err = new Error(message);
@@ -327,6 +391,7 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
     const target = targetSnap.data() ?? {};
     const targetOrgs = Array.isArray(target.orgIds) && target.orgIds.length ? target.orgIds.map(String) : [orgIdOf(target.orgId)];
     if (!myOrgs.some((o) => targetOrgs.includes(o))) return json(res, 403, { error: 'Deze sporter zit niet in jouw studio.', build: BUILD });
+    if (isInactiveIn(target, myOrgs[0])) return json(res, 409, { error: 'Dit lid staat op inactief. Activeer het lid eerst in Beheer.', build: BUILD });
     beneficiaryUid = targetUserId;
     beneficiaryIsStaff = isStaffIn(target, myOrgs[0]);
   }
@@ -1103,6 +1168,7 @@ async function requireMemberOfMyOrgs(db, myOrgs, userId) {
   const t = snap.data() ?? {};
   const orgs = Array.isArray(t.orgIds) && t.orgIds.length ? t.orgIds.map(String) : [orgIdOf(t.orgId)];
   if (!myOrgs.some((o) => orgs.includes(o))) throw refuse('Deze sporter zit niet in jouw studio.', 403);
+  if (myOrgs.some((o) => isInactiveIn(t, o))) throw refuse('Dit lid staat op inactief. Activeer het lid eerst in Beheer.', 409);
   return t;
 }
 

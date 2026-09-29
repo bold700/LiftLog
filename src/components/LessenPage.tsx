@@ -16,6 +16,7 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Alert,
 } from '@mui/material';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
@@ -696,6 +697,12 @@ export function LessenPage() {
 
   return (
     <PageLayout maxWidth="none">
+      {me?.inactive && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Je lidmaatschap bij deze studio staat op inactief. Je kunt het rooster bekijken, maar niet boeken. Neem contact op met de studio
+          om weer mee te doen.
+        </Alert>
+      )}
       {/* Figma "Schedule": weergave, ruimtes en legenda op één regel. Op de telefoon blijft alleen
           Week/Dag staan; de rest zit achter de filterknop in een bottom sheet. */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, rowGap: 1, mb: 2 }}>

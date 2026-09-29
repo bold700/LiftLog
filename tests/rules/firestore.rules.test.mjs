@@ -518,6 +518,11 @@ await t('beheerder B maakt account aan in B → mag', true,
   setDoc(doc(as('adminB'), 'profiles/nieuwB3'), { userId: 'nieuwB3', orgId: 'studiob', orgIds: ['studiob'], role: 'sporter', trainerId: null }));
 await t('oude trainer van twee studio\'s (alleen role) blijft trainer in beide', true, leden('duo', 'vanas'));
 
+console.log('Actief / inactief');
+await t('beheerder zet een lid op inactief via de app → geweigerd (alleen server)', false, updateDoc(doc(as('admin1'), 'profiles/lidA'), { inactiveOrgs: ['vanas'] }));
+await t('lid haalt zichzelf van inactief af → geweigerd', false, updateDoc(doc(as('lidA'), 'profiles/lidA'), { inactiveOrgs: [] }));
+await t('registratie met inactiveOrgs → geweigerd', false, setDoc(doc(as('nieuwInact'), 'profiles/nieuwInact'), { userId: 'nieuwInact', role: 'sporter', trainerId: null, inactiveOrgs: [] }));
+
 await env.cleanup();
 console.log(`\n${passed} geslaagd, ${failed} mislukt`);
 process.exit(failed ? 1 : 0);
