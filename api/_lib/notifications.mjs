@@ -7,7 +7,7 @@
  * waar het kan, zodat de regels te testen zijn zonder database.
  */
 import { orgIdOf } from './liftlogData.mjs';
-import { orgsOf, roleIn } from './orgRoles.mjs';
+import { isInactiveIn, orgsOf, roleIn } from './orgRoles.mjs';
 import { sendPushToUser } from './pushSend.mjs';
 import { amsterdamDate as amsterdamDay, buildClassReminders } from './classReminders.mjs';
 
@@ -161,7 +161,7 @@ function createdAtIso(p) {
 }
 
 /** Sporter in minstens één studio (de rol kan per studio verschillen, zie orgRoles.mjs). */
-const isSporterSomewhere = (p) => orgsOf(p).some((o) => roleIn(p, o) === 'sporter');
+const isSporterSomewhere = (p) => orgsOf(p).some((o) => roleIn(p, o) === 'sporter' && !isInactiveIn(p, o));
 
 /**
  * Per trainer: welke van zijn sporters hebben 14 dagen niets gelogd en geen les gehad? Nieuwe
@@ -242,7 +242,13 @@ export async function resolveAudience(db, orgId, audience, senderId, today) {
     }
   }
   ids.delete(senderId);
-  return [...ids];
+  // Inactieve leden krijgen geen berichten meer van deze studio.
+  const out = [];
+  for (const id of ids) {
+    const snap = await db.collection('profiles').doc(id).get();
+    if (snap.exists && !isInactiveIn(snap.data(), orgId)) out.push(id);
+  }
+  return out;
 }
 
 /** Stuurt een opgeslagen bericht naar zijn doelgroep en werkt het document bij. */

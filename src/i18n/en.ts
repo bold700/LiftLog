@@ -59,6 +59,10 @@ export const en: Messages = {
     comingSoon: 'Coming in a later step.',
     review: 'Review',
     memberFilters: {
+      status: 'Status',
+      active: 'Active',
+      inactive: 'Inactive',
+      allStatus: 'Active and inactive',
       all: 'Everyone',
       sporters: 'Members',
       staff: 'Staff',

@@ -48,3 +48,10 @@ export function actingOrg(data, requested) {
   const home = orgIdOf(data?.orgId);
   return orgs.includes(home) ? home : orgs[0];
 }
+
+/**
+ * Lid staat op inactief bij deze studio (Beheer → lid deactiveren, of uitgeschreven bij de import).
+ * Het account en de geschiedenis blijven; boeken, kopen en meldingen van de studio staan uit.
+ * Per studio: inactief bij de ene studio zegt niets over een andere.
+ */
+export const isInactiveIn = (data, orgId) => Array.isArray(data?.inactiveOrgs) && data.inactiveOrgs.map(String).includes(orgId);

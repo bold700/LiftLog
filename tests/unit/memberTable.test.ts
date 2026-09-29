@@ -37,6 +37,12 @@ describe('filterMembers', () => {
     expect(ids(filterMembers(profiles, { ...DEFAULT_MEMBER_FILTER, plan: 'strip' }, ctx))).toEqual(['margot']);
     expect(ids(filterMembers(profiles, { ...DEFAULT_MEMBER_FILTER, plan: NO_PLAN }, ctx))).toEqual(['richard']);
   });
+  it('toont standaard alleen actieve leden; inactief apart op te vragen', () => {
+    const withInactive = [...profiles, p('oud', 'Oud lid', 'sporter', { inactive: true })];
+    expect(ids(filterMembers(withInactive, DEFAULT_MEMBER_FILTER, ctx))).toEqual(ids(profiles));
+    expect(ids(filterMembers(withInactive, { ...DEFAULT_MEMBER_FILTER, status: 'inactive' }, ctx))).toEqual(['oud']);
+    expect(filterMembers(withInactive, { ...DEFAULT_MEMBER_FILTER, status: 'all' }, ctx)).toHaveLength(6);
+  });
 });
 
 describe('sortMembers', () => {

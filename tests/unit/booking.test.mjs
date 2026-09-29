@@ -1846,3 +1846,47 @@ describe('trainer meldt één sporter af, binnen de afmeldtermijn', () => {
     expect(res.body.refunded).toBe(false);
   });
 });
+
+describe('leden (de)activeren', () => {
+  beforeEach(() => {
+    store['profiles/admin1'] = { userId: 'admin1', orgId: 'vanas', orgIds: ['vanas'], role: 'admin' };
+    store['standingBookings/sb1'] = { orgId: 'vanas', userId: 'sporter1', classTypeId: 'ct1', weekday: 2, startTime: '09:00', active: true };
+  });
+
+  it('alleen een beheerder', async () => {
+    const res = await post({ action: 'setMemberActive', userId: 'sporter1', active: false }, 'trainer1');
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('deactiveren: status per studio, reservering afgemeld, vaste les uit', async () => {
+    await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    const res = await post({ action: 'setMemberActive', userId: 'sporter1', active: false }, 'admin1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ active: false, bookingsCancelled: 1, standingPaused: 1 });
+    expect(store['profiles/sporter1'].inactiveOrgs).toEqual(['vanas']);
+    expect(store['standingBookings/sb1']).toMatchObject({ active: false, pausedByInactive: true });
+    expect(store['classes/c1'].bookedCount).toBe(0);
+  });
+
+  it('inactief lid kan niet boeken, en staf kan het er ook niet bij zetten', async () => {
+    await post({ action: 'setMemberActive', userId: 'sporter1', active: false }, 'admin1');
+    expect((await post({ action: 'book', classId: 'c1' }, 'sporter1')).statusCode).toBe(403);
+    expect((await post({ action: 'book', classId: 'c1', userId: 'sporter1' }, 'trainer1')).statusCode).toBe(409);
+  });
+
+  it('activeren: weer boeken, en de vaste les staat weer aan', async () => {
+    await post({ action: 'setMemberActive', userId: 'sporter1', active: false }, 'admin1');
+    const res = await post({ action: 'setMemberActive', userId: 'sporter1', active: true }, 'admin1');
+    expect(res.body).toMatchObject({ active: true, standingRestored: 1 });
+    expect(store['profiles/sporter1'].inactiveOrgs).toEqual([]);
+    expect(store['standingBookings/sb1'].active).toBe(true);
+    expect(store['standingBookings/sb1'].pausedByInactive).toBeUndefined();
+    expect((await post({ action: 'book', classId: 'c1' }, 'sporter1')).body.status).toBe('booked');
+  });
+
+  it('een lid van een andere studio kan een beheerder niet (de)activeren', async () => {
+    const res = await post({ action: 'setMemberActive', userId: 'sporterB', active: false }, 'admin1');
+    expect(res.statusCode).toBe(404);
+    expect(store['profiles/sporterB'].inactiveOrgs).toBeUndefined();
+  });
+});

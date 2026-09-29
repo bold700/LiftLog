@@ -129,7 +129,7 @@ service cloud.firestore {
      */
     function touchesProtectedProfileFields() {
       return request.resource.data.diff(resource.data).affectedKeys()
-        .hasAny(['role', 'orgRoles', 'createdByAdmin', 'orgId', 'orgIds', 'platformAdmin', 'userId']);
+        .hasAny(['role', 'orgRoles', 'inactiveOrgs', 'createdByAdmin', 'orgId', 'orgIds', 'platformAdmin', 'userId']);
     }
     /**
      * Wat je op je eigen profiel nooit zelf mag zetten. Naast het bovenstaande ook `trainerId`:
@@ -229,13 +229,15 @@ service cloud.firestore {
             && writesMyOrg()
             && request.resource.data.get('orgIds', [request.resource.data.get('orgId', defaultOrg())])
                  .hasOnly([request.resource.data.get('orgId', defaultOrg())])
-            && !('orgRoles' in request.resource.data))
+            && !('orgRoles' in request.resource.data)
+            && !('inactiveOrgs' in request.resource.data))
         || (isSignedIn()
             && request.auth.uid == userId
             && request.resource.data.get('role', 'sporter') == 'sporter'
             && request.resource.data.get('createdByAdmin', false) == false
             && request.resource.data.get('platformAdmin', false) == false
             && !('orgRoles' in request.resource.data)
+            && !('inactiveOrgs' in request.resource.data)
             // Je meldt je aan bij één studio; lid worden van een tweede doet een beheerder daar.
             && request.resource.data.get('orgIds', [request.resource.data.get('orgId', defaultOrg())])
                  .hasOnly([request.resource.data.get('orgId', defaultOrg())])
@@ -251,7 +253,9 @@ service cloud.firestore {
              // Rol per studio alleen via de server (api/admin-account.mjs, actie setRole). De rol
              // van het account zelf alleen bij wie maar bij één studio hoort: anders zou een
              // beheerder hier de rol in een andere studio meeveranderen.
-             && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['orgRoles'])
+             // Actief/inactief ook alleen via de server (api/booking.mjs, actie setMemberActive):
+             // die ruimt ook de reserveringen en het abonnement op.
+             && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['orgRoles', 'inactiveOrgs'])
              && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])
                  || resource.data.get('orgIds', [orgOf(resource.data)]).size() == 1)
              && (request.auth.uid == userId || !touchesHealthConsent()))

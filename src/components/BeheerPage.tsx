@@ -64,7 +64,7 @@ import { ClassPlanningPanel } from './beheer/ClassPlanningPanel';
 import { ExerciseLibraryPanel } from './beheer/ExerciseLibraryPanel';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import { assignPlan, getActiveMembershipsForOrg, getPlans, renewDue, unassignPlan } from '../services/planService';
-import { getCreditBalancesForOrg, grantCredits } from '../services/classService';
+import { getCreditBalancesForOrg, grantCredits, setMemberActive } from '../services/classService';
 import { NumberField } from './NumberField';
 import { designTokens } from '../theme/designTokens';
 import { EMAIL_RE, generatePassword } from '../utils/account';
@@ -427,6 +427,34 @@ export function BeheerPage() {
 
   const canDeleteTarget = isAdmin && !!target && target.userId !== selfId;
 
+  /** Lid (de)activeren: eerst bevestigen, want deactiveren meldt komende lessen af en stopt het abonnement. */
+  const [statusTarget, setStatusTarget] = useState<Profile | null>(null);
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const handleConfirmStatus = async () => {
+    if (!statusTarget) return;
+    const activate = !!statusTarget.inactive;
+    setStatusBusy(true);
+    setStatusError(null);
+    try {
+      const r = await setMemberActive(statusTarget.userId, activate);
+      const who = statusTarget.displayName?.trim() || statusTarget.email || 'lid';
+      setStatusTarget(null);
+      closeEditor();
+      await load();
+      setMessage({
+        type: 'success',
+        text: activate
+          ? `${who} is weer actief${r.standingRestored ? `; ${r.standingRestored} vaste les${r.standingRestored === 1 ? '' : 'sen'} staan weer aan` : ''}. Ken zo nodig opnieuw een abonnement toe.`
+          : `${who} staat op inactief${r.bookingsCancelled ? `; ${r.bookingsCancelled} komende les${r.bookingsCancelled === 1 ? '' : 'sen'} afgemeld` : ''}${r.membershipStopped ? ', abonnement gestopt' : ''}.`,
+      });
+    } catch (e) {
+      setStatusError(e instanceof Error ? e.message : 'Wijzigen mislukt.');
+    } finally {
+      setStatusBusy(false);
+    }
+  };
+
   // Afgeleide waarden in de editor, live uit de formulierwaarden.
   const editAge = edit ? ageOnDate(edit.birthDate || null, todayIso()) : null;
   const editZones = edit ? heartRateZones(editAge, num(edit.restingHr)) : null;
@@ -713,6 +741,17 @@ export function BeheerPage() {
           </DialogContent>
         )}
         <DialogActions sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+          {canDeleteTarget && target && (
+            <Button
+              onClick={() => {
+                setStatusError(null);
+                setStatusTarget(target);
+              }}
+              disabled={saving}
+            >
+              {target.inactive ? 'Activeren' : 'Deactiveren'}
+            </Button>
+          )}
           {canDeleteTarget && (
             <Button color="error" startIcon={<DeleteOutlineRoundedIcon />} onClick={openDelete} disabled={saving} sx={{ mr: 'auto' }}>
               Verwijderen
@@ -721,6 +760,42 @@ export function BeheerPage() {
           <Button onClick={closeEditor}>Annuleren</Button>
           <Button variant="contained" onClick={handleSave} disabled={saving}>
             {saving ? 'Bezig…' : 'Opslaan'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!statusTarget} onClose={() => !statusBusy && setStatusTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>{statusTarget?.inactive ? 'Lid activeren' : 'Lid deactiveren'}</DialogTitle>
+        <DialogContent>
+          {statusError && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setStatusError(null)}>
+              {statusError}
+            </Alert>
+          )}
+          {statusTarget?.inactive ? (
+            <Typography variant="body2">
+              <strong>{statusTarget.displayName?.trim() || statusTarget.email}</strong> kan weer lessen boeken. Vaste lessen die bij het
+              deactiveren uit gingen, staan weer aan. Een abonnement ken je daarna zelf opnieuw toe.
+            </Typography>
+          ) : (
+            <Typography variant="body2" component="div">
+              <strong>{statusTarget?.displayName?.trim() || statusTarget?.email}</strong> wordt inactief bij deze studio:
+              <ul style={{ margin: '8px 0', paddingLeft: 20 }}>
+                <li>kan niet meer boeken of een abonnement kopen;</li>
+                <li>komende lessen en wachtlijstplekken worden afgemeld;</li>
+                <li>vaste lessen gaan uit en het abonnement stopt (geen facturen meer);</li>
+                <li>krijgt geen berichten meer van de studio.</li>
+              </ul>
+              Het account, de trainingen, metingen en facturen blijven bewaard. Je kunt het lid altijd weer activeren.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStatusTarget(null)} disabled={statusBusy}>
+            Annuleren
+          </Button>
+          <Button variant="contained" onClick={() => void handleConfirmStatus()} disabled={statusBusy}>
+            {statusBusy ? 'Bezig…' : statusTarget?.inactive ? 'Activeren' : 'Deactiveren'}
           </Button>
         </DialogActions>
       </Dialog>

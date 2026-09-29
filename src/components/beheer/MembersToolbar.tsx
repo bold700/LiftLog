@@ -40,6 +40,12 @@ const pillSelectSx = (active: boolean) => ({
   '& .MuiSelect-select': { py: 0.5, pl: 1.5 },
 });
 
+const STATUSES: { value: MemberFilter['status']; key: 'active' | 'inactive' | 'allStatus' }[] = [
+  { value: 'active', key: 'active' },
+  { value: 'inactive', key: 'inactive' },
+  { value: 'all', key: 'allStatus' },
+];
+
 export function MembersToolbar({ filter, onFilter, sort, onSort, plans, shown, total }: Props) {
   const { t } = useI18n();
   return (
@@ -96,13 +102,27 @@ export function MembersToolbar({ filter, onFilter, sort, onSort, plans, shown, t
             </MenuItem>
           ))}
         </TextField>
+        <TextField
+          select
+          size="small"
+          value={filter.status}
+          onChange={(e) => onFilter({ ...filter, status: e.target.value as MemberFilter['status'] })}
+          inputProps={{ 'aria-label': t('admin.memberFilters.status') }}
+          sx={{ minWidth: 120, flexShrink: 0, ...pillSelectSx(filter.status !== 'active') }}
+        >
+          {STATUSES.map((s) => (
+            <MenuItem key={s.value} value={s.value}>
+              {t(`admin.memberFilters.${s.key}`)}
+            </MenuItem>
+          ))}
+        </TextField>
       </Box>
       {/* Telefoon: rol, abonnement en sorteren achter de filterknop, in een bottom sheet. */}
       <Box sx={{ display: { xs: 'flex', md: 'none' } }}>
         <FilterSheet
-          activeCount={(filter.role !== 'all' ? 1 : 0) + (filter.plan ? 1 : 0) + (sort.key !== DEFAULT_MEMBER_SORT.key || sort.dir !== DEFAULT_MEMBER_SORT.dir ? 1 : 0)}
+          activeCount={(filter.role !== 'all' ? 1 : 0) + (filter.plan ? 1 : 0) + (filter.status !== 'active' ? 1 : 0) + (sort.key !== DEFAULT_MEMBER_SORT.key || sort.dir !== DEFAULT_MEMBER_SORT.dir ? 1 : 0)}
           onReset={() => {
-            onFilter({ ...filter, role: 'all', plan: '' });
+            onFilter({ ...filter, role: 'all', plan: '', status: 'active' });
             onSort(DEFAULT_MEMBER_SORT);
           }}
         >
@@ -113,6 +133,16 @@ export function MembersToolbar({ filter, onFilter, sort, onSort, plans, shown, t
                 label={t(`admin.memberFilters.${r.key}`)}
                 onClick={() => onFilter({ ...filter, role: r.value })}
                 sx={filterPillSx(filter.role === r.value)}
+              />
+            ))}
+          </FilterGroup>
+          <FilterGroup label={t('admin.memberFilters.status')}>
+            {STATUSES.map((s) => (
+              <Chip
+                key={s.value}
+                label={t(`admin.memberFilters.${s.key}`)}
+                onClick={() => onFilter({ ...filter, status: s.value })}
+                sx={filterPillSx(filter.status === s.value)}
               />
             ))}
           </FilterGroup>

@@ -86,6 +86,7 @@ export function MembersList({ profiles, credits, memberships = {}, selfId, loadi
                 {sublineOf(p)}
               </Typography>
             </Box>
+            {p.inactive && <InactiveChip />}
             <RoleChip role={p.role} />
           </Box>
         ))}
@@ -132,7 +133,10 @@ export function MembersList({ profiles, credits, memberships = {}, selfId, loadi
               </TableCell>
               <TableCell sx={{ color: 'text.secondary' }}>{p.email ?? t('common.none')}</TableCell>
               <TableCell>
-                <RoleChip role={p.role} />
+                <Box sx={{ display: 'flex', gap: 0.75, alignItems: 'center' }}>
+                  <RoleChip role={p.role} />
+                  {p.inactive && <InactiveChip />}
+                </Box>
               </TableCell>
               <TableCell sx={{ color: 'text.secondary' }}>{subscriptionOf(p)}</TableCell>
               <TableCell sx={{ color: 'text.secondary' }}>{creditsOf(p)}</TableCell>
@@ -158,6 +162,19 @@ export function RoleChip({ role }: { role: ProfileRole }) {
         bgcolor: staff ? designTokens.primaryContainer : designTokens.cardBackgroundHigh,
         color: staff ? designTokens.onPrimaryContainer : 'text.primary',
       }}
+    />
+  );
+}
+
+/** Inactief bij deze studio: gestopt of gepauzeerd, kan niet boeken. */
+export function InactiveChip() {
+  const { t } = useI18n();
+  return (
+    <Chip
+      size="small"
+      variant="outlined"
+      label={t('admin.memberFilters.inactive')}
+      sx={{ height: 22, fontSize: 12, color: 'text.secondary', borderColor: designTokens.cardBorder }}
     />
   );
 }

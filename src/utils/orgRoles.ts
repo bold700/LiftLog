@@ -31,3 +31,8 @@ export function roleInOrg(
   const own = orgId ? p.orgRoles?.[orgId] : undefined;
   return own ?? p.accountRole ?? p.role ?? 'sporter';
 }
+
+/** Staat dit lid op inactief bij deze studio? Zie `isInactiveIn` in api/_lib/orgRoles.mjs. */
+export function isInactiveInOrg(p: { inactiveOrgs?: string[] | null }, orgId: string | null | undefined): boolean {
+  return !!orgId && Array.isArray(p.inactiveOrgs) && p.inactiveOrgs.includes(orgId);
+}

@@ -479,6 +479,10 @@ export interface Profile {
   accountRole?: ProfileRole;
   /** Rol per studio (studio-id → rol). Alleen de server schrijft dit. */
   orgRoles?: Record<string, ProfileRole>;
+  /** Studio's waar dit lid op inactief staat (niet boeken, geen abonnement). Alleen de server schrijft dit. */
+  inactiveOrgs?: string[];
+  /** Staat dit lid op inactief bij de studio die nu in beeld is (afgeleid van `inactiveOrgs`). */
+  inactive?: boolean;
   email: string | null;
   displayName: string | null;
   /** Profielfoto (download-URL uit Firebase Storage). */

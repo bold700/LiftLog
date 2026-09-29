@@ -61,6 +61,10 @@ export const nl = {
     comingSoon: 'Komt in een volgende stap.',
     review: 'Bekijken',
     memberFilters: {
+      status: 'Status',
+      active: 'Actief',
+      inactive: 'Inactief',
+      allStatus: 'Actief en inactief',
       all: 'Iedereen',
       sporters: 'Sporters',
       staff: 'Staf',
