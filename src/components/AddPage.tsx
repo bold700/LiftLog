@@ -614,6 +614,7 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
                   .filter(muscle => frontMuscleGroups.includes(muscle) && frontMuscleToSvg[muscle])
                   .map((muscle, index) => (
                     <BodyLayerImg
+                      highlight
                       key={`front-${muscle}-${index}`}
                       src={frontMuscleToSvg[muscle]}
                       alt={muscle}
@@ -668,6 +669,7 @@ export const AddPage = ({ onExerciseAdded, onClose, useDialog = false }: AddPage
                   .filter(muscle => backMuscleGroups.includes(muscle) && backMuscleToSvg[muscle])
                   .map((muscle, index) => (
                     <BodyLayerImg
+                      highlight
                       key={`back-${muscle}-${index}`}
                       src={backMuscleToSvg[muscle]}
                       alt={muscle}

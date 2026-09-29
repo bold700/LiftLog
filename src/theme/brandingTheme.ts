@@ -231,6 +231,15 @@ export function createAppTheme(s: LightScheme, mode: ColorMode = 'light'): Theme
       // Geen witte waas over papier in donkere modus (MUI's elevation-overlay): Material 3 werkt met
       // de surface-container-tonen uit het schema, niet met een laag erbovenop.
       MuiPaper: { styleOverrides: { root: { backgroundImage: 'none' }, rounded: { borderRadius: 16 } } },
+      // Schermvullende vensters op een telefoon: niet onder de klok/Dynamic Island of de thuisbalk.
+      MuiDialog: {
+        styleOverrides: {
+          paperFullScreen: {
+            paddingTop: 'env(safe-area-inset-top, 0px)',
+            paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          },
+        },
+      },
       MuiFab: {
         styleOverrides: {
           root: { borderRadius: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.3), 0 4px 8px 3px rgba(0,0,0,0.15)' },
