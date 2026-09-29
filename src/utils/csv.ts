@@ -47,7 +47,8 @@ function splitLine(line: string, delimiter: string): string[] {
 }
 
 export function parseCsv(text: string): ParsedCsv {
-  const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  // Een BOM vooraan (Excel, Virtuagym) hoort niet bij de eerste kolomnaam.
+  const normalized = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const lines = normalized.split('\n').filter((l) => l.trim().length > 0);
   if (lines.length === 0) return { headers: [], rows: [] };
   const delimiter = detectDelimiter(lines[0]);
