@@ -587,6 +587,9 @@ export interface ClassType {
    * een gewone lessoort.
    */
   privateFor: string | null;
+  /** Vaste groepsles (Beheer → Groepen): alleen voor de leden van die groep; staat ook niet in Lessoorten. */
+  privateForGroup?: string | null;
+  groupMemberIds?: string[] | null;
   createdAt: string;
   updatedAt: string;
 }

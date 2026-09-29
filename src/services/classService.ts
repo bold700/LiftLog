@@ -76,6 +76,9 @@ export interface StudioClass {
   cancelledAt: string | null;
   /** Vast PT-moment van één lid (userId): alleen dat lid (en staf) ziet en boekt deze les. */
   privateFor: string | null;
+  /** Vaste groepsles: alleen de leden van de groep (en staf) zien en boeken deze les; de groep betaalt. */
+  privateForGroup?: string | null;
+  groupMemberIds?: string[] | null;
   /** Afgelast omdat het lid zich afmeldde (niet door de trainer): komt terug als het lid zich weer aanmeldt. */
   autoCancelled: boolean;
   createdAt: string;
@@ -129,6 +132,8 @@ function toClass(data: Record<string, unknown>, id: string): StudioClass {
     description: data.description ? str(data.description) : null,
     cancelledAt: data.cancelledAt ? str(data.cancelledAt) : null,
     privateFor: typeof data.privateFor === 'string' && data.privateFor ? data.privateFor : null,
+    privateForGroup: typeof data.privateForGroup === 'string' && data.privateForGroup ? data.privateForGroup : null,
+    groupMemberIds: Array.isArray(data.groupMemberIds) ? data.groupMemberIds.map(String) : null,
     autoCancelled: data.autoCancelled === true,
     createdAt: str(data.createdAt),
   };
@@ -497,13 +502,20 @@ export function addStandingBooking(input: {
   return callBooking({ action: 'addStandingBooking', ...input });
 }
 
+/** Vaste groepsles stoppen: komende lessen afgelast, de groep krijgt alles terug (alleen staf). */
+export function removeGroupSlot(classTypeId: string): Promise<{ removed: boolean; cancelled: number }> {
+  return callBooking({ action: 'removeGroupSlot', classTypeId });
+}
+
 /**
  * Vast PT-moment voor een lid (alleen staf): elke week op deze dag en tijd, bij deze trainer, op
  * basis van een lessoort (prijs, soort, ruimte). Er komt een privé-lessoort met dat ene
- * weekmoment; het rooster vult zich en het lid wordt elke week geboekt.
+ * weekmoment; het rooster vult zich en het lid wordt elke week geboekt. Met `groupId` in plaats van
+ * `userId`: een vaste groepsles voor alle leden van de groep, betaald uit het groepstegoed.
  */
 export function addPersonalSlot(input: {
-  userId: string;
+  userId?: string;
+  groupId?: string;
   baseClassTypeId: string;
   weekday: number;
   startTime: string;

@@ -149,7 +149,7 @@ function BroadcastsColumn() {
       .then((list) => setClasses(list.filter((c) => !c.cancelledAt && c.date <= last)))
       .catch(() => setClasses([]));
     void getClassTypes()
-      .then((list) => setClassTypes(list.filter((t) => !t.privateFor).sort((a, b) => a.name.localeCompare(b.name, 'nl'))))
+      .then((list) => setClassTypes(list.filter((t) => !t.privateFor && !t.privateForGroup).sort((a, b) => a.name.localeCompare(b.name, 'nl'))))
       .catch(() => setClassTypes([]));
   }, [loadHistory]);
 

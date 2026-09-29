@@ -138,7 +138,7 @@ export function ClassTypesPanel({ staff, profiles, profilesLoading, createSignal
       const role = profile?.profile?.role ?? 'sporter';
       const [list, mine] = await Promise.all([getClassTypes(), uid ? getWorkoutsForUser(uid, role).catch(() => []) : Promise.resolve([])]);
       // Vaste PT-momenten van één lid beheer je op diens profiel, niet hier.
-      setTypes(sortClassTypesByWeek(list.filter((t) => !t.privateFor)));
+      setTypes(sortClassTypesByWeek(list.filter((t) => !t.privateFor && !t.privateForGroup)));
       setSchemas(mine);
     } catch (e) {
       notify.error(t('classTypes.saveFailed'), e);

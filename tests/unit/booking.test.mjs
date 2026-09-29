@@ -2063,3 +2063,109 @@ describe('groepen', () => {
     expect(store[`groups/${g.id}`]).toBeUndefined();
   });
 });
+
+describe('vaste groepslessen (betaald uit het groepstegoed, naar opkomst)', () => {
+  const inDays = (n) => {
+    const d = new Date(Date.now() + n * 86_400_000);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const first = inDays(3);
+  const weekday = new Date(`${first}T12:00:00`).getDay();
+  let groupId;
+  const holder = () => `creditAccounts/vanas__grp_${groupId}`;
+  const ctId = () => `ctp_grp_${groupId}_${weekday}_1800`;
+  const lessons = () =>
+    Object.entries(store)
+      .filter(([k, v]) => k.startsWith('classes/') && v.classTypeId === ctId() && v.date >= first)
+      .map(([k, v]) => ({ ...v, id: k.slice('classes/'.length) }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  const bookingOf = (userId, classId) =>
+    Object.entries(store).find(([k, v]) => k.startsWith('bookings/') && v.userId === userId && v.classId === classId && ['booked', 'waitlist'].includes(v.status));
+
+  beforeEach(async () => {
+    store['profiles/sporter4'] = { userId: 'sporter4', orgId: 'vanas', orgIds: ['vanas'], role: 'sporter' };
+    store['classTypes/ctPT'] = { orgId: 'vanas', name: 'Personal training', capacity: 1, creditCost: 1, defaultTrainerId: 'trainer1', sessionKind: '1on1', schedule: [] };
+    const g = await post({ action: 'saveGroup', name: 'Pouw', kind: 'gezin', memberIds: ['sporter1', 'sporter2', 'sporter4'], payerId: 'sporter1' }, 'trainer1');
+    groupId = g.body.group.id;
+    await post({ action: 'grant', groupId, amount: 5000 }, 'trainer1');
+    const res = await post({ action: 'addPersonalSlot', groupId, baseClassTypeId: 'ctPT', weekday, startTime: '18:00', endTime: '19:00', startDate: first }, 'trainer1');
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('inplannen: alle leden elke week geboekt, €85 + €25 per extra persoon van het groepstegoed', () => {
+    expect(store[`classTypes/${ctId()}`]).toMatchObject({ privateForGroup: groupId, privateFor: null, capacity: 3, groupMemberIds: ['sporter1', 'sporter2', 'sporter4'] });
+    const list = lessons();
+    expect(list.length).toBeGreaterThanOrEqual(7);
+    expect(list.every((c) => c.bookedCount === 3 && c.groupSpent === 135)).toBe(true);
+    expect(store[holder()].balance).toBe(5000 - 135 * list.length);
+    // Het lid zelf betaalt niets.
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(3);
+  });
+
+  it('iemand buiten de groep kan de groepsles niet boeken', async () => {
+    store['profiles/sporter5'] = { userId: 'sporter5', orgId: 'vanas', orgIds: ['vanas'], role: 'sporter' };
+    const res = await post({ action: 'book', classId: lessons()[0].id }, 'sporter5');
+    expect(res.statusCode).toBe(409);
+    expect(res.body.error).toMatch(/groep/);
+  });
+
+  it('op tijd afmelden: de les wordt €25 goedkoper, dat komt terug op het groepstegoed', async () => {
+    const cls = lessons()[0];
+    const before = store[holder()].balance;
+    const [key] = bookingOf('sporter2', cls.id);
+    const res = await post({ action: 'cancel', bookingId: key.slice('bookings/'.length) }, 'sporter2');
+    expect(res.body.refunded).toBe(true);
+    expect(store[holder()].balance).toBe(before + 25);
+    expect(store[`classes/${cls.id}`]).toMatchObject({ groupSpent: 110, groupPaidIds: ['sporter1', 'sporter4'] });
+  });
+
+  it('te laat afmelden: de groep betaalt die plek; toch komen kost niets extra', async () => {
+    store['orgs/vanas'] = { ...(store['orgs/vanas'] ?? {}), bookingPolicy: { freeCancelHours: 24 * 30 } };
+    const cls = lessons()[0];
+    const [key] = bookingOf('sporter2', cls.id);
+    store[key].createdAt = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    const before = store[holder()].balance;
+    await post({ action: 'cancel', bookingId: key.slice('bookings/'.length) }, 'sporter2');
+    expect(store[holder()].balance).toBe(before);
+    expect(store[`classes/${cls.id}`].groupSpent).toBe(135);
+    const again = await post({ action: 'book', classId: cls.id }, 'sporter2');
+    expect(again.statusCode).toBe(200);
+    expect(store[holder()].balance).toBe(before);
+  });
+
+  it('laatste afmelding op tijd: alles terug en de les gaat van het rooster', async () => {
+    const cls = lessons()[0];
+    const before = store[holder()].balance;
+    for (const uid of ['sporter1', 'sporter2', 'sporter4']) {
+      const [key] = bookingOf(uid, cls.id);
+      await post({ action: 'cancel', bookingId: key.slice('bookings/'.length) }, uid);
+    }
+    expect(store[holder()].balance).toBe(before + 135);
+    expect(store[`classes/${cls.id}`]).toMatchObject({ groupSpent: 0, autoCancelled: true });
+  });
+
+  it('studio gelast de les af: de groep krijgt alles terug', async () => {
+    const cls = lessons()[0];
+    const before = store[holder()].balance;
+    const res = await post({ action: 'cancelClass', classId: cls.id }, 'trainer1');
+    expect(res.statusCode).toBe(200);
+    expect(store[holder()].balance).toBe(before + 135);
+    expect(store[`classes/${cls.id}`].groupSpent).toBe(0);
+  });
+
+  it('lid uit de groep: afgemeld en de lessen worden goedkoper; groep verwijderen pas zonder vaste les', async () => {
+    const cls = lessons()[0];
+    await post({ action: 'saveGroup', groupId, name: 'Pouw', kind: 'gezin', memberIds: ['sporter1', 'sporter2'], payerId: 'sporter1' }, 'trainer1');
+    expect(bookingOf('sporter4', cls.id)).toBeUndefined();
+    expect(store[`classes/${cls.id}`]).toMatchObject({ groupSpent: 110, capacity: 2, groupMemberIds: ['sporter1', 'sporter2'] });
+    expect((await post({ action: 'deleteGroup', groupId }, 'trainer1')).statusCode).toBe(409);
+  });
+
+  it('vaste groepsles stoppen: komende lessen afgelast, groepstegoed weer vol', async () => {
+    const res = await post({ action: 'removeGroupSlot', classTypeId: ctId() }, 'trainer1');
+    expect(res.statusCode).toBe(200);
+    expect(store[holder()].balance).toBe(5000);
+    expect(store[`classTypes/${ctId()}`]).toBeUndefined();
+    expect(Object.values(store).some((v) => v.classTypeId === ctId() && v.userId && !['cancelled'].includes(v.status) && v.orgId)).toBe(false);
+  });
+});

@@ -66,3 +66,30 @@ export function groupSessionPrice(pricing, size) {
  * restant gaat altijd mee naar de volgende periode.
  */
 export const groupPlanView = (plan) => ({ ...plan, credits: euros(plan.price), rollover: 'carry' });
+
+/**
+ * Groepsles: wie de groep voor deze les betaalt (`groupPaidIds` op de les) en wat er betaald is
+ * (`groupSpent`). Boekt er iemand bij, dan komt die op de lijst en betaalt de groep het verschil.
+ * Meldt iemand zich op tijd af, dan gaat die van de lijst en komt het verschil terug. Te laat
+ * afgemeld: blijft op de lijst (de groep betaalt die plek). Afgelast door de studio: alles terug
+ * (zie cancelWholeClass). Wie te laat afmeldde en toch komt, kost niets extra.
+ */
+const paidIdsOf = (cls) => (Array.isArray(cls?.groupPaidIds) ? cls.groupPaidIds.map(String) : []);
+
+export function groupChargeOnBook(pricing, cls, userId) {
+  const paid = paidIdsOf(cls);
+  const spent = euros(cls?.groupSpent);
+  if (paid.includes(userId)) return { paidIds: paid, total: spent, charge: 0 };
+  const next = [...paid, userId];
+  const total = groupSessionPrice(pricing, next.length);
+  return { paidIds: next, total, charge: Math.max(0, euros(total - spent)) };
+}
+
+export function groupRefundOnCancel(pricing, cls, userId) {
+  const paid = paidIdsOf(cls);
+  const spent = euros(cls?.groupSpent);
+  if (!paid.includes(userId)) return { paidIds: paid, total: spent, refund: 0 };
+  const next = paid.filter((id) => id !== userId);
+  const total = Math.min(spent, groupSessionPrice(pricing, next.length));
+  return { paidIds: next, total, refund: euros(spent - total) };
+}

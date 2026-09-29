@@ -297,7 +297,9 @@ export function LessenPage() {
    * pauze) staat voor niemand op het rooster — die zie je op het profiel bij Vaste lessen.
    */
   const scopedClasses = useMemo(() => {
-    const visible = classes.filter((c) => !c.privateFor || (!c.autoCancelled && (isStaff || c.privateFor === me?.userId)));
+    // Privé-les (PT van één lid) of groepsles: alleen voor dat lid of de leden van de groep, en staf.
+    const mayBook = (c: StudioClass) => (c.privateFor ? c.privateFor === me?.userId : !!me && (c.groupMemberIds ?? []).includes(me.userId));
+    const visible = classes.filter((c) => !(c.privateFor || c.privateForGroup) || (!c.autoCancelled && (isStaff || mayBook(c))));
     if (!myDayOnly || !me) return visible;
     return isStaff ? visible.filter((c) => c.trainerId === me.userId) : visible.filter((c) => myBookingByClass.has(c.id));
   }, [classes, myDayOnly, me, isStaff, myBookingByClass]);
@@ -1070,8 +1072,10 @@ function BookConfirmDialog({
   const claim = myStatus === 'waitlist' && !full;
   // Te weinig credits voor een vrije plek: eerst credits kopen (staf boekt altijd gratis).
   // Staf reserveert altijd gratis (server bypasst de credit-kosten), ongeacht het saldo.
-  const cost = isStaff ? 0 : cls.creditCost;
-  const short = !isStaff && credits < cost;
+  // Groepsles: de groep betaalt uit het groepstegoed, niet het lid.
+  const groupLesson = !!cls.privateForGroup;
+  const cost = isStaff || groupLesson ? 0 : cls.creditCost;
+  const short = !isStaff && !groupLesson && credits < cost;
   // Begonnen of voorbij: alleen informatie, niet meer te reserveren.
   const started = classHasStarted(cls);
 
@@ -1151,11 +1155,21 @@ function BookConfirmDialog({
             }}
           >
             <Typography variant="body2" fontWeight={600}>
-              {cost === 0 ? (isStaff ? 'Gratis (staf)' : 'Gratis') : cost === 1 ? 'Kost 1 credit' : `Kost ${cost} credits`}
+              {groupLesson
+                ? 'Groepsles · betaald uit het groepstegoed'
+                : cost === 0
+                  ? isStaff
+                    ? 'Gratis (staf)'
+                    : 'Gratis'
+                  : cost === 1
+                    ? 'Kost 1 credit'
+                    : `Kost ${cost} credits`}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {cost > 0 ? `Saldo ${credits} · daarna ${credits - cost}` : `Saldo ${credits}`}
-            </Typography>
+            {!groupLesson && (
+              <Typography variant="caption" color="text.secondary">
+                {cost > 0 ? `Saldo ${credits} · daarna ${credits - cost}` : `Saldo ${credits}`}
+              </Typography>
+            )}
           </Box>
         )}
 

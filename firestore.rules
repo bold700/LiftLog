@@ -503,16 +503,19 @@ service cloud.firestore {
     //
     // `bookedCount` en `waitlistCount` worden alleen door de server bijgewerkt (api/booking.mjs).
     // Kon een trainer die tellers zelf zetten, dan klopt de capaciteit niet meer en kunnen er meer
-    // mensen in de zaal staan dan er plek is.
+    // mensen in de zaal staan dan er plek is. Hetzelfde voor wat een groep voor een groepsles betaalde
+    // (`groupSpent`, `groupPaidIds`): daarop rekent de server terugbetalingen uit het groepstegoed.
     match /classes/{classId} {
       function touchesCounters() {
         return request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['bookedCount', 'waitlistCount']);
+          .hasAny(['bookedCount', 'waitlistCount', 'groupSpent', 'groupPaidIds']);
       }
       allow read: if isSignedIn() && sameOrg();
       allow create: if isStaffInSameOrgForNew()
         && request.resource.data.get('bookedCount', 0) == 0
         && request.resource.data.get('waitlistCount', 0) == 0
+        && !('groupSpent' in request.resource.data)
+        && !('groupPaidIds' in request.resource.data)
         && request.resource.data.capacity is int
         && request.resource.data.capacity > 0;
       allow update: if isSignedIn()

@@ -29,7 +29,7 @@ export function fixedMomentsOf(standings: StandingBooking[], types: ClassType[])
     .filter((s) => s.active)
     .map((s) => {
       const t = byId.get(s.classTypeId);
-      const pt = !!t?.privateFor;
+      const pt = !!t?.privateFor || !!t?.privateForGroup;
       return { weekday: (s.weekday + 6) % 7, startTime: s.startTime, label: pt ? 'PT' : (t?.name ?? 'Les'), pt };
     })
     .sort((a, b) => a.weekday - b.weekday || a.startTime.localeCompare(b.startTime));
