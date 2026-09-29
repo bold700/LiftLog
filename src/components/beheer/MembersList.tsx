@@ -9,6 +9,7 @@ import { UserAvatar } from '../UserAvatar';
 import { designTokens } from '../../theme/designTokens';
 import type { Membership, Profile, ProfileRole } from '../../types';
 import type { MemberSort, MemberSortKey } from '../../utils/memberTable';
+import { paysAsMember } from '../../utils/orgRoles';
 
 interface MembersListProps {
   profiles: Profile[];
@@ -35,7 +36,7 @@ export function MembersList({ profiles, credits, memberships = {}, selfId, loadi
   const nameOf = (p: Profile) => `${p.displayName?.trim() || p.email || p.userId}${p.userId === selfId ? ` ${t('admin.me')}` : ''}`;
   const subscriptionOf = (p: Profile) => memberships[p.userId]?.planName || t('common.none');
   const creditsOf = (p: Profile) => {
-    if (p.role !== 'sporter') return t('common.none');
+    if (!paysAsMember(p)) return t('common.none');
     const n = credits[p.userId];
     return n == null ? t('common.none') : t('admin.creditsLeft', { count: n });
   };
@@ -43,7 +44,7 @@ export function MembersList({ profiles, credits, memberships = {}, selfId, loadi
   // Telefoon: abonnement en credits onder de naam zodra die bekend zijn; anders het e-mailadres,
   // want twee streepjes zeggen niets.
   const sublineOf = (p: Profile) => {
-    const known = p.role === 'sporter' && (credits[p.userId] != null || !!memberships[p.userId]);
+    const known = paysAsMember(p) && (credits[p.userId] != null || !!memberships[p.userId]);
     return known ? `${subscriptionOf(p)} · ${creditsOf(p)}` : p.email ?? t('common.none');
   };
 

@@ -27,6 +27,9 @@ import { applyCors } from './_lib/cors.mjs';
  *
  * GET /f/{token} (rewrite naar ?invoice={token}): de factuur-PDF zonder inloggen, voor wie de link
  * heeft. De code is 32 hexcijfers uit een veilige toevalsbron en staat alleen op de post.
+ *   { action: 'setMemberActive', userId, active }      lid (de)activeren bij deze studio (beheerder)
+ *   { action: 'setTrainsAsMember', userId, on }        trainer/beheerder traint ook mee als lid: betaalt
+ *                                                        credits, kan abonnement en facturen krijgen (beheerder)
  *   { action: 'mailStatus' }                           is versturen ingericht? (staf)
  *   { action: 'savePaymentKey', orgId, mode, apiKey }  Mollie-sleutel koppelen, geverifieerd (beheerder)
  *   { action: 'removePaymentKey', orgId, mode }        Mollie-sleutel loskoppelen (beheerder)
@@ -70,7 +73,7 @@ import { getAdmin, getStorageBucket } from './_lib/firebaseAdmin.mjs';
 import { runAccountRetention } from './_lib/accountRetention.mjs';
 import { clearPublishedLeaderboard } from './_lib/leaderboardCleanup.mjs';
 import { orgIdOf, newId } from './_lib/liftlogData.mjs';
-import { actingOrg, isAdminIn, isInactiveIn, isStaffAnywhere, isStaffIn, orgsOf, roleIn } from './_lib/orgRoles.mjs';
+import { actingOrg, isAdminIn, isInactiveIn, isStaffAnywhere, isStaffIn, orgsOf, paysAsMemberIn, roleIn } from './_lib/orgRoles.mjs';
 import { randomBytes } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { activeMembership, newCharge, newMembership, settleMembership } from './_lib/subscriptions.mjs';
@@ -217,6 +220,9 @@ export default async function handler(req, res) {
       case 'setMemberActive':
         if (myRole !== 'admin') return json(res, 403, { error: 'Alleen een beheerder kan leden (de)activeren.', build: BUILD });
         return await setMemberActive(res, db, uid, actOrg, String(body.userId ?? '').trim(), body.active === true);
+      case 'setTrainsAsMember':
+        if (myRole !== 'admin') return json(res, 403, { error: 'Alleen een beheerder kan dit instellen.', build: BUILD });
+        return await setTrainsAsMember(res, db, actOrg, String(body.userId ?? '').trim(), body.on === true);
       case 'book':
         return await book(
           res, db, uid, myOrgs,
@@ -224,7 +230,8 @@ export default async function handler(req, res) {
           body.weekly === true,
           isStaff,
           body.userId ? String(body.userId).trim() : null,
-          body.extra === true
+          body.extra === true,
+          !paysAsMemberIn(meData, actOrg)
         );
       case 'cancel':
         return await cancel(res, db, uid, myOrgs, isStaff, String(body.bookingId ?? '').trim());
@@ -359,6 +366,29 @@ async function setMemberActive(res, db, adminUid, orgId, userId, active) {
   return json(res, 200, { active: false, standingPaused: standing.docs.length, bookingsCancelled: cancelled, membershipStopped: !!membership, build: BUILD });
 }
 
+/**
+ * Trainer of beheerder traint bij deze studio ook mee als lid (Beheer → lid → "Traint ook mee als
+ * lid"). Aan: boeken kost credits, en abonnement, credits en facturen werken als bij een sporter.
+ * Uit: weer gratis meedoen als staf; dat kan pas als er geen abonnement meer loopt, anders zou er
+ * gefactureerd worden voor lessen die niets meer kosten. Per studio, en alleen de server schrijft
+ * `trainsAsMemberOrgs` (zie firestore.rules).
+ */
+async function setTrainsAsMember(res, db, orgId, userId, on) {
+  if (!userId) return json(res, 400, { error: 'Geen lid opgegeven.', build: BUILD });
+  const ref = db.collection('profiles').doc(userId);
+  const snap = await ref.get();
+  const target = snap.exists ? snap.data() : null;
+  if (!target || !orgsOf(target).includes(orgId)) return json(res, 404, { error: 'Dit lid hoort niet bij jouw studio.', build: BUILD });
+  if (!isStaffIn(target, orgId)) return json(res, 409, { error: 'Dit geldt alleen voor trainers en beheerders; een sporter traint altijd als lid.', build: BUILD });
+  if (!on && (await activeMembership(db, orgId, userId).catch(() => null))) {
+    return json(res, 409, { error: 'Stop eerst het abonnement; daarna kan meetrainen als lid uit.', build: BUILD });
+  }
+  const list = Array.isArray(target.trainsAsMemberOrgs) ? target.trainsAsMemberOrgs.map(String) : [];
+  const next = on ? [...new Set([...list, orgId])] : list.filter((o) => o !== orgId);
+  await ref.set({ trainsAsMemberOrgs: next, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  return json(res, 200, { trainsAsMember: on, build: BUILD });
+}
+
 /** Weigering die de gebruiker moet zien (geen plek, geen saldo) — geen serverfout. */
 function refuse(message, status) {
   const err = new Error(message);
@@ -377,13 +407,14 @@ function refuse(message, status) {
  * extra: alleen staf. De trainer beslist dat iemand er nog bij kan, ook als de les vol zit of de
  * plek even voor een ander wordt vastgehouden (een extra plek boven het maximum).
  */
-async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId, extra = false) {
+async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId, extra = false, selfFree = isStaff) {
   if (!classId) return json(res, 400, { error: 'Geen les opgegeven.', build: BUILD });
 
   // Staf kan iemand anders inschrijven (bijv. een sporter die via WhatsApp afmeldde er weer bij
   // zetten); de credit gaat dan gewoon van diegene af, niet van de staf zelf.
+  // Gratis boeken: staf die als trainer meedoet. Staf die ook als lid meetraint, betaalt gewoon.
   let beneficiaryUid = uid;
-  let beneficiaryIsStaff = isStaff;
+  let beneficiaryFree = selfFree;
   if (targetUserId && targetUserId !== uid) {
     if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan iemand anders inschrijven.', build: BUILD });
     const targetSnap = await db.collection('profiles').doc(targetUserId).get();
@@ -393,7 +424,7 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
     if (!myOrgs.some((o) => targetOrgs.includes(o))) return json(res, 403, { error: 'Deze sporter zit niet in jouw studio.', build: BUILD });
     if (isInactiveIn(target, myOrgs[0])) return json(res, 409, { error: 'Dit lid staat op inactief. Activeer het lid eerst in Beheer.', build: BUILD });
     beneficiaryUid = targetUserId;
-    beneficiaryIsStaff = isStaffIn(target, myOrgs[0]);
+    beneficiaryFree = !paysAsMemberIn(target, myOrgs[0]);
   }
   if (extra && !isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan iemand er extra bij zetten.', build: BUILD });
 
@@ -457,7 +488,7 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
       throw refuse(beneficiaryUid === uid ? 'Je staat al op de wachtlijst. Valt er iemand af, dan schuif je vanzelf door.' : 'Deze sporter staat al op de wachtlijst.');
     }
 
-    const cost = unlimited || beneficiaryIsStaff ? 0 : Number(cls.creditCost ?? 1) || 0;
+    const cost = unlimited || beneficiaryFree ? 0 : Number(cls.creditCost ?? 1) || 0;
     const onWaitlist = claim || extra ? false : heldForOther || placeNewBooking(cls) === 'waitlist';
 
     const accountRef = db.collection('creditAccounts').doc(accountId(orgId, beneficiaryUid));
@@ -706,9 +737,9 @@ async function waitlistPositions(res, db, uid, myOrgs) {
 }
 
 /**
- * Wat doorschuiven kost per persoon op de wachtlijst: net als bij boeken niets voor staf en voor een
- * onbeperkt abonnement. Buiten de transactie opgezocht (abonnementen zijn queries); de transactie
- * leest daarna zelf de actuele wachtlijst en saldo's.
+ * Wat doorschuiven kost per persoon op de wachtlijst: net als bij boeken niets voor staf (tenzij die
+ * ook als lid meetraint) en voor een onbeperkt abonnement. Buiten de transactie opgezocht
+ * (abonnementen zijn queries); de transactie leest daarna zelf de actuele wachtlijst en saldo's.
  */
 async function waitlistCosts(db, classId) {
   const clsSnap = await db.collection('classes').doc(classId).get();
@@ -723,7 +754,7 @@ async function waitlistCosts(db, classId) {
     if (userId in costs) continue;
     let cost = baseCost;
     const prof = await db.collection('profiles').doc(userId).get();
-    if (prof.exists && isStaffIn(prof.data(), orgId)) cost = 0;
+    if (prof.exists && !paysAsMemberIn(prof.data(), orgId)) cost = 0;
     else if (cost > 0) {
       const m = await activeMembership(db, orgId, userId).catch(() => null);
       if (m) {

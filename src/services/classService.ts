@@ -341,6 +341,14 @@ export function setMemberActive(userId: string, active: boolean): Promise<Member
   return callBooking({ action: 'setMemberActive', userId, active });
 }
 
+/**
+ * Trainer of beheerder traint bij de actieve studio ook mee als lid (alleen beheerder): boeken kost
+ * dan credits en abonnement en facturen werken als bij een sporter. Uitzetten kan pas zonder abonnement.
+ */
+export function setTrainsAsMember(userId: string, on: boolean): Promise<{ trainsAsMember: boolean }> {
+  return callBooking({ action: 'setTrainsAsMember', userId, on });
+}
+
 /** Een per ongeluk afgelasten les terugzetten: `cancelledAt` weer wissen. */
 export async function restoreClass(classId: string): Promise<void> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');

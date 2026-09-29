@@ -36,3 +36,16 @@ export function roleInOrg(
 export function isInactiveInOrg(p: { inactiveOrgs?: string[] | null }, orgId: string | null | undefined): boolean {
   return !!orgId && Array.isArray(p.inactiveOrgs) && p.inactiveOrgs.includes(orgId);
 }
+
+/** Traint deze staf bij deze studio ook mee als lid? Zie `trainsAsMemberIn` in api/_lib/orgRoles.mjs. */
+export function trainsAsMemberInOrg(p: { trainsAsMemberOrgs?: string[] | null }, orgId: string | null | undefined): boolean {
+  return !!orgId && Array.isArray(p.trainsAsMemberOrgs) && p.trainsAsMemberOrgs.includes(orgId);
+}
+
+/**
+ * Heeft dit profiel (in de studio die in beeld is) een abonnement, credits en facturen zoals een lid?
+ * Sporters altijd; trainers en beheerders alleen als ze ook meetrainen.
+ */
+export function paysAsMember(p: { role: ProfileRole; trainsAsMember?: boolean }): boolean {
+  return p.role === 'sporter' || !!p.trainsAsMember;
+}

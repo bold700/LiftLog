@@ -7,7 +7,7 @@
  * waar het kan, zodat de regels te testen zijn zonder database.
  */
 import { orgIdOf } from './liftlogData.mjs';
-import { isInactiveIn, orgsOf, roleIn } from './orgRoles.mjs';
+import { isInactiveIn, orgsOf, paysAsMemberIn } from './orgRoles.mjs';
 import { sendPushToUser } from './pushSend.mjs';
 import { amsterdamDate as amsterdamDay, buildClassReminders } from './classReminders.mjs';
 
@@ -160,8 +160,11 @@ function createdAtIso(p) {
   return null;
 }
 
-/** Sporter in minstens één studio (de rol kan per studio verschillen, zie orgRoles.mjs). */
-const isSporterSomewhere = (p) => orgsOf(p).some((o) => roleIn(p, o) === 'sporter' && !isInactiveIn(p, o));
+/**
+ * Traint als lid in minstens één studio: sporter, of staf die ook meetraint (de rol kan per studio
+ * verschillen, zie orgRoles.mjs). Inactief bij een studio telt daar niet.
+ */
+const isSporterSomewhere = (p) => orgsOf(p).some((o) => paysAsMemberIn(p, o) && !isInactiveIn(p, o));
 
 /**
  * Per trainer: welke van zijn sporters hebben 14 dagen niets gelogd en geen les gehad? Nieuwe

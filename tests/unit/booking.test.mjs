@@ -1890,3 +1890,78 @@ describe('leden (de)activeren', () => {
     expect(store['profiles/sporterB'].inactiveOrgs).toBeUndefined();
   });
 });
+
+describe('staf traint ook mee als lid', () => {
+  beforeEach(() => {
+    store['profiles/admin1'] = { userId: 'admin1', orgId: 'vanas', orgIds: ['vanas'], role: 'admin' };
+  });
+
+  it('alleen een beheerder zet het aan', async () => {
+    const res = await post({ action: 'setTrainsAsMember', userId: 'trainer1', on: true }, 'trainer1');
+    expect(res.statusCode).toBe(403);
+    expect(store['profiles/trainer1'].trainsAsMemberOrgs).toBeUndefined();
+  });
+
+  it('niet voor een sporter (die traint altijd als lid)', async () => {
+    const res = await post({ action: 'setTrainsAsMember', userId: 'sporter1', on: true }, 'admin1');
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('niet voor iemand van een andere studio', async () => {
+    store['profiles/trainerB'] = { userId: 'trainerB', orgId: 'studiob', orgIds: ['studiob'], role: 'trainer' };
+    const res = await post({ action: 'setTrainsAsMember', userId: 'trainerB', on: true }, 'admin1');
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('aan: boeken kost een credit, zonder credits lukt het niet', async () => {
+    await post({ action: 'setTrainsAsMember', userId: 'trainer1', on: true }, 'admin1');
+    expect(store['profiles/trainer1'].trainsAsMemberOrgs).toEqual(['vanas']);
+    const zonder = await post({ action: 'book', classId: 'c1' }, 'trainer1');
+    expect(zonder.statusCode).toBe(409);
+    store['creditAccounts/vanas__trainer1'] = { orgId: 'vanas', userId: 'trainer1', balance: 2 };
+    const res = await post({ action: 'book', classId: 'c1' }, 'trainer1');
+    expect(res.body.status).toBe('booked');
+    expect(store['creditAccounts/vanas__trainer1'].balance).toBe(1);
+  });
+
+  it('beheerder zet een meetrainende trainer erbij: diens credit gaat eraf', async () => {
+    store['profiles/trainer1'].trainsAsMemberOrgs = ['vanas'];
+    store['creditAccounts/vanas__trainer1'] = { orgId: 'vanas', userId: 'trainer1', balance: 2 };
+    const res = await post({ action: 'book', classId: 'c1', userId: 'trainer1' }, 'admin1');
+    expect(res.body.status).toBe('booked');
+    expect(store['creditAccounts/vanas__trainer1'].balance).toBe(1);
+  });
+
+  it('beheerder die zelf meetraint betaalt ook, terwijl een andere trainer gratis blijft', async () => {
+    store['profiles/admin1'].trainsAsMemberOrgs = ['vanas'];
+    store['creditAccounts/vanas__admin1'] = { orgId: 'vanas', userId: 'admin1', balance: 1 };
+    store['classes/c1'].capacity = 2;
+    await post({ action: 'book', classId: 'c1' }, 'admin1');
+    await post({ action: 'book', classId: 'c1' }, 'trainer1');
+    expect(store['creditAccounts/vanas__admin1'].balance).toBe(0);
+    expect(store['creditAccounts/vanas__trainer1']).toBeUndefined();
+  });
+
+  it('op de wachtlijst doorschuiven kost een meetrainende trainer een credit', async () => {
+    store['profiles/trainer1'].trainsAsMemberOrgs = ['vanas'];
+    store['creditAccounts/vanas__trainer1'] = { orgId: 'vanas', userId: 'trainer1', balance: 2 };
+    const eerste = await post({ action: 'book', classId: 'c1' }, 'sporter1');
+    await post({ action: 'book', classId: 'c1' }, 'trainer1');
+    const res = await post({ action: 'cancel', bookingId: eerste.body.bookingId }, 'sporter1');
+    expect(res.body.promotedUserId).toBe('trainer1');
+    const trainerBooking = Object.values(store).find((v) => v.classId === 'c1' && v.userId === 'trainer1' && v.status);
+    expect(trainerBooking.creditsSpent).toBe(1);
+  });
+
+  it('uitzetten kan pas als het abonnement gestopt is', async () => {
+    store['profiles/trainer1'].trainsAsMemberOrgs = ['vanas'];
+    store['memberships/mb1'] = { orgId: 'vanas', userId: 'trainer1', planId: 'p1', status: 'active' };
+    const res = await post({ action: 'setTrainsAsMember', userId: 'trainer1', on: false }, 'admin1');
+    expect(res.statusCode).toBe(409);
+    expect(store['profiles/trainer1'].trainsAsMemberOrgs).toEqual(['vanas']);
+    store['memberships/mb1'].status = 'cancelled';
+    const ok = await post({ action: 'setTrainsAsMember', userId: 'trainer1', on: false }, 'admin1');
+    expect(ok.body.trainsAsMember).toBe(false);
+    expect(store['profiles/trainer1'].trainsAsMemberOrgs).toEqual([]);
+  });
+});

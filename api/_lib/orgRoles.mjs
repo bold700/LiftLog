@@ -55,3 +55,14 @@ export function actingOrg(data, requested) {
  * Per studio: inactief bij de ene studio zegt niets over een andere.
  */
 export const isInactiveIn = (data, orgId) => Array.isArray(data?.inactiveOrgs) && data.inactiveOrgs.map(String).includes(orgId);
+
+/**
+ * Staf die bij deze studio ook zelf meetraint als lid (bijv. een beheerder die ook lessen volgt).
+ * Die betaalt dan net als een sporter: credits bij boeken, abonnement en facturen. Zonder die
+ * vlag boekt staf gratis (meedoen als trainer). Per studio, net als de rol.
+ */
+export const trainsAsMemberIn = (data, orgId) =>
+  Array.isArray(data?.trainsAsMemberOrgs) && data.trainsAsMemberOrgs.map(String).includes(orgId);
+
+/** Betaalt dit profiel bij deze studio als lid? Sporters altijd, staf alleen als die meetraint. */
+export const paysAsMemberIn = (data, orgId) => !isStaffIn(data, orgId) || trainsAsMemberIn(data, orgId);

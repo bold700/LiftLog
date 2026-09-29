@@ -942,7 +942,7 @@ export function LessenPage() {
         cls={confirmClass}
         trainerName={confirmClass ? trainerNames[confirmClass.trainerId] : undefined}
         credits={credits}
-        isStaff={isStaff}
+        isStaff={isStaff && !me.trainsAsMember}
         freeCancelHours={freeCancelHours}
         busy={confirmClass != null && busyId === confirmClass.id}
         myStatus={confirmClass ? myBookingByClass.get(confirmClass.id)?.status : undefined}
@@ -1048,6 +1048,7 @@ function BookConfirmDialog({
   cls: StudioClass | null;
   trainerName?: string;
   credits: number;
+  /** Staf die gratis meedoet; staf die ook als lid meetraint geldt hier als sporter. */
   isStaff: boolean;
   freeCancelHours: number;
   busy: boolean;

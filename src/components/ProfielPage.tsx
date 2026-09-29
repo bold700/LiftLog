@@ -720,7 +720,8 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
     </Box>
   );
 
-  const isSporterProfile = !!uid && effectiveRole === 'sporter';
+  // Abonnement-tab: sporters, en staf die ook als lid meetraint (die krijgt ook facturen).
+  const isSporterProfile = !!uid && (effectiveRole === 'sporter' || !!effective?.trainsAsMember);
   const tabs: { value: ProfileTab; label: string }[] = [
     { value: 'gegevens', label: 'Gegevens' },
     ...(isSporterProfile ? [{ value: 'abonnement' as const, label: 'Abonnement' }] : []),

@@ -523,6 +523,11 @@ await t('beheerder zet een lid op inactief via de app → geweigerd (alleen serv
 await t('lid haalt zichzelf van inactief af → geweigerd', false, updateDoc(doc(as('lidA'), 'profiles/lidA'), { inactiveOrgs: [] }));
 await t('registratie met inactiveOrgs → geweigerd', false, setDoc(doc(as('nieuwInact'), 'profiles/nieuwInact'), { userId: 'nieuwInact', role: 'sporter', trainerId: null, inactiveOrgs: [] }));
 
+console.log('Traint ook mee als lid');
+await t('beheerder zet meetrainen via de app → geweigerd (alleen server)', false, updateDoc(doc(as('admin1'), 'profiles/lidA'), { trainsAsMemberOrgs: ['vanas'] }));
+await t('staf zet meetrainen bij zichzelf uit → geweigerd', false, updateDoc(doc(as('admin1'), 'profiles/admin1'), { trainsAsMemberOrgs: [] }));
+await t('registratie met trainsAsMemberOrgs → geweigerd', false, setDoc(doc(as('nieuwMee'), 'profiles/nieuwMee'), { userId: 'nieuwMee', role: 'sporter', trainerId: null, trainsAsMemberOrgs: [] }));
+
 await env.cleanup();
 console.log(`\n${passed} geslaagd, ${failed} mislukt`);
 process.exit(failed ? 1 : 0);

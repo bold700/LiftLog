@@ -3,6 +3,7 @@
  * blijft. Puur, zodat het testbaar is zonder opslag.
  */
 import type { Membership, Profile } from '../types';
+import { paysAsMember } from './orgRoles';
 
 /** Rolfilter: iedereen, alleen sporters, of staf (trainers en beheerders). */
 export type RoleFilter = 'all' | 'sporter' | 'staff';
@@ -49,7 +50,7 @@ export function filterMembers(profiles: Profile[], filter: MemberFilter, ctx: Me
     if (filter.role === 'staff' && p.role === 'sporter') return false;
     if (filter.plan) {
       const planId = ctx.memberships[p.userId]?.planId ?? null;
-      if (filter.plan === NO_PLAN ? p.role !== 'sporter' || !!planId : planId !== filter.plan) return false;
+      if (filter.plan === NO_PLAN ? !paysAsMember(p) || !!planId : planId !== filter.plan) return false;
     }
     if (q) {
       const hay = [p.displayName, p.email, ctx.nameOf?.(p.trainerId), ctx.memberships[p.userId]?.planName];
@@ -77,7 +78,7 @@ export function sortMembers(profiles: Profile[], sort: MemberSort, ctx: MemberCo
       case 'subscription':
         return ctx.memberships[p.userId]?.planName || null;
       case 'credits':
-        return p.role === 'sporter' ? (ctx.credits[p.userId] ?? null) : null;
+        return paysAsMember(p) ? (ctx.credits[p.userId] ?? null) : null;
     }
   };
   return [...profiles].sort((a, b) => {

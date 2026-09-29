@@ -483,6 +483,10 @@ export interface Profile {
   inactiveOrgs?: string[];
   /** Staat dit lid op inactief bij de studio die nu in beeld is (afgeleid van `inactiveOrgs`). */
   inactive?: boolean;
+  /** Studio's waar deze trainer/beheerder ook zelf meetraint als lid. Alleen de server schrijft dit. */
+  trainsAsMemberOrgs?: string[];
+  /** Traint deze staf mee als lid bij de studio die nu in beeld is (credits, abonnement, facturen). */
+  trainsAsMember?: boolean;
   email: string | null;
   displayName: string | null;
   /** Profielfoto (download-URL uit Firebase Storage). */
