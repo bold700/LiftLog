@@ -31,6 +31,8 @@ import { applyCors } from './_lib/cors.mjs';
  *   { action: 'setTrainsAsMember', userId, on }        trainer/beheerder traint ook mee als lid: betaalt
  *                                                        credits, kan abonnement en facturen krijgen (beheerder)
  *   { action: 'saveGroup', groupId?, name, kind, memberIds, payerId }  groep (bedrijf/gezin/vrienden) opslaan (staf)
+ *   { action: 'addPersonalSlot', groupId, … }          vaste groepsles: alle leden elke week, betaald uit het groepstegoed (staf)
+ *   { action: 'removeGroupSlot', classTypeId }         vaste groepsles stoppen; komende lessen afgelast, groep krijgt alles terug (staf)
  *   { action: 'deleteGroup', groupId }                 groep weghalen, als er geen abonnement of tegoed meer op staat (staf)
  *                                                        grant/assign/unassign met `groupId` i.p.v. `userId`: het groepstegoed;
  *                                                        de posten van een groepsabonnement gaan naar het hoofdprofiel
@@ -81,7 +83,7 @@ import { actingOrg, isAdminIn, isInactiveIn, isStaffAnywhere, isStaffIn, orgsOf,
 import { randomBytes } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { activeMembership, newCharge, newMembership, settleMembership } from './_lib/subscriptions.mjs';
-import { cleanGroupInput, euros, groupHolderId, MAX_GROUP_ADJUST } from './_lib/groups.mjs';
+import { cleanGroupInput, euros, groupChargeOnBook, groupHolderId, groupPricingOf, groupRefundOnCancel, MAX_GROUP_ADJUST } from './_lib/groups.mjs';
 import { businessOf, dueDateOf, reserveInvoiceNumber, vatRateOf } from './_lib/invoice.mjs';
 import { buildInvoicePdf, invoiceFileName } from './_lib/invoicePdf.mjs';
 import { logoToDataUrl } from './_lib/invoiceLogo.mjs';
@@ -260,6 +262,9 @@ export default async function handler(req, res) {
         return await pauseStandingBooking(res, db, uid, myOrgs, isStaff, body);
       case 'addPersonalSlot':
         return await addPersonalSlot(res, db, uid, myOrgs, isStaff, body);
+      case 'removeGroupSlot':
+        if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan een groepsles stoppen.', build: BUILD });
+        return await removeGroupSlot(res, db, uid, myOrgs, String(body.classTypeId ?? '').trim());
       case 'generateClassOccurrences':
         return await generateClassOccurrencesNow(res, db, myOrgs, isStaff, String(body.classTypeId ?? '').trim());
       case 'pruneStaleClasses':
@@ -474,6 +479,9 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
     // Een privé-les (vaste PT van één lid) is alleen voor dat lid; zelf afgemeld? Dan mag het lid
     // hem weer terugzetten ("toch wel").
     if (cls.privateFor && cls.privateFor !== beneficiaryUid) throw refuse('Deze les is een persoonlijke afspraak van iemand anders.');
+    // Groepsles: alleen voor leden van de groep; de groep betaalt, niet het lid.
+    const group = cls.privateForGroup ? await readGroupLesson(tx, db, cls, orgId) : null;
+    if (group && !group.memberIds.includes(beneficiaryUid)) throw refuse('Deze les is van een groep waar deze sporter niet in zit.');
     const reopen = canReopenPrivateClass(cls, beneficiaryUid);
     if (cls.cancelledAt && !reopen) throw refuse('Deze les is afgelast.');
 
@@ -499,7 +507,7 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
       throw refuse(beneficiaryUid === uid ? 'Je staat al op de wachtlijst. Valt er iemand af, dan schuif je vanzelf door.' : 'Deze sporter staat al op de wachtlijst.');
     }
 
-    const cost = unlimited || beneficiaryFree ? 0 : Number(cls.creditCost ?? 1) || 0;
+    const cost = unlimited || beneficiaryFree || group ? 0 : Number(cls.creditCost ?? 1) || 0;
     const onWaitlist = claim || extra ? false : heldForOther || placeNewBooking(cls) === 'waitlist';
 
     const accountRef = db.collection('creditAccounts').doc(accountId(orgId, beneficiaryUid));
@@ -551,6 +559,10 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
       );
     } else {
       tx.set(classRef, { bookedCount: FieldValue.increment(1), ...reopened }, { merge: true });
+    }
+    if (!onWaitlist && group) {
+      const c = groupChargeOnBook(group.pricing, cls, beneficiaryUid);
+      writeGroupMoney(tx, db, group, { orgId, classRef, classId, paidIds: c.paidIds, total: c.total, delta: -c.charge, byUserId: uid, nowIso: now, reason: 'booking' });
     }
     if (!onWaitlist) {
       if (cost > 0) {
@@ -675,6 +687,8 @@ async function cancelWholeClass(res, db, uid, myOrgs, classId) {
   }
   // Tellers netjes op nul, ook als er onderweg iets niet lukte en opnieuw geprobeerd wordt.
   if (cancelled === open.length) await classRef.set({ bookedCount: 0, waitlistCount: 0 }, { merge: true });
+  // Groepsles afgelast door de studio: wat de groep voor deze les betaalde, gaat helemaal terug.
+  if (cls.privateForGroup) await refundGroupLesson(db, classRef, classId, orgId, uid);
   return json(res, 200, { cancelled, refunded, failed: open.length - cancelled, build: BUILD });
 }
 
@@ -872,8 +886,7 @@ async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
     const hoursLeft = startsAt ? (startsAtMs - nowMs) / 3_600_000 : Infinity;
     const spent = Number(booking.creditsSpent) || 0;
     // Te laat is te laat, behalve bij een afgelaste les of binnen de bedenktijd na boeken/doorschuiven.
-    const refund = refundOnCancel({
-      spent,
+    const refundRule = {
       classCancelled: !!cls?.cancelledAt,
       hoursLeft,
       freeCancelHours,
@@ -881,7 +894,12 @@ async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
       // Afgemeld door de studio (niet door de sporter zelf): de studio bepaalt of de credit dan terug gaat.
       byStudio: isStaff && String(booking.userId) !== uid,
       studioCancelRefund: orgSnap.data()?.studioCancelRefund === true,
-    });
+    };
+    const refund = refundOnCancel({ spent, ...refundRule });
+    // Groepsles: op tijd afgemeld maakt de les goedkoper voor de groep. Een afgelaste les rekent
+    // cancelWholeClass in één keer af.
+    const group = cls?.privateForGroup && booking.status === 'booked' && !cls.cancelledAt ? await readGroupLesson(tx, db, cls, orgId) : null;
+    const groupRefund = group && refundOnCancel({ spent: 1, ...refundRule }) ? groupRefundOnCancel(group.pricing, cls, String(booking.userId)) : null;
 
     // Komt er een plek vrij? Bij afmelden met een plek, of als degene voor wie een plek werd
     // vastgehouden van de wachtlijst gaat.
@@ -898,7 +916,10 @@ async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
     }
 
     const now = new Date(nowMs).toISOString();
-    tx.set(bookingRef, { status: 'cancelled', cancelledAt: now, refunded: refund }, { merge: true });
+    tx.set(bookingRef, { status: 'cancelled', cancelledAt: now, refunded: refund || !!groupRefund?.refund, ...(groupRefund ? { groupRefund: groupRefund.refund } : {}) }, { merge: true });
+    if (groupRefund) {
+      writeGroupMoney(tx, db, group, { orgId, classRef, classId, paidIds: groupRefund.paidIds, total: groupRefund.total, delta: groupRefund.refund, byUserId: uid, nowIso: now, reason: 'refund' });
+    }
 
     if (refund) {
       const accountRef = db.collection('creditAccounts').doc(accountId(orgId, booking.userId));
@@ -935,7 +956,7 @@ async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
 
     return {
       cancelled: true,
-      refunded: refund,
+      refunded: refund || !!groupRefund?.refund,
       promotedUserId: outcome.promotedUserId ?? null,
       // Alleen voor de meldingen hierna; gaat niet mee in het antwoord.
       notice: {
@@ -1169,6 +1190,9 @@ async function addStandingBooking(res, db, uid, myOrgs, isStaff, body) {
   const orgId = orgIdOf(ct.orgId);
   if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Deze lessoort hoort niet bij jouw studio.', build: BUILD });
   if (ct.privateFor && ct.privateFor !== targetUserId) return json(res, 403, { error: 'Dit is een persoonlijke afspraak van iemand anders.', build: BUILD });
+  if (ct.privateForGroup && !(ct.groupMemberIds ?? []).map(String).includes(targetUserId)) {
+    return json(res, 403, { error: 'Dit is een groepsles van een groep waar deze sporter niet in zit.', build: BUILD });
+  }
   const slot = (Array.isArray(ct.schedule) ? ct.schedule : []).find((sl) => Number(sl.weekday) === weekday && sl.startTime === startTime);
   if (!slot) return json(res, 400, { error: 'Dit weekmoment staat niet (meer) bij deze lessoort.', build: BUILD });
 
@@ -1224,26 +1248,29 @@ async function requireMemberOfMyOrgs(db, myOrgs, userId) {
  */
 async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
   if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan een PT-moment vastzetten.', build: BUILD });
-  const userId = String(body?.userId ?? '').trim();
+  // Met `groupId`: een vaste groepsles voor alle leden van de groep (Beheer → Groepen).
+  const groupId = String(body?.groupId ?? '').trim();
+  const userId = groupId ? '' : String(body?.userId ?? '').trim();
   const baseClassTypeId = String(body?.baseClassTypeId ?? '').trim();
   const weekday = Number(body?.weekday);
   const startTime = String(body?.startTime ?? '').trim();
   const endTime = String(body?.endTime ?? '').trim();
   const startDate = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.startDate ?? '')) ? String(body.startDate) : todayIso();
   const isTime = (v) => /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
-  if (!userId || !baseClassTypeId) return json(res, 400, { error: 'Kies een lid en een lessoort.', build: BUILD });
+  if (!(userId || groupId) || !baseClassTypeId) return json(res, 400, { error: 'Kies een lid en een lessoort.', build: BUILD });
   if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6 || !isTime(startTime) || !isTime(endTime)) {
     return json(res, 400, { error: 'Kies een dag en een begin- en eindtijd.', build: BUILD });
   }
   if (endTime <= startTime) return json(res, 400, { error: 'De eindtijd ligt voor de begintijd.', build: BUILD });
 
-  await requireMemberOfMyOrgs(db, myOrgs, userId);
+  const group = groupId ? await loadGroup(db, myOrgs, groupId) : null;
+  if (!group) await requireMemberOfMyOrgs(db, myOrgs, userId);
   const baseSnap = await db.collection('classTypes').doc(baseClassTypeId).get();
   if (!baseSnap.exists) return json(res, 404, { error: 'Deze lessoort bestaat niet (meer).', build: BUILD });
   const base = baseSnap.data();
   const orgId = orgIdOf(base.orgId);
   if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Deze lessoort hoort niet bij jouw studio.', build: BUILD });
-  if (base.privateFor) return json(res, 400, { error: 'Kies een gewone lessoort als basis.', build: BUILD });
+  if (base.privateFor || base.privateForGroup) return json(res, 400, { error: 'Kies een gewone lessoort als basis.', build: BUILD });
 
   // Trainer: gekozen, anders de vaste trainer van de lessoort, anders wie het instelt.
   const trainerId = String(body?.trainerId ?? '').trim() || base.defaultTrainerId || uid;
@@ -1256,7 +1283,7 @@ async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
     }
   }
 
-  const id = personalClassTypeId(userId, weekday, startTime);
+  const id = personalClassTypeId(group ? groupHolderId(group.id) : userId, weekday, startTime);
   const now = new Date().toISOString();
   const ref = db.collection('classTypes').doc(id);
   const existing = await ref.get();
@@ -1264,8 +1291,8 @@ async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
     id,
     orgId,
     name: base.name,
-    // Eén lid per PT-moment; duo-PT met twee vaste leden komt later.
-    capacity: 1,
+    // Eén lid per PT-moment; een groepsles heeft een plek per lid van de groep.
+    capacity: group ? group.memberIds.length : 1,
     creditCost: base.creditCost ?? 1,
     defaultTrainerId: trainerId,
     schemaId: base.schemaId ?? null,
@@ -1273,21 +1300,30 @@ async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
     room: base.room ?? null,
     sessionKind: base.sessionKind ?? '1on1',
     description: base.description ?? null,
-    privateFor: userId,
+    privateFor: group ? null : userId,
+    ...(group ? { privateForGroup: group.id, groupMemberIds: group.memberIds } : {}),
     baseClassTypeId,
     createdAt: existing.exists ? existing.data().createdAt ?? now : now,
     updatedAt: now,
   };
   await ref.set(ct);
 
-  // Eerst de vaste les, dan het rooster: nieuw gemaakte lessen worden zo meteen voor het lid geboekt.
-  const standing = await writeStanding(db, { orgId, userId, classTypeId: id, weekday, startTime, startDate, createdByUserId: uid });
+  // Eerst de vaste les (bij een groep: één per lid), dan het rooster: nieuw gemaakte lessen worden
+  // zo meteen geboekt.
+  const standings = [];
+  for (const memberId of group ? group.memberIds : [userId]) {
+    standings.push(await writeStanding(db, { orgId, userId: memberId, classTypeId: id, weekday, startTime, startDate, createdByUserId: uid }));
+  }
   if (existing.exists) await syncClassType(db, id, ct);
   const generated = await generateForClassType(db, id, ct);
-  const counts = await bookExistingForStanding(db, standing);
+  const counts = { booked: 0, skippedFull: 0, skippedNoCredits: 0 };
+  for (const standing of standings) {
+    const c = await bookExistingForStanding(db, standing);
+    for (const k of Object.keys(counts)) counts[k] += c[k];
+  }
   return json(res, 200, {
     classTypeId: id,
-    standingBookingId: standing.id,
+    standingBookingId: standings[0].id,
     booked: generated.autoBooked + counts.booked,
     skippedFull: generated.autoWaitlisted + counts.skippedFull,
     skippedNoCredits: generated.autoSkippedNoCredits + counts.skippedNoCredits,
@@ -1299,6 +1335,64 @@ async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
  * Een PT-moment stoppen: geboekte lessen afmelden (gewone afmeldregel), de privé-lessoort en de
  * vaste les weghalen en de lege toekomstige lessen van het rooster halen. Wat al geweest is blijft.
  */
+async function removeGroupSlot(res, db, uid, myOrgs, classTypeId) {
+  const ref = db.collection('classTypes').doc(classTypeId);
+  const snap = classTypeId ? await ref.get() : null;
+  const ct = snap?.exists ? snap.data() : null;
+  if (!ct || !ct.privateForGroup || !myOrgs.includes(orgIdOf(ct.orgId))) return json(res, 404, { error: 'Deze groepsles bestaat niet (meer).', build: BUILD });
+  const orgId = orgIdOf(ct.orgId);
+  // Komende lessen afgelasten zoals de studio dat doet: iedereen afgemeld, de groep krijgt alles terug.
+  const future = await futureClassesOfType(db, classTypeId, todayIso(), [orgId]);
+  let cancelled = 0;
+  const nowIso = new Date().toISOString();
+  for (const cls of future) {
+    if (cls.cancelledAt && !(Number(cls.bookedCount) > 0)) continue;
+    const classRef = db.collection('classes').doc(cls.id);
+    await classRef.set({ cancelledAt: cls.cancelledAt || nowIso, autoCancelled: false, updatedAt: nowIso }, { merge: true });
+    const bookings = await db.collection('bookings').where('classId', '==', cls.id).get();
+    for (const d of bookings.docs) {
+      if (!['booked', 'waitlist'].includes(String(d.data().status))) continue;
+      if (await cancelBookingCore(db, uid, myOrgs, true, d.id).catch(() => null)) cancelled++;
+    }
+    await refundGroupLesson(db, classRef, cls.id, orgId, uid);
+  }
+  const standings = await db.collection('standingBookings').where('classTypeId', '==', classTypeId).get();
+  for (const d of standings.docs) await db.collection('standingBookings').doc(d.id).delete();
+  await deleteClasses(db, (await futureClassesOfType(db, classTypeId, todayIso(), [orgId])).filter((c) => !(Number(c.bookedCount) > 0) && !(Number(c.waitlistCount) > 0)));
+  await ref.delete();
+  return json(res, 200, { removed: true, cancelled, build: BUILD });
+}
+
+/**
+ * Leden van een groep gewijzigd: de vaste groepslessen volgen. Nieuwe leden krijgen de vaste les en
+ * worden op de komende lessen gezet; wie uit de groep gaat, wordt afgemeld en zijn vaste les stopt.
+ */
+async function syncGroupSlots(db, uid, myOrgs, group, prevMemberIds) {
+  const cts = await db.collection('classTypes').where('privateForGroup', '==', group.id).get();
+  if (cts.docs.length === 0) return;
+  const added = group.memberIds.filter((id) => !prevMemberIds.includes(id));
+  const removed = prevMemberIds.filter((id) => !group.memberIds.includes(id));
+  const nowIso = new Date().toISOString();
+  for (const d of cts.docs) {
+    const ct = { ...d.data(), groupMemberIds: group.memberIds, capacity: group.memberIds.length, updatedAt: nowIso };
+    await db.collection('classTypes').doc(d.id).set(ct, { merge: true });
+    await syncClassType(db, d.id, ct);
+    const slot = (Array.isArray(ct.schedule) ? ct.schedule : [])[0];
+    if (!slot) continue;
+    for (const memberId of removed) {
+      const sRef = db.collection('standingBookings').doc(standingBookingId(d.id, memberId, slot.weekday, slot.startTime));
+      const sSnap = await sRef.get();
+      if (!sSnap.exists) continue;
+      await cancelSeriesBookings(db, uid, myOrgs, true, { ...sSnap.data(), id: sRef.id }, () => true);
+      await sRef.delete();
+    }
+    for (const memberId of added) {
+      const standing = await writeStanding(db, { orgId: orgIdOf(ct.orgId), userId: memberId, classTypeId: d.id, weekday: slot.weekday, startTime: slot.startTime, startDate: todayIso(), createdByUserId: uid });
+      await bookExistingForStanding(db, standing);
+    }
+  }
+}
+
 async function removePersonalSlot(db, uid, myOrgs, isStaff, standing) {
   const r = await cancelSeriesBookings(db, uid, myOrgs, isStaff, standing, () => true);
   const classTypeId = String(standing.classTypeId);
@@ -1401,6 +1495,56 @@ async function loadGroup(db, myOrgs, groupId) {
 }
 
 /**
+ * Groepsles binnen een transactie: de groep (wie mag), de groepsprijs van de studio en het
+ * groepstegoed. Alleen lezen; vóór de eerste write aanroepen (Firestore eist dat).
+ */
+async function readGroupLesson(tx, db, cls, orgId) {
+  const groupId = String(cls.privateForGroup);
+  const gSnap = await tx.get(db.collection('groups').doc(groupId));
+  const orgSnap = await tx.get(db.collection('orgs').doc(orgId));
+  const accountRef = db.collection('creditAccounts').doc(accountId(orgId, groupHolderId(groupId)));
+  const aSnap = await tx.get(accountRef);
+  return {
+    groupId,
+    memberIds: gSnap.exists ? (gSnap.data().memberIds ?? []).map(String) : [],
+    pricing: groupPricingOf(orgSnap.exists ? orgSnap.data() : {}),
+    accountRef,
+    balance: euros(aSnap.exists ? aSnap.data().balance : 0),
+  };
+}
+
+/** Wat de groep voor deze les betaalt bijwerken, en het verschil (+ terug, − af) op het groepstegoed. */
+function writeGroupMoney(tx, db, group, { orgId, classRef, classId, paidIds, total, delta, byUserId, nowIso, reason }) {
+  tx.set(classRef, { groupPaidIds: paidIds, groupSpent: euros(total) }, { merge: true });
+  if (!euros(delta)) return;
+  const holder = groupHolderId(group.groupId);
+  tx.set(group.accountRef, { orgId, userId: holder, groupId: group.groupId, unit: 'eur', balance: euros(group.balance + delta), updatedAt: nowIso }, { merge: true });
+  tx.set(db.collection('creditLedger').doc(newId('cl')), {
+    orgId,
+    userId: holder,
+    groupId: group.groupId,
+    unit: 'eur',
+    delta: euros(delta),
+    reason,
+    classId,
+    byUserId,
+    createdAt: nowIso,
+  });
+}
+
+/** Afgelaste groepsles: alles wat de groep ervoor betaalde terug op het groepstegoed. */
+async function refundGroupLesson(db, classRef, classId, orgId, byUserId) {
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(classRef);
+    const cls = snap.exists ? snap.data() : null;
+    if (!cls?.privateForGroup) return;
+    const group = await readGroupLesson(tx, db, cls, orgId);
+    const spent = euros(cls.groupSpent);
+    writeGroupMoney(tx, db, group, { orgId, classRef, classId, paidIds: [], total: 0, delta: spent, byUserId, nowIso: new Date().toISOString(), reason: 'refund' });
+  });
+}
+
+/**
  * Groep aanmaken of bijwerken (Beheer → Groepen). Alle leden moeten actief lid van de studio zijn.
  * Tegoed en abonnement volgen mee: wie het groepssaldo mag zien (`memberIds` op het creditAccount)
  * en wie de volgende factuur krijgt (`billToUserId` op het lidmaatschap).
@@ -1426,6 +1570,7 @@ async function saveGroup(res, db, uid, myOrgs, body) {
     updatedAt: now,
   };
   await ref.set(group);
+  if (existingId) await syncGroupSlots(db, uid, myOrgs, group, (prev.memberIds ?? []).map(String));
 
   const holder = groupHolderId(groupId);
   const accountRef = db.collection('creditAccounts').doc(accountId(orgId, holder));
@@ -1447,6 +1592,8 @@ async function deleteGroup(res, db, myOrgs, groupId) {
   if (await activeMembership(db, group.orgId, holder)) {
     return json(res, 409, { error: 'Stop eerst het abonnement van deze groep.', build: BUILD });
   }
+  const slots = await db.collection('classTypes').where('privateForGroup', '==', group.id).get();
+  if (slots.docs.length > 0) return json(res, 409, { error: 'Stop eerst de vaste groepslessen van deze groep.', build: BUILD });
   const account = await db.collection('creditAccounts').doc(accountId(group.orgId, holder)).get();
   const balance = Number(account.exists ? account.data().balance : 0) || 0;
   if (balance > 0) return json(res, 409, { error: `Er staan nog ${balance} credits op deze groep. Zet die eerst op 0.`, build: BUILD });
@@ -2232,6 +2379,9 @@ async function generateForClassType(db, classTypeId, ct) {
       description: ct.description ?? null,
       // Vaste PT van één lid (Profiel → Vaste lessen → PT-moment): alleen voor dat lid te boeken.
       privateFor: ct.privateFor ?? null,
+      // Vaste groepsles (Beheer → Groepen): alleen voor de leden van die groep, betaald uit het groepstegoed.
+      privateForGroup: ct.privateForGroup ?? null,
+      groupMemberIds: ct.groupMemberIds ?? null,
       bookedCount: 0,
       waitlistCount: 0,
       cancelledAt: null,
@@ -2255,7 +2405,7 @@ async function generateForClassType(db, classTypeId, ct) {
     result.autoSkippedNoCredits += outcome.skippedNoCredits;
     // Vaste PT in een week dat het lid niet komt (pauze, nog niet begonnen, geen credits): niet
     // als lege les op het rooster van de trainer laten staan.
-    if (ct.privateFor && outcome.booked + outcome.skippedFull === 0) emptyPrivate.push(classId);
+    if ((ct.privateFor || ct.privateForGroup) && outcome.booked + outcome.skippedFull === 0) emptyPrivate.push(classId);
   }
   if (emptyPrivate.length > 0) {
     const cancelBatch = db.batch();
@@ -2407,13 +2557,17 @@ async function attemptStandingBooking(db, orgId, classId, standing) {
     const reopen = canReopenPrivateClass(cls, userId);
     if (cls.cancelledAt && !reopen) return null;
     if (cls.privateFor && cls.privateFor !== userId) return null;
+    // Groepsles: alleen leden van de groep, en de groep betaalt. Is het groepstegoed op, dan toch
+    // boeken: er is vooruit gefactureerd, de trainer ziet het tekort bij Groepen.
+    const group = cls.privateForGroup ? await readGroupLesson(tx, db, cls, orgId) : null;
+    if (group && !group.memberIds.includes(userId)) return null;
 
     const mine = await tx.get(db.collection('bookings').where('classId', '==', classId).where('userId', '==', userId));
     if (mine.docs.some((d) => ['booked', 'waitlist'].includes(String(d.data().status)))) return null;
 
     const capacity = Number(cls.capacity) || 0;
     const booked = Number(cls.bookedCount) || 0;
-    const cost = Number(cls.creditCost ?? 1) || 0;
+    const cost = group ? 0 : Number(cls.creditCost ?? 1) || 0;
     const onWaitlist = booked >= capacity;
 
     const accountRef = db.collection('creditAccounts').doc(accountId(orgId, userId));
@@ -2438,6 +2592,10 @@ async function attemptStandingBooking(db, orgId, classId, standing) {
       tx.set(classRef, { waitlistCount: FieldValue.increment(1), ...reopened }, { merge: true });
     } else {
       tx.set(classRef, { bookedCount: FieldValue.increment(1), ...reopened }, { merge: true });
+      if (group) {
+        const c = groupChargeOnBook(group.pricing, cls, userId);
+        writeGroupMoney(tx, db, group, { orgId, classRef, classId, paidIds: c.paidIds, total: c.total, delta: -c.charge, byUserId: 'system', nowIso, reason: 'booking' });
+      }
       if (cost > 0) {
         tx.set(accountRef, { orgId, userId, balance: balance - cost, updatedAt: nowIso }, { merge: true });
         tx.set(db.collection('creditLedger').doc(newId('cl')), {

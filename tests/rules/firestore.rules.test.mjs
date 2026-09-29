@@ -405,6 +405,8 @@ await t('studio B leest het rooster van studio A → geweigerd', false, getDoc(d
 await t('trainer wijzigt de capaciteit → mag', true, updateDoc(doc(as('trainer1'), 'classes/c1'), { capacity: 10 }));
 await t('trainer draait zelf aan de bezettingsteller → geweigerd', false, updateDoc(doc(as('trainer1'), 'classes/c1'), { bookedCount: 7 }));
 await t('trainer draait aan de wachtlijstteller → geweigerd', false, updateDoc(doc(as('trainer1'), 'classes/c1'), { waitlistCount: 3 }));
+await t('trainer zet wat de groep voor een les betaalde → geweigerd', false, updateDoc(doc(as('trainer1'), 'classes/c1'), { groupSpent: 0 }));
+await t('trainer zet wie de groep betaalt → geweigerd', false, updateDoc(doc(as('trainer1'), 'classes/c1'), { groupPaidIds: [] }));
 await t('sporter wijzigt de les → geweigerd', false, updateDoc(doc(as('sporter2'), 'classes/c1'), { capacity: 99 }));
 
 await env.withSecurityRulesDisabled(async (ctx) => {

@@ -46,6 +46,8 @@ function toClassType(data: Record<string, unknown>, id: string): ClassType {
     sessionKind: toSessionKind(data.sessionKind),
     description: typeof data.description === 'string' ? data.description : null,
     privateFor: typeof data.privateFor === 'string' && data.privateFor ? data.privateFor : null,
+    privateForGroup: typeof data.privateForGroup === 'string' && data.privateForGroup ? data.privateForGroup : null,
+    groupMemberIds: Array.isArray(data.groupMemberIds) ? data.groupMemberIds.map(String) : null,
     createdAt: typeof data.createdAt === 'string' ? data.createdAt : '',
     updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
   };
@@ -64,7 +66,7 @@ export function newClassTypeId(): string {
 }
 
 export async function saveClassType(
-  input: Omit<ClassType, 'orgId' | 'createdAt' | 'updatedAt' | 'privateFor'> & { createdAt?: string }
+  input: Omit<ClassType, 'orgId' | 'createdAt' | 'updatedAt' | 'privateFor' | 'privateForGroup' | 'groupMemberIds'> & { createdAt?: string }
 ): Promise<void> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
   await setDoc(

@@ -118,10 +118,12 @@ export function classFieldUpdates(existing, ct, endTime) {
     room: ct.room ?? null,
     description: ct.description ?? null,
     sessionKind: ct.sessionKind ?? 'group',
+    // Groepsles: wie erbij mag en hoeveel plekken volgen de groep (Beheer → Groepen).
+    ...(ct.privateForGroup ? { groupMemberIds: ct.groupMemberIds ?? [], capacity: ct.capacity ?? 1 } : {}),
   };
   const out = {};
   for (const [k, v] of Object.entries(want)) {
-    if ((existing[k] ?? null) !== v) out[k] = v;
+    if (JSON.stringify(existing[k] ?? null) !== JSON.stringify(v)) out[k] = v;
   }
   return Object.keys(out).length ? out : null;
 }
@@ -170,13 +172,18 @@ export function personalClassTypeId(userId, weekday, startTime) {
  * trainer af (afgelast, met `autoCancelled` zodat hij terugkomt als het lid zich weer aanmeldt).
  */
 export function privateClassEmptyAfter(cls, { bookedDelta = 0, waitlistDelta = 0 } = {}) {
-  if (!cls || !cls.privateFor || cls.cancelledAt) return false;
+  if (!cls || !(cls.privateFor || cls.privateForGroup) || cls.cancelledAt) return false;
   const booked = (Number(cls.bookedCount) || 0) + bookedDelta;
   const waiting = (Number(cls.waitlistCount) || 0) + waitlistDelta;
   return booked <= 0 && waiting <= 0;
 }
 
-/** Mag deze (automatisch afgelaste) privé-les voor dit lid weer open? Een les die de trainer zelf afgelastte niet. */
+/**
+ * Mag deze (automatisch afgelaste) privé-les voor dit lid weer open? Een les die de trainer zelf
+ * afgelastte niet. Een groepsles mag elk lid van de groep weer openen.
+ */
 export function canReopenPrivateClass(cls, userId) {
-  return !!cls && !!cls.cancelledAt && cls.autoCancelled === true && !!cls.privateFor && cls.privateFor === userId;
+  if (!cls || !cls.cancelledAt || cls.autoCancelled !== true) return false;
+  if (cls.privateFor) return cls.privateFor === userId;
+  return !!cls.privateForGroup && Array.isArray(cls.groupMemberIds) && cls.groupMemberIds.includes(userId);
 }

@@ -23,6 +23,10 @@ import {
   useTheme,
 } from '@mui/material';
 import { ContentCard } from '../layout';
+import { PersonalSlotDialog } from '../StandingBookingsCard';
+import { useI18n } from '../../context/I18nContext';
+import { addPersonalSlot, removeGroupSlot } from '../../services/classService';
+import { getClassTypes } from '../../services/classTypeService';
 import { FullScreenDialogTitle } from './FullScreenDialogTitle';
 import { useNotify } from '../../context/NotifyContext';
 import { useProfile } from '../../context/ProfileContext';
@@ -30,7 +34,7 @@ import { adjustGroupBalance, assignGroupPlan, deleteGroup, getGroupsForOrg, save
 import { getOrg } from '../../services/orgService';
 import { designTokens } from '../../theme/designTokens';
 import { DEFAULT_GROUP_PRICING, formatEuro, groupHolderId, groupPricingOf, groupSessionPrice } from '../../utils/groupPricing';
-import type { Group, GroupKind, Membership, OrgGroupPricing, Plan, Profile } from '../../types';
+import type { ClassType, Group, GroupKind, Membership, OrgGroupPricing, Plan, Profile } from '../../types';
 
 const KIND_LABEL: Record<GroupKind, string> = { bedrijf: 'Bedrijf', gezin: 'Gezin', vrienden: 'Vrienden' };
 
@@ -56,9 +60,11 @@ interface Draft {
 }
 
 const nameOf = (p: Profile | undefined) => p?.displayName?.trim() || p?.email || 'Onbekend lid';
+const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
 export function GroupsPanel({ profiles, plans, memberships, credits, createSignal, onChanged }: GroupsPanelProps) {
   const notify = useNotify();
+  const { t } = useI18n();
   const profileCtx = useProfile();
   const theme = useTheme();
   const wide = useMediaQuery(theme.breakpoints.up('md'));
@@ -72,15 +78,29 @@ export function GroupsPanel({ profiles, plans, memberships, credits, createSigna
   const [error, setError] = useState<string | null>(null);
   const [adjust, setAdjust] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [types, setTypes] = useState<ClassType[]>([]);
+  const [slotOpen, setSlotOpen] = useState(false);
+  const [stopSlot, setStopSlot] = useState<ClassType | null>(null);
 
   const byId = useMemo(() => new Map(profiles.map((p) => [p.userId, p])), [profiles]);
   // Kiesbaar als lid: wie actief is bij deze studio (een inactief lid kan niet trainen).
   const selectable = useMemo(() => profiles.filter((p) => !p.inactive), [profiles]);
+  const trainers = useMemo(() => profiles.filter((p) => p.role !== 'sporter').map((p) => ({ userId: p.userId, name: nameOf(p) })), [profiles]);
+  const publicTypes = useMemo(() => types.filter((c) => !c.privateFor && !c.privateForGroup), [types]);
+  const slotsOf = (groupId: string) => types.filter((c) => c.privateForGroup === groupId);
+  const weekdayLabel = (wd: number) => t(`classTypes.schedule.weekdayLabels.${WEEKDAY_KEYS[wd]}`);
+  const slotText = (c: ClassType) => {
+    const s = c.schedule[0];
+    const trainer = c.defaultTrainerId ? byId.get(c.defaultTrainerId) : undefined;
+    return [s ? `${weekdayLabel(s.weekday)} ${s.startTime}–${s.endTime}` : c.name, c.name, trainer ? nameOf(trainer) : null].filter(Boolean).join(' · ');
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setGroups(await getGroupsForOrg());
+      const [list, ct] = await Promise.all([getGroupsForOrg(), getClassTypes()]);
+      setGroups(list);
+      setTypes(ct);
     } catch (e) {
       notify.error('Groepen laden mislukt.', e);
     } finally {
@@ -181,6 +201,40 @@ export function GroupsPanel({ profiles, plans, memberships, credits, createSigna
     }
   };
 
+  const addSlot = async (input: { baseClassTypeId: string; weekday: number; startTime: string; endTime: string; trainerId: string | null; startDate: string }) => {
+    if (!draft?.groupId) return;
+    setSlotOpen(false);
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await addPersonalSlot({ ...input, groupId: draft.groupId });
+      const booked = r.booked ?? 0;
+      notify.success(booked > 0 ? `Vaste groepsles ingepland; ${booked} ${booked === 1 ? 'plek' : 'plekken'} geboekt.` : 'Vaste groepsles ingepland.');
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Inplannen mislukt.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const doStopSlot = async () => {
+    if (!stopSlot) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await removeGroupSlot(stopSlot.id);
+      notify.success('Vaste groepsles gestopt; komende lessen zijn afgelast en terug op het groepstegoed.');
+      setStopSlot(null);
+      await refresh();
+    } catch (e) {
+      setStopSlot(null);
+      setError(e instanceof Error ? e.message : 'Stoppen mislukt.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const size = draft?.memberIds.length ?? 0;
   const lessonPrice = groupSessionPrice(pricing, size);
   const balanceOf = (groupId: string) => credits[groupHolderId(groupId)] ?? 0;
@@ -231,7 +285,7 @@ export function GroupsPanel({ profiles, plans, memberships, credits, createSigna
                     {g.name}
                   </Typography>
                   <Chip size="small" label={KIND_LABEL[g.kind]} sx={{ height: 22, fontSize: 12 }} />
-                  <Typography variant="body2" sx={{ ml: 'auto', fontWeight: 600, flexShrink: 0 }}>
+                  <Typography variant="body2" sx={{ ml: 'auto', fontWeight: 600, flexShrink: 0, color: balanceOf(g.id) < 0 ? 'error.main' : undefined }}>
                     {formatEuro(balanceOf(g.id))}
                   </Typography>
                 </Box>
@@ -240,6 +294,7 @@ export function GroupsPanel({ profiles, plans, memberships, credits, createSigna
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   {plan ? plan.planName : 'Geen abonnement'} · groepsles {formatEuro(groupSessionPrice(pricing, g.memberIds.length))}
+                  {slotsOf(g.id).length > 0 ? ` · ${slotsOf(g.id).length} vaste ${slotsOf(g.id).length === 1 ? 'les' : 'lessen'}` : ''}
                 </Typography>
               </Box>
             );
@@ -343,6 +398,35 @@ export function GroupsPanel({ profiles, plans, memberships, credits, createSigna
                 </Button>
               </Box>
             )}
+
+            {draft.groupId && (
+              <Box sx={{ p: 1.5, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackgroundHigh }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    Vaste groepslessen
+                  </Typography>
+                  <Button size="small" sx={{ ml: 'auto' }} disabled={saving} onClick={() => setSlotOpen(true)}>
+                    Inplannen
+                  </Button>
+                </Box>
+                {slotsOf(draft.groupId).length === 0 ? (
+                  <Typography variant="caption" color="text.secondary">
+                    Nog geen. Plan een vast moment: alle leden worden elke week geboekt en de les gaat van het groepstegoed af.
+                  </Typography>
+                ) : (
+                  slotsOf(draft.groupId).map((c) => (
+                    <Box key={c.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.25 }}>
+                      <Typography variant="body2" sx={{ minWidth: 0 }}>
+                        {slotText(c)}
+                      </Typography>
+                      <Button size="small" color="error" sx={{ ml: 'auto', flexShrink: 0 }} disabled={saving} onClick={() => setStopSlot(c)}>
+                        Stoppen
+                      </Button>
+                    </Box>
+                  ))
+                )}
+              </Box>
+            )}
           </DialogContent>
         )}
         <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -358,6 +442,36 @@ export function GroupsPanel({ profiles, plans, memberships, credits, createSigna
           )}
           <Button variant="contained" disableElevation onClick={() => void save()} disabled={saving || !draft?.name.trim() || !draft?.memberIds.length}>
             {saving ? 'Bezig…' : 'Opslaan'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <PersonalSlotDialog
+        open={slotOpen}
+        types={publicTypes}
+        trainers={trainers}
+        defaultTrainerId={null}
+        weekdayLabel={weekdayLabel}
+        onClose={() => setSlotOpen(false)}
+        onAdd={(input) => void addSlot(input)}
+        title="Vaste groepsles"
+        intro={`Elke week op dezelfde dag en tijd voor ${draft?.name || 'deze groep'}. Alle leden worden geboekt; de les kost ${formatEuro(lessonPrice)} bij ${size} ${size === 1 ? 'persoon' : 'personen'} en gaat van het groepstegoed af. Meldt iemand zich op tijd af, dan wordt het goedkoper.`}
+      />
+
+      <Dialog open={!!stopSlot} onClose={() => !saving && setStopSlot(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Vaste groepsles stoppen</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            {stopSlot ? slotText(stopSlot) : ''}: de komende lessen worden afgelast en wat de groep ervoor betaalde, komt terug op het
+            groepstegoed. Wat al geweest is, blijft staan.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setStopSlot(null)} disabled={saving}>
+            Annuleren
+          </Button>
+          <Button color="error" variant="contained" disableElevation onClick={() => void doStopSlot()} disabled={saving}>
+            Stoppen
           </Button>
         </DialogActions>
       </Dialog>

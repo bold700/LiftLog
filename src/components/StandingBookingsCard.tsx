@@ -148,7 +148,7 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
   };
 
   const typeById = useMemo(() => new Map(types.map((c) => [c.id, c])), [types]);
-  const publicTypes = useMemo(() => types.filter((c) => !c.privateFor), [types]);
+  const publicTypes = useMemo(() => types.filter((c) => !c.privateFor && !c.privateForGroup), [types]);
   const trainerName = (id: string | null | undefined) =>
     id ? (trainers.find((tr) => tr.userId === id)?.name ?? memberNames[id]) : undefined;
   const weekdayLabel = (wd: number) => t(`classTypes.schedule.weekdayLabels.${WEEKDAY_KEYS[wd]}`);
@@ -160,7 +160,7 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
     if (!s.active) return 'Gestopt';
     const ct = typeById.get(s.classTypeId);
     const who = ct?.privateFor && trainerName(ct.defaultTrainerId) ? ` · bij ${trainerName(ct.defaultTrainerId)}` : '';
-    const kind = ct?.privateFor ? 'PT-moment, elke week' : 'Elke week';
+    const kind = ct?.privateFor ? 'PT-moment, elke week' : ct?.privateForGroup ? 'Groepsles, elke week' : 'Elke week';
     if (s.pausedFrom) return `Pauze ${shortDate(s.pausedFrom)}${s.pausedUntil ? ` t/m ${shortDate(s.pausedUntil)}` : ', tot je hervat'}${who}`;
     if (s.startDate && s.startDate > today) return `${kind}, vanaf ${shortDate(s.startDate)}${who}`;
     return `${kind}${who}`;
@@ -552,7 +552,7 @@ const plusHour = (time: string) => {
  * Vast PT-moment voor een lid: lessoort (voor prijs, soort en ruimte), dag, tijd, trainer en
  * startdatum. PT-lessoorten (1-op-1, duo) staan bovenaan.
  */
-function PersonalSlotDialog({
+export function PersonalSlotDialog({
   open,
   types,
   trainers,
@@ -560,8 +560,13 @@ function PersonalSlotDialog({
   weekdayLabel,
   onClose,
   onAdd,
+  title = 'Vast PT-moment',
+  intro,
 }: {
   open: boolean;
+  /** Ook gebruikt voor een vaste groepsles (Beheer → Groepen), met een eigen titel en uitleg. */
+  title?: string;
+  intro?: string;
   types: ClassType[];
   trainers: { userId: string; name: string }[];
   defaultTrainerId: string | null;
@@ -594,11 +599,15 @@ function PersonalSlotDialog({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>Vast PT-moment</DialogTitle>
+      <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <DialogContentText sx={{ mb: 2 }}>
-          Elke week op dezelfde dag en tijd, alleen voor dit lid. Het moment komt vanzelf op het rooster van de trainer en het lid wordt elke week geboekt
-          {base ? ` (${base.creditCost === 0 ? 'gratis' : base.creditCost === 1 ? '1 credit' : `${base.creditCost} credits`} per keer)` : ''}.
+          {intro ?? (
+            <>
+              Elke week op dezelfde dag en tijd, alleen voor dit lid. Het moment komt vanzelf op het rooster van de trainer en het lid wordt elke week geboekt
+              {base ? ` (${base.creditCost === 0 ? 'gratis' : base.creditCost === 1 ? '1 credit' : `${base.creditCost} credits`} per keer)` : ''}.
+            </>
+          )}
         </DialogContentText>
         {ordered.length === 0 ? (
           <Typography variant="body2" color="text.secondary">
