@@ -20,6 +20,9 @@ import { getExerciseProgressInPeriod } from '../../utils/schemaProgressUtils';
 import { useFixedMoments } from '../../hooks/useFixedMoments';
 import { WEEKDAY_NAMES, WEEKDAY_SHORT, dayIndexForWeekday, hasWeekPlan, weekdayOfDate, weekdayText } from '../../utils/weekPlan';
 import { formatWarmupSummary, formatCardioSummary, formatCooldownSummary, formatStretchingSummary } from '../../utils/format';
+import { useViewedExercises } from '../../hooks/useViewedExercises';
+import { fromLocalExercises } from '../../utils/previousPerformance';
+import { formatKg, targetWeightFor, type TargetWeight } from '../../utils/targetWeight';
 
 interface SchemaDetailViewProps {
   schema: Schema;
@@ -52,7 +55,6 @@ const dayLabelOf = (schema: Schema, i: number) => {
 };
 const countLabel = (n: number) => `${n} ${n === 1 ? 'oefening' : 'oefeningen'}`;
 const setsReps = (ex: SchemaExercise) => `${ex.setsTarget} × ${ex.repsTarget}`;
-const target = (ex: SchemaExercise) => (ex.targetWeight != null && ex.targetWeight > 0 ? `${String(ex.targetWeight).replace('.', ',')} kg` : '–');
 const rest = (ex: SchemaExercise) => (ex.restSeconds != null && ex.restSeconds > 0 ? `${ex.restSeconds}s` : '–');
 
 /** Voortgang binnen de periode als korte regel: "70 → 75 kg · doel 80 kg". */
@@ -92,6 +94,27 @@ const pillSx = (bg: string, fg: string, outlined?: boolean) => ({
   whiteSpace: 'nowrap' as const,
 });
 
+/**
+ * Doelgewicht als label: het doel uit de workout, of een voorstel uit de vorige keer (met de reden
+ * als tooltip). Zo weet je vóór de training al waar je op mikt.
+ */
+function GoalPill({ goal }: { goal: TargetWeight | null }) {
+  if (!goal) return null;
+  const suggested = goal.kind === 'suggested';
+  return (
+    <Box
+      component="span"
+      title={suggested ? `Voorstel: ${goal.reason}` : 'Doelgewicht uit de workout'}
+      sx={pillSx(
+        suggested ? designTokens.tertiaryContainer : designTokens.primaryContainer,
+        suggested ? designTokens.onTertiaryContainer : designTokens.onPrimaryContainer
+      )}
+    >
+      {suggested ? 'Voorstel' : 'Doel'} {formatKg(goal.kg)}
+    </Box>
+  );
+}
+
 /** Functie, geen constante: designTokens volgt het actieve thema en moet bij elke render gelezen worden. */
 const weekBadge = (text = 'Deze week') => (
   <Box component="span" sx={{ ...pillSx(designTokens.primary, designTokens.onPrimary), fontSize: 10, lineHeight: '16px', px: 0.75, ml: 1 }}>
@@ -121,6 +144,10 @@ export function SchemaDetailView({
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const day = schema.days[dayIndex];
   const exercises = day?.exercises ?? [];
+  // Wat wie je bekijkt de vorige keer deed: basis voor het voorgestelde doelgewicht.
+  const { exercises: viewedLogs } = useViewedExercises();
+  const previous = useMemo(() => fromLocalExercises(viewedLogs, new Set()), [viewedLogs]);
+  const goalOf = (ex: SchemaExercise) => targetWeightFor(ex, previous.get(ex.exerciseName.trim().toLowerCase()));
   const canStart = exercises.length > 0;
   const pill = audiencePill(schema, assigneeOf(schema), isStaff);
   const extras = extraSections(schema, dayIndex);
@@ -312,9 +339,12 @@ export function SchemaDetailView({
                   <ExerciseDbDemo exerciseName={ex.exerciseName} variant="thumb" />
                   <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Typography sx={{ fontSize: 15, fontWeight: 500, lineHeight: '20px' }}>{ex.exerciseName}</Typography>
-                    <Typography sx={{ fontSize: 12, lineHeight: '16px', color: 'text.secondary' }}>
-                      {[setsReps(ex), ex.targetWeight ? target(ex) : null, ex.restSeconds ? `${ex.restSeconds}s rust` : null].filter(Boolean).join(' · ')}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                      <Typography sx={{ fontSize: 12, lineHeight: '16px', color: 'text.secondary' }}>
+                        {[setsReps(ex), ex.restSeconds ? `${ex.restSeconds}s rust` : null].filter(Boolean).join(' · ')}
+                      </Typography>
+                      <GoalPill goal={goalOf(ex)} />
+                    </Box>
                     {ex.notes && <Typography sx={{ fontSize: 12, lineHeight: '16px', color: 'text.secondary', fontStyle: 'italic' }}>{ex.notes}</Typography>}
                     {prog && <Typography sx={{ fontSize: 11, lineHeight: '16px', color: 'text.secondary' }}>{prog}</Typography>}
                   </Box>
@@ -500,7 +530,7 @@ export function SchemaDetailView({
                       )}
                     </Box>
                     <Typography sx={{ fontSize: 13, lineHeight: '18px' }}>{setsReps(ex)}</Typography>
-                    <Typography sx={{ fontSize: 13, lineHeight: '18px' }}>{target(ex)}</Typography>
+                    <Box sx={{ minWidth: 0 }}>{goalOf(ex) ? <GoalPill goal={goalOf(ex)} /> : <Typography sx={{ fontSize: 13, lineHeight: '18px' }}>–</Typography>}</Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
                       <Typography sx={{ fontSize: 13, lineHeight: '18px' }}>{rest(ex)}</Typography>
                       <ExerciseInfoButton exerciseName={ex.exerciseName} />

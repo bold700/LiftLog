@@ -15,8 +15,8 @@ const cache = new Map<string, Promise<string>>();
 const DARK_SWAP = new Map(GREEN_TINTS.map((c, i) => [c.toLowerCase(), muscleTints('dark')[i]]));
 
 /** De SVG op `url` in donkere kleuren (lijnen in `color`), als object-URL. Per combinatie maar één keer. */
-function tintedSvgUrl(url: string, color: string): Promise<string> {
-  const key = `${url}|${color}`;
+function tintedSvgUrl(url: string, color: string, swapGreens: boolean): Promise<string> {
+  const key = `${url}|${color}|${swapGreens}`;
   let p = cache.get(key);
   if (!p) {
     p = fetch(url)
@@ -31,7 +31,7 @@ function tintedSvgUrl(url: string, color: string): Promise<string> {
               svg.replace(/fill="(black|#[0-9a-fA-F]{6})"/g, (m, c: string) =>
                 c === 'black'
                   ? `fill="${color}"`
-                  : DARK_SWAP.has(c.toLowerCase())
+                  : swapGreens && DARK_SWAP.has(c.toLowerCase())
                     ? `fill="${DARK_SWAP.get(c.toLowerCase())}"`
                     : m
               ),
@@ -51,22 +51,28 @@ export function BodyLayerImg({
   alt,
   sx,
   ariaHidden,
+  highlight = false,
 }: {
   src: string;
   alt: string;
   sx?: SxProps<Theme>;
   ariaHidden?: boolean;
+  /**
+   * De laag markeert alleen "deze spier doet mee" (geen niveau): dan blijft het groen zoals het is.
+   * Het lichte groen valt op een donkere kaart juist op; omdraaien zou het onzichtbaar maken.
+   */
+  highlight?: boolean;
 }) {
   const theme = useTheme();
   const dark = theme.palette.mode === 'dark';
   const color = theme.palette.text.secondary;
   const [tinted, setTinted] = useState<{ key: string; url: string } | null>(null);
-  const key = `${src}|${color}`;
+  const key = `${src}|${color}|${highlight}`;
 
   useEffect(() => {
     if (!dark) return;
     let alive = true;
-    tintedSvgUrl(src, color)
+    tintedSvgUrl(src, color, !highlight)
       .then((url) => {
         if (alive) setTinted({ key, url });
       })
@@ -74,7 +80,7 @@ export function BodyLayerImg({
     return () => {
       alive = false;
     };
-  }, [dark, src, color, key]);
+  }, [dark, src, color, key, highlight]);
 
   const shown = dark && tinted?.key === key ? tinted.url : src;
   return <Box component="img" src={shown} alt={alt} aria-hidden={ariaHidden || undefined} sx={sx} />;

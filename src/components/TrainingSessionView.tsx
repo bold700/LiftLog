@@ -24,6 +24,9 @@ import {
   sporterEntries,
   type PreviousPerformance,
 } from '../utils/previousPerformance';
+import { getSessionSwaps, setSessionSwap } from '../utils/sessionSwaps';
+import { formatKg, targetWeightFor } from '../utils/targetWeight';
+import { PrUnlockDialog } from './PrUnlockDialog';
 import { getAllExercises } from '../utils/storage';
 import {
   isDayMarkedCompleteInLast12Hours,
@@ -112,7 +115,25 @@ export const TrainingSessionView = ({
   const [checkinSaving, setCheckinSaving] = useState(false);
   /** Overdracht uit stap 2 van de dialoog; gaat mee in de check-in die daarna wordt opgeslagen. */
   const [handover, setHandover] = useState<string | null>(null);
-  const day = schema.days[dayIndex];
+  /** Oefeningen die de trainer voor deze training heeft gewisseld (positie → oefening). */
+  const [swaps, setSwaps] = useState<Record<number, string>>(() => getSessionSwaps(schema.id, dayIndex));
+  useEffect(() => {
+    setSwaps(getSessionSwaps(schema.id, dayIndex));
+  }, [schema.id, dayIndex]);
+  const plannedDay = schema.days[dayIndex];
+  // De dag zoals hij vandaag gedaan wordt: met de wissels erin. Loggen, "vorige keer" en het record
+  // gaan dan over de oefening die echt gedaan wordt. Het doelgewicht uit het schema hoort bij de
+  // geplande oefening, dus dat valt bij een wissel weg (het voorstel komt dan uit de vorige keer).
+  const day = useMemo(
+    () =>
+      plannedDay && Object.keys(swaps).length
+        ? {
+            ...plannedDay,
+            exercises: plannedDay.exercises.map((e, i) => (swaps[i] ? { ...e, exerciseName: swaps[i], targetWeight: undefined } : e)),
+          }
+        : plannedDay,
+    [plannedDay, swaps]
+  );
 
   const completeDay = useCallback(() => {
     markDayComplete(schema.id, dayIndex);
@@ -163,6 +184,10 @@ export const TrainingSessionView = ({
   const [previous, setPrevious] = useState<Map<string, PreviousPerformance>>(new Map());
   /** Personal record per oefeningnaam (kleine letters): het beste ooit, vandaag meegeteld. */
   const [records, setRecords] = useState<Map<string, PreviousPerformance>>(new Map());
+  /** Alle logs van deze persoon in de gedeelde vorm; om bij een nieuw record het vorige te vinden. */
+  const entriesRef = useRef<PreviousPerformance[]>([]);
+  /** Net een nieuw record gezet: dan tonen we de unlock. */
+  const [unlock, setUnlock] = useState<{ exerciseName: string; record: PreviousPerformance; before: PreviousPerformance | null } | null>(null);
 
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
   const healthStorageKey = useMemo(
@@ -190,7 +215,8 @@ export const TrainingSessionView = ({
       setLoggedExercises(logged);
       const all = getAllExercises();
       setPrevious(fromLocalExercises(all, new Set(logged.map((ex) => ex.id))));
-      setRecords(buildPersonalRecords(localEntries(all)));
+      entriesRef.current = localEntries(all);
+      setRecords(buildPersonalRecords(entriesRef.current));
       return;
     }
     getLogsForUser(logTargetId)
@@ -198,9 +224,11 @@ export const TrainingSessionView = ({
         const logged = loggedExercisesFromSporterLogs(logs, schema.id, dayIndex);
         setLoggedExercises(logged);
         setPrevious(fromSporterLogs(logs, new Set(logged.map((ex) => ex.id))));
-        setRecords(buildPersonalRecords(sporterEntries(logs)));
+        entriesRef.current = sporterEntries(logs);
+        setRecords(buildPersonalRecords(entriesRef.current));
       })
       .catch(() => {
+        entriesRef.current = [];
         setLoggedExercises([]);
         setPrevious(new Map());
         setRecords(new Map());
@@ -270,18 +298,31 @@ export const TrainingSessionView = ({
   const handleLogToevoegen = useCallback(
     (ex: SchemaExercise) => {
       if (!addFromSchema) return;
+      // Het doel (of het voorstel uit de vorige keer) staat al ingevuld; alleen nog controleren.
+      const goal = targetWeightFor(ex, previous.get(ex.exerciseName.trim().toLowerCase()));
       addFromSchema.setAddFromSchema(
         {
           exerciseName: ex.exerciseName,
           sets: ex.setsTarget,
           reps: ex.repsTarget,
-          targetWeight: ex.targetWeight ?? null,
+          targetWeight: goal?.kg ?? null,
         },
         schema.id,
         dayIndex
       );
     },
-    [addFromSchema, schema.id, dayIndex]
+    [addFromSchema, schema.id, dayIndex, previous]
+  );
+
+  /** Oefening wisselen voor deze training (of met de geplande naam terug). Alleen voor de trainer. */
+  const swapExercise = useCallback(
+    (index: number, exerciseName: string) => {
+      const planned = plannedDay?.exercises[index]?.exerciseName ?? '';
+      const back = exerciseName.trim().toLowerCase() === planned.trim().toLowerCase();
+      setSwaps(setSessionSwap(schema.id, dayIndex, index, back ? null : exerciseName));
+      notify.success(back ? `Terug naar ${planned}` : `Gewisseld naar ${exerciseName}`);
+    },
+    [plannedDay, schema.id, dayIndex, notify]
   );
 
   const handleGelogdClick = useCallback(
@@ -365,6 +406,24 @@ export const TrainingSessionView = ({
     if (nextOpen >= 0) setSelectedIdx(nextOpen);
   }, [justLoggedExerciseId, loggedExercises, day]);
 
+  // Na een nieuwe log: is het een nieuw record? Pas beslissen als de logs (en dus de records)
+  // binnen zijn; bij terugkomen in de training staan die er een tel later dan de lijst.
+  const lastPrFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!justLoggedExerciseId || lastPrFor.current === justLoggedExerciseId) return;
+    const log = loggedExercises.find((l) => l.id === justLoggedExerciseId);
+    const k = log?.name?.trim().toLowerCase() ?? '';
+    if (!log || !k) return;
+    const sameLog = (e: PreviousPerformance) => e.date === log.date && e.exerciseName.trim().toLowerCase() === k;
+    if (!entriesRef.current.some(sameLog)) return;
+    lastPrFor.current = justLoggedExerciseId;
+    const record = records.get(k);
+    if (!record || record.date !== log.date) return;
+    // De eerste keer loggen is nog geen record breken: er moet een vorig record zijn.
+    const before = buildPersonalRecords(entriesRef.current.filter((e) => !sameLog(e))).get(k);
+    if (before) setUnlock({ exerciseName: log.name ?? '', record, before });
+  }, [justLoggedExerciseId, loggedExercises, records]);
+
   usePageTitle(day ? `${day.dayLabel} · sessie` : null);
 
   if (!day) {
@@ -391,14 +450,13 @@ export const TrainingSessionView = ({
   const next = nextIdx >= 0 ? day.exercises[nextIdx] : null;
   const restLeft = rest ? Math.max(0, Math.ceil((rest.until - now) / 1000)) : 0;
   const mmss = (secs: number) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+  const goalText = (e: SchemaExercise) => {
+    const goal = targetWeightFor(e, previous.get(e.exerciseName.trim().toLowerCase()));
+    return goal ? `${goal.kind === 'schema' ? 'doel' : 'voorstel'} ${formatKg(goal.kg)}` : null;
+  };
   const prescription = (e: SchemaExercise) =>
-    [
-      `${e.setsTarget} × ${e.repsTarget}`,
-      e.targetWeight ? `doel ${String(e.targetWeight).replace('.', ',')} kg` : null,
-      e.restSeconds ? `${e.restSeconds}s rust` : null,
-    ]
-      .filter(Boolean)
-      .join(' · ');
+    [`${e.setsTarget} × ${e.repsTarget}`, goalText(e), e.restSeconds ? `${e.restSeconds}s rust` : null].filter(Boolean).join(' · ');
+  const plannedName = (i: number) => plannedDay?.exercises[i]?.exerciseName ?? '';
   const extras = [
     { label: 'Warming-up', text: formatWarmupSummary(day.warmup ?? schema.formule7?.warmup) },
     { label: 'Cardio', text: formatCardioSummary(day.cardio ?? schema.formule7?.cardio) },
@@ -482,8 +540,29 @@ export const TrainingSessionView = ({
               {ex.exerciseName}
             </Typography>
             {/* Makkelijker, zwaarder en alternatieven bij een klacht; alleen voor trainers (knop verbergt zich anders). */}
-            <ExerciseInfoButton exerciseName={ex.exerciseName} size="medium" />
+            <ExerciseInfoButton
+              exerciseName={ex.exerciseName}
+              size="medium"
+              // Wisselen kan zolang deze oefening nog niet gelogd is; daarna hoort de log bij deze oefening.
+              onSwap={exLog ? undefined : (name) => swapExercise(current, name)}
+              plannedName={swaps[current] ? plannedName(current) : undefined}
+            />
           </Box>
+          {swaps[current] && (
+            <Typography sx={{ fontSize: 12, lineHeight: '16px', color: 'text.secondary', mt: 0.25 }}>
+              In plaats van {plannedName(current)}
+              {!exLog && (
+                <Box
+                  component="button"
+                  type="button"
+                  onClick={() => swapExercise(current, plannedName(current))}
+                  sx={{ all: 'unset', cursor: 'pointer', color: designTokens.primary, fontWeight: 600, ml: 1 }}
+                >
+                  Terugzetten
+                </Box>
+              )}
+            </Typography>
+          )}
           <Typography sx={{ fontSize: 13, lineHeight: '18px', color: 'text.secondary', mt: 0.25 }}>{prescription(ex)}</Typography>
           {ex.notes && (
             <Typography sx={{ fontSize: 12, lineHeight: '16px', color: 'text.secondary', fontStyle: 'italic', mt: 0.5 }}>{ex.notes}</Typography>
@@ -660,6 +739,7 @@ export const TrainingSessionView = ({
               </Typography>
               <Typography sx={{ fontSize: 11, lineHeight: '16px', opacity: 0.8 }} noWrap>
                 {log ? `${formatLogDetails(log) || 'gelogd'} · gelogd` : `${e.setsTarget} × ${e.repsTarget}`}
+                {swaps[i] ? ` · i.p.v. ${plannedName(i)}` : ''}
               </Typography>
             </Box>
           </Box>
@@ -777,6 +857,15 @@ export const TrainingSessionView = ({
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         sx={{ mb: 8 }}
       />
+      {unlock && (
+        <PrUnlockDialog
+          exerciseName={unlock.exerciseName}
+          record={unlock.record}
+          before={unlock.before}
+          personName={logTarget ? logTarget.displayName?.trim() || null : null}
+          onClose={() => setUnlock(null)}
+        />
+      )}
     <CheckinDialog
         open={checkinOpen}
         dayLabel={day?.dayLabel || 'de training'}

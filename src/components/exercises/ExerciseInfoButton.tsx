@@ -22,6 +22,7 @@ import {
   useTheme,
 } from '@mui/material';
 import SwapVertRoundedIcon from '@mui/icons-material/SwapVertRounded';
+import SwapHorizRoundedIcon from '@mui/icons-material/SwapHorizRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
@@ -94,7 +95,19 @@ export function useExerciseNotes(enabled = true): Map<string, ExerciseNote> | nu
   );
 }
 
-export function ExerciseInfoButton({ exerciseName, size = 'small' }: { exerciseName: string; size?: 'small' | 'medium' }) {
+export function ExerciseInfoButton({
+  exerciseName,
+  size = 'small',
+  onSwap,
+  plannedName,
+}: {
+  exerciseName: string;
+  size?: 'small' | 'medium';
+  /** Tijdens een training: een voorstel aantikken wisselt de oefening meteen (alleen voor deze training). */
+  onSwap?: (exerciseName: string) => void;
+  /** De oefening uit het schema, als er al gewisseld is: dan kun je terug. */
+  plannedName?: string;
+}) {
   const profile = useProfile();
   const isStaff = profile?.role === 'trainer' || profile?.role === 'admin';
   const notes = useExerciseNotes(isStaff);
@@ -122,17 +135,22 @@ export function ExerciseInfoButton({ exerciseName, size = 'small' }: { exerciseN
           <SwapVertRoundedIcon fontSize="small" />
         </IconButton>
       </Tooltip>
-      {open && <ExerciseInfoDialog exerciseName={exerciseName} note={note} onClose={() => setOpen(false)} />}
+      {open && (
+        <ExerciseInfoDialog exerciseName={exerciseName} note={note} onClose={() => setOpen(false)} onSwap={onSwap} plannedName={plannedName} />
+      )}
     </>
   );
 }
 
-/** Eén voorstel: gifje van de oefening (tik om te vergroten), naam en aanwijzing. */
-export function RefRow({ item }: { item: ExerciseRef }) {
+/**
+ * Eén voorstel: gifje van de oefening (tik om te vergroten), naam en aanwijzing. Met `onPick`
+ * (tijdens een training) staat er een knop achter om meteen naar deze oefening te wisselen.
+ */
+export function RefRow({ item, onPick }: { item: ExerciseRef; onPick?: (exerciseName: string) => void }) {
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minHeight: item.exercise ? 52 : 0 }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minHeight: item.exercise ? 52 : 0, flex: 1, minWidth: 0 }}>
       {item.exercise ? <ExerciseDbDemo exerciseName={item.exercise} variant="aside" /> : null}
-      <Box sx={{ minWidth: 0 }}>
+      <Box sx={{ minWidth: 0, flex: 1 }}>
         {item.exercise && (
           <Typography variant="body2" fontWeight={600}>
             {item.exercise}
@@ -144,11 +162,28 @@ export function RefRow({ item }: { item: ExerciseRef }) {
           </Typography>
         )}
       </Box>
+      {onPick && item.exercise && (
+        <Button
+          size="small"
+          startIcon={<SwapHorizRoundedIcon />}
+          onClick={() => onPick(item.exercise)}
+          aria-label={`Wissel naar ${item.exercise}`}
+          sx={{
+            flexShrink: 0,
+            bgcolor: designTokens.secondaryContainer,
+            color: designTokens.onSecondaryContainer,
+            px: 1.5,
+            '&:hover': { bgcolor: designTokens.secondaryContainer, filter: 'brightness(0.95)' },
+          }}
+        >
+          Wissel
+        </Button>
+      )}
     </Box>
   );
 }
 
-function Section({ title, items }: { title: string; items: ExerciseRef[] }) {
+function Section({ title, items, onPick }: { title: string; items: ExerciseRef[]; onPick?: (exerciseName: string) => void }) {
   if (items.length === 0) return null;
   const withExercise = items.filter((x) => x.exercise);
   const tips = items.filter((x) => !x.exercise);
@@ -159,7 +194,7 @@ function Section({ title, items }: { title: string; items: ExerciseRef[] }) {
       </Typography>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         {withExercise.map((x, i) => (
-          <RefRow key={i} item={x} />
+          <RefRow key={i} item={x} onPick={onPick} />
         ))}
       </Box>
       {tips.length > 0 && (
@@ -293,7 +328,7 @@ function standardAsNote(exerciseName: string) {
   };
 }
 
-function AlternativesList({ items }: { items: ExerciseAlternative[] }) {
+function AlternativesList({ items, onPick }: { items: ExerciseAlternative[]; onPick?: (exerciseName: string) => void }) {
   if (items.length === 0) return null;
   return (
     <Box sx={{ mb: 2 }}>
@@ -319,7 +354,7 @@ function AlternativesList({ items }: { items: ExerciseAlternative[] }) {
             >
               {a.reason || 'Overig'}
             </Box>
-            <RefRow item={a} />
+            <RefRow item={a} onPick={onPick} />
           </Box>
         ))}
       </Box>
@@ -341,7 +376,15 @@ function complaintOptions(note: ExerciseNote | null): string[] {
  * "Klacht van de sporter?": kies of typ een klacht en het systeem geeft een alternatief. Eerst wat
  * de studio zelf vastlegde, dan de ingebouwde standaard, en anders een slim voorstel (AI).
  */
-function ComplaintLookup({ exerciseName, note }: { exerciseName: string; note: ExerciseNote | null }) {
+function ComplaintLookup({
+  exerciseName,
+  note,
+  onPick,
+}: {
+  exerciseName: string;
+  note: ExerciseNote | null;
+  onPick?: (exerciseName: string) => void;
+}) {
   const [complaint, setComplaint] = useState('');
   const [answer, setAnswer] = useState<{ ref: ExerciseRef | null; text?: string; source: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -401,7 +444,7 @@ function ComplaintLookup({ exerciseName, note }: { exerciseName: string; note: E
       </Box>
       {answer && (
         <Box sx={{ mt: 1.25 }}>
-          {answer.ref ? <RefRow item={answer.ref} /> : <Typography variant="body2">{answer.text}</Typography>}
+          {answer.ref ? <RefRow item={answer.ref} onPick={onPick} /> : <Typography variant="body2">{answer.text}</Typography>}
           {answer.source && (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
               {answer.source}
@@ -418,11 +461,17 @@ export function ExerciseInfoDialog({
   note,
   onClose,
   startEditing = false,
+  onSwap,
+  plannedName,
 }: {
   exerciseName: string;
   note: ExerciseNote | null;
   onClose: () => void;
   startEditing?: boolean;
+  /** Tijdens een training: wisselen naar het aangetikte voorstel, daarna sluit het venster. */
+  onSwap?: (exerciseName: string) => void;
+  /** Geplande oefening als er al gewisseld is (dan staat er een knop om terug te gaan). */
+  plannedName?: string;
 }) {
   const notify = useNotify();
   const theme = useTheme();
@@ -521,6 +570,14 @@ export function ExerciseInfoDialog({
     setEditing(true);
   };
 
+  const pick = onSwap
+    ? (name: string) => {
+        onSwap(name);
+        onClose();
+      }
+    : undefined;
+  const swapped = !!plannedName && plannedName.trim().toLowerCase() !== exerciseName.trim().toLowerCase();
+
   const altRows: ExerciseAlternative[] = alternatives.length ? alternatives : [{ reason: '', exercise: '', note: '' }];
   const setAlt = (i: number, patch: Partial<ExerciseAlternative>) =>
     setAlternatives(altRows.map((x, j) => (j === i ? { ...x, ...patch } : x)));
@@ -550,15 +607,20 @@ export function ExerciseInfoDialog({
               : 'Oefeningenbibliotheek'}{' '}
           · alleen zichtbaar voor trainers
         </Typography>
+        {pick && !editing && (
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            {swapped ? `Gewisseld: in plaats van ${plannedName}. ` : ''}Tik op Wissel om de oefening alleen in deze training te vervangen.
+          </Typography>
+        )}
 
         {!editing ? (
           <>
-            <ComplaintLookup exerciseName={exerciseName} note={note} />
+            <ComplaintLookup exerciseName={exerciseName} note={note} onPick={pick} />
             {shown ? (
               <>
-                <Section title="Makkelijker (regressie)" items={shown.regressions} />
-                <Section title="Zwaarder (progressie)" items={shown.progressions} />
-                <AlternativesList items={shown.alternatives} />
+                <Section title="Makkelijker (regressie)" items={shown.regressions} onPick={pick} />
+                <Section title="Zwaarder (progressie)" items={shown.progressions} onPick={pick} />
+                <AlternativesList items={shown.alternatives} onPick={pick} />
                 {shown.tip && (
                   <Box sx={{ mb: 1 }}>
                     <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 2 }}>
@@ -708,9 +770,15 @@ export function ExerciseInfoDialog({
           </>
         ) : (
           <>
-            <Button onClick={adopt} sx={{ mr: 'auto' }}>
-              {hasOwn ? 'Bewerken' : standard ? 'Overnemen en aanpassen' : 'Invullen'}
-            </Button>
+            {pick && swapped && plannedName ? (
+              <Button onClick={() => pick(plannedName)} sx={{ mr: 'auto' }}>
+                Terug naar {plannedName}
+              </Button>
+            ) : (
+              <Button onClick={adopt} sx={{ mr: 'auto' }}>
+                {hasOwn ? 'Bewerken' : standard ? 'Overnemen en aanpassen' : 'Invullen'}
+              </Button>
+            )}
             <Button variant="contained" disableElevation onClick={onClose}>
               Sluiten
             </Button>

@@ -5,7 +5,7 @@
  * Werkt voor beide bronnen: je eigen logs staan lokaal op het toestel, die van een sporter komen
  * uit Firestore. Beide worden eerst tot dezelfde vorm teruggebracht.
  */
-import type { Exercise, ExerciseLog } from '../types';
+import type { Exercise, ExerciseEffort, ExerciseLog } from '../types';
 
 export interface PreviousPerformance {
   exerciseName: string;
@@ -14,6 +14,8 @@ export interface PreviousPerformance {
   reps: number | null;
   date: string;
   notes: string | null;
+  /** Hoe het ging: te licht / goed / te zwaar (als dat is ingevuld). */
+  effort?: ExerciseEffort | null;
 }
 
 function num(v: unknown): number | null {
@@ -62,6 +64,7 @@ export function localEntries(exercises: Exercise[]): PreviousPerformance[] {
       reps: num(ex.reps),
       date: ex.date,
       notes: ex.notes ?? null,
+      effort: ex.effort ?? null,
     }));
 }
 
@@ -76,6 +79,7 @@ export function sporterEntries(logs: ExerciseLog[]): PreviousPerformance[] {
       reps: num(l.reps),
       date: l.date,
       notes: l.notes ?? null,
+      effort: l.effort ?? null,
     }));
 }
 
