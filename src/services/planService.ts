@@ -57,6 +57,8 @@ function toMembership(data: Record<string, unknown>, id: string): Membership {
     nextRenewalAt: str(data.nextRenewalAt),
     expiresAt: str(data.expiresAt),
     lastRenewedAt: str(data.lastRenewedAt),
+    groupId: str(data.groupId),
+    billToUserId: str(data.billToUserId),
   };
 }
 

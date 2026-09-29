@@ -41,6 +41,7 @@ export const en: Messages = {
     title: 'Admin',
     tabs: {
       members: 'Members',
+      groups: 'Groups',
       classTypes: 'Class types',
       classPlanning: 'Class planning',
       exercises: 'Exercises',

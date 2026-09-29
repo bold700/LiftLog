@@ -8,7 +8,8 @@ import { doc, getDoc, setDoc, serverTimestamp, type Timestamp } from 'firebase/f
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
 import { callBooking } from './classService';
-import type { NotificationKind, Org, OrgAccountRetention, OrgBookingPolicy, OrgBranding, OrgBusiness, OrgNotificationSettings, OrgPaymentsStatus } from '../types';
+import type { NotificationKind, Org, OrgAccountRetention, OrgBookingPolicy, OrgBranding, OrgBusiness, OrgGroupPricing, OrgNotificationSettings, OrgPaymentsStatus } from '../types';
+import { groupPricingOf } from '../utils/groupPricing';
 
 const COLLECTION = 'orgs';
 
@@ -32,6 +33,7 @@ function toOrg(data: Record<string, unknown>, id: string): Org {
     business: toBusiness(data.business),
     payments: toPaymentsStatus(data.payments),
     bookingPolicy: toBookingPolicy(data.bookingPolicy),
+    groupPricing: groupPricingOf(data.groupPricing),
     notifications: toNotificationSettings(data.notifications),
     accountRetention: toAccountRetention(data.accountRetention),
     createdAt: ts(data.createdAt),
@@ -184,6 +186,15 @@ export async function saveOrgShowTrainerNames(orgId: string, show: boolean): Pro
   const id = orgId.trim();
   if (!id) throw new Error('Studio-id ontbreekt');
   await setDoc(doc(db, COLLECTION, id), { showTrainerNames: show === true, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+/** Groepsprijs (Beheer → Instellingen): basis per les plus per extra persoon, in euro's. */
+export async function saveOrgGroupPricing(orgId: string, pricing: OrgGroupPricing): Promise<void> {
+  if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
+  const id = orgId.trim();
+  if (!id) throw new Error('Studio-id ontbreekt');
+  const clean = groupPricingOf(pricing);
+  await setDoc(doc(db, COLLECTION, id), { groupPricing: clean, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 export async function saveOrgBookingPolicy(orgId: string, policy: OrgBookingPolicy): Promise<void> {

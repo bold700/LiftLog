@@ -8,6 +8,7 @@
  */
 
 import { reserveInvoiceNumber, vatRateOf } from './invoice.mjs';
+import { euros, groupPlanView } from './groups.mjs';
 
 /** Zoveel maanden verder, op dezelfde dag van de maand (31 januari + 1 → 28/29 februari). */
 export function addMonths(iso, months) {
@@ -150,7 +151,9 @@ export async function settleMembership(db, newId, membershipRef, nowIso) {
     if (m.status !== 'active') return { steps: 0 };
     const pSnap = await tx.get(db.collection('plans').doc(String(m.planId)));
     if (!pSnap.exists) return { steps: 0 };
-    const plan = { id: pSnap.id, ...pSnap.data() };
+    const basePlan = { id: pSnap.id, ...pSnap.data() };
+    // Groepsabonnement: het tegoed is in euro's (de prijs van het abonnement), zie groups.mjs.
+    const plan = m.groupId ? groupPlanView(basePlan) : basePlan;
     const accountRef = db.collection('creditAccounts').doc(accountId(m.orgId, m.userId));
     const aSnap = await tx.get(accountRef);
     const balance = Number(aSnap.exists ? aSnap.data().balance : 0) || 0;
@@ -167,8 +170,9 @@ export async function settleMembership(db, newId, membershipRef, nowIso) {
       if (step.kind === 'renewal' && (Number(plan.price) || 0) > 0) {
         const invoiceNumber = reserveInvoiceNumber(tx, orgRef, counterSnap, nowIso);
         counterSnap = bumpedCounter(counterSnap);
-        const charge = newCharge({ id: newId('ch'), orgId: m.orgId, userId: m.userId, plan, membershipId: mSnap.id, periodStartIso: step.periodStart, nowIso, invoiceNumber });
-        tx.set(db.collection('charges').doc(charge.id), charge);
+        // Groepsabonnement: het tegoed staat op de groep, de post gaat naar het hoofdprofiel.
+        const charge = newCharge({ id: newId('ch'), orgId: m.orgId, userId: m.billToUserId || m.userId, plan, membershipId: mSnap.id, periodStartIso: step.periodStart, nowIso, invoiceNumber });
+        tx.set(db.collection('charges').doc(charge.id), m.groupId ? { ...charge, groupId: m.groupId } : charge);
       }
       if (step.delta === 0) continue;
       tx.set(db.collection('creditLedger').doc(newId('cl')), {
@@ -182,7 +186,7 @@ export async function settleMembership(db, newId, membershipRef, nowIso) {
         createdAt: nowIso,
       });
     }
-    tx.set(accountRef, { orgId: m.orgId, userId: m.userId, balance: result.balance, updatedAt: nowIso }, { merge: true });
+    tx.set(accountRef, { orgId: m.orgId, userId: m.userId, ...(m.groupId ? { unit: 'eur', groupId: m.groupId } : {}), balance: m.groupId ? euros(result.balance) : result.balance, updatedAt: nowIso }, { merge: true });
     tx.set(membershipRef, { ...result.membership, updatedAt: nowIso }, { merge: true });
     return { steps: result.steps.length };
   });

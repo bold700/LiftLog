@@ -544,9 +544,21 @@ service cloud.firestore {
 
     // Creditsaldo per persoon per studio. Lezen: jezelf, of de staf van je studio.
     // Schrijven: alleen de server, zodat saldo en grootboek nooit uit elkaar lopen.
+    // Een groepstegoed (userId `grp_{groupId}`, in euro's) mogen de leden van die groep zien.
     match /creditAccounts/{accountId} {
       allow read: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+        && (resource.data.userId == request.auth.uid
+            || request.auth.uid in resource.data.get('memberIds', [])
+            || isStaffInSameOrg());
+      allow write: if false;
+    }
+
+    // Groepen (Beheer → Groepen): bedrijf, gezin of vriendengroep met één hoofdprofiel dat betaalt.
+    // Alleen de server schrijft ze (api/booking.mjs: saveGroup/deleteGroup); staf van de studio en
+    // de leden van de groep zelf mogen ze lezen.
+    match /groups/{groupId} {
+      allow read: if isSignedIn()
+        && (request.auth.uid in resource.data.get('memberIds', []) || isStaffInSameOrg());
       allow write: if false;
     }
 
@@ -568,9 +580,12 @@ service cloud.firestore {
     // Lidmaatschappen: wie welk abonnement heeft en wanneer het verlengt. Lezen: jezelf of de
     // staf van je studio. Schrijven: alleen de server (api/booking.mjs), die tegelijk het
     // grootboek bijwerkt.
+    // Een groepsabonnement ziet ook het hoofdprofiel dat de facturen krijgt (`billToUserId`).
     match /memberships/{membershipId} {
       allow read: if isSignedIn()
-        && (resource.data.userId == request.auth.uid || isStaffInSameOrg());
+        && (resource.data.userId == request.auth.uid
+            || resource.data.get('billToUserId', '') == request.auth.uid
+            || isStaffInSameOrg());
       allow write: if false;
     }
 

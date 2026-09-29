@@ -30,6 +30,10 @@ import { applyCors } from './_lib/cors.mjs';
  *   { action: 'setMemberActive', userId, active }      lid (de)activeren bij deze studio (beheerder)
  *   { action: 'setTrainsAsMember', userId, on }        trainer/beheerder traint ook mee als lid: betaalt
  *                                                        credits, kan abonnement en facturen krijgen (beheerder)
+ *   { action: 'saveGroup', groupId?, name, kind, memberIds, payerId }  groep (bedrijf/gezin/vrienden) opslaan (staf)
+ *   { action: 'deleteGroup', groupId }                 groep weghalen, als er geen abonnement of tegoed meer op staat (staf)
+ *                                                        grant/assign/unassign met `groupId` i.p.v. `userId`: het groepstegoed;
+ *                                                        de posten van een groepsabonnement gaan naar het hoofdprofiel
  *   { action: 'mailStatus' }                           is versturen ingericht? (staf)
  *   { action: 'savePaymentKey', orgId, mode, apiKey }  Mollie-sleutel koppelen, geverifieerd (beheerder)
  *   { action: 'removePaymentKey', orgId, mode }        Mollie-sleutel loskoppelen (beheerder)
@@ -77,6 +81,7 @@ import { actingOrg, isAdminIn, isInactiveIn, isStaffAnywhere, isStaffIn, orgsOf,
 import { randomBytes } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { activeMembership, newCharge, newMembership, settleMembership } from './_lib/subscriptions.mjs';
+import { cleanGroupInput, euros, groupHolderId, MAX_GROUP_ADJUST } from './_lib/groups.mjs';
 import { businessOf, dueDateOf, reserveInvoiceNumber, vatRateOf } from './_lib/invoice.mjs';
 import { buildInvoicePdf, invoiceFileName } from './_lib/invoicePdf.mjs';
 import { logoToDataUrl } from './_lib/invoiceLogo.mjs';
@@ -259,6 +264,12 @@ export default async function handler(req, res) {
         return await generateClassOccurrencesNow(res, db, myOrgs, isStaff, String(body.classTypeId ?? '').trim());
       case 'pruneStaleClasses':
         return await pruneStaleClasses(res, db, myOrgs, isStaff);
+      case 'saveGroup':
+        if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan groepen beheren.', build: BUILD });
+        return await saveGroup(res, db, uid, myOrgs, body);
+      case 'deleteGroup':
+        if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan groepen beheren.', build: BUILD });
+        return await deleteGroup(res, db, myOrgs, String(body.groupId ?? '').trim());
       case 'grant':
         if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan credits aanpassen.', build: BUILD });
         return await grant(res, db, uid, myOrgs, body);
@@ -1323,37 +1334,50 @@ async function pauseStandingBooking(res, db, uid, myOrgs, isStaff, body) {
 
 /** Credits handmatig aanpassen (toekennen of afboeken). Elke mutatie komt ook in het grootboek te staan. */
 async function grant(res, db, uid, myOrgs, body) {
-  const targetUserId = String(body?.userId ?? '').trim();
   const amount = Number(body?.amount);
   const note = typeof body?.note === 'string' ? body.note.slice(0, 200) : '';
+  const group = body?.groupId ? await loadGroup(db, myOrgs, body.groupId) : null;
+  const targetUserId = group ? groupHolderId(group.id) : String(body?.userId ?? '').trim();
 
   if (!targetUserId) return json(res, 400, { error: 'Geen sporter opgegeven.', build: BUILD });
-  if (!Number.isInteger(amount) || amount === 0 || Math.abs(amount) > MAX_GRANT) {
+  // Groepstegoed is in euro's (op de cent), persoonlijk tegoed in hele credits.
+  if (group) {
+    if (!Number.isFinite(amount) || euros(amount) === 0 || Math.abs(amount) > MAX_GROUP_ADJUST) {
+      return json(res, 400, { error: `Vul een bedrag in tussen -€${MAX_GROUP_ADJUST} en €${MAX_GROUP_ADJUST}.`, build: BUILD });
+    }
+  } else if (!Number.isInteger(amount) || amount === 0 || Math.abs(amount) > MAX_GRANT) {
     return json(res, 400, { error: `Vul een heel aantal credits in tussen -${MAX_GRANT} en ${MAX_GRANT}.`, build: BUILD });
   }
 
-  const targetSnap = await db.collection('profiles').doc(targetUserId).get();
-  if (!targetSnap.exists) return json(res, 404, { error: 'Sporter niet gevonden.', build: BUILD });
-  const target = targetSnap.data() ?? {};
-  const targetOrgs = Array.isArray(target.orgIds) && target.orgIds.length ? target.orgIds.map(String) : [orgIdOf(target.orgId)];
-
-  // De studio waar jullie elkaar treffen; credits horen bij één studio.
-  const orgId = myOrgs.find((o) => targetOrgs.includes(o));
-  if (!orgId) return json(res, 403, { error: 'Deze sporter zit niet in jouw studio.', build: BUILD });
+  let orgId = group?.orgId ?? null;
+  if (!group) {
+    const targetSnap = await db.collection('profiles').doc(targetUserId).get();
+    if (!targetSnap.exists) return json(res, 404, { error: 'Sporter niet gevonden.', build: BUILD });
+    const target = targetSnap.data() ?? {};
+    const targetOrgs = Array.isArray(target.orgIds) && target.orgIds.length ? target.orgIds.map(String) : [orgIdOf(target.orgId)];
+    // De studio waar jullie elkaar treffen; credits horen bij één studio.
+    orgId = myOrgs.find((o) => targetOrgs.includes(o));
+    if (!orgId) return json(res, 403, { error: 'Deze sporter zit niet in jouw studio.', build: BUILD });
+  }
+  const groupFields = group ? { groupId: group.id, memberIds: group.memberIds, unit: 'eur' } : {};
+  const delta = group ? euros(amount) : amount;
 
   const result = await db.runTransaction(async (tx) => {
     const accountRef = db.collection('creditAccounts').doc(accountId(orgId, targetUserId));
     const snap = await tx.get(accountRef);
     const balance = Number(snap.exists ? snap.data().balance : 0) || 0;
-    const next = balance + amount;
-    if (next < 0) throw refuse(`Dat zou het saldo op ${next} zetten; er staan er ${balance}.`);
+    const next = group ? euros(balance + delta) : balance + delta;
+    if (next < 0) {
+      throw refuse(group ? `Dat zou het groepstegoed op €${next} zetten; er staat €${balance}.` : `Dat zou het saldo op ${next} zetten; er staan er ${balance}.`);
+    }
 
     const now = new Date().toISOString();
-    tx.set(accountRef, { orgId, userId: targetUserId, balance: next, updatedAt: now }, { merge: true });
+    tx.set(accountRef, { orgId, userId: targetUserId, ...groupFields, balance: next, updatedAt: now }, { merge: true });
     tx.set(db.collection('creditLedger').doc(newId('cl')), {
       orgId,
       userId: targetUserId,
-      delta: amount,
+      ...(group ? { groupId: group.id, unit: 'eur' } : {}),
+      delta,
       reason: 'manual',
       note,
       byUserId: uid,
@@ -1363,6 +1387,71 @@ async function grant(res, db, uid, myOrgs, body) {
   });
 
   return json(res, 200, { ...result, build: BUILD });
+}
+
+// --- Groepen ----------------------------------------------------------------------
+
+/** Een groep van jouw studio, of een weigering (404) als die niet bestaat of van een andere studio is. */
+async function loadGroup(db, myOrgs, groupId) {
+  const id = String(groupId ?? '').trim();
+  const snap = id ? await db.collection('groups').doc(id).get() : null;
+  const g = snap?.exists ? snap.data() : null;
+  if (!g || !myOrgs.includes(orgIdOf(g.orgId))) throw refuse('Deze groep hoort niet bij jouw studio.', 404);
+  return { ...g, id, orgId: orgIdOf(g.orgId), memberIds: (g.memberIds ?? []).map(String), payerId: String(g.payerId) };
+}
+
+/**
+ * Groep aanmaken of bijwerken (Beheer → Groepen). Alle leden moeten actief lid van de studio zijn.
+ * Tegoed en abonnement volgen mee: wie het groepssaldo mag zien (`memberIds` op het creditAccount)
+ * en wie de volgende factuur krijgt (`billToUserId` op het lidmaatschap).
+ */
+async function saveGroup(res, db, uid, myOrgs, body) {
+  const input = cleanGroupInput(body);
+  if (input.error) return json(res, 400, { error: input.error, build: BUILD });
+  const orgId = myOrgs[0];
+  for (const memberId of input.value.memberIds) await requireMemberOfMyOrgs(db, myOrgs, memberId);
+
+  const existingId = String(body?.groupId ?? '').trim();
+  if (existingId) await loadGroup(db, myOrgs, existingId);
+  const groupId = existingId || newId('g');
+  const ref = db.collection('groups').doc(groupId);
+  const prev = existingId ? (await ref.get()).data() ?? {} : {};
+  const now = new Date().toISOString();
+  const group = {
+    id: groupId,
+    orgId,
+    ...input.value,
+    createdAt: prev.createdAt ?? now,
+    createdBy: prev.createdBy ?? uid,
+    updatedAt: now,
+  };
+  await ref.set(group);
+
+  const holder = groupHolderId(groupId);
+  const accountRef = db.collection('creditAccounts').doc(accountId(orgId, holder));
+  if ((await accountRef.get()).exists) await accountRef.set({ memberIds: group.memberIds, groupId, updatedAt: now }, { merge: true });
+  const current = await activeMembership(db, orgId, holder);
+  if (current && current.billToUserId !== group.payerId) {
+    await db.collection('memberships').doc(current.id).set({ billToUserId: group.payerId, updatedAt: now }, { merge: true });
+  }
+  return json(res, 200, { group, build: BUILD });
+}
+
+/**
+ * Groep weghalen. Loopt er nog een abonnement of staat er nog tegoed op, dan eerst dat regelen:
+ * anders blijft er gefactureerd worden, of verdwijnen credits waar al voor betaald is.
+ */
+async function deleteGroup(res, db, myOrgs, groupId) {
+  const group = await loadGroup(db, myOrgs, groupId);
+  const holder = groupHolderId(group.id);
+  if (await activeMembership(db, group.orgId, holder)) {
+    return json(res, 409, { error: 'Stop eerst het abonnement van deze groep.', build: BUILD });
+  }
+  const account = await db.collection('creditAccounts').doc(accountId(group.orgId, holder)).get();
+  const balance = Number(account.exists ? account.data().balance : 0) || 0;
+  if (balance > 0) return json(res, 409, { error: `Er staan nog ${balance} credits op deze groep. Zet die eerst op 0.`, build: BUILD });
+  await db.collection('groups').doc(group.id).delete();
+  return json(res, 200, { deleted: true, build: BUILD });
 }
 
 // --- Abonnementen -----------------------------------------------------------------
@@ -1379,14 +1468,22 @@ function sharedOrg(myOrgs, target) {
  * de eerste verlenging).
  */
 async function assign(res, db, uid, myOrgs, body) {
-  const targetUserId = String(body?.userId ?? '').trim();
+  // Groep: het abonnement staat op het groepstegoed, de posten gaan naar het hoofdprofiel.
+  const group = body?.groupId ? await loadGroup(db, myOrgs, body.groupId) : null;
+  const targetUserId = group ? groupHolderId(group.id) : String(body?.userId ?? '').trim();
   const planId = String(body?.planId ?? '').trim();
   if (!targetUserId || !planId) return json(res, 400, { error: 'Lid of abonnement ontbreekt.', build: BUILD });
 
-  const targetSnap = await db.collection('profiles').doc(targetUserId).get();
-  if (!targetSnap.exists) return json(res, 404, { error: 'Lid niet gevonden.', build: BUILD });
-  const orgId = sharedOrg(myOrgs, targetSnap.data() ?? {});
-  if (!orgId) return json(res, 403, { error: 'Dit lid zit niet in jouw studio.', build: BUILD });
+  let orgId = group?.orgId ?? null;
+  if (!group) {
+    const targetSnap = await db.collection('profiles').doc(targetUserId).get();
+    if (!targetSnap.exists) return json(res, 404, { error: 'Lid niet gevonden.', build: BUILD });
+    orgId = sharedOrg(myOrgs, targetSnap.data() ?? {});
+    if (!orgId) return json(res, 403, { error: 'Dit lid zit niet in jouw studio.', build: BUILD });
+  }
+  const billTo = group ? group.payerId : targetUserId;
+  const groupFields = group ? { groupId: group.id } : {};
+  const groupAccountFields = group ? { groupId: group.id, memberIds: group.memberIds, unit: 'eur' } : {};
 
   const planSnap = await db.collection('plans').doc(planId).get();
   if (!planSnap.exists || orgIdOf(planSnap.data().orgId) !== orgId) return json(res, 404, { error: 'Abonnement niet gevonden.', build: BUILD });
@@ -1394,8 +1491,9 @@ async function assign(res, db, uid, myOrgs, body) {
 
   const nowIso = new Date().toISOString();
   const current = await activeMembership(db, orgId, targetUserId);
-  const membership = newMembership({ id: newId('mb'), orgId, userId: targetUserId, plan, nowIso, byUserId: uid });
-  const credits = plan.credits == null ? 0 : Number(plan.credits) || 0;
+  const membership = { ...newMembership({ id: newId('mb'), orgId, userId: targetUserId, plan, nowIso, byUserId: uid }), ...(group ? { billToUserId: billTo, groupId: group.id } : {}) };
+  // Groep: de prijs van het abonnement komt als tegoed in euro's op de groep (zie groups.mjs).
+  const credits = group ? euros(plan.price) : plan.credits == null ? 0 : Number(plan.credits) || 0;
 
   const balance = await db.runTransaction(async (tx) => {
     const accountRef = db.collection('creditAccounts').doc(accountId(orgId, targetUserId));
@@ -1408,14 +1506,15 @@ async function assign(res, db, uid, myOrgs, body) {
     // Eerste post: de eerste periode (maand of de kaart zelf), tenzij het plan gratis is. Met factuurnummer.
     if ((Number(plan.price) || 0) > 0) {
       const invoiceNumber = reserveInvoiceNumber(tx, orgRef, orgSnap, nowIso);
-      const charge = newCharge({ id: newId('ch'), orgId, userId: targetUserId, plan, membershipId: membership.id, periodStartIso: nowIso, nowIso, invoiceNumber });
-      tx.set(db.collection('charges').doc(charge.id), charge);
+      const charge = newCharge({ id: newId('ch'), orgId, userId: billTo, plan, membershipId: membership.id, periodStartIso: nowIso, nowIso, invoiceNumber });
+      tx.set(db.collection('charges').doc(charge.id), { ...charge, ...groupFields });
     }
     if (credits > 0) {
-      tx.set(accountRef, { orgId, userId: targetUserId, balance: saldo + credits, updatedAt: nowIso }, { merge: true });
+      tx.set(accountRef, { orgId, userId: targetUserId, ...groupAccountFields, balance: group ? euros(saldo + credits) : saldo + credits, updatedAt: nowIso }, { merge: true });
       tx.set(db.collection('creditLedger').doc(newId('cl')), {
         orgId,
         userId: targetUserId,
+        ...(group ? { groupId: group.id, unit: 'eur' } : {}),
         delta: credits,
         reason: 'plan',
         planId: plan.id,
@@ -1424,7 +1523,7 @@ async function assign(res, db, uid, myOrgs, body) {
         createdAt: nowIso,
       });
     }
-    return saldo + credits;
+    return group ? euros(saldo + credits) : saldo + credits;
   });
 
   return json(res, 200, { membershipId: membership.id, balance, build: BUILD });
@@ -1432,12 +1531,16 @@ async function assign(res, db, uid, myOrgs, body) {
 
 /** Lidmaatschap stoppen; credits die er staan blijven staan. */
 async function unassign(res, db, uid, myOrgs, body) {
-  const targetUserId = String(body?.userId ?? '').trim();
+  const group = body?.groupId ? await loadGroup(db, myOrgs, body.groupId) : null;
+  const targetUserId = group ? groupHolderId(group.id) : String(body?.userId ?? '').trim();
   if (!targetUserId) return json(res, 400, { error: 'Geen lid opgegeven.', build: BUILD });
-  const targetSnap = await db.collection('profiles').doc(targetUserId).get();
-  if (!targetSnap.exists) return json(res, 404, { error: 'Lid niet gevonden.', build: BUILD });
-  const orgId = sharedOrg(myOrgs, targetSnap.data() ?? {});
-  if (!orgId) return json(res, 403, { error: 'Dit lid zit niet in jouw studio.', build: BUILD });
+  let orgId = group?.orgId ?? null;
+  if (!group) {
+    const targetSnap = await db.collection('profiles').doc(targetUserId).get();
+    if (!targetSnap.exists) return json(res, 404, { error: 'Lid niet gevonden.', build: BUILD });
+    orgId = sharedOrg(myOrgs, targetSnap.data() ?? {});
+    if (!orgId) return json(res, 403, { error: 'Dit lid zit niet in jouw studio.', build: BUILD });
+  }
 
   const current = await activeMembership(db, orgId, targetUserId);
   if (!current) return json(res, 200, { stopped: false, build: BUILD });

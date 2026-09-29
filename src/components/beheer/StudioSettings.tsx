@@ -8,9 +8,11 @@ import { ContentCard } from '../layout';
 import { AccountRetentionSettings } from './AccountRetentionSettings';
 import { useProfile } from '../../context/ProfileContext';
 import { useNotify } from '../../context/NotifyContext';
+import { DEFAULT_GROUP_PRICING, formatEuro, groupPricingOf, groupSessionPrice } from '../../utils/groupPricing';
 import {
   getOrg,
   saveOrgBookingPolicy,
+  saveOrgGroupPricing,
   saveOrgShowTrainerNames,
   saveOrgStaffAccess,
   saveOrgStudioCancelRefund,
@@ -34,6 +36,10 @@ export function StudioSettings() {
   const [studioRefund, setStudioRefund] = useState(false);
   const [savingRefund, setSavingRefund] = useState(false);
   const [savingNames, setSavingNames] = useState(false);
+  const [groupBase, setGroupBase] = useState(String(DEFAULT_GROUP_PRICING.base));
+  const [groupExtra, setGroupExtra] = useState(String(DEFAULT_GROUP_PRICING.perExtra));
+  const [savedGroup, setSavedGroup] = useState(`${DEFAULT_GROUP_PRICING.base}|${DEFAULT_GROUP_PRICING.perExtra}`);
+  const [savingGroup, setSavingGroup] = useState(false);
 
   useEffect(() => {
     if (!orgId) return;
@@ -46,6 +52,10 @@ export function StudioSettings() {
       setStaffAccess(org.staffFullClientAccess);
       setShowNames(org.showTrainerNames);
       setStudioRefund(org.studioCancelRefund);
+      const gp = groupPricingOf(org.groupPricing);
+      setGroupBase(String(gp.base));
+      setGroupExtra(String(gp.perExtra));
+      setSavedGroup(`${gp.base}|${gp.perExtra}`);
       setLoaded(true);
     });
     return () => {
@@ -75,6 +85,23 @@ export function StudioSettings() {
       notify.error('Boekingsbeleid opslaan mislukt.', e);
     } finally {
       setSavingPolicy(false);
+    }
+  };
+
+  const baseNum = Number(groupBase.replace(',', '.'));
+  const extraNum = Number(groupExtra.replace(',', '.'));
+  const groupValid = groupBase.trim() !== '' && groupExtra.trim() !== '' && Number.isFinite(baseNum) && baseNum >= 0 && Number.isFinite(extraNum) && extraNum >= 0;
+  const groupDirty = `${baseNum}|${extraNum}` !== savedGroup;
+  const saveGroupPricing = async () => {
+    setSavingGroup(true);
+    try {
+      await saveOrgGroupPricing(orgId, { base: baseNum, perExtra: extraNum });
+      setSavedGroup(`${baseNum}|${extraNum}`);
+      notify.success('Groepsprijs opgeslagen.');
+    } catch (e) {
+      notify.error('Groepsprijs opslaan mislukt.', e);
+    } finally {
+      setSavingGroup(false);
     }
   };
 
@@ -162,6 +189,29 @@ export function StudioSettings() {
             control={<Switch checked={studioRefund} disabled={savingRefund} onChange={(e) => void toggleRefund(e.target.checked)} />}
             label="Credit terug als de studio iemand afmeldt"
           />
+        </ContentCard>
+
+        <ContentCard>
+          <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+            Groepsprijs
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Wat een les kost voor een groep (bedrijf, gezin, vrienden): een prijs voor de eerste persoon plus een bedrag per
+            extra persoon, naar wie er komt. Meldt iemand zich op tijd af, dan wordt de les goedkoper en blijft het verschil
+            op het groepstegoed staan.
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <TextField label="Per les (€)" size="small" value={groupBase} onChange={(e) => setGroupBase(e.target.value)} inputProps={{ inputMode: 'decimal' }} sx={{ width: 140 }} />
+            <TextField label="Per extra persoon (€)" size="small" value={groupExtra} onChange={(e) => setGroupExtra(e.target.value)} inputProps={{ inputMode: 'decimal' }} sx={{ width: 180 }} />
+            <Button variant="contained" disableElevation onClick={() => void saveGroupPricing()} disabled={savingGroup || !groupValid || !groupDirty}>
+              {savingGroup ? 'Bezig…' : 'Opslaan'}
+            </Button>
+          </Box>
+          {groupValid && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              {[1, 2, 3, 4].map((n) => `${n} ${n === 1 ? 'persoon' : 'personen'}: ${formatEuro(groupSessionPrice({ base: baseNum, perExtra: extraNum }, n))}`).join(' · ')}
+            </Typography>
+          )}
         </ContentCard>
 
         <ContentCard>

@@ -321,6 +321,8 @@ export interface Org {
   payments: OrgPaymentsStatus;
   /** Wanneer afmelden nog gratis is (Beheer → Instellingen). Ontbreekt dit, dan geldt het standaard aantal uur van de server. */
   bookingPolicy?: OrgBookingPolicy | null;
+  /** Prijs van een groepsles (Beheer → Instellingen): basis plus per extra persoon. Ontbreekt dit, dan €85 + €25. */
+  groupPricing?: OrgGroupPricing | null;
   /**
    * Accounts die lang niet zijn gebruikt automatisch verwijderen (Beheer → Instellingen). Alleen de
    * eigenaar zet dit aan; de dagelijkse ronde op de server doet de rest (api/_lib/accountRetention.mjs).
@@ -628,6 +630,30 @@ export interface OrgBookingPolicy {
   freeCancelHours: number;
 }
 
+/** Groepsprijs: een groepsles kost `base` voor de eerste persoon en `perExtra` voor elke volgende. */
+export interface OrgGroupPricing {
+  base: number;
+  perExtra: number;
+}
+
+export type GroupKind = 'bedrijf' | 'gezin' | 'vrienden';
+
+/**
+ * Groep (Beheer → Groepen): bedrijf, gezin of vriendengroep die samen traint. Elk lid heeft een
+ * eigen account; het hoofdprofiel (`payerId`) krijgt de facturen. Tegoed en abonnement van de groep
+ * staan op `grp_{id}` (zie `groupHolderId`), in euro's. Alleen de server schrijft groepen.
+ */
+export interface Group {
+  id: string;
+  orgId: string;
+  name: string;
+  kind: GroupKind;
+  memberIds: string[];
+  payerId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** Abonnement (Beheer → Abonnementen): wat een lid krijgt en wat het kost. */
 export interface Plan {
   id: string;
@@ -668,6 +694,9 @@ export interface Membership {
   nextRenewalAt: string | null;
   expiresAt: string | null;
   lastRenewedAt: string | null;
+  /** Groepsabonnement: welke groep, en wie de posten krijgt (het hoofdprofiel). */
+  groupId?: string | null;
+  billToUserId?: string | null;
 }
 
 /** Post (Beheer → Facturatie): wat een lid verschuldigd is voor een periode van zijn abonnement. */

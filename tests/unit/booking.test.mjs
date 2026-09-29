@@ -1965,3 +1965,101 @@ describe('staf traint ook mee als lid', () => {
     expect(store['profiles/trainer1'].trainsAsMemberOrgs).toEqual([]);
   });
 });
+
+describe('groepen', () => {
+  const seed = () => {
+    store['profiles/admin1'] = { userId: 'admin1', orgId: 'vanas', orgIds: ['vanas'], role: 'admin' };
+    store['plans/plG'] = { orgId: 'vanas', name: 'Pouw 4 weken', period: 'fourWeeks', price: 771, credits: null, rollover: 'expire', vatRate: 9, availableTo: 'invite' };
+    store['orgs/vanas'] = { name: 'Van As', business: { invoicePrefix: 'VAS-2026-', nextInvoiceNumber: 10 } };
+  };
+  const makeGroup = async (extra = {}) =>
+    post({ action: 'saveGroup', name: 'Pouw', kind: 'gezin', memberIds: ['sporter1', 'sporter2'], payerId: 'sporter1', ...extra }, 'trainer1');
+
+  it('alleen staf beheert groepen', async () => {
+    seed();
+    const res = await post({ action: 'saveGroup', name: 'Pouw', memberIds: ['sporter1'], payerId: 'sporter1' }, 'sporter1');
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('groep opslaan: leden van de studio, hoofdprofiel moet erin zitten', async () => {
+    seed();
+    const res = await makeGroup();
+    expect(res.statusCode).toBe(200);
+    const g = res.body.group;
+    expect(store[`groups/${g.id}`]).toMatchObject({ orgId: 'vanas', name: 'Pouw', kind: 'gezin', memberIds: ['sporter1', 'sporter2'], payerId: 'sporter1' });
+    expect((await makeGroup({ payerId: 'sporterB' })).statusCode).toBe(400);
+    expect((await makeGroup({ memberIds: ['sporter1', 'sporterB'] })).statusCode).toBe(403);
+    store['profiles/sporter2'].inactiveOrgs = ['vanas'];
+    expect((await makeGroup()).statusCode).toBe(409);
+  });
+
+  it('groepsabonnement: prijs als tegoed in euro\'s op de groep, post naar het hoofdprofiel', async () => {
+    seed();
+    const g = (await makeGroup()).body.group;
+    const res = await post({ action: 'assign', groupId: g.id, planId: 'plG' }, 'trainer1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.balance).toBe(771);
+    expect(store[`creditAccounts/vanas__grp_${g.id}`]).toMatchObject({ userId: `grp_${g.id}`, groupId: g.id, unit: 'eur', balance: 771, memberIds: ['sporter1', 'sporter2'] });
+    const membership = Object.entries(store).find(([k, v]) => k.startsWith('memberships/') && v.groupId === g.id)[1];
+    expect(membership).toMatchObject({ userId: `grp_${g.id}`, billToUserId: 'sporter1', status: 'active' });
+    const charge = Object.entries(store).find(([k]) => k.startsWith('charges/'))[1];
+    expect(charge).toMatchObject({ userId: 'sporter1', groupId: g.id, amount: 771, invoiceNumber: 'VAS-2026-0010' });
+    // Geen persoonlijke credits voor het hoofdprofiel.
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(3);
+  });
+
+  it('ander hoofdprofiel: de volgende factuur gaat naar die persoon', async () => {
+    seed();
+    const g = (await makeGroup()).body.group;
+    await post({ action: 'assign', groupId: g.id, planId: 'plG' }, 'trainer1');
+    await makeGroup({ groupId: g.id, payerId: 'sporter2' });
+    const membership = Object.entries(store).find(([k, v]) => k.startsWith('memberships/') && v.groupId === g.id)[1];
+    expect(membership.billToUserId).toBe('sporter2');
+  });
+
+  it('verlenging: tegoed komt erbij (restant blijft), post naar het hoofdprofiel', async () => {
+    seed();
+    const g = (await makeGroup()).body.group;
+    await post({ action: 'assign', groupId: g.id, planId: 'plG' }, 'trainer1');
+    const [key] = Object.entries(store).find(([k, v]) => k.startsWith('memberships/') && v.groupId === g.id);
+    store[key].nextRenewalAt = new Date(Date.now() - 1000).toISOString();
+    store[`creditAccounts/vanas__grp_${g.id}`].balance = 50;
+    const res = await post({ action: 'renewDue', orgId: 'vanas' }, 'trainer1');
+    expect(res.body.steps).toBe(1);
+    expect(store[`creditAccounts/vanas__grp_${g.id}`].balance).toBe(821);
+    const charges = Object.entries(store).filter(([k]) => k.startsWith('charges/')).map(([, v]) => v);
+    expect(charges).toHaveLength(2);
+    expect(charges.every((c) => c.userId === 'sporter1' && c.groupId === g.id)).toBe(true);
+  });
+
+  it('groepstegoed bijstellen in euro\'s, niet onder nul', async () => {
+    seed();
+    const g = (await makeGroup()).body.group;
+    const plus = await post({ action: 'grant', groupId: g.id, amount: 12.5 }, 'trainer1');
+    expect(plus.body.balance).toBe(12.5);
+    expect((await post({ action: 'grant', groupId: g.id, amount: -20 }, 'trainer1')).statusCode).toBe(409);
+    const min = await post({ action: 'grant', groupId: g.id, amount: -2.25 }, 'trainer1');
+    expect(min.body.balance).toBe(10.25);
+  });
+
+  it('een groep van een andere studio is onbereikbaar', async () => {
+    seed();
+    store['groups/gB'] = { id: 'gB', orgId: 'studiob', name: 'B', memberIds: ['sporterB'], payerId: 'sporterB' };
+    expect((await post({ action: 'grant', groupId: 'gB', amount: 10 }, 'trainer1')).statusCode).toBe(404);
+    expect((await post({ action: 'assign', groupId: 'gB', planId: 'plG' }, 'trainer1')).statusCode).toBe(404);
+    expect((await post({ action: 'deleteGroup', groupId: 'gB' }, 'trainer1')).statusCode).toBe(404);
+  });
+
+  it('verwijderen pas zonder abonnement en zonder tegoed', async () => {
+    seed();
+    const g = (await makeGroup()).body.group;
+    await post({ action: 'assign', groupId: g.id, planId: 'plG' }, 'trainer1');
+    expect((await post({ action: 'deleteGroup', groupId: g.id }, 'trainer1')).statusCode).toBe(409);
+    await post({ action: 'unassign', groupId: g.id }, 'trainer1');
+    expect((await post({ action: 'deleteGroup', groupId: g.id }, 'trainer1')).statusCode).toBe(409);
+    await post({ action: 'grant', groupId: g.id, amount: -771 }, 'trainer1');
+    const res = await post({ action: 'deleteGroup', groupId: g.id }, 'trainer1');
+    expect(res.body.deleted).toBe(true);
+    expect(store[`groups/${g.id}`]).toBeUndefined();
+  });
+});

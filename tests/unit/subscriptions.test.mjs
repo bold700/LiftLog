@@ -89,3 +89,21 @@ describe('abonnementen', () => {
     expect(c.description).toBe('Week 2 · 2026-09-27');
   });
 });
+
+describe('groepsprijs (groups.mjs)', async () => {
+  const { groupSessionPrice, groupPricingOf, cleanGroupInput, groupPlanView } = await import('../../api/_lib/groups.mjs');
+  it('€85 plus €25 per extra persoon; niemand is niets', () => {
+    const p = groupPricingOf(undefined);
+    expect([0, 1, 2, 3, 4].map((n) => groupSessionPrice(p, n))).toEqual([0, 85, 110, 135, 160]);
+    expect(groupSessionPrice(groupPricingOf({ groupPricing: { base: 64.25, perExtra: 20 } }), 2)).toBe(84.25);
+  });
+  it('groep controleren', () => {
+    expect(cleanGroupInput({ name: '', memberIds: ['a'] }).error).toBeTruthy();
+    expect(cleanGroupInput({ name: 'X', memberIds: [] }).error).toBeTruthy();
+    expect(cleanGroupInput({ name: 'X', memberIds: ['a', 'b'], payerId: 'c' }).error).toBeTruthy();
+    expect(cleanGroupInput({ name: ' Pouw ', kind: 'raar', memberIds: ['a', 'a', 'b'] }).value).toEqual({ name: 'Pouw', kind: 'vrienden', memberIds: ['a', 'b'], payerId: 'a' });
+  });
+  it('groepsabonnement: prijs als tegoed, restant gaat mee', () => {
+    expect(groupPlanView({ price: 771, credits: null, rollover: 'expire' })).toMatchObject({ credits: 771, rollover: 'carry' });
+  });
+});
