@@ -960,6 +960,7 @@ export function BeheerPage() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         existingEmails={existingEmails}
+        plans={plans}
         trainers={trainerOptions}
         defaultTrainerId={selfId}
         onImported={load}

@@ -9,6 +9,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -29,11 +30,20 @@ import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import UploadFileRoundedIcon from '@mui/icons-material/UploadFileRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import { useAuth } from '../../context/AuthContext';
-import { grantCredits } from '../../services/classService';
+import { grantCredits, setMemberActive } from '../../services/classService';
+import { updateProfile } from '../../services/profileService';
+import { assignPlan } from '../../services/planService';
 import { parseCsv, toCsv } from '../../utils/csv';
-import { buildMemberImportRows, MEMBER_IMPORT_TEMPLATE, MAX_IMPORT_ROWS, type MemberImportRow } from '../../utils/memberImport';
+import { buildMemberImportRows, importOutcome, MEMBER_IMPORT_TEMPLATE, MAX_IMPORT_ROWS, type ImportOutcome, type MemberImportRow } from '../../utils/memberImport';
 import { generatePassword } from '../../utils/account';
-import type { ProfileRole } from '../../types';
+import type { Plan, ProfileRole } from '../../types';
+
+const OUTCOME: Record<ImportOutcome, { label: string; color: 'success' | 'default' | 'warning' | 'error' }> = {
+  create: { label: 'Nieuw', color: 'success' },
+  createInactive: { label: 'Nieuw, inactief', color: 'default' },
+  skip: { label: 'Overgeslagen', color: 'warning' },
+  error: { label: 'Fout', color: 'error' },
+};
 
 const ROLE_LABEL: Record<ProfileRole, string> = { sporter: 'sporter', trainer: 'trainer', admin: 'beheerder' };
 
@@ -60,9 +70,11 @@ interface MemberImportDialogProps {
   defaultTrainerId: string;
   /** Ververst de ledenlijst in Beheer nadat er accounts zijn aangemaakt. */
   onImported: () => void;
+  /** Abonnementen van de studio: de kolom "abonnement" koppelt op naam. */
+  plans?: Plan[];
 }
 
-export function MemberImportDialog({ open, onClose, existingEmails, trainers, defaultTrainerId, onImported }: MemberImportDialogProps) {
+export function MemberImportDialog({ open, onClose, existingEmails, trainers, defaultTrainerId, onImported, plans = [] }: MemberImportDialogProps) {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const auth = useAuth();
@@ -111,7 +123,11 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
       setUploadError(`Dit bestand heeft ${parsed.rows.length} rijen; meer dan ${MAX_IMPORT_ROWS} in één keer wordt niet ondersteund.`);
       return;
     }
-    setRows(buildMemberImportRows(parsed.rows, existingEmails));
+    const built = buildMemberImportRows(parsed.rows, existingEmails);
+    for (const r of built) {
+      if (r.planName && !planByName.has(r.planName.toLowerCase())) r.warnings.push(`Abonnement "${r.planName}" bestaat niet; zonder abonnement geïmporteerd.`);
+    }
+    setRows(built);
     setStep('preview');
   };
 
@@ -122,7 +138,9 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
     return defaultTrainerId || null;
   };
 
-  const validRows = rows.filter((r) => r.errors.length === 0);
+  const planByName = new Map(plans.map((p) => [p.name.trim().toLowerCase(), p]));
+  const validRows = rows.filter((r) => ['create', 'createInactive'].includes(importOutcome(r)));
+  const counts = rows.reduce<Record<ImportOutcome, number>>((acc, r) => ({ ...acc, [importOutcome(r)]: acc[importOutcome(r)] + 1 }), { create: 0, createInactive: 0, skip: 0, error: 0 });
 
   const handleImport = async () => {
     if (!auth) return;
@@ -133,6 +151,19 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
       const password = generatePassword();
       try {
         const created = await auth.adminCreateAccount(row.email, password, row.role, row.displayName, { trainerId: resolveTrainerId(row) });
+        // Wat het oude systeem nog meer wist; lukt dit niet, dan staat het account er toch.
+        const problems: string[] = [];
+        if (row.birthDate || row.gender) {
+          await updateProfile(created.uid, { birthDate: row.birthDate, gender: row.gender }).catch(() => problems.push('geboortedatum/geslacht'));
+        }
+        const plan = row.planName ? planByName.get(row.planName.toLowerCase()) : undefined;
+        if (plan && !row.inactive) await assignPlan(created.uid, plan.id).catch(() => problems.push('abonnement'));
+        if (row.inactive) await setMemberActive(created.uid, false).catch(() => problems.push('op inactief zetten'));
+        if (problems.length) {
+          done.push({ ...row, password, outcome: 'ok', failureReason: `Account aangemaakt, maar niet gelukt: ${problems.join(', ')}.` });
+          setProgress((p) => p + 1);
+          continue;
+        }
         if (row.credits) {
           try {
             await grantCredits(created.uid, row.credits, 'Geïmporteerd bij overstap');
@@ -178,9 +209,10 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
         {step === 'upload' && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Typography variant="body2" color="text.secondary">
-              Download het sjabloon, vul per lid een rij in (naam en e-mail zijn verplicht; rol, trainer en startsaldo zijn
-              optioneel) en upload het bestand terug. Elk lid krijgt meteen een werkend account met een tijdelijk wachtwoord —
-              geen e-mailverificatie nodig.
+              Download het sjabloon, vul per lid een rij in (naam en e-mail zijn verplicht; rol, trainer, startsaldo,
+              abonnement, status, geboortedatum en geslacht zijn optioneel) en upload het bestand terug. Een ledenexport uit
+              Virtuagym (CSV) werkt ook. Je ziet eerst wat er gebeurt; pas daarna worden de accounts aangemaakt, elk met een
+              tijdelijk wachtwoord. Uitgeschreven leden komen erin als inactief.
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               <Button variant="outlined" startIcon={<DownloadRoundedIcon />} onClick={handleDownloadTemplate}>
@@ -208,9 +240,13 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
         {step === 'preview' && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
             <Typography variant="body2">
-              {validRows.length} van {rows.length} {rows.length === 1 ? 'rij wordt' : 'rijen worden'} geïmporteerd
-              {validRows.length < rows.length ? ' — de rest heeft fouten en wordt overgeslagen.' : '.'}
+              Controleer wat er gebeurt voordat je importeert. Er wordt nog niets aangemaakt.
             </Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {(Object.keys(OUTCOME) as ImportOutcome[]).map((k) => (
+                <Chip key={k} size="small" color={OUTCOME[k].color} variant={k === 'create' ? 'filled' : 'outlined'} label={`${OUTCOME[k].label}: ${counts[k]}`} />
+              ))}
+            </Box>
             <Box sx={{ overflowX: 'auto' }}>
               <Table size="small">
                 <TableHead>
@@ -219,33 +255,32 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
                     <TableCell>E-mail</TableCell>
                     <TableCell>Rol</TableCell>
                     <TableCell>Credits</TableCell>
-                    <TableCell>Status</TableCell>
+                    <TableCell>Abonnement</TableCell>
+                    <TableCell>Wat gebeurt er</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {rows.map((r) => (
-                    <TableRow key={r.line}>
-                      <TableCell>{r.displayName || '—'}</TableCell>
-                      <TableCell>{r.email || '—'}</TableCell>
-                      <TableCell>{ROLE_LABEL[r.role]}</TableCell>
-                      <TableCell>{r.credits ?? '—'}</TableCell>
-                      <TableCell>
-                        {r.errors.length > 0 ? (
-                          <Typography variant="caption" color="error">
-                            {r.errors.join(' ')}
-                          </Typography>
-                        ) : r.warnings.length > 0 ? (
-                          <Typography variant="caption" sx={{ color: 'warning.main' }}>
-                            {r.warnings.join(' ')}
-                          </Typography>
-                        ) : (
-                          <Typography variant="caption" color="text.secondary">
-                            Klaar om te importeren
-                          </Typography>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {rows.map((r) => {
+                    const outcome = importOutcome(r);
+                    const notes = [...r.errors, ...(r.skipReason ? [r.skipReason] : []), ...r.warnings];
+                    return (
+                      <TableRow key={r.line} sx={outcome === 'skip' || outcome === 'error' ? { opacity: 0.7 } : undefined}>
+                        <TableCell>{r.displayName || '—'}</TableCell>
+                        <TableCell sx={{ overflowWrap: 'anywhere', minWidth: 160 }}>{r.email || '—'}</TableCell>
+                        <TableCell>{ROLE_LABEL[r.role]}</TableCell>
+                        <TableCell>{r.credits ?? '—'}</TableCell>
+                        <TableCell>{r.planName || '—'}</TableCell>
+                        <TableCell>
+                          <Chip size="small" color={OUTCOME[outcome].color} variant="outlined" label={OUTCOME[outcome].label} sx={{ mb: notes.length ? 0.5 : 0 }} />
+                          {notes.length > 0 && (
+                            <Typography variant="caption" color={outcome === 'error' ? 'error' : 'text.secondary'} sx={{ display: 'block' }}>
+                              {notes.join(' ')}
+                            </Typography>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </Box>
