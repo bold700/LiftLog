@@ -3,6 +3,7 @@
  * Alle functies krijgen de Firestore-instantie mee zodat ze in tests vervangen kunnen worden.
  */
 import { createHash, randomBytes } from 'node:crypto';
+import { roleIn } from './orgRoles.mjs';
 import { FieldValue } from 'firebase-admin/firestore';
 
 /** Vandaag als YYYY-MM-DD in Nederlandse tijd. */
@@ -67,15 +68,17 @@ function str(v) {
   return v == null ? null : String(v);
 }
 
-export function toProfile(data, userId) {
-  const rawRole = String(data.role ?? '').toLowerCase().trim();
+/**
+ * `viewOrg`: de studio waarvoor de rol telt (zie _lib/orgRoles.mjs). Zonder: de thuisstudio.
+ */
+export function toProfile(data, userId, viewOrg = null) {
   const orgId = orgIdOf(data.orgId);
   return {
     userId,
     orgId,
     // Studio's waar deze persoon lid van is; een trainer kan er bij meerdere werken.
     orgIds: Array.isArray(data.orgIds) && data.orgIds.length ? data.orgIds.map(String) : [orgId],
-    role: rawRole === 'admin' || rawRole === 'trainer' ? rawRole : 'sporter',
+    role: roleIn(data, viewOrg ?? orgId),
     email: str(data.email),
     displayName: str(data.displayName),
     trainerId: str(data.trainerId),
@@ -208,14 +211,15 @@ export function createStore(db, auth, orgId = null) {
      */
     async getProfile(userId) {
       const snap = await db.collection('profiles').doc(userId).get();
-      return snap.exists ? toProfile(snap.data(), snap.id) : null;
+      // Rol in de studio van deze store (als die al bekend is), anders in de thuisstudio.
+      return snap.exists ? toProfile(snap.data(), snap.id, orgId) : null;
     },
 
     /** Profiel van een derde; geeft null als die persoon niet bij de eigen studio hoort. */
     async getProfileInOrg(userId) {
       const snap = await db.collection('profiles').doc(userId).get();
       if (!snap.exists) return null;
-      const profile = toProfile(snap.data(), snap.id);
+      const profile = toProfile(snap.data(), snap.id, requireOrg());
       return profile.orgIds.includes(requireOrg()) ? profile : null;
     },
 
@@ -226,7 +230,7 @@ export function createStore(db, auth, orgId = null) {
      */
     async updateProfileFields(userId, fields) {
       const safe = { ...(fields ?? {}) };
-      for (const blocked of ['orgId', 'role', 'platformAdmin', 'userId', 'createdByAdmin']) delete safe[blocked];
+      for (const blocked of ['orgId', 'orgIds', 'role', 'orgRoles', 'platformAdmin', 'userId', 'createdByAdmin']) delete safe[blocked];
       await db.collection('profiles').doc(userId).set({ ...safe, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     },
 
@@ -237,7 +241,7 @@ export function createStore(db, auth, orgId = null) {
      */
     async getAllProfiles() {
       const snap = await db.collection('profiles').where('orgIds', 'array-contains', requireOrg()).get();
-      return snap.docs.map((d) => toProfile(d.data(), d.id));
+      return snap.docs.map((d) => toProfile(d.data(), d.id, requireOrg()));
     },
 
     /**

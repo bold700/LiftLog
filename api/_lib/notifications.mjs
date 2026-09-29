@@ -7,6 +7,7 @@
  * waar het kan, zodat de regels te testen zijn zonder database.
  */
 import { orgIdOf } from './liftlogData.mjs';
+import { orgsOf, roleIn } from './orgRoles.mjs';
 import { sendPushToUser } from './pushSend.mjs';
 import { amsterdamDate as amsterdamDay, buildClassReminders } from './classReminders.mjs';
 
@@ -159,6 +160,9 @@ function createdAtIso(p) {
   return null;
 }
 
+/** Sporter in minstens één studio (de rol kan per studio verschillen, zie orgRoles.mjs). */
+const isSporterSomewhere = (p) => orgsOf(p).some((o) => roleIn(p, o) === 'sporter');
+
 /**
  * Per trainer: welke van zijn sporters hebben 14 dagen niets gelogd en geen les gehad? Nieuwe
  * leden (korter dan 14 dagen) tellen niet mee: die hebben simpelweg nog niet kunnen beginnen.
@@ -167,7 +171,7 @@ function createdAtIso(p) {
 export function inactiveByTrainer(profiles, activeUserIds, sinceIso) {
   const out = new Map();
   for (const p of profiles) {
-    if (p.role !== 'sporter' || !p.trainerId || activeUserIds.has(p.userId)) continue;
+    if (!isSporterSomewhere(p) || !p.trainerId || activeUserIds.has(p.userId)) continue;
     const created = createdAtIso(p);
     if (created && created > sinceIso) continue;
     const list = out.get(p.trainerId) ?? [];
@@ -346,7 +350,7 @@ export async function runEveningNotifications(db, now = new Date()) {
   // 3. Zondag: wekelijkse check-in voor sporters met een trainer.
   if (weekday === 0) {
     const list = profiles
-      .filter((p) => p.role === 'sporter' && p.trainerId && orgOn(p.orgId, 'weeklyCheckin'))
+      .filter((p) => isSporterSomewhere(p) && p.trainerId && orgOn(p.orgId, 'weeklyCheckin'))
       .map((p) => ({ userId: p.userId, message: messages.weeklyCheckin(), data: { kind: 'weeklyCheckin' } }));
     report.weeklyCheckin = await sendMany(db, list);
   }

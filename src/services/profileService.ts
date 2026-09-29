@@ -18,7 +18,8 @@ import {
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
 import type { HealthConsent, Profile, ProfileRole, LeaderboardVisibility, Limitation, LimitationArea } from '../types';
-import { DEFAULT_ORG_ID, orgIdOf, orgIdsOf, requireOrgId } from './orgContext';
+import { DEFAULT_ORG_ID, getCurrentOrgId, orgIdOf, orgIdsOf, requireOrgId } from './orgContext';
+import { cleanRole, parseOrgRoles, roleInOrg } from '../utils/orgRoles';
 
 const COLLECTION = 'profiles';
 
@@ -65,17 +66,23 @@ function parseLimitations(raw: unknown): Limitation[] | undefined {
 function toProfile(data: Record<string, unknown>, userId: string): Profile {
   const toStr = (v: unknown) => (v == null ? null : String(v));
   const ts = (v: unknown) => (v && typeof (v as Timestamp).toDate === 'function' ? (v as Timestamp).toDate().toISOString() : new Date().toISOString());
-  const rawRole = data.role != null ? String(data.role).toLowerCase().trim() : '';
-  const role = rawRole === 'admin' || rawRole === 'trainer' || rawRole === 'sporter' ? rawRole : 'sporter';
+  const accountRole = cleanRole(data.role) ?? 'sporter';
+  const orgRoles = parseOrgRoles(data.orgRoles);
   const rawVis = data.leaderboardVisibility;
   const leaderboardVisibility: LeaderboardVisibility =
     rawVis === 'anonymous' || rawVis === 'named' || rawVis === 'hidden' ? rawVis : 'named';
   const orgId = orgIdOf(data.orgId);
+  const orgIds = orgIdsOf(data.orgIds, orgId);
+  // De rol in de studio die nu in beeld is; ben je daar geen lid, dan die in je thuisstudio.
+  const current = getCurrentOrgId();
+  const viewOrg = current && orgIds.includes(current) ? current : orgId;
   return {
     userId,
     orgId,
-    orgIds: orgIdsOf(data.orgIds, orgId),
-    role: role as ProfileRole,
+    orgIds,
+    role: roleInOrg({ accountRole, orgRoles }, viewOrg),
+    accountRole,
+    orgRoles,
     email: toStr(data.email),
     displayName: toStr(data.displayName),
     photoURL: toStr(data.photoURL),

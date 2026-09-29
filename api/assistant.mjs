@@ -224,7 +224,7 @@ export default async function handler(req, res) {
 
   // 2) Profiel bepaalt de rol én de studio; daarna is alles tot die studio begrensd.
   const lookup = createStore(admin.db, admin.auth);
-  const profile = await lookup.getProfile(uid);
+  let profile = await lookup.getProfile(uid);
   if (!profile) return json(res, 401, { error: 'Profiel niet gevonden.', build: BUILD });
 
   const messages = Array.isArray(body?.messages) ? body.messages : [];
@@ -236,6 +236,8 @@ export default async function handler(req, res) {
   const requestedOrgId = typeof body?.orgId === 'string' ? body.orgId.trim() : '';
   const activeOrgId = requestedOrgId && profile.orgIds.includes(requestedOrgId) ? requestedOrgId : profile.orgId;
   const store = createStore(admin.db, admin.auth, activeOrgId);
+  // De rol per studio: trainer bij de ene studio is niet vanzelf trainer bij de andere.
+  profile = (await store.getProfile(uid)) ?? profile;
 
   const orgSnap = await admin.db.collection('orgs').doc(activeOrgId).get().catch(() => null);
   const orgName = orgSnap?.exists ? orgSnap.data()?.name || 'je studio' : 'je studio';
