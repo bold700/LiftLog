@@ -10,6 +10,7 @@ import { designTokens } from '../../theme/designTokens';
 import type { Membership, Profile, ProfileRole } from '../../types';
 import type { MemberSort, MemberSortKey } from '../../utils/memberTable';
 import { paysAsMember } from '../../utils/orgRoles';
+import { isSupportEmail } from '../../utils/support';
 
 interface MembersListProps {
   profiles: Profile[];
@@ -24,11 +25,13 @@ interface MembersListProps {
   /** Sortering van de tabel; klik op een kolomkop om te sorteren (nog een keer: andersom). */
   sort?: MemberSort;
   onSort?: (s: MemberSort) => void;
+  /** Eigenaar van de studio: krijgt het label "Eigenaar" naast de rol. */
+  ownerId?: string | null;
 }
 
 const COLUMNS: MemberSortKey[] = ['name', 'email', 'role', 'subscription', 'credits'];
 
-export function MembersList({ profiles, credits, memberships = {}, selfId, loading, hasAny, onOpen, sort, onSort }: MembersListProps) {
+export function MembersList({ profiles, credits, memberships = {}, selfId, loading, hasAny, onOpen, sort, onSort, ownerId = null }: MembersListProps) {
   const { t } = useI18n();
   const theme = useTheme();
   const wide = useMediaQuery(theme.breakpoints.up('md'));
@@ -88,7 +91,7 @@ export function MembersList({ profiles, credits, memberships = {}, selfId, loadi
               </Typography>
             </Box>
             {p.inactive && <InactiveChip />}
-            <RoleChip role={p.role} />
+            <RoleChip role={p.role} owner={p.userId === ownerId} support={isSupportEmail(p.email)} />
           </Box>
         ))}
       </Box>
@@ -135,7 +138,7 @@ export function MembersList({ profiles, credits, memberships = {}, selfId, loadi
               <TableCell sx={{ color: 'text.secondary' }}>{p.email ?? t('common.none')}</TableCell>
               <TableCell>
                 <Box sx={{ display: 'flex', gap: 0.75, alignItems: 'center' }}>
-                  <RoleChip role={p.role} />
+                  <RoleChip role={p.role} owner={p.userId === ownerId} support={isSupportEmail(p.email)} />
                   {p.inactive && <InactiveChip />}
                 </Box>
               </TableCell>
@@ -149,20 +152,28 @@ export function MembersList({ profiles, credits, memberships = {}, selfId, loadi
   );
 }
 
-/** Sporter grijs, staf in de primaire container: zo staat het in het ontwerp. */
-export function RoleChip({ role }: { role: ProfileRole }) {
+/**
+ * Sporter grijs, staf in de primaire container: zo staat het in het ontwerp. De eigenaar krijgt
+ * "Eigenaar" in plaats van "Beheerder"; support van BOLD700 staat er als "Support · BOLD700".
+ */
+export function RoleChip({ role, owner = false, support = false }: { role: ProfileRole; owner?: boolean; support?: boolean }) {
   const { t } = useI18n();
   const staff = role !== 'sporter';
+  const label = owner ? t('admin.ownerChip') : support && staff ? t('admin.supportChip') : t(`admin.roles.${role}`);
   return (
     <Chip
       size="small"
-      label={t(`admin.roles.${role}`)}
-      sx={{
-        height: 22,
-        fontSize: 12,
-        bgcolor: staff ? designTokens.primaryContainer : designTokens.cardBackgroundHigh,
-        color: staff ? designTokens.onPrimaryContainer : 'text.primary',
-      }}
+      label={label}
+      sx={
+        support && !owner && staff
+          ? { height: 22, fontSize: 12, bgcolor: 'transparent', border: 1, borderColor: designTokens.cardBorder, color: 'text.secondary' }
+          : {
+              height: 22,
+              fontSize: 12,
+              bgcolor: staff ? designTokens.primaryContainer : designTokens.cardBackgroundHigh,
+              color: staff ? designTokens.onPrimaryContainer : 'text.primary',
+            }
+      }
     />
   );
 }

@@ -103,6 +103,21 @@ export async function setMemberRole(caller: User, targetUid: string, role: 'spor
   if (!res.ok) throw new Error((data as { error?: string })?.error || 'Rol wijzigen mislukt.');
 }
 
+/**
+ * Wijst de eigenaar van de actieve studio aan (Beheer → Instellingen). Loopt via de server: de huidige
+ * eigenaar draagt over, support van BOLD700 mag het ook, en zolang er geen eigenaar is elke beheerder.
+ */
+export async function setStudioOwner(caller: User, targetUid: string): Promise<void> {
+  const token = await caller.getIdToken();
+  const res = await fetch(apiUrl('/api/admin-account'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ actingOrgId: getCurrentOrgId(), action: 'setOwner', targetUid }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string })?.error || 'Eigenaar aanwijzen mislukt.');
+}
+
 export type InviteResult = { status: 'no-account' | 'already-member' | 'invited'; orgName?: string };
 
 /**

@@ -77,7 +77,6 @@ export function BrandingSettings() {
   const [loaded, setLoaded] = useState(false);
   const [orgName, setOrgName] = useState('');
   const [savedOrgName, setSavedOrgName] = useState('');
-  const [ownerId, setOwnerId] = useState<string | null>(null);
   const [allowSelfSignup, setAllowSelfSignup] = useState(false);
   const [staffFullClientAccess, setStaffFullClientAccess] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -98,7 +97,6 @@ export function BrandingSettings() {
       if (cancelled || !org) return;
       setOrgName(org.name);
       setSavedOrgName(org.name);
-      setOwnerId(org.ownerId);
       setAllowSelfSignup(org.allowSelfSignup);
       setStaffFullClientAccess(org.staffFullClientAccess);
       setLogoUrl(org.branding?.logoUrl ?? null);
@@ -192,7 +190,7 @@ export function BrandingSettings() {
     setBusy(true);
     try {
       if (orgName.trim() !== savedOrgName) {
-        await saveOrg(orgId, { name: orgName.trim(), ownerId, allowSelfSignup, staffFullClientAccess });
+        await saveOrg(orgId, { name: orgName.trim(), allowSelfSignup, staffFullClientAccess });
         setSavedOrgName(orgName.trim());
       }
       await saveOrgBranding(orgId, draft);

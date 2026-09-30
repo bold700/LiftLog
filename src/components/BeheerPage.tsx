@@ -29,6 +29,7 @@ import UploadFileRoundedIcon from '@mui/icons-material/UploadFileRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useProfile } from '../context/ProfileContext';
+import { getOrg } from '../services/orgService';
 import { useI18n } from '../context/I18nContext';
 import { useAuth } from '../context/AuthContext';
 import { assignTrainerToSporter, getAllProfiles, getProfileByEmail, updateProfile } from '../services/profileService';
@@ -206,6 +207,22 @@ export function BeheerPage() {
   const [createError, setCreateError] = useState<string | null>(null);
 
   const [importOpen, setImportOpen] = useState(false);
+  // Eigenaar van de studio, voor het label "Eigenaar" in de ledenlijst.
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+  const activeOrgId = profileCtx?.activeOrgId ?? null;
+  useEffect(() => {
+    if (!activeOrgId) return;
+    let cancelled = false;
+    getOrg(activeOrgId).then(
+      (org) => {
+        if (!cancelled) setOwnerId(org?.ownerId ?? null);
+      },
+      () => undefined
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [activeOrgId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -620,6 +637,7 @@ export function BeheerPage() {
         onOpen={openEditor}
         sort={memberSort}
         onSort={setMemberSort}
+        ownerId={ownerId}
       />
 
       <Dialog open={!!target && !!edit} onClose={closeEditor} maxWidth="sm" fullWidth fullScreen={fullScreen}>

@@ -42,6 +42,24 @@ zichtbaar, opzettelijk en niet per ongeluk aan te zetten vanuit de app.
 
 `orgId` en `platformAdmin` kunnen nooit vanuit de client worden gezet — ook niet door een beheerder.
 
+### Eigenaar
+
+Elke studio heeft precies één **eigenaar** (`orgs/{orgId}.ownerId`). Die tekent namens de studio
+(de verwerkersovereenkomst met BOLD700), is het aanspreekpunt voor BOLD700 en krijgt de rekening.
+Andere beheerders beheren mee maar tekenen niet. In Beheer → Leden staat de eigenaar als "Eigenaar".
+
+- Aanwijzen en overdragen: Beheer → Instellingen → Eigenaar van de studio. Dat mag de huidige
+  eigenaar, support van BOLD700, en zolang er nog geen eigenaar is elke beheerder. Het loopt via de
+  server (`api/admin-account.mjs`, actie `setOwner`); de Firestore-regels weigeren `ownerId` vanuit
+  de app.
+- De eigenaar moet beheerder van de studio zijn, en blijft dat: terugzetten naar trainer of
+  verwijderen kan pas na overdragen.
+- Support van BOLD700 (een account op `@bold700.com`) staat in de ledenlijst als
+  "Support · BOLD700" en kan nooit eigenaar worden: BOLD700 kan niet aan beide kanten van de
+  verwerkersovereenkomst tekenen.
+
+BOLD700 factureert de studio's (nog) handmatig, buiten de app, aan de eigenaar.
+
 ---
 
 ## 2. Een nieuwe studio aansluiten

@@ -29,6 +29,11 @@ import { applyCors } from './_lib/cors.mjs';
  *                                       verwerkersovereenkomst met BOLD700 lezen, tekenen en als PDF
  *                                       downloaden (alleen beheerder). Na tekenen gaat de PDF naar de
  *                                       gedeelde drive (GOOGLE_DRIVE_FOLDER_ID) en per mail rond.
+ *                                       Alleen de eigenaar van de studio tekent; andere beheerders lezen mee.
+ *  - { action: 'setOwner', targetUid }  wijst de eigenaar van de studio aan (api/_lib/studioOwner.mjs):
+ *                                       de huidige eigenaar draagt over, of support van BOLD700, of een
+ *                                       beheerder zolang er nog geen eigenaar is. De nieuwe eigenaar is
+ *                                       beheerder van de studio en geen support van BOLD700.
  *  - { action: 'myInvites' }            openstaande uitnodigingen voor de beller.
  *  - { action: 'acceptInvite', inviteId } / { action: 'declineInvite', inviteId }
  *                                       de uitgenodigde beslist; pas bij accepteren hoort hij erbij.
@@ -70,6 +75,7 @@ import { mailConfigured, sendViaResend } from './_lib/invoiceEmail.mjs';
 import { deleteQueryInBatches, deleteUserData, exportUserData } from './_lib/accountData.mjs';
 import { enforceRateLimit } from './_lib/requireUser.mjs';
 import { actingOrg, isAdminIn, isStaffIn, orgsOf, roleIn } from './_lib/orgRoles.mjs';
+import { canSetOwner, canSignForStudio, isSupportEmail } from './_lib/studioOwner.mjs';
 import { FieldValue } from 'firebase-admin/firestore';
 import { sendPushToUser } from './_lib/pushSend.mjs';
 import { randomBytes } from 'node:crypto';
@@ -280,8 +286,12 @@ export default async function handler(req, res) {
     const orgData = orgSnap.exists ? orgSnap.data() : {};
     const signed = orgData?.processorAgreement ?? null;
 
+    const ownerId = typeof orgData?.ownerId === 'string' && orgData.ownerId ? orgData.ownerId : null;
+
     if (action === 'processorAgreement') {
       const b = orgData?.business ?? {};
+      const ownerSnap = ownerId ? await db.collection('profiles').doc(ownerId).get() : null;
+      const ownerName = ownerSnap?.exists ? String(ownerSnap.data()?.displayName || ownerSnap.data()?.email || '') : '';
       return json(res, 200, {
         ok: true,
         version: CURRENT_PROCESSOR_AGREEMENT_VERSION,
@@ -289,6 +299,8 @@ export default async function handler(req, res) {
         processor: PROCESSOR,
         sections: agreementSections(),
         signed,
+        owner: ownerId ? { uid: ownerId, name: ownerName } : null,
+        canSign: canSignForStudio({ ownerId, callerUid }),
         prefill: {
           legalName: String(b.legalName || orgData?.name || ''),
           street: String(b.street || ''),
@@ -306,7 +318,14 @@ export default async function handler(req, res) {
       return json(res, 200, { ok: true, filename: agreementFileName(signed), pdf: Buffer.from(pdf).toString('base64') });
     }
 
-    // signProcessorAgreement
+    // signProcessorAgreement: alleen de eigenaar tekent namens de studio.
+    if (!canSignForStudio({ ownerId, callerUid })) {
+      return json(res, 403, {
+        error: ownerId
+          ? 'Alleen de eigenaar van de studio kan de verwerkersovereenkomst tekenen.'
+          : 'Wijs eerst de eigenaar van de studio aan (Beheer → Instellingen); die tekent de verwerkersovereenkomst.',
+      });
+    }
     const parsed = cleanSignInput(body);
     if (parsed.error) return json(res, 400, { error: parsed.error });
     if (!(await enforceRateLimit(db, res, callerUid, 'signProcessorAgreement', 10, 24 * 60 * 60 * 1000))) return;
@@ -516,6 +535,32 @@ export default async function handler(req, res) {
     return json(res, 200, { ok: true });
   }
 
+  if (action === 'setOwner') {
+    const callerSnap = await db.collection('profiles').doc(callerUid).get();
+    const callerData = callerSnap.exists ? callerSnap.data() : null;
+    const org = callerData ? actingOrg(callerData, body?.actingOrgId) : null;
+    if (!callerData || !isAdminIn(callerData, org)) return json(res, 403, { error: 'Alleen een beheerder kan de eigenaar aanwijzen.' });
+    const orgRef = db.collection('orgs').doc(org);
+    const orgSnap = await orgRef.get();
+    const ownerId = orgSnap.exists && typeof orgSnap.data()?.ownerId === 'string' ? orgSnap.data().ownerId || null : null;
+    const callerAuth = await auth.getUser(callerUid).catch(() => null);
+    if (!canSetOwner({ ownerId, callerUid, callerIsSupport: isSupportEmail(callerAuth?.email) })) {
+      return json(res, 403, { error: 'Alleen de eigenaar kan het eigenaarschap overdragen.' });
+    }
+    const targetUid = String(body?.targetUid || '').trim();
+    const targetSnap = targetUid ? await db.collection('profiles').doc(targetUid).get() : null;
+    const target = targetSnap?.exists ? targetSnap.data() : null;
+    if (!target || !isAdminIn(target, org)) {
+      return json(res, 400, { error: 'De eigenaar moet beheerder van de studio zijn. Maak diegene eerst beheerder.' });
+    }
+    const targetAuth = await auth.getUser(targetUid).catch(() => null);
+    if (isSupportEmail(targetAuth?.email ?? target.email)) {
+      return json(res, 400, { error: 'Support van BOLD700 kan geen eigenaar van een studio zijn.' });
+    }
+    await orgRef.set({ ownerId: targetUid, ownerSetBy: callerUid, ownerSetAt: FieldValue.serverTimestamp() }, { merge: true });
+    return json(res, 200, { ok: true, ownerId: targetUid });
+  }
+
   // 3) Alle overige acties: alleen een beheerder van de studio waarin het verzoek handelt.
   const callerSnap = await db.collection('profiles').doc(callerUid).get();
   const callerData = callerSnap.exists ? callerSnap.data() : null;
@@ -536,6 +581,11 @@ export default async function handler(req, res) {
   // Alleen leden van je eigen studio; een beheerder van de ene studio komt nooit aan een ander.
   if (!target || !orgsOf(target).includes(org)) {
     return json(res, 404, { error: 'Dit lid hoort niet bij jouw studio.' });
+  }
+  // De eigenaar blijft beheerder zolang hij eigenaar is: eerst overdragen.
+  const orgOwnerSnap = await db.collection('orgs').doc(org).get();
+  if (orgOwnerSnap.exists && orgOwnerSnap.data()?.ownerId === targetUid && (action === 'delete' || String(body?.role ?? '') !== 'admin')) {
+    return json(res, 409, { error: 'Dit is de eigenaar van de studio. Draag het eigenaarschap eerst over (Beheer → Instellingen).' });
   }
 
   if (action === 'setRole') {

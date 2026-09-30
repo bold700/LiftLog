@@ -90,6 +90,8 @@ export const en: Messages = {
       trainer: 'Trainer',
       admin: 'Manager',
     },
+    ownerChip: 'Owner',
+    supportChip: 'Support · BOLD700',
     creditsLeft: {
       one: '1 credit left',
       other: '{count} credits left',

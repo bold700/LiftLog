@@ -3,8 +3,11 @@
  * versie): uitleg en "Lezen en tekenen". Getekend: wie en wanneer, met "Bekijken" en de PDF.
  * Alleen voor beheerders; de server controleert dat ook.
  *
- * `variant="banner"`: bovenaan Beheer → Leden een melding zolang er (opnieuw) getekend moet worden;
- * daarna niets.
+ * Alleen de eigenaar van de studio tekent. Andere beheerders zien wie dat is en kunnen de tekst
+ * lezen; is er nog geen eigenaar, dan staat er dat die eerst moet worden aangewezen.
+ *
+ * `variant="banner"`: bovenaan Beheer → Leden een melding zolang er (opnieuw) getekend moet worden,
+ * alleen voor de eigenaar (of voor elke beheerder zolang er geen eigenaar is); daarna niets.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, Typography } from '@mui/material';
@@ -56,7 +59,7 @@ export function ProcessorAgreementCard({ variant = 'card' }: { variant?: 'card' 
   }, [uid]);
 
   if (!user) return null;
-  if (variant === 'banner' && (loadError || !info || isAgreementCurrent(info))) return null;
+  if (variant === 'banner' && (loadError || !info || isAgreementCurrent(info) || (!info.canSign && info.owner))) return null;
   if (loadError) {
     return (
       <ContentCard>
@@ -71,6 +74,9 @@ export function ProcessorAgreementCard({ variant = 'card' }: { variant?: 'card' 
 
   const current = isAgreementCurrent(info);
   const signed = info.signed;
+  const canSign = info.canSign === true;
+  // Wie niet mag tekenen, leest alleen.
+  const readOnly = current || !canSign;
 
   const sign = async (input: SignAgreementInput) => {
     const r = await signProcessorAgreement(user, info.version, input);
@@ -90,7 +96,15 @@ export function ProcessorAgreementCard({ variant = 'card' }: { variant?: 'card' 
     }
   };
 
-  const dialog = <ProcessorAgreementDialog open={open} info={info} readOnly={current} onClose={() => setOpen(false)} onSign={sign} />;
+  const dialog = <ProcessorAgreementDialog open={open} info={info} readOnly={readOnly} onClose={() => setOpen(false)} onSign={sign} />;
+
+  if (variant === 'banner' && !canSign) {
+    return (
+      <Alert severity="info" sx={{ mb: 2 }}>
+        Wijs de eigenaar van de studio aan (Beheer → Instellingen). Die tekent de verwerkersovereenkomst met BOLD700.
+      </Alert>
+    );
+  }
 
   if (variant === 'banner') {
     return (
@@ -118,6 +132,12 @@ export function ProcessorAgreementCard({ variant = 'card' }: { variant?: 'card' 
         <Typography variant="body2" color="text.secondary">
           Getekend door {signed.signer.name} ({signed.signer.role}) op {formatDate(signed.signedAt)}, namens {signed.controller.legalName}.
         </Typography>
+      ) : !canSign ? (
+        <Alert severity="info" sx={{ mb: 1 }}>
+          {info.owner
+            ? `Alleen de eigenaar van de studio tekent: ${info.owner.name || 'de eigenaar'}. Je kunt de tekst wel lezen.`
+            : 'Wijs hierboven eerst de eigenaar van de studio aan. Die tekent de verwerkersovereenkomst namens de studio.'}
+        </Alert>
       ) : (
         <Alert severity="info" sx={{ mb: 1 }}>
           {signed
@@ -126,8 +146,8 @@ export function ProcessorAgreementCard({ variant = 'card' }: { variant?: 'card' 
         </Alert>
       )}
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1.5 }}>
-        <Button variant={current ? 'outlined' : 'contained'} disableElevation onClick={() => setOpen(true)}>
-          {current ? 'Bekijken' : 'Lezen en tekenen'}
+        <Button variant={readOnly ? 'outlined' : 'contained'} disableElevation onClick={() => setOpen(true)}>
+          {readOnly ? 'Bekijken' : 'Lezen en tekenen'}
         </Button>
         {signed && (
           <Button variant="text" onClick={download} disabled={downloading} sx={{ textTransform: 'none' }}>

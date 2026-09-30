@@ -186,6 +186,9 @@ await env.withSecurityRulesDisabled(async (c) => { await updateDoc(doc(c.firesto
 await t('eigenaar zet inactieve-accounts-instelling → mag', true, updateDoc(doc(as('adminB'), 'orgs/studiob'), { accountRetention: retention }));
 
 // Verwerkersovereenkomst: alleen de server legt een ondertekening vast, ook niet de eigen beheerder.
+await t('beheerder maakt zichzelf eigenaar van de studio → geweigerd (alleen via de server)', false, updateDoc(doc(as('admin1'), 'orgs/vanas'), { ownerId: 'admin1' }));
+await t('eigenaar draagt zelf over via de app → geweigerd (alleen via de server)', false, updateDoc(doc(as('adminB'), 'orgs/studiob'), { ownerId: 'eigenaarB' }));
+await t('beheerder wijzigt de naam zonder eigenaar mee te sturen → mag', true, setDoc(doc(as('admin1'), 'orgs/vanas'), { name: 'Van As Personal Training' }, { merge: true }));
 await t('beheerder zet zelf een ondertekende verwerkersovereenkomst op de studio → geweigerd', false, updateDoc(doc(as('admin1'), 'orgs/vanas'), { processorAgreement: { version: 1, signedAt: '2026-10-01' } }));
 await t('beheerder leest de ondertekeningen rechtstreeks → geweigerd', false, getDoc(doc(as('admin1'), 'processorAgreements/vanas__v1__1')));
 await t('beheerder schrijft een ondertekening rechtstreeks → geweigerd', false, setDoc(doc(as('admin1'), 'processorAgreements/vanas__v1__1'), { version: 1 }));
