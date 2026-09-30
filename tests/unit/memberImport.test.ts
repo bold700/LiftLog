@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildMemberImportRows, fillForExisting, fillSummary, importOutcome, MAX_IMPORT_CREDITS, normalizePhone, parseImportDate, PLACEHOLDER_EMAIL_DOMAIN } from '../../src/utils/memberImport';
+import { buildMemberImportRows, detectCreditColumns, fillForExisting, fillSummary, importOutcome, MAX_IMPORT_CREDITS, normalizePhone, parseImportDate, PLACEHOLDER_EMAIL_DOMAIN } from '../../src/utils/memberImport';
 import { parseCsv } from '../../src/utils/csv';
 
 describe('buildMemberImportRows', () => {
@@ -183,3 +183,46 @@ describe('buildMemberImportRows', () => {
   });
 });
 
+
+describe('creditsaldo uit Virtuagym', () => {
+  const vg = (extra: Record<string, string>) => ({ member_id: '1', firstname: 'Jan', lastname: 'Vries', email: 'jan@x.nl', phone: '612345678', ...extra });
+
+  it('herkent alleen niet-standaard kolommen met hele getallen, en alleen in een Virtuagym-export', () => {
+    const rows = [vg({ bootcamp: '0', 'small group training': '5', tags: '12' }), vg({ bootcamp: '-3', 'small group training': '', tags: '' })];
+    const headers = ['member_id', 'firstname', 'lastname', 'email', 'phone', 'tags', 'bootcamp', 'small group training'];
+    expect(detectCreditColumns(headers, rows)).toEqual(['bootcamp', 'small group training']);
+    // Alles nul: niets over te nemen.
+    expect(detectCreditColumns(['member_id', 'firstname', 'bootcamp'], [vg({ bootcamp: '0' })])).toEqual([]);
+    // Tekst in de kolom: geen saldo.
+    expect(detectCreditColumns(['member_id', 'firstname', 'notitie'], [vg({ notitie: 'vip' })])).toEqual([]);
+    // Eigen sjabloon: geen Virtuagym.
+    expect(detectCreditColumns(['naam', 'email', 'extra'], [{ naam: 'Jan', email: 'j@x.nl', extra: '4' }])).toEqual([]);
+  });
+
+  it('telt positieve saldi op en neemt een negatief saldo niet over', () => {
+    const cols = ['bootcamp', 'small group training'];
+    const [a, b, c] = buildMemberImportRows(
+      [vg({ bootcamp: '10', 'small group training': '3' }), vg({ email: 'b@x.nl', bootcamp: '-3', 'small group training': '4' }), vg({ email: 'c@x.nl', bootcamp: '0', 'small group training': '' })],
+      new Set(),
+      '2026-09-30',
+      { creditColumns: cols }
+    );
+    expect(a.credits).toBe(13);
+    expect(b.credits).toBe(4);
+    expect(b.warnings.join(' ')).toContain('Negatief saldo "Bootcamp" (-3)');
+    expect(c.credits).toBeNull();
+  });
+
+  it('neemt geen saldo over zonder schakelaar, en een eigen creditskolom gaat voor', () => {
+    const [off] = buildMemberImportRows([vg({ bootcamp: '10' })], new Set(), '2026-09-30');
+    expect(off.credits).toBeNull();
+    const [own] = buildMemberImportRows([vg({ bootcamp: '10', credits: '2' })], new Set(), '2026-09-30', { creditColumns: ['bootcamp'] });
+    expect(own.credits).toBe(2);
+  });
+
+  it('begrenst een groot saldo op het maximum', () => {
+    const [row] = buildMemberImportRows([vg({ bootcamp: String(MAX_IMPORT_CREDITS), sgt: '5' })], new Set(), '2026-09-30', { creditColumns: ['bootcamp', 'sgt'] });
+    expect(row.credits).toBe(MAX_IMPORT_CREDITS);
+    expect(row.warnings.join(' ')).toContain(`${MAX_IMPORT_CREDITS} overgenomen`);
+  });
+});

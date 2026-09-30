@@ -14,8 +14,10 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   LinearProgress,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -34,8 +36,8 @@ import { grantCredits } from '../../services/classService';
 import { importMembers } from '../../services/adminAccountService';
 import { updateProfile } from '../../services/profileService';
 import { assignPlan } from '../../services/planService';
-import { parseCsv, toCsv } from '../../utils/csv';
-import { buildMemberImportRows, fillForExisting, fillSummary, importOutcome, MEMBER_IMPORT_TEMPLATE, MAX_IMPORT_ROWS, type ImportFill, type ImportOutcome, type MemberImportRow } from '../../utils/memberImport';
+import { parseCsv, toCsv, type ParsedCsv } from '../../utils/csv';
+import { buildMemberImportRows, detectCreditColumns, fillForExisting, fillSummary, importOutcome, MEMBER_IMPORT_TEMPLATE, MAX_IMPORT_ROWS, type ImportFill, type ImportOutcome, type MemberImportRow } from '../../utils/memberImport';
 import { generatePassword } from '../../utils/account';
 import type { Plan, Profile, ProfileRole } from '../../types';
 
@@ -45,6 +47,15 @@ const OUTCOME: Record<ImportOutcome, { label: string; color: 'success' | 'defaul
   skip: { label: 'Overgeslagen', color: 'warning' },
   error: { label: 'Fout', color: 'error' },
 };
+
+/** Excel-werkmap (xlsx), op naam of type. De lezer zelf laden we pas als er zo'n bestand komt. */
+const isXlsxFile = (file: File) => /\.xlsx$/i.test(file.name) || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+/** "bootcamp", "small group training" → "Bootcamp en Small group training" */
+function creditColumnsLabel(columns: string[]): string {
+  const names = columns.map((c) => `"${c.charAt(0).toUpperCase()}${c.slice(1)}"`);
+  return names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} en ${names[names.length - 1]}`;
+}
 
 const ROLE_LABEL: Record<ProfileRole, string> = { sporter: 'sporter', trainer: 'trainer', admin: 'beheerder' };
 
@@ -91,6 +102,11 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
   /** Per regel: wat er bij een bestaand lid wordt aangevuld (alleen lege velden). */
   const [fills, setFills] = useState<Record<number, { uid: string; fill: ImportFill }>>({});
   const [updated, setUpdated] = useState<{ ok: number; failed: number }>({ ok: 0, failed: 0 });
+  /** De ingelezen rijen, om het voorbeeld opnieuw op te bouwen als de schakelaar voor credits omgaat. */
+  const [sourceRows, setSourceRows] = useState<Record<string, string>[]>([]);
+  /** Creditkolommen in een Virtuagym-export (bijv. "bootcamp"); leeg bij andere bestanden. */
+  const [creditColumns, setCreditColumns] = useState<string[]>([]);
+  const [takeCredits, setTakeCredits] = useState(false);
 
   const reset = () => {
     setStep('upload');
@@ -98,6 +114,9 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
     setRows([]);
     setProgress(0);
     setResults([]);
+    setSourceRows([]);
+    setCreditColumns([]);
+    setTakeCredits(false);
   };
 
   const handleClose = () => {
@@ -117,19 +136,8 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
     URL.revokeObjectURL(url);
   };
 
-  const handleFile = async (file: File) => {
-    setUploadError(null);
-    const text = await file.text();
-    const parsed = parseCsv(text);
-    if (parsed.rows.length === 0) {
-      setUploadError('Geen rijen gevonden in dit bestand. Gebruik het sjabloon als voorbeeld.');
-      return;
-    }
-    if (parsed.rows.length > MAX_IMPORT_ROWS) {
-      setUploadError(`Dit bestand heeft ${parsed.rows.length} rijen; meer dan ${MAX_IMPORT_ROWS} in één keer wordt niet ondersteund.`);
-      return;
-    }
-    const built = buildMemberImportRows(parsed.rows, existingEmails);
+  const buildPreview = (source: Record<string, string>[], columns: string[]) => {
+    const built = buildMemberImportRows(source, existingEmails, undefined, { creditColumns: columns });
     for (const r of built) {
       if (r.planName && !planByName.has(r.planName.toLowerCase())) r.warnings.push(`Abonnement "${r.planName}" bestaat niet; zonder abonnement geïmporteerd.`);
     }
@@ -144,7 +152,40 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
     }
     setFills(nextFills);
     setRows(built);
+  };
+
+  const handleFile = async (file: File) => {
+    setUploadError(null);
+    let parsed: ParsedCsv;
+    try {
+      if (isXlsxFile(file)) {
+        const { parseXlsx } = await import('../../utils/xlsx');
+        parsed = parseXlsx(new Uint8Array(await file.arrayBuffer()));
+      } else {
+        parsed = parseCsv(await file.text());
+      }
+    } catch {
+      setUploadError('Dit bestand kon niet worden gelezen. Kies een CSV- of Excel-bestand (.xlsx).');
+      return;
+    }
+    if (parsed.rows.length === 0) {
+      setUploadError('Geen rijen gevonden in dit bestand. Gebruik het sjabloon als voorbeeld.');
+      return;
+    }
+    if (parsed.rows.length > MAX_IMPORT_ROWS) {
+      setUploadError(`Dit bestand heeft ${parsed.rows.length} rijen; meer dan ${MAX_IMPORT_ROWS} in één keer wordt niet ondersteund.`);
+      return;
+    }
+    setSourceRows(parsed.rows);
+    setCreditColumns(detectCreditColumns(parsed.headers, parsed.rows));
+    setTakeCredits(false);
+    buildPreview(parsed.rows, []);
     setStep('preview');
+  };
+
+  const handleTakeCredits = (on: boolean) => {
+    setTakeCredits(on);
+    buildPreview(sourceRows, on ? creditColumns : []);
   };
 
   const trainerIdByEmail = new Map(trainers.filter((t) => t.email).map((t) => [t.email!.toLowerCase(), t.userId]));
@@ -263,7 +304,7 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
             <Typography variant="body2" color="text.secondary">
               Download het sjabloon, vul per lid een rij in (naam en e-mail zijn verplicht; rol, trainer, startsaldo,
               abonnement, status, geboortedatum en geslacht zijn optioneel) en upload het bestand terug. Een ledenexport uit
-              Virtuagym (CSV) werkt ook. Je ziet eerst wat er gebeurt; pas daarna worden de accounts aangemaakt, elk met een
+              Virtuagym (Excel of CSV) werkt ook. Je ziet eerst wat er gebeurt; pas daarna worden de accounts aangemaakt, elk met een
               tijdelijk wachtwoord. Uitgeschreven leden komen erin als inactief.
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -276,7 +317,7 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 hidden
                 onChange={(e) => {
                   const file = e.target.files?.[0];
@@ -300,6 +341,18 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
               ))}
               {fillCount > 0 && <Chip size="small" color="info" variant="outlined" label={`Aanvullen: ${fillCount}`} />}
             </Box>
+            {creditColumns.length > 0 && (
+              <Box>
+                <FormControlLabel
+                  control={<Switch checked={takeCredits} onChange={(e) => handleTakeCredits(e.target.checked)} />}
+                  label="Creditsaldo overnemen"
+                />
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  Uit {creditColumnsLabel(creditColumns)}, per lid opgeteld. Een negatief saldo gaat niet mee. Alleen voor nieuwe
+                  accounts; wie al een account heeft, houdt het saldo dat er staat.
+                </Typography>
+              </Box>
+            )}
             <Box sx={{ overflowX: 'auto' }}>
               <Table size="small">
                 <TableHead>
