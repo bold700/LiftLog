@@ -194,6 +194,8 @@ await t('beheerder leest de ondertekeningen rechtstreeks → geweigerd', false, 
 await t('beheerder schrijft een ondertekening rechtstreeks → geweigerd', false, setDoc(doc(as('admin1'), 'processorAgreements/vanas__v1__1'), { version: 1 }));
 await t('beheerder leest beschikbaarheid rechtstreeks → geweigerd (alleen via de server)', false, getDoc(doc(as('admin1'), 'trainerAvailability/vanas__admin1')));
 await t('beheerder schrijft beschikbaarheid rechtstreeks → geweigerd', false, setDoc(doc(as('admin1'), 'trainerAvailability/vanas__admin1'), { days: {} }));
+await t('sporter leest verzoeken om te verzetten rechtstreeks → geweigerd (alleen via de server)', false, getDoc(doc(as('sporter1'), 'rescheduleRequests/rr_x')));
+await t('trainer zet zelf een verzoek op goedgekeurd → geweigerd', false, setDoc(doc(as('trainer1'), 'rescheduleRequests/rr_x'), { status: 'approved' }));
 
 // orgSecrets: de Mollie-sleutels. Nooit leesbaar of schrijfbaar via de client, ook niet voor de
 // eigen beheerder van de studio — alleen de server (Admin SDK) mag hierbij, na de sleutel bij

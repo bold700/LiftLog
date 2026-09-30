@@ -62,6 +62,27 @@ const clockTime = (iso) => {
 const when = (cls) => [dayLabel(cls?.date), shortTime(cls?.startTime)].filter(Boolean).join(' ');
 
 export const messages = {
+  /** Aan de trainer: een sporter meldde een PT-moment af en vraagt een ander moment aan. */
+  rescheduleRequested(req, memberName) {
+    return {
+      title: 'Verzoek om te verzetten',
+      body: `${memberName || 'Een sporter'} vraagt ${req?.title || 'een PT-moment'} aan op ${when(req)}. Keur het goed of wijs het af in Beheer.`,
+    };
+  },
+  /** Aan de sporter: het nieuwe moment staat vast (de credit is afgeschreven zoals bij boeken). */
+  rescheduleApproved(req) {
+    return {
+      title: 'Nieuw moment staat vast',
+      body: `${req?.title || 'Je PT-moment'} staat op ${when(req)}. Tot dan!`,
+    };
+  },
+  /** Aan de sporter: de trainer kan dan niet; de credit staat nog op het saldo. */
+  rescheduleDeclined(req) {
+    return {
+      title: 'Moment niet bevestigd',
+      body: `Je trainer kan niet op ${when(req)}. Kies in Lessen een ander moment; je credit staat nog op je saldo.`,
+    };
+  },
   /** De studio meldde iemand af (in de praktijk: de les gaat niet door). */
   bookingCancelledByStudio(cls, refunded) {
     return {

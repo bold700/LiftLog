@@ -210,6 +210,12 @@ service cloud.firestore {
 
     // Trainer beschikbaarheid (per weekdag de uren waarop een trainer kan). Lezen en schrijven via de
     // server (api/booking.mjs: getAvailability/saveAvailability), die de rol en studio controleert.
+    // Verzoeken om een PT-moment te verzetten: alleen via de server (api/booking.mjs), die ook
+    // controleert wie wat mag zien en goedkeuren.
+    match /rescheduleRequests/{id} {
+      allow read, write: if false;
+    }
+
     match /trainerAvailability/{id} {
       allow read, write: if false;
     }

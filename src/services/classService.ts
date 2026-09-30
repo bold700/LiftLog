@@ -474,8 +474,13 @@ export function bookClass(
   return callBooking({ action: 'book', classId, weekly, userId, ...(extra ? { extra: true } : {}) });
 }
 
-/** Afmelden. Binnen de annuleertermijn krijg je de credit terug. */
-export function cancelBooking(bookingId: string): Promise<{ refunded: boolean; promotedUserId: string | null }> {
+/**
+ * Afmelden. Binnen de annuleertermijn krijg je de credit terug. Was het een PT-moment en kwam de
+ * credit terug, dan zit `reschedule` erin: de app biedt dan meteen een ander moment aan.
+ */
+export function cancelBooking(
+  bookingId: string
+): Promise<{ refunded: boolean; promotedUserId: string | null; reschedule?: { classId: string; userId: string } | null }> {
   return callBooking({ action: 'cancel', bookingId });
 }
 

@@ -2223,3 +2223,100 @@ describe('vaste groepslessen (betaald uit het groepstegoed, naar opkomst)', () =
     expect(Object.values(store).some((v) => v.classTypeId === ctId() && v.userId && !['cancelled'].includes(v.status) && v.orgId)).toBe(false);
   });
 });
+
+describe('verzetten na afmelden (PT-moment)', () => {
+  const D = amsterdamDate(new Date(), 3);
+  const allWeek = Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), [{ from: '16:00', to: '21:00' }]]));
+
+  beforeEach(() => {
+    store['classes/pt1'] = {
+      orgId: 'vanas', title: 'Personal Training', date: D, startTime: '18:00', endTime: '19:00', room: 'Zaal 1',
+      trainerId: 'trainer1', capacity: 1, creditCost: 1, bookedCount: 0, waitlistCount: 0, privateFor: 'sporter1', classTypeId: 'ctp_x',
+    };
+    store['classes/other'] = {
+      orgId: 'vanas', title: 'Small Group', date: D, startTime: '19:00', endTime: '20:00', room: 'Zaal 2',
+      trainerId: 'trainer1', capacity: 6, creditCost: 1, bookedCount: 0, waitlistCount: 0,
+    };
+    store['trainerAvailability/vanas__trainer1'] = { orgId: 'vanas', userId: 'trainer1', days: allWeek };
+  });
+
+  const cancelPt = async () => {
+    const booked = await post({ action: 'book', classId: 'pt1' });
+    return post({ action: 'cancel', bookingId: booked.body.bookingId });
+  };
+
+  it('op tijd afgemeld: credit terug en de app mag een ander moment aanbieden', async () => {
+    const res = await cancelPt();
+    expect(res.body.refunded).toBe(true);
+    expect(res.body.reschedule).toEqual({ classId: 'pt1', userId: 'sporter1' });
+  });
+
+  it('een groepsles afmelden biedt geen verzetten aan', async () => {
+    const booked = await post({ action: 'book', classId: 'c1' });
+    const res = await post({ action: 'cancel', bookingId: booked.body.bookingId });
+    expect(res.body.reschedule).toBeNull();
+  });
+
+  it('opties: binnen de beschikbaarheid, aansluitend op een andere les eerst, niet het afgemelde moment', async () => {
+    await cancelPt();
+    const res = await post({ action: 'rescheduleOptions', classId: 'pt1' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.adjacent).toEqual([{ date: D, startTime: '20:00', endTime: '21:00', adjacent: true }]);
+    const day = res.body.days.find((d) => d.date === D);
+    expect(day.times.map((t) => t.startTime)).toEqual(['16:00', '16:30', '17:00', '17:30', '20:00']);
+    // Een ander lid mag de opties van deze les niet opvragen.
+    expect((await post({ action: 'rescheduleOptions', classId: 'pt1' }, 'sporter2')).statusCode).toBe(403);
+  });
+
+  it('sporter vraagt aan, trainer keurt goed: nieuwe les, ingeschreven, credit eraf', async () => {
+    await cancelPt();
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(3);
+    const req = await post({ action: 'requestReschedule', classId: 'pt1', date: D, startTime: '20:00' });
+    expect(req.body).toMatchObject({ requestId: 'rr_pt1', status: 'pending' });
+    expect(store['rescheduleRequests/rr_pt1']).toMatchObject({ userId: 'sporter1', trainerId: 'trainer1', date: D, startTime: '20:00', endTime: '21:00' });
+    // Nog een keer aanvragen gaat niet zolang dit verzoek loopt.
+    expect((await post({ action: 'requestReschedule', classId: 'pt1', date: D, startTime: '17:00' })).statusCode).toBe(409);
+    // Het aangevraagde moment is voor anderen bij deze trainer niet meer vrij.
+    const opts = await post({ action: 'rescheduleOptions', classId: 'pt1' });
+    expect(opts.body.days.find((d) => d.date === D).times.map((t) => t.startTime)).not.toContain('20:00');
+
+    // De sporter ziet zijn verzoek; de trainer ziet het openstaande verzoek met naam.
+    const mine = await post({ action: 'rescheduleRequests' });
+    expect(mine.body.requests.map((r) => r.status)).toEqual(['pending']);
+    expect((await post({ action: 'answerReschedule', requestId: 'rr_pt1', approve: true })).statusCode).toBe(403);
+
+    const ok = await post({ action: 'answerReschedule', requestId: 'rr_pt1', approve: true }, 'trainer1');
+    expect(ok.statusCode).toBe(200);
+    const cls = store['classes/cls_rs_rr_pt1'];
+    expect(cls).toMatchObject({ date: D, startTime: '20:00', endTime: '21:00', privateFor: 'sporter1', trainerId: 'trainer1', bookedCount: 1, rescheduledFrom: 'pt1' });
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(2);
+    expect(store['rescheduleRequests/rr_pt1'].status).toBe('approved');
+    expect((await post({ action: 'answerReschedule', requestId: 'rr_pt1', approve: false }, 'trainer1')).statusCode).toBe(409);
+  });
+
+  it('trainer wijst af: de sporter kan daarna een ander moment aanvragen', async () => {
+    await cancelPt();
+    await post({ action: 'requestReschedule', classId: 'pt1', date: D, startTime: '20:00' });
+    const no = await post({ action: 'answerReschedule', requestId: 'rr_pt1', approve: false }, 'trainer1');
+    expect(no.body.status).toBe('declined');
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(3);
+    const again = await post({ action: 'requestReschedule', classId: 'pt1', date: D, startTime: '17:00' });
+    expect(again.body.status).toBe('pending');
+  });
+
+  it('staf plant meteen in, zonder goedkeuring', async () => {
+    await cancelPt();
+    const res = await post({ action: 'requestReschedule', classId: 'pt1', date: D, startTime: '16:00' }, 'trainer1');
+    expect(res.body).toMatchObject({ status: 'approved', classId: 'cls_rs_rr_pt1' });
+    expect(store['classes/cls_rs_rr_pt1'].bookedCount).toBe(1);
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(2);
+  });
+
+  it('weigert een moment dat niet wordt aangeboden, of zolang je nog ingeschreven staat', async () => {
+    const booked = await post({ action: 'book', classId: 'pt1' });
+    expect((await post({ action: 'requestReschedule', classId: 'pt1', date: D, startTime: '20:00' })).statusCode).toBe(409);
+    await post({ action: 'cancel', bookingId: booked.body.bookingId });
+    expect((await post({ action: 'requestReschedule', classId: 'pt1', date: D, startTime: '19:00' })).statusCode).toBe(409);
+    expect((await post({ action: 'requestReschedule', classId: 'pt1', date: D, startTime: '09:00' })).statusCode).toBe(409);
+  });
+});
