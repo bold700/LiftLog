@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildMemberImportRows, importOutcome, MAX_IMPORT_CREDITS, parseImportDate, PLACEHOLDER_EMAIL_DOMAIN } from '../../src/utils/memberImport';
+import { buildMemberImportRows, importOutcome, MAX_IMPORT_CREDITS, normalizePhone, parseImportDate, PLACEHOLDER_EMAIL_DOMAIN } from '../../src/utils/memberImport';
 import { parseCsv } from '../../src/utils/csv';
 
 describe('buildMemberImportRows', () => {
@@ -159,4 +159,15 @@ describe('buildMemberImportRows', () => {
     expect(parseImportDate('31-02-1990')).toBeNull();
     expect(parseImportDate('gisteren')).toBeNull();
   });
+
+  it('telefoon, adres en lid sinds uit Virtuagym (0 vooraan terug die Excel weghaalde)', () => {
+    const [row] = buildMemberImportRows(
+      [{ 'first name': 'Eva', 'last name': 'J', email: 'eva@x.nl', mobile: '612345678', 'street address': 'Dorpsstraat 1', 'zip code': '1234ab', city: 'Utrecht', 'member since': '01-03-2021' }],
+      new Set()
+    );
+    expect(row).toMatchObject({ phone: '0612345678', address: { street: 'Dorpsstraat 1', zip: '1234AB', city: 'Utrecht' }, memberSince: '2021-03-01' });
+    expect(normalizePhone('06-12345678')).toBe('06-12345678');
+    expect(normalizePhone('')).toBeNull();
+  });
 });
+

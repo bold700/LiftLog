@@ -503,6 +503,12 @@ export interface Profile {
   birthDate?: string | null;
   /** Geslacht. */
   gender?: 'man' | 'vrouw' | 'anders' | null;
+  /** Telefoonnummer (bijv. voor WhatsApp); vrije tekst. */
+  phone?: string | null;
+  /** Postadres; alle delen vrije tekst. */
+  address?: ProfileAddress | null;
+  /** Lid sinds (YYYY-MM-DD), bijv. overgenomen uit het vorige systeem bij een overstap. */
+  memberSince?: string | null;
   /** Rusthartslag in bpm. */
   restingHrBpm?: number | null;
   /** Blessures en pijntjes; zichtbaar voor de trainer bij het inplannen en tijdens de les. */
@@ -655,6 +661,12 @@ export interface Group {
   payerId: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProfileAddress {
+  street: string | null;
+  zip: string | null;
+  city: string | null;
 }
 
 /** Abonnement (Beheer → Abonnementen): wat een lid krijgt en wat het kost. */

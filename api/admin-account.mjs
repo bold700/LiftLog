@@ -17,6 +17,13 @@ import { applyCors } from './_lib/cors.mjs';
  *  - { action: 'invite', email, role } nodigt iemand met een bestaand account uit bij de studio van
  *                                       de beller. Geen account? Dan { status: 'no-account' } en maakt
  *                                       de app gewoon een nieuw account aan.
+ *  - { action: 'importMembers', members: [...] }
+ *                                       leden importeren (Beheer → Leden importeren), max. 25 per keer:
+ *                                       account + profiel aanmaken op de server. In de browser kan
+ *                                       Firebase maar ~100 accounts per uur aanmaken ("te veel
+ *                                       pogingen"); de Admin SDK heeft die grens niet. Per lid:
+ *                                       { email, displayName, trainerId?, birthDate?, gender?, phone?,
+ *                                       address?, memberSince?, inactive? } → { status, uid?, password? }.
  *  - { action: 'myInvites' }            openstaande uitnodigingen voor de beller.
  *  - { action: 'acceptInvite', inviteId } / { action: 'declineInvite', inviteId }
  *                                       de uitgenodigde beslist; pas bij accepteren hoort hij erbij.
@@ -48,6 +55,7 @@ import { enforceRateLimit } from './_lib/requireUser.mjs';
 import { actingOrg, isAdminIn, isStaffIn, orgsOf, roleIn } from './_lib/orgRoles.mjs';
 import { FieldValue } from 'firebase-admin/firestore';
 import { sendPushToUser } from './_lib/pushSend.mjs';
+import { randomBytes } from 'node:crypto';
 
 /** Versie van de toestemmingstekst voor gezondheidsgegevens (zie src/components/HealthConsentDialog.tsx). */
 const HEALTH_CONSENT_VERSION = 2;
@@ -172,6 +180,72 @@ export default async function handler(req, res) {
       console.error('[admin-account] export mislukte:', e);
       return json(res, 500, { error: 'Je gegevens ophalen mislukte. Probeer het later opnieuw.' });
     }
+  }
+
+  // Leden importeren bij een overstap: accounts op de server aanmaken (geen limiet per uur zoals in
+  // de browser). Alleen een beheerder, alleen in de eigen studio, als sporter.
+  if (action === 'importMembers') {
+    const callerSnap = await db.collection('profiles').doc(callerUid).get();
+    const callerData = callerSnap.exists ? callerSnap.data() : null;
+    const org = callerData ? actingOrg(callerData, body?.actingOrgId) : null;
+    if (!callerData || !isAdminIn(callerData, org)) return json(res, 403, { error: 'Alleen een beheerder kan leden importeren.' });
+    const members = Array.isArray(body?.members) ? body.members.slice(0, 25) : [];
+    if (members.length === 0) return json(res, 400, { error: 'Geen leden om te importeren.' });
+    if (!(await enforceRateLimit(db, res, callerUid, 'importMembers', 200, 24 * 60 * 60 * 1000))) return;
+    const str = (v, max = 200) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+    const isoDate = (v) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+    const trainerOk = new Map();
+    const results = [];
+    for (const m of members) {
+      const email = String(m?.email ?? '').trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        results.push({ email, status: 'failed', error: 'Ongeldig e-mailadres.' });
+        continue;
+      }
+      // Trainer alleen koppelen als die staf is in deze studio.
+      let trainerId = str(m?.trainerId, 128);
+      if (trainerId && !trainerOk.has(trainerId)) {
+        const t = await db.collection('profiles').doc(trainerId).get();
+        trainerOk.set(trainerId, t.exists && isStaffIn(t.data(), org));
+      }
+      if (trainerId && !trainerOk.get(trainerId)) trainerId = null;
+      const password = randomBytes(9).toString('base64url');
+      const displayName = str(m?.displayName, 120);
+      let user;
+      try {
+        user = await auth.createUser({ email, password, ...(displayName ? { displayName } : {}) });
+      } catch (e) {
+        const code = String(e?.code ?? e?.errorInfo?.code ?? '');
+        results.push({ email, status: code.includes('email-already-exists') ? 'exists' : 'failed', error: code.includes('email-already-exists') ? 'Er bestaat al een account met dit e-mailadres.' : 'Account aanmaken mislukt.' });
+        continue;
+      }
+      const address = m?.address && typeof m.address === 'object' ? { street: str(m.address.street), zip: str(m.address.zip, 20), city: str(m.address.city) } : null;
+      const gender = ['man', 'vrouw', 'anders'].includes(m?.gender) ? m.gender : null;
+      await db.collection('profiles').doc(user.uid).set({
+        userId: user.uid,
+        orgId: org,
+        orgIds: [org],
+        role: 'sporter',
+        email,
+        displayName,
+        trainerId,
+        trainerRequested: false,
+        leaderboardVisibility: 'named',
+        createdByAdmin: true,
+        birthDate: isoDate(m?.birthDate),
+        gender,
+        phone: str(m?.phone, 40),
+        address: address && (address.street || address.zip || address.city) ? address : null,
+        memberSince: isoDate(m?.memberSince),
+        // Uitgeschreven in het oude systeem: meteen inactief (er staan nog geen lessen of abonnementen).
+        inactiveOrgs: m?.inactive === true ? [org] : [],
+        importedAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      results.push({ email, status: 'created', uid: user.uid, password });
+    }
+    return json(res, 200, { results });
   }
 
   // Uitnodigingen voor een tweede (of derde) studio. Eén account, meerdere studio's: de studio vraagt,

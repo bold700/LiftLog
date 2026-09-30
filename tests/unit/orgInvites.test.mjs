@@ -78,6 +78,12 @@ vi.mock('../../api/_lib/firebaseAdmin.mjs', () => ({
         return { uid: authUsers[email] };
       },
       deleteUser: async () => {},
+      createUser: async ({ email }) => {
+        if (authUsers[email]) throw Object.assign(new Error('bestaat'), { code: 'auth/email-already-exists' });
+        const uid = `new_${email.split('@')[0]}`;
+        authUsers[email] = uid;
+        return { uid };
+      },
     },
     db: {
       collection: (name) => ({ doc: (id) => docRef(name, id), ...query(name) }),
@@ -205,3 +211,45 @@ describe('rol per studio (setRole) en uit de studio halen (delete)', () => {
     expect(store.profiles.basA).toBeDefined();
   });
 });
+
+describe('leden importeren op de server (geen limiet per uur zoals in de browser)', () => {
+  const member = (extra = {}) => ({ email: 'nieuw@example.com', displayName: 'Nina Nieuw', ...extra });
+
+  it('alleen een beheerder', async () => {
+    const res = await post('trainerA', { action: 'importMembers', members: [member()], actingOrgId: 'vanas' });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('maakt account en profiel aan in de eigen studio, met de gegevens uit het oude systeem', async () => {
+    const res = await post('adminA', {
+      action: 'importMembers',
+      actingOrgId: 'vanas',
+      members: [
+        member({ birthDate: '1990-12-31', gender: 'vrouw', phone: '0612345678', address: { street: 'Dorpsstraat 1', zip: '1234 AB', city: 'Utrecht' }, memberSince: '2021-03-01', trainerId: 'trainerA' }),
+        { email: 'oud@example.com', displayName: 'Oud Lid', inactive: true, trainerId: 'basA' },
+      ],
+    });
+    expect(res.statusCode).toBe(200);
+    const [a, b] = res.body.results;
+    expect(a).toMatchObject({ email: 'nieuw@example.com', status: 'created', uid: 'new_nieuw' });
+    expect(a.password.length).toBeGreaterThanOrEqual(10);
+    expect(store.profiles.new_nieuw).toMatchObject({
+      orgId: 'vanas', orgIds: ['vanas'], role: 'sporter', email: 'nieuw@example.com', displayName: 'Nina Nieuw', createdByAdmin: true,
+      birthDate: '1990-12-31', gender: 'vrouw', phone: '0612345678', memberSince: '2021-03-01', trainerId: 'trainerA', inactiveOrgs: [],
+      address: { street: 'Dorpsstraat 1', zip: '1234 AB', city: 'Utrecht' },
+    });
+    // Uitgeschreven → inactief; een sporter als "trainer" wordt niet gekoppeld.
+    expect(b.status).toBe('created');
+    expect(store.profiles.new_oud).toMatchObject({ inactiveOrgs: ['vanas'], trainerId: null });
+  });
+
+  it('bestaand account of ongeldig adres: overgeslagen per lid, de rest gaat door', async () => {
+    const res = await post('adminA', {
+      action: 'importMembers',
+      actingOrgId: 'vanas',
+      members: [{ email: 'bas@example.com', displayName: 'Bas' }, { email: 'geen-adres', displayName: 'X' }, member({ email: 'derde@example.com' })],
+    });
+    expect(res.body.results.map((r) => r.status)).toEqual(['exists', 'failed', 'created']);
+  });
+});
+
