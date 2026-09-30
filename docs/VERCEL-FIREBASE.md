@@ -36,6 +36,23 @@ Op de Vercel-deploy (https://lift-log-phi.vercel.app/) zie je nu geen inlog en w
 
    Zonder deze twee blijft de knop uitgeschakeld en zegt Facturatie dat mail nog niet is ingericht. De naam van de afzender is de bedrijfsnaam uit Huisstijl; antwoorden gaan naar het factuur-e-mailadres daar.
 
+   **Getekende verwerkersovereenkomsten naar de Drive van BOLD700.** Tekent een studio de
+   verwerkersovereenkomst in de app (Beheer → Instellingen), dan zet de server de PDF op een gedeelde
+   drive. Eenmalig instellen:
+
+   1. Google Cloud Console, project van Firebase → *APIs & Services* → *Library* → **Google Drive API** → *Enable*.
+   2. Google Drive → gedeelde drive van BOLD700 (bijv. "Contracten") → map "Verwerkersovereenkomsten" maken.
+   3. Gedeelde drive → *Leden beheren* → het e-mailadres van het serviceaccount toevoegen (het veld
+      `client_email` uit `FIREBASE_SERVICE_ACCOUNT`, eindigt op `iam.gserviceaccount.com`), rol **Inhoudbeheerder**.
+      Weigert Drive dat, zet dan in de Admin-console (Apps → Google Workspace → Drive en Documenten →
+      Instellingen voor delen) toe dat gedeelde drives leden van buiten de organisatie hebben.
+   4. In Vercel: `GOOGLE_DRIVE_FOLDER_ID` = het laatste stuk van de link van de map
+      (`drive.google.com/drive/folders/<dit stuk>`).
+
+   Zonder `GOOGLE_DRIVE_FOLDER_ID` gaat de PDF alleen per mail naar de ondertekenaar en support@bold700.com
+   (als Resend is ingericht). De PDF is in de app altijd opnieuw te downloaden. Een serviceaccount heeft
+   zelf geen opslagruimte: het werkt daarom alleen op een gedeelde drive, niet in "Mijn Drive".
+
 3. **Opnieuw deployen**  
    Na het opslaan van de variabelen een **nieuwe deploy** doen (bijv. *Deployments* → *…* bij de laatste deploy → *Redeploy*, of een nieuwe commit pushen).
 

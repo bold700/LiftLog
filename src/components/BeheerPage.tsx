@@ -45,6 +45,7 @@ import { HeartRateZonesTable } from './HeartRateZonesTable';
 import { LimitationsEditor } from './LimitationsEditor';
 import { todayIso } from '../utils/format';
 import { RequestsBanner } from './beheer/RequestsBanner';
+import { ProcessorAgreementCard } from './beheer/ProcessorAgreementCard';
 import { MembersList } from './beheer/MembersList';
 import { StandingBookingsCard } from './StandingBookingsCard';
 import { MembersToolbar } from './beheer/MembersToolbar';
@@ -591,6 +592,7 @@ export function BeheerPage() {
       {header}
 
       <RequestsBanner profiles={profiles} onChanged={load} />
+      {isAdmin && <ProcessorAgreementCard variant="banner" />}
 
       {/* Met veel leden: zoeken, filteren op rol en abonnement, sorteren (kolomkoppen of, op de telefoon, de keuzelijst). */}
       <MembersToolbar

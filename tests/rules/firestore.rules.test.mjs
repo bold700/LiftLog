@@ -185,6 +185,11 @@ await t('diezelfde beheerder wijzigt iets anders van de studio → mag', true, u
 await env.withSecurityRulesDisabled(async (c) => { await updateDoc(doc(c.firestore(), 'orgs/studiob'), { ownerId: 'adminB' }); });
 await t('eigenaar zet inactieve-accounts-instelling → mag', true, updateDoc(doc(as('adminB'), 'orgs/studiob'), { accountRetention: retention }));
 
+// Verwerkersovereenkomst: alleen de server legt een ondertekening vast, ook niet de eigen beheerder.
+await t('beheerder zet zelf een ondertekende verwerkersovereenkomst op de studio → geweigerd', false, updateDoc(doc(as('admin1'), 'orgs/vanas'), { processorAgreement: { version: 1, signedAt: '2026-10-01' } }));
+await t('beheerder leest de ondertekeningen rechtstreeks → geweigerd', false, getDoc(doc(as('admin1'), 'processorAgreements/vanas__v1__1')));
+await t('beheerder schrijft een ondertekening rechtstreeks → geweigerd', false, setDoc(doc(as('admin1'), 'processorAgreements/vanas__v1__1'), { version: 1 }));
+
 // orgSecrets: de Mollie-sleutels. Nooit leesbaar of schrijfbaar via de client, ook niet voor de
 // eigen beheerder van de studio — alleen de server (Admin SDK) mag hierbij, na de sleutel bij
 // Mollie zelf geverifieerd te hebben.
