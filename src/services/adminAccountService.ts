@@ -154,3 +154,39 @@ export async function answerInvite(caller: User, inviteId: string, accept: boole
   if (!res.ok) throw new Error((data as { error?: string })?.error || 'Uitnodiging verwerken mislukt.');
   return (data as { orgId?: string }).orgId ?? null;
 }
+
+export interface ImportMemberInput {
+  email: string;
+  displayName: string | null;
+  trainerId?: string | null;
+  birthDate?: string | null;
+  gender?: 'man' | 'vrouw' | 'anders' | null;
+  phone?: string | null;
+  address?: { street: string | null; zip: string | null; city: string | null } | null;
+  memberSince?: string | null;
+  inactive?: boolean;
+}
+
+export interface ImportMemberResult {
+  email: string;
+  status: 'created' | 'exists' | 'failed';
+  uid?: string;
+  password?: string;
+  error?: string;
+}
+
+/**
+ * Leden importeren (max. 25 per keer): accounts en profielen worden op de server aangemaakt. In de
+ * browser laat Firebase maar ongeveer 100 nieuwe accounts per uur toe; op de server geldt dat niet.
+ */
+export async function importMembers(caller: User, members: ImportMemberInput[]): Promise<ImportMemberResult[]> {
+  const token = await caller.getIdToken();
+  const res = await fetch(apiUrl('/api/admin-account'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ actingOrgId: getCurrentOrgId(), action: 'importMembers', members }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string })?.error || 'Importeren mislukt.');
+  return (data as { results: ImportMemberResult[] }).results;
+}

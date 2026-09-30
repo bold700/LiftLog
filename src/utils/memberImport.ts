@@ -41,6 +41,10 @@ export interface MemberImportRow {
   inactive: boolean;
   /** Naam van het abonnement om te koppelen (moet in Beheer → Abonnementen bestaan), of ''. */
   planName: string;
+  phone: string | null;
+  address: { street: string | null; zip: string | null; city: string | null } | null;
+  /** Lid sinds (YYYY-MM-DD), uit het oude systeem. */
+  memberSince: string | null;
   /** Tijdelijk e-mailadres gekregen omdat een ander hetzelfde adres gebruikt. */
   placeholderEmail: boolean;
   /** Niet importeren, met de reden (testaccount, dubbel, geen e-mail, bestaat al). Geen fout. */
@@ -85,6 +89,18 @@ function ageOn(birthIso: string, todayIso: string): number {
   return ty - by - (tm < bm || (tm === bm && td < bd) ? 1 : 0);
 }
 
+/**
+ * Telefoonnummer netjes: Excel laat de 0 vooraan weg (612345678 → 0612345678). Verder zoals het
+ * er stond; het is vrije tekst voor de trainer (bijv. om te appen).
+ */
+export function normalizePhone(raw: string): string | null {
+  const v = raw.trim();
+  if (!v) return null;
+  const digits = v.replace(/\D/g, '');
+  if (/^[1-9]\d{8}$/.test(digits) && digits === v.replace(/[\s-]/g, '')) return `0${digits}`;
+  return v;
+}
+
 /** Leest een veld uit een CSV-rij onder een van de gegeven kolomnamen (eerste match wint). */
 function field(row: Record<string, string>, ...names: string[]): string {
   for (const n of names) {
@@ -103,7 +119,7 @@ const slug = (s: string) =>
 
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 /** Hoeveel velden een rij heeft ingevuld: bij dubbelen wint de meest volledige. */
-const filled = (r: MemberImportRow) => [r.birthDate, r.gender, r.planName, r.credits, r.trainerEmail].filter((v) => v != null && v !== '').length + (r.inactive ? 0 : 1);
+const filled = (r: MemberImportRow) => [r.birthDate, r.gender, r.planName, r.credits, r.trainerEmail, r.phone, r.address, r.memberSince].filter((v) => v != null && v !== '').length + (r.inactive ? 0 : 1);
 
 export function buildMemberImportRows(rows: Record<string, string>[], existingEmails: ReadonlySet<string>, todayIso = new Date().toISOString().slice(0, 10)): MemberImportRow[] {
   const thisYear = Number(todayIso.slice(0, 4));
@@ -120,6 +136,12 @@ export function buildMemberImportRows(rows: Record<string, string>[], existingEm
     const creditsRaw = field(raw, 'credits', 'creditsaldo', 'saldo').trim();
     const planName = field(raw, 'abonnement', 'plan').trim();
     const gender = normalizeGender(field(raw, 'geslacht', 'gender'));
+    const phone = normalizePhone(field(raw, 'telefoon', 'mobile', 'mobiel', 'phone'));
+    const street = field(raw, 'adres', 'straat', 'street address', 'street').trim() || null;
+    const zip = field(raw, 'postcode', 'zip code', 'zip_code').trim().toUpperCase() || null;
+    const city = field(raw, 'plaats', 'woonplaats', 'city').trim() || null;
+    const address = street || zip || city ? { street, zip, city } : null;
+    const memberSince = parseImportDate(field(raw, 'lid sinds', 'member since', 'member_since', 'registration date', 'registration_date'));
 
     // Uitgeschreven: expliciete status, of een datum bij "uitgeschreven sinds" (Virtuagym).
     const status = field(raw, 'status').trim().toLowerCase();
@@ -159,7 +181,7 @@ export function buildMemberImportRows(rows: Record<string, string>[], existingEm
       skipReason = 'Heeft al een account';
     }
 
-    return { line: i + 2, displayName, email, role, trainerEmail, credits, birthDate, gender, inactive, planName, placeholderEmail: false, skipReason, errors, warnings };
+    return { line: i + 2, displayName, email, role, trainerEmail, credits, birthDate, gender, inactive, planName, phone, address, memberSince, placeholderEmail: false, skipReason, errors, warnings };
   });
 
   // Dubbelen in het bestand: zelfde e-mail + zelfde naam = één persoon (meest volledige rij wint);
@@ -201,6 +223,6 @@ export function importOutcome(r: MemberImportRow): ImportOutcome {
 
 /** Kolomkoppen en een voorbeeldrij voor het downloadbare CSV-sjabloon. */
 export const MEMBER_IMPORT_TEMPLATE: { headers: string[]; example: string[] } = {
-  headers: ['naam', 'email', 'rol', 'trainer', 'credits', 'abonnement', 'status', 'geboortedatum', 'geslacht'],
-  example: ['Jan de Vries', 'jan@voorbeeld.nl', 'sporter', '', '10', 'SGT 2x per week', 'actief', '31-12-1990', 'man'],
+  headers: ['naam', 'email', 'rol', 'trainer', 'credits', 'abonnement', 'status', 'geboortedatum', 'geslacht', 'telefoon', 'adres', 'postcode', 'plaats', 'lid sinds'],
+  example: ['Jan de Vries', 'jan@voorbeeld.nl', 'sporter', '', '10', 'SGT 2x per week', 'actief', '31-12-1990', 'man', '0612345678', 'Dorpsstraat 1', '1234 AB', 'Utrecht', '01-03-2021'],
 };

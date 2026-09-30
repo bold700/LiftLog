@@ -89,6 +89,10 @@ interface EditState {
   gender: 'man' | 'vrouw' | 'anders' | '';
   restingHr: string;
   weightGoalKg: string;
+  phone: string;
+  street: string;
+  zip: string;
+  city: string;
   leaderboardVisibility: LeaderboardVisibility;
   limitations: Limitation[];
   /** Nee gezegd tegen gezondheidsgegevens: geen rusthartslag en blessures invullen. */
@@ -109,6 +113,10 @@ function toEditState(p: Profile, planId = ''): EditState {
     gender: p.gender ?? '',
     restingHr: p.restingHrBpm != null ? String(p.restingHrBpm) : '',
     weightGoalKg: p.weightGoalKg != null ? String(p.weightGoalKg) : '',
+    phone: p.phone ?? '',
+    street: p.address?.street ?? '',
+    zip: p.address?.zip ?? '',
+    city: p.address?.city ?? '',
     leaderboardVisibility: p.leaderboardVisibility ?? 'named',
     limitations: p.limitations ?? [],
     healthRefused: p.healthConsent?.given === false,
@@ -384,6 +392,11 @@ export function BeheerPage() {
         restingHrBpm: num(edit.restingHr),
         limitations: edit.limitations,
         weightGoalKg: num(edit.weightGoalKg),
+        phone: edit.phone.trim() || null,
+        address:
+          edit.street.trim() || edit.zip.trim() || edit.city.trim()
+            ? { street: edit.street.trim() || null, zip: edit.zip.trim().toUpperCase() || null, city: edit.city.trim() || null }
+            : null,
         leaderboardVisibility: edit.leaderboardVisibility,
       });
       // Abonnement gewijzigd? Dat loopt via de server (saldo en grootboek in één keer).
@@ -617,6 +630,11 @@ export function BeheerPage() {
                 <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
                   {target.email || target.userId}
                 </Typography>
+                {target.memberSince && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    Lid sinds {new Date(`${target.memberSince}T12:00:00`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </Typography>
+                )}
                 {editAge != null && editZones && (
                   <Typography variant="caption" color="text.secondary">
                     {editAge} jaar · max {editZones.maxHr} bpm · Z2 {editZones.zones[1].lowBpm}–{editZones.zones[1].highBpm}
@@ -742,6 +760,10 @@ export function BeheerPage() {
                 <NumberField label="Rusthartslag (bpm)" size="small" fullWidth value={edit.restingHr} onChange={(v) => setEdit({ ...edit, restingHr: v })} />
               )}
               <NumberField label="Doelgewicht (kg)" decimal size="small" fullWidth value={edit.weightGoalKg} onChange={(v) => setEdit({ ...edit, weightGoalKg: v })} />
+              <TextField label="Telefoon" size="small" fullWidth value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} inputProps={{ inputMode: 'tel' }} />
+              <TextField label="Adres" size="small" fullWidth value={edit.street} onChange={(e) => setEdit({ ...edit, street: e.target.value })} sx={{ gridColumn: { sm: '1 / -1' } }} />
+              <TextField label="Postcode" size="small" fullWidth value={edit.zip} onChange={(e) => setEdit({ ...edit, zip: e.target.value })} />
+              <TextField label="Plaats" size="small" fullWidth value={edit.city} onChange={(e) => setEdit({ ...edit, city: e.target.value })} />
               {LEADERBOARD_ENABLED && (
                 <TextField select label="Ranglijst" size="small" fullWidth value={edit.leaderboardVisibility} onChange={(e) => setEdit({ ...edit, leaderboardVisibility: e.target.value as LeaderboardVisibility })}>
                   <MenuItem value="named">Met naam</MenuItem>

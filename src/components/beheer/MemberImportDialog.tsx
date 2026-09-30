@@ -30,7 +30,8 @@ import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import UploadFileRoundedIcon from '@mui/icons-material/UploadFileRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import { useAuth } from '../../context/AuthContext';
-import { grantCredits, setMemberActive } from '../../services/classService';
+import { grantCredits } from '../../services/classService';
+import { importMembers } from '../../services/adminAccountService';
 import { updateProfile } from '../../services/profileService';
 import { assignPlan } from '../../services/planService';
 import { parseCsv, toCsv } from '../../utils/csv';
@@ -143,37 +144,60 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
   const counts = rows.reduce<Record<ImportOutcome, number>>((acc, r) => ({ ...acc, [importOutcome(r)]: acc[importOutcome(r)] + 1 }), { create: 0, createInactive: 0, skip: 0, error: 0 });
 
   const handleImport = async () => {
-    if (!auth) return;
+    if (!auth?.user) return;
+    const caller = auth.user;
     setStep('importing');
     setProgress(0);
     const done: ImportResult[] = [];
-    for (const row of validRows) {
+
+    /** Na het aanmaken: abonnement en startsaldo (lopen via de boekingsserver, geen limiet). */
+    const finish = async (row: MemberImportRow, uid: string, password: string) => {
+      const problems: string[] = [];
+      const plan = row.planName ? planByName.get(row.planName.toLowerCase()) : undefined;
+      if (plan && !row.inactive) await assignPlan(uid, plan.id).catch(() => problems.push('abonnement'));
+      if (row.credits) await grantCredits(uid, row.credits, 'Geïmporteerd bij overstap').catch(() => problems.push('startsaldo'));
+      done.push({ ...row, password, outcome: 'ok', ...(problems.length ? { failureReason: `Account aangemaakt, maar niet gelukt: ${problems.join(', ')}.` } : {}) });
+    };
+
+    // Sporters: in groepjes op de server aanmaken. In de browser laat Firebase maar ~100 nieuwe
+    // accounts per uur toe ("te veel pogingen"); op de server geldt die grens niet.
+    const sporters = validRows.filter((r) => r.role === 'sporter');
+    for (let i = 0; i < sporters.length; i += 20) {
+      const batch = sporters.slice(i, i + 20);
+      try {
+        const results = await importMembers(
+          caller,
+          batch.map((r) => ({
+            email: r.email,
+            displayName: r.displayName || null,
+            trainerId: resolveTrainerId(r),
+            birthDate: r.birthDate,
+            gender: r.gender,
+            phone: r.phone,
+            address: r.address,
+            memberSince: r.memberSince,
+            inactive: r.inactive,
+          }))
+        );
+        const byEmail = new Map(results.map((x) => [x.email, x]));
+        for (const row of batch) {
+          const r = byEmail.get(row.email);
+          if (r?.status === 'created' && r.uid) await finish(row, r.uid, r.password ?? '');
+          else done.push({ ...row, password: '', outcome: 'failed', failureReason: r?.error ?? 'Account aanmaken mislukt.' });
+        }
+      } catch (e) {
+        for (const row of batch) done.push({ ...row, password: '', outcome: 'failed', failureReason: e instanceof Error ? e.message : 'Importeren mislukt.' });
+      }
+      setProgress((p) => p + batch.length);
+    }
+
+    // Trainers en beheerders (zelden in een import): zoals één account aanmaken.
+    for (const row of validRows.filter((r) => r.role !== 'sporter')) {
       const password = generatePassword();
       try {
-        const created = await auth.adminCreateAccount(row.email, password, row.role, row.displayName, { trainerId: resolveTrainerId(row) });
-        // Wat het oude systeem nog meer wist; lukt dit niet, dan staat het account er toch.
-        const problems: string[] = [];
-        if (row.birthDate || row.gender) {
-          await updateProfile(created.uid, { birthDate: row.birthDate, gender: row.gender }).catch(() => problems.push('geboortedatum/geslacht'));
-        }
-        const plan = row.planName ? planByName.get(row.planName.toLowerCase()) : undefined;
-        if (plan && !row.inactive) await assignPlan(created.uid, plan.id).catch(() => problems.push('abonnement'));
-        if (row.inactive) await setMemberActive(created.uid, false).catch(() => problems.push('op inactief zetten'));
-        if (problems.length) {
-          done.push({ ...row, password, outcome: 'ok', failureReason: `Account aangemaakt, maar niet gelukt: ${problems.join(', ')}.` });
-          setProgress((p) => p + 1);
-          continue;
-        }
-        if (row.credits) {
-          try {
-            await grantCredits(created.uid, row.credits, 'Geïmporteerd bij overstap');
-          } catch {
-            done.push({ ...row, password, outcome: 'ok', failureReason: 'Account aangemaakt, maar het startsaldo kon niet worden gezet.' });
-            setProgress((p) => p + 1);
-            continue;
-          }
-        }
-        done.push({ ...row, password, outcome: 'ok' });
+        const created = await auth.adminCreateAccount(row.email, password, row.role, row.displayName, { trainerId: null });
+        await updateProfile(created.uid, { birthDate: row.birthDate, gender: row.gender, phone: row.phone, address: row.address, memberSince: row.memberSince }).catch(() => undefined);
+        await finish(row, created.uid, password);
       } catch (e) {
         done.push({ ...row, password: '', outcome: 'failed', failureReason: e instanceof Error ? e.message : 'Account aanmaken mislukt.' });
       }

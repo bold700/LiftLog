@@ -17,7 +17,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
-import type { HealthConsent, Profile, ProfileRole, LeaderboardVisibility, Limitation, LimitationArea } from '../types';
+import type { HealthConsent, Profile, ProfileAddress, ProfileRole, LeaderboardVisibility, Limitation, LimitationArea } from '../types';
 import { DEFAULT_ORG_ID, getCurrentOrgId, orgIdOf, orgIdsOf, requireOrgId } from './orgContext';
 import { cleanRole, isInactiveInOrg, parseOrgRoles, roleInOrg, trainsAsMemberInOrg } from '../utils/orgRoles';
 
@@ -63,6 +63,14 @@ function parseLimitations(raw: unknown): Limitation[] | undefined {
   return out;
 }
 
+function parseAddress(raw: unknown): ProfileAddress | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const a = raw as Record<string, unknown>;
+  const part = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  const out = { street: part(a.street), zip: part(a.zip), city: part(a.city) };
+  return out.street || out.zip || out.city ? out : null;
+}
+
 function toProfile(data: Record<string, unknown>, userId: string): Profile {
   const toStr = (v: unknown) => (v == null ? null : String(v));
   const ts = (v: unknown) => (v && typeof (v as Timestamp).toDate === 'function' ? (v as Timestamp).toDate().toISOString() : new Date().toISOString());
@@ -97,6 +105,9 @@ function toProfile(data: Record<string, unknown>, userId: string): Profile {
     heightCm: numOrNull(data.heightCm),
     birthDate: toStr(data.birthDate),
     gender: data.gender === 'man' || data.gender === 'vrouw' || data.gender === 'anders' ? data.gender : null,
+    phone: toStr(data.phone),
+    address: parseAddress(data.address),
+    memberSince: toStr(data.memberSince),
     restingHrBpm: numOrNull(data.restingHrBpm),
     limitations: parseLimitations(data.limitations),
     trainerId: toStr(data.trainerId),
@@ -179,6 +190,9 @@ export async function updateProfile(
       | 'heightCm'
       | 'birthDate'
       | 'gender'
+      | 'phone'
+      | 'address'
+      | 'memberSince'
       | 'restingHrBpm'
       | 'limitations'
       | 'trainerId'
