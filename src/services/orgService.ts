@@ -29,6 +29,7 @@ function toOrg(data: Record<string, unknown>, id: string): Org {
     rooms: Array.isArray(data.rooms)
       ? Array.from(new Set(data.rooms.filter((r): r is string => typeof r === 'string' && r.trim() !== '').map((r) => r.trim())))
       : [],
+    blockDoubleBooking: (data.scheduling as { blockDoubleBooking?: unknown } | undefined)?.blockDoubleBooking !== false,
     branding: toBranding(data.branding),
     business: toBusiness(data.business),
     payments: toPaymentsStatus(data.payments),
@@ -170,6 +171,14 @@ export async function saveOrgStaffAccess(orgId: string, staffFullClientAccess: b
   const id = orgId.trim();
   if (!id) throw new Error('Studio-id ontbreekt');
   await setDoc(doc(db, COLLECTION, id), { staffFullClientAccess: staffFullClientAccess === true, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+/** Dubbel plannen blokkeren (zelfde trainer of ruimte op hetzelfde moment). */
+export async function saveOrgBlockDoubleBooking(orgId: string, block: boolean): Promise<void> {
+  if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
+  const id = orgId.trim();
+  if (!id) throw new Error('Studio-id ontbreekt');
+  await setDoc(doc(db, COLLECTION, id), { scheduling: { blockDoubleBooking: block === true }, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 /** Credit terug als de studio iemand te laat afmeldt (Beheer → Instellingen → Boekingsbeleid). */

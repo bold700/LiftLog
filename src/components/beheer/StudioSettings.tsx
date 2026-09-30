@@ -13,6 +13,7 @@ import { useNotify } from '../../context/NotifyContext';
 import { DEFAULT_GROUP_PRICING, formatEuro, groupPricingOf, groupSessionPrice } from '../../utils/groupPricing';
 import {
   getOrg,
+  saveOrgBlockDoubleBooking,
   saveOrgBookingPolicy,
   saveOrgGroupPricing,
   saveOrgShowTrainerNames,
@@ -38,6 +39,8 @@ export function StudioSettings() {
   const [studioRefund, setStudioRefund] = useState(false);
   const [savingRefund, setSavingRefund] = useState(false);
   const [savingNames, setSavingNames] = useState(false);
+  const [blockDouble, setBlockDouble] = useState(true);
+  const [savingBlock, setSavingBlock] = useState(false);
   const [groupBase, setGroupBase] = useState(String(DEFAULT_GROUP_PRICING.base));
   const [groupExtra, setGroupExtra] = useState(String(DEFAULT_GROUP_PRICING.perExtra));
   const [savedGroup, setSavedGroup] = useState(`${DEFAULT_GROUP_PRICING.base}|${DEFAULT_GROUP_PRICING.perExtra}`);
@@ -54,6 +57,7 @@ export function StudioSettings() {
       setStaffAccess(org.staffFullClientAccess);
       setShowNames(org.showTrainerNames);
       setStudioRefund(org.studioCancelRefund);
+      setBlockDouble(org.blockDoubleBooking);
       const gp = groupPricingOf(org.groupPricing);
       setGroupBase(String(gp.base));
       setGroupExtra(String(gp.perExtra));
@@ -140,6 +144,20 @@ export function StudioSettings() {
     }
   };
 
+  const toggleBlock = async (next: boolean) => {
+    setBlockDouble(next);
+    setSavingBlock(true);
+    try {
+      await saveOrgBlockDoubleBooking(orgId, next);
+      notify.success(next ? 'Dubbel plannen wordt nu geblokkeerd.' : 'Dubbel plannen is weer toegestaan.');
+    } catch (e) {
+      setBlockDouble(!next);
+      notify.error('Opslaan mislukt.', e);
+    } finally {
+      setSavingBlock(false);
+    }
+  };
+
   const toggleNames = async (next: boolean) => {
     setShowNames(next);
     setSavingNames(true);
@@ -214,6 +232,21 @@ export function StudioSettings() {
               {[1, 2, 3, 4].map((n) => `${n} ${n === 1 ? 'persoon' : 'personen'}: ${formatEuro(groupSessionPrice({ base: baseNum, perExtra: extraNum }, n))}`).join(' · ')}
             </Typography>
           )}
+        </ContentCard>
+
+        <ContentCard>
+          <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+            Dubbel plannen
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Aan: een lessoort of PT-moment kan niet worden opgeslagen als dezelfde trainer of dezelfde ruimte op dat moment al
+            ingepland staat. De app stelt dan een vrije ruimte of een ander tijdstip voor. Uit: dubbel plannen mag, met een
+            waarschuwing. Zet het uit als er in één ruimte twee sessies tegelijk kunnen.
+          </Typography>
+          <FormControlLabel
+            control={<Switch checked={blockDouble} disabled={savingBlock} onChange={(e) => void toggleBlock(e.target.checked)} />}
+            label="Dubbel plannen blokkeren"
+          />
         </ContentCard>
 
         <ContentCard>

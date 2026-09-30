@@ -133,3 +133,54 @@ export function generateClassOccurrencesNow(classTypeId: string): Promise<Genera
 export function pruneStaleClasses(): Promise<{ removed: number; staleWithBookings: StaleClass[] }> {
   return callBooking({ action: 'pruneStaleClasses' });
 }
+
+/** Een weekmoment van een andere lessoort waarmee iets botst (zie api/_lib/scheduleConflicts.mjs). */
+export interface ScheduleSlotRef extends ClassScheduleSlot {
+  id: string;
+  name: string;
+  trainerId: string | null;
+  room: string | null;
+}
+
+export interface ScheduleConflict {
+  /** Welk weekmoment van de lessoort die je opslaat. */
+  slotIndex: number;
+  slot: ClassScheduleSlot;
+  other: ScheduleSlotRef;
+  sameTrainer: boolean;
+  sameRoom: boolean;
+}
+
+export interface ScheduleSuggestion {
+  /** Ruimtes die op dat tijdstip vrij zijn. */
+  rooms: string[];
+  /** Vrije tijden op dezelfde dag, dichtstbijzijnde eerst. */
+  times: ClassScheduleSlot[];
+}
+
+export interface ScheduleCheck {
+  /** Staat "Dubbel plannen blokkeren" aan? Dan kan opslaan niet zolang er botsingen zijn. */
+  block: boolean;
+  conflicts: ScheduleConflict[];
+  /** Per weekmoment (index) dat botst. */
+  suggestions: Record<number, ScheduleSuggestion>;
+}
+
+/** Botst een weekmoment van deze (nog niet opgeslagen) lessoort met een andere, qua trainer of ruimte? */
+export function checkSchedule(classType: {
+  id: string;
+  name: string;
+  defaultTrainerId: string | null;
+  room: string | null;
+  schedule: ClassScheduleSlot[];
+}): Promise<ScheduleCheck> {
+  return callBooking({ action: 'checkSchedule', classType });
+}
+
+/** Alle botsingen die nu op het rooster staan (elk paar één keer). */
+export function getScheduleConflicts(): Promise<{
+  block: boolean;
+  conflicts: { a: ScheduleSlotRef; b: ScheduleSlotRef; sameTrainer: boolean; sameRoom: boolean }[];
+}> {
+  return callBooking({ action: 'scheduleConflicts' });
+}

@@ -28,14 +28,18 @@ import { FullScreenDialogTitle } from './FullScreenDialogTitle';
 import { useNotify } from '../../context/NotifyContext';
 import { useProfile } from '../../context/ProfileContext';
 import {
+  checkSchedule,
   deleteClassType,
   generateClassOccurrencesNow,
   getClassTypes,
   newClassTypeId,
   pruneStaleClasses,
   saveClassType,
+  type ScheduleCheck,
   type StaleClass,
 } from '../../services/classTypeService';
+import { ScheduleConflictNotice } from './ScheduleConflictNotice';
+import { ScheduleConflictsOverview } from './ScheduleConflictsOverview';
 import { getWorkoutsForUser } from '../../services/workoutFirestore';
 import { getOrg, saveOrgRooms } from '../../services/orgService';
 import { sortClassTypesByWeek } from '../../utils/classTypeOrder';
@@ -130,6 +134,10 @@ export function ClassTypesPanel({ staff, profiles, profilesLoading, createSignal
   const [rooms, setRooms] = useState<string[]>([]);
   /** Een nieuwe ruimte typen in plaats van er een uit de lijst te kiezen. */
   const [typingRoom, setTypingRoom] = useState(false);
+  /** Botsing met een andere lessoort bij de laatste poging om op te slaan, met voorstellen. */
+  const [check, setCheck] = useState<ScheduleCheck | null>(null);
+  /** Telt op na elke opslag, zodat het overzicht "dubbel ingepland" opnieuw kijkt. */
+  const [conflictsKey, setConflictsKey] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -214,7 +222,10 @@ export function ClassTypesPanel({ staff, profiles, profilesLoading, createSignal
 
   // Ook een ruimte die (nog) niet in de lijst staat tonen, bijv. door een trainer ingevuld.
   const roomOptions = draft?.room.trim() && !rooms.some((r) => r.toLowerCase() === draft.room.trim().toLowerCase()) && !typingRoom ? [...rooms, draft.room.trim()] : rooms;
-  useEffect(() => setTypingRoom(false), [draft?.id]);
+  useEffect(() => {
+    setTypingRoom(false);
+    setCheck(null);
+  }, [draft?.id]);
 
   const save = async () => {
     if (!draft) return;
@@ -228,6 +239,22 @@ export function ClassTypesPanel({ staff, profiles, profilesLoading, createSignal
     const roomName = rooms.find((r) => r.toLowerCase() === typedRoom.toLowerCase()) ?? typedRoom;
     setSaving(true);
     setError(null);
+    // Dubbel plannen: botst een weekmoment met een andere les (zelfde trainer of ruimte)? Met de
+    // instelling aan wordt er dan niet opgeslagen en staan er voorstellen klaar. Lukt de controle
+    // zelf niet (geen verbinding), dan niet tegenhouden.
+    const checked = await checkSchedule({
+      id: draft.id,
+      name,
+      defaultTrainerId: draft.defaultTrainerId || null,
+      room: roomName || null,
+      schedule: draft.schedule,
+    }).catch(() => null);
+    if (checked?.block && checked.conflicts.length > 0) {
+      setCheck(checked);
+      setSaving(false);
+      return;
+    }
+    setCheck(null);
     try {
       await saveClassType({
         id: draft.id,
@@ -258,7 +285,9 @@ export function ClassTypesPanel({ staff, profiles, profilesLoading, createSignal
           .catch((e) => notify.error(t('classTypes.saveFailed'), e));
       }
       setTypingRoom(false);
-      notify.success(t('classTypes.saved'));
+      if (checked && checked.conflicts.length > 0) notify.info(t('classTypes.schedule.conflict.warned', { count: new Set(checked.conflicts.map((c) => c.slotIndex)).size }));
+      else notify.success(t('classTypes.saved'));
+      setConflictsKey((k) => k + 1);
       warnStaleKept(synced?.staleWithBookings);
       await load();
       if (!wide) setDraft(null);
@@ -329,6 +358,7 @@ export function ClassTypesPanel({ staff, profiles, profilesLoading, createSignal
 
   const list = (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1, minWidth: 0 }}>
+      <ScheduleConflictsOverview refreshKey={conflictsKey} />
       {!loading && types.length === 0 && (
         <Box sx={{ p: 3, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground }}>
           <Typography color="text.secondary">{t('classTypes.empty')}</Typography>
@@ -568,6 +598,19 @@ export function ClassTypesPanel({ staff, profiles, profilesLoading, createSignal
         </Button>
       </Box>
 
+      {check && (
+        <ScheduleConflictNotice
+          check={check}
+          onPickRoom={(room) => {
+            setDraft({ ...draft, room });
+            setCheck(null);
+          }}
+          onPickTime={(i, slot) => {
+            setDraft({ ...draft, schedule: draft.schedule.map((s, j) => (j === i ? { ...s, startTime: slot.startTime, endTime: slot.endTime } : s)) });
+            setCheck(null);
+          }}
+        />
+      )}
       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', pt: 0.5 }}>
         <Button variant="contained" disableElevation onClick={() => void save()} disabled={saving}>
           {saving ? t('common.saving') : t('common.save')}
