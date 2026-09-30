@@ -1,11 +1,13 @@
 /**
  * Beheer → Instellingen: hoe de studio werkt, los van hoe hij eruitziet (Huisstijl) en van het geld
- * (Facturatie). Boekingsbeleid, toegang tussen trainers en inactieve accounts opruimen.
+ * (Facturatie). Boekingsbeleid, toegang tussen trainers, inactieve accounts opruimen en de
+ * verwerkersovereenkomst met BOLD700.
  */
 import { useEffect, useState } from 'react';
 import { Box, Button, CircularProgress, FormControlLabel, Switch, TextField, Typography } from '@mui/material';
 import { ContentCard } from '../layout';
 import { AccountRetentionSettings } from './AccountRetentionSettings';
+import { ProcessorAgreementCard } from './ProcessorAgreementCard';
 import { useProfile } from '../../context/ProfileContext';
 import { useNotify } from '../../context/NotifyContext';
 import { DEFAULT_GROUP_PRICING, formatEuro, groupPricingOf, groupSessionPrice } from '../../utils/groupPricing';
@@ -244,6 +246,7 @@ export function StudioSettings() {
       </Box>
 
       <AccountRetentionSettings orgId={orgId} myUid={profile?.profile?.userId} />
+      <ProcessorAgreementCard />
     </Box>
   );
 }

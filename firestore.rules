@@ -183,7 +183,9 @@ service cloud.firestore {
       allow read: if isSignedIn() && orgId in myOrgs();
       // "Inactieve accounts verwijderen" is een beslissing van de eigenaar, niet van elke beheerder.
       // Heeft de studio (nog) geen eigenaar, dan mag een beheerder het.
+      // De ondertekende verwerkersovereenkomst zet alleen de server (api/admin-account.mjs).
       allow update: if isAdminIn(orgId)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['processorAgreement'])
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['accountRetention'])
             || resource.data.get('ownerId', null) == null
             || resource.data.get('ownerId', null) == request.auth.uid);
@@ -197,6 +199,12 @@ service cloud.firestore {
     // te hebben geverifieerd. Het zichtbare restje (modus, laatste vier tekens) staat gewoon op
     // orgs/{orgId}.payments, onder de normale orgs-regels hierboven.
     match /orgSecrets/{orgId} {
+      allow read, write: if false;
+    }
+
+    // Elke ondertekening van de verwerkersovereenkomst (bewijs: wie, wanneer, welke tekst). Alleen de
+    // server schrijft en leest dit; de laatste staat ook op orgs/{orgId}.processorAgreement.
+    match /processorAgreements/{id} {
       allow read, write: if false;
     }
 

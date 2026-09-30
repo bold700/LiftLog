@@ -24,6 +24,11 @@ import { applyCors } from './_lib/cors.mjs';
  *                                       pogingen"); de Admin SDK heeft die grens niet. Per lid:
  *                                       { email, displayName, trainerId?, birthDate?, gender?, phone?,
  *                                       address?, memberSince?, inactive? } → { status, uid?, password? }.
+ *  - { action: 'processorAgreement' } / { action: 'signProcessorAgreement', version, agree, controller, signer }
+ *    / { action: 'processorAgreementPdf' }
+ *                                       verwerkersovereenkomst met BOLD700 lezen, tekenen en als PDF
+ *                                       downloaden (alleen beheerder). Na tekenen gaat de PDF naar de
+ *                                       gedeelde drive (GOOGLE_DRIVE_FOLDER_ID) en per mail rond.
  *  - { action: 'myInvites' }            openstaande uitnodigingen voor de beller.
  *  - { action: 'acceptInvite', inviteId } / { action: 'declineInvite', inviteId }
  *                                       de uitgenodigde beslist; pas bij accepteren hoort hij erbij.
@@ -49,7 +54,19 @@ import { applyCors } from './_lib/cors.mjs';
  * Vereist env-var FIREBASE_SERVICE_ACCOUNT: de JSON van een Firebase service-account
  * (als string). Zonder deze var geeft het endpoint een nette foutmelding.
  */
-import { getAdmin } from './_lib/firebaseAdmin.mjs';
+import { getAdmin, parseServiceAccount } from './_lib/firebaseAdmin.mjs';
+import {
+  CURRENT_PROCESSOR_AGREEMENT_VERSION,
+  PROCESSOR,
+  PROCESSOR_AGREEMENT_TITLE,
+  agreementFileName,
+  agreementHash,
+  agreementSections,
+  cleanSignInput,
+} from './_lib/processorAgreement.mjs';
+import { buildProcessorAgreementPdf, formatSignedAt } from './_lib/processorAgreementPdf.mjs';
+import { driveFolderId, uploadPdfToDrive } from './_lib/googleDrive.mjs';
+import { mailConfigured, sendViaResend } from './_lib/invoiceEmail.mjs';
 import { deleteQueryInBatches, deleteUserData, exportUserData } from './_lib/accountData.mjs';
 import { enforceRateLimit } from './_lib/requireUser.mjs';
 import { actingOrg, isAdminIn, isStaffIn, orgsOf, roleIn } from './_lib/orgRoles.mjs';
@@ -250,6 +267,101 @@ export default async function handler(req, res) {
 
   // Uitnodigingen voor een tweede (of derde) studio. Eén account, meerdere studio's: de studio vraagt,
   // het lid beslist. Uitnodigingen staan in `orgInvites` en alleen de server leest en schrijft ze.
+  // Verwerkersovereenkomst met BOLD700 (Beheer → Instellingen): lezen, tekenen, PDF. Alleen een
+  // beheerder van de studio. Tekenen legt vast wie, wanneer en welke tekst; de PDF gaat naar de
+  // gedeelde drive van BOLD700 (als ingesteld) en per mail naar de ondertekenaar en BOLD700.
+  if (action === 'processorAgreement' || action === 'signProcessorAgreement' || action === 'processorAgreementPdf') {
+    const callerSnap = await db.collection('profiles').doc(callerUid).get();
+    const callerData = callerSnap.exists ? callerSnap.data() : null;
+    const org = callerData ? actingOrg(callerData, body?.actingOrgId) : null;
+    if (!callerData || !org || !isAdminIn(callerData, org)) return json(res, 403, { error: 'Alleen een beheerder van de studio kan de verwerkersovereenkomst inzien en tekenen.' });
+    const orgRef = db.collection('orgs').doc(org);
+    const orgSnap = await orgRef.get();
+    const orgData = orgSnap.exists ? orgSnap.data() : {};
+    const signed = orgData?.processorAgreement ?? null;
+
+    if (action === 'processorAgreement') {
+      const b = orgData?.business ?? {};
+      return json(res, 200, {
+        ok: true,
+        version: CURRENT_PROCESSOR_AGREEMENT_VERSION,
+        title: PROCESSOR_AGREEMENT_TITLE,
+        processor: PROCESSOR,
+        sections: agreementSections(),
+        signed,
+        prefill: {
+          legalName: String(b.legalName || orgData?.name || ''),
+          street: String(b.street || ''),
+          postcode: String(b.postcode || ''),
+          city: String(b.city || ''),
+          kvk: String(b.kvk || ''),
+          name: String(callerData.displayName || ''),
+        },
+      });
+    }
+
+    if (action === 'processorAgreementPdf') {
+      if (!signed) return json(res, 404, { error: 'Er is nog geen getekende verwerkersovereenkomst.' });
+      const pdf = buildProcessorAgreementPdf(signed);
+      return json(res, 200, { ok: true, filename: agreementFileName(signed), pdf: Buffer.from(pdf).toString('base64') });
+    }
+
+    // signProcessorAgreement
+    const parsed = cleanSignInput(body);
+    if (parsed.error) return json(res, 400, { error: parsed.error });
+    if (!(await enforceRateLimit(db, res, callerUid, 'signProcessorAgreement', 10, 24 * 60 * 60 * 1000))) return;
+    const authUser = await auth.getUser(callerUid).catch(() => null);
+    const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    const record = {
+      version: CURRENT_PROCESSOR_AGREEMENT_VERSION,
+      textHash: agreementHash(),
+      signedAt: new Date().toISOString(),
+      orgId: org,
+      controller: parsed.value.controller,
+      signer: { ...parsed.value.signer, uid: callerUid, email: authUser?.email ?? callerData.email ?? '' },
+      ip: forwarded || null,
+      userAgent: String(req.headers['user-agent'] || '').slice(0, 300) || null,
+    };
+    const historyRef = db.collection('processorAgreements').doc(`${org}__v${record.version}__${Date.now()}`);
+    await historyRef.set(record);
+    await orgRef.set({ processorAgreement: record }, { merge: true });
+
+    // Kopieën: naar de Drive van BOLD700 en per mail. Mislukt dat, dan staat de ondertekening er
+    // wel; de PDF is altijd opnieuw te downloaden.
+    const pdf = buildProcessorAgreementPdf(record);
+    const filename = agreementFileName(record);
+    const copies = { drive: 'not-configured', driveLink: null, emailed: false };
+    const folderId = driveFolderId();
+    if (folderId) {
+      try {
+        const parsedAccount = parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT);
+        if (parsedAccount.error) throw new Error(parsedAccount.error);
+        const up = await uploadPdfToDrive({ account: parsedAccount.account, folderId, name: filename, pdf });
+        copies.drive = 'uploaded';
+        copies.driveLink = up.webViewLink;
+      } catch (e) {
+        console.error('[admin-account] verwerkersovereenkomst naar Drive mislukt:', e);
+        copies.drive = 'failed';
+      }
+    }
+    if (mailConfigured()) {
+      const c = record.controller;
+      const subject = `${PROCESSOR_AGREEMENT_TITLE} getekend: ${c.legalName}`;
+      const text = `${record.signer.name} (${record.signer.role}) heeft namens ${c.legalName} de ${PROCESSOR_AGREEMENT_TITLE} (versie ${record.version}) getekend op ${formatSignedAt(record.signedAt)}. De PDF zit in de bijlage en staat ook in de app onder Beheer → Instellingen.`;
+      const html = `<p>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p>`;
+      const attachments = [{ filename, content: Buffer.from(pdf).toString('base64') }];
+      const to = [...new Set([record.signer.email, PROCESSOR.email].filter(Boolean))];
+      try {
+        for (const addr of to) await sendViaResend({ fromName: 'VORM', to: addr, replyTo: PROCESSOR.email, subject, html, text, attachments });
+        copies.emailed = true;
+      } catch (e) {
+        console.error('[admin-account] mail verwerkersovereenkomst mislukt:', e);
+      }
+    }
+    await historyRef.set({ copies }, { merge: true });
+    return json(res, 200, { ok: true, signed: record, ...copies });
+  }
+
   if (action === 'invite') {
     const callerSnap = await db.collection('profiles').doc(callerUid).get();
     const callerData = callerSnap.exists ? callerSnap.data() : null;
