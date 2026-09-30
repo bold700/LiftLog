@@ -1374,6 +1374,37 @@ describe('vaste PT-momenten (privé-lessoort per lid)', () => {
     expect(myActive()).toHaveLength(classes.length);
   });
 
+  it('dubbel plannen: dezelfde trainer op hetzelfde moment kan niet, met voorstellen', async () => {
+    expect((await post(slot(), 'trainer1')).statusCode).toBe(200);
+    const res = await post(slot({ userId: 'sporter2', startTime: '18:30', endTime: '19:30' }), 'trainer1');
+    expect(res.statusCode).toBe(409);
+    expect(res.body.error).toMatch(/botst met Personal training .*zelfde trainer/);
+    expect(res.body.conflicts[0]).toMatchObject({ sameTrainer: true, other: { id: ctId } });
+    // Voorstel: een tijd op dezelfde dag waarop de trainer vrij is (niet overlappend met 18:00–19:00).
+    expect(res.body.suggestions.times.length).toBeGreaterThan(0);
+    expect(res.body.suggestions.times.every((t) => t.endTime <= '18:00' || t.startTime >= '19:00')).toBe(true);
+    expect(store[`classTypes/ctp_sporter2_${weekday}_1830`]).toBeUndefined();
+  });
+
+  it('dubbel plannen mag als de studio het niet blokkeert', async () => {
+    store['orgs/vanas'] = { ...(store['orgs/vanas'] ?? {}), scheduling: { blockDoubleBooking: false } };
+    expect((await post(slot(), 'trainer1')).statusCode).toBe(200);
+    expect((await post(slot({ userId: 'sporter2' }), 'trainer1')).statusCode).toBe(200);
+  });
+
+  it('checkSchedule meldt botsingen van een lessoort, alleen voor staf', async () => {
+    await post(slot(), 'trainer1');
+    const body = { action: 'checkSchedule', classType: { id: 'nieuw', name: 'Bootcamp', defaultTrainerId: 'trainer1', room: null, schedule: [{ weekday, startTime: '18:30', endTime: '19:30' }] } };
+    expect((await post(body, 'sporter1')).statusCode).toBe(403);
+    const res = await post(body, 'trainer1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.block).toBe(true);
+    expect(res.body.conflicts).toHaveLength(1);
+    expect(res.body.suggestions[0].times.length).toBeGreaterThan(0);
+    const all = await post({ action: 'scheduleConflicts' }, 'trainer1');
+    expect(all.body.conflicts).toHaveLength(0);
+  });
+
   it('alleen staf; een ander lid kan de privé-les niet boeken', async () => {
     expect((await post(slot(), 'sporter1')).statusCode).toBe(403);
     await post(slot(), 'trainer1');

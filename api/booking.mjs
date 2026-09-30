@@ -91,6 +91,7 @@ import { buildInvoiceEmail, mailConfigured, sendViaResend } from './_lib/invoice
 import { hashFeedToken, buildIcsFeed } from './_lib/calendarFeed.mjs';
 import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey, getOrgMollieKey, createMolliePayment, getMolliePayment } from './_lib/molliePayments.mjs';
 import { enforceRateLimit } from './_lib/requireUser.mjs';
+import { allConflicts, blocksDoubleBooking, findConflicts, hoursOf, suggestionsFor } from './_lib/scheduleConflicts.mjs';
 import { amsterdamDate, amsterdamDateTime } from './_lib/classReminders.mjs';
 import { sendPushToUser } from './_lib/pushSend.mjs';
 import {
@@ -262,6 +263,12 @@ export default async function handler(req, res) {
         return await pauseStandingBooking(res, db, uid, myOrgs, isStaff, body);
       case 'addPersonalSlot':
         return await addPersonalSlot(res, db, uid, myOrgs, isStaff, body);
+      case 'checkSchedule':
+        if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan het rooster controleren.', build: BUILD });
+        return await checkSchedule(res, db, actOrg, body);
+      case 'scheduleConflicts':
+        if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan het rooster controleren.', build: BUILD });
+        return await listScheduleConflicts(res, db, actOrg);
       case 'removeGroupSlot':
         if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan een groepsles stoppen.', build: BUILD });
         return await removeGroupSlot(res, db, uid, myOrgs, String(body.classTypeId ?? '').trim());
@@ -1246,6 +1253,57 @@ async function requireMemberOfMyOrgs(db, myOrgs, userId) {
  * rooster vult zich dan vanzelf en de vaste les boekt het lid elke week.
  * Alleen staf: het gaat om de agenda van de trainer.
  */
+const WEEKDAY_NL = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
+
+/** "Botst met Bootcamp (maandag 09:00–10:00): zelfde trainer." */
+function conflictMessage(c) {
+  const why = c.sameTrainer && c.sameRoom ? 'zelfde trainer en ruimte' : c.sameTrainer ? 'zelfde trainer' : `ruimte ${c.other.room} is dan bezet`;
+  return `Dit moment botst met ${c.other.name} (${WEEKDAY_NL[c.other.weekday]} ${c.other.startTime}–${c.other.endTime}): ${why}.`;
+}
+
+/** Lessoorten, ruimtes, openingstijden en de blokkeer-instelling van een studio. */
+async function scheduleContext(db, orgId) {
+  const [typesSnap, orgSnap] = await Promise.all([db.collection('classTypes').get(), db.collection('orgs').doc(orgId).get()]);
+  const org = orgSnap.exists ? orgSnap.data() : {};
+  return {
+    types: typesSnap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((ct) => orgIdOf(ct.orgId) === orgId),
+    rooms: Array.isArray(org?.rooms) ? org.rooms.map(String) : [],
+    hours: hoursOf(org),
+    block: blocksDoubleBooking(org),
+  };
+}
+
+/**
+ * Controle vóór het opslaan van een lessoort (Beheer → Lessoorten): botst een weekmoment met een
+ * andere lessoort (zelfde trainer of ruimte)? Met voorstellen per botsend moment.
+ */
+async function checkSchedule(res, db, orgId, body) {
+  const input = body?.classType ?? {};
+  const schedule = (Array.isArray(input.schedule) ? input.schedule : [])
+    .slice(0, 50)
+    .map((s) => ({ weekday: Number(s?.weekday), startTime: String(s?.startTime ?? ''), endTime: String(s?.endTime ?? '') }));
+  const candidate = {
+    id: String(input.id ?? ''),
+    name: String(input.name ?? ''),
+    defaultTrainerId: input.defaultTrainerId ? String(input.defaultTrainerId) : null,
+    room: input.room ? String(input.room) : null,
+    schedule,
+  };
+  const sched = await scheduleContext(db, orgId);
+  const conflicts = findConflicts(candidate, sched.types);
+  const suggestions = {};
+  for (const c of conflicts) {
+    if (!suggestions[c.slotIndex]) suggestions[c.slotIndex] = suggestionsFor(candidate, c.slot, sched.types, sched.rooms, sched.hours);
+  }
+  return json(res, 200, { block: sched.block, conflicts, suggestions, build: BUILD });
+}
+
+/** Alle botsingen die nu op het rooster staan, om één keer recht te zetten. */
+async function listScheduleConflicts(res, db, orgId) {
+  const sched = await scheduleContext(db, orgId);
+  return json(res, 200, { block: sched.block, conflicts: allConflicts(sched.types), build: BUILD });
+}
+
 async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
   if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan een PT-moment vastzetten.', build: BUILD });
   // Met `groupId`: een vaste groepsles voor alle leden van de groep (Beheer → Groepen).
@@ -1306,6 +1364,19 @@ async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
     createdAt: existing.exists ? existing.data().createdAt ?? now : now,
     updatedAt: now,
   };
+  // Dubbel plannen: zelfde trainer of ruimte op een overlappend moment kan niet (als de studio dat blokkeert).
+  const sched = await scheduleContext(db, orgId);
+  if (sched.block) {
+    const conflicts = findConflicts(ct, sched.types);
+    if (conflicts.length) {
+      return json(res, 409, {
+        error: conflictMessage(conflicts[0]),
+        conflicts,
+        suggestions: suggestionsFor(ct, conflicts[0].slot, sched.types, sched.rooms, sched.hours),
+        build: BUILD,
+      });
+    }
+  }
   await ref.set(ct);
 
   // Eerst de vaste les (bij een groep: één per lid), dan het rooster: nieuw gemaakte lessen worden

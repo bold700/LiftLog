@@ -353,6 +353,11 @@ export interface Org {
    */
   rooms: string[];
   /**
+   * Dubbel plannen blokkeren (Beheer → Instellingen): zelfde trainer of ruimte op een overlappend
+   * weekmoment kan dan niet. Standaard aan; de server dwingt het af (api/_lib/scheduleConflicts.mjs).
+   */
+  blockDoubleBooking: boolean;
+  /**
    * Automatische meldingen aan of uit (Beheer → Meldingen). Standaard staat alles aan: alleen een
    * expliciete `false` zet een soort uit. De server leest dit voordat hij iets verstuurt.
    */
