@@ -10,7 +10,8 @@
  * - testaccounts van Virtuagym en rijen zonder e-mailadres → overslaan, met de reden erbij;
  * - dezelfde persoon twee keer (zelfde e-mail en naam) → één lid, de meest volledige rij;
  * - twee personen met één e-mailadres (bijv. een stel) → de tweede krijgt een tijdelijk adres, zodat
- *   beiden een eigen account hebben; het echte adres vul je later in.
+ *   beiden een eigen account hebben; het echte adres vul je later in;
+ * - creditsaldo per soort (kolommen als "Bootcamp") → alleen als de studio dat aanzet, opgeteld.
  */
 import { EMAIL_RE } from './account';
 import type { ProfileRole } from '../types';
@@ -121,7 +122,39 @@ const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().t
 /** Hoeveel velden een rij heeft ingevuld: bij dubbelen wint de meest volledige. */
 const filled = (r: MemberImportRow) => [r.birthDate, r.gender, r.planName, r.credits, r.trainerEmail, r.phone, r.address, r.memberSince].filter((v) => v != null && v !== '').length + (r.inactive ? 0 : 1);
 
-export function buildMemberImportRows(rows: Record<string, string>[], existingEmails: ReadonlySet<string>, todayIso = new Date().toISOString().slice(0, 10)): MemberImportRow[] {
+/** Vaste kolommen van een Virtuagym-ledenexport; wat er verder aan getallen in staat, is creditsaldo. */
+const VIRTUAGYM_COLUMNS = new Set([
+  'member_id', 'club_member_id', 'custom_export_field', 'external_id', 'firstname', 'lastname', 'gender', 'birthday', 'email',
+  'street', 'zip_code', 'city', 'phone', 'mobile', 'pro', 'member_since', 'registration_date', 'bank_account_number', 'sort_code',
+  'bic_code', 'bank_account_owner', 'card_nr', 'unsubscribe_date', 'will_be_unsubscribed_at', 'check_in', 'last_online', 'tags',
+  'last_booking', 'source', 'subscription_reason', 'unsubscription_reason',
+]);
+
+/**
+ * Creditkolommen in een Virtuagym-export: per soort credits (bijv. "bootcamp", "small group training")
+ * een kolom met het saldo per lid. Dat zijn de kolommen die niet standaard in de export zitten en
+ * alleen hele getallen bevatten, met minstens één saldo dat niet nul is. Geen Virtuagym-export: leeg.
+ */
+export function detectCreditColumns(headers: string[], rows: Record<string, string>[]): string[] {
+  if (!headers.includes('member_id') || !headers.includes('firstname')) return [];
+  return headers.filter((h) => {
+    if (!h || VIRTUAGYM_COLUMNS.has(h)) return false;
+    const values = rows.map((r) => (r[h] ?? '').trim()).filter((v) => v !== '');
+    return values.length > 0 && values.every((v) => /^-?\d+$/.test(v)) && values.some((v) => Number(v) !== 0);
+  });
+}
+
+export interface BuildImportOptions {
+  /** Creditsaldo overnemen uit deze kolommen (zie detectCreditColumns): opgeteld, negatief telt niet mee. */
+  creditColumns?: string[];
+}
+
+export function buildMemberImportRows(
+  rows: Record<string, string>[],
+  existingEmails: ReadonlySet<string>,
+  todayIso = new Date().toISOString().slice(0, 10),
+  options: BuildImportOptions = {}
+): MemberImportRow[] {
   const thisYear = Number(todayIso.slice(0, 4));
   const out: MemberImportRow[] = rows.map((raw, i) => {
     const errors: string[] = [];
@@ -167,6 +200,21 @@ export function buildMemberImportRows(rows: Record<string, string>[], existingEm
       if (!Number.isInteger(n)) errors.push('Creditsaldo moet een heel getal zijn.');
       else if (Math.abs(n) > MAX_IMPORT_CREDITS) errors.push(`Creditsaldo moet tussen -${MAX_IMPORT_CREDITS} en ${MAX_IMPORT_CREDITS} liggen.`);
       else credits = n;
+    } else if (options.creditColumns?.length) {
+      // Saldo uit het oude systeem, per soort credits opgeteld. Een negatief saldo (lessen die nog
+      // betaald moeten worden) nemen we niet over: dat regelt de studio zelf.
+      let sum = 0;
+      for (const col of options.creditColumns) {
+        const n = Number((raw[col] ?? '').trim() || 0);
+        if (!Number.isInteger(n)) continue;
+        if (n < 0) warnings.push(`Negatief saldo "${col.charAt(0).toUpperCase()}${col.slice(1)}" (${n}): niet overgenomen.`);
+        else sum += n;
+      }
+      if (sum > MAX_IMPORT_CREDITS) {
+        warnings.push(`Saldo ${sum} is meer dan ${MAX_IMPORT_CREDITS}; ${MAX_IMPORT_CREDITS} overgenomen.`);
+        sum = MAX_IMPORT_CREDITS;
+      }
+      if (sum > 0) credits = sum;
     }
 
     let skipReason: string | null = null;
