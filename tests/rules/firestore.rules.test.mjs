@@ -189,6 +189,8 @@ await t('eigenaar zet inactieve-accounts-instelling → mag', true, updateDoc(do
 await t('beheerder zet zelf een ondertekende verwerkersovereenkomst op de studio → geweigerd', false, updateDoc(doc(as('admin1'), 'orgs/vanas'), { processorAgreement: { version: 1, signedAt: '2026-10-01' } }));
 await t('beheerder leest de ondertekeningen rechtstreeks → geweigerd', false, getDoc(doc(as('admin1'), 'processorAgreements/vanas__v1__1')));
 await t('beheerder schrijft een ondertekening rechtstreeks → geweigerd', false, setDoc(doc(as('admin1'), 'processorAgreements/vanas__v1__1'), { version: 1 }));
+await t('beheerder leest beschikbaarheid rechtstreeks → geweigerd (alleen via de server)', false, getDoc(doc(as('admin1'), 'trainerAvailability/vanas__admin1')));
+await t('beheerder schrijft beschikbaarheid rechtstreeks → geweigerd', false, setDoc(doc(as('admin1'), 'trainerAvailability/vanas__admin1'), { days: {} }));
 
 // orgSecrets: de Mollie-sleutels. Nooit leesbaar of schrijfbaar via de client, ook niet voor de
 // eigen beheerder van de studio — alleen de server (Admin SDK) mag hierbij, na de sleutel bij

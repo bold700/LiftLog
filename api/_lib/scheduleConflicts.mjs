@@ -9,11 +9,12 @@
  *
  * Pure functies zonder Firestore, zodat server en tests hetzelfde rekenen.
  */
+import { windowsOn, withinAvailability } from './availability.mjs';
 
 /** Standaard openingstijden: eerste les om 06:00, laatste les begint om 21:00. */
 export const DEFAULT_HOURS = { firstStart: '06:00', lastStart: '21:00' };
 const STEP_MIN = 30;
-const MAX_TIME_SUGGESTIONS = 4;
+const MAX_TIME_SUGGESTIONS = 6;
 
 export const toMin = (hhmm) => {
   const [h, m] = String(hhmm ?? '').split(':').map(Number);
@@ -97,10 +98,13 @@ function isFree(slot, trainer, rKey, others) {
  * Voorstellen voor een moment dat botst:
  * - `rooms`: ruimtes van de studio die op dat tijdstip vrij zijn (alleen als de ruimte de botsing is
  *   en de trainer zelf wel kan);
- * - `times`: tijden op dezelfde dag, zelfde duur, binnen de openingstijden, waarop trainer én
- *   ruimte vrij zijn; dichtstbijzijnde eerst.
+ * - `times`: tijden op dezelfde dag, zelfde duur, waarop trainer én ruimte vrij zijn. Binnen de
+ *   beschikbaarheid van de trainer (`availability`, per weekdag blokken { from, to }); heeft hij die
+ *   niet ingevuld, dan binnen de openingstijden van de studio. Eerst de momenten die direct aansluiten
+ *   op een andere les van deze trainer die dag (`adjacent: true`): zo vul je hele dagdelen in plaats
+ *   van losse gaten. Daarna de rest, dichtstbijzijnde eerst.
  */
-export function suggestionsFor(candidate, slot, classTypes, studioRooms = [], hours = DEFAULT_HOURS) {
+export function suggestionsFor(candidate, slot, classTypes, studioRooms = [], hours = DEFAULT_HOURS, availability = null) {
   const c = shape(candidate);
   const others = classTypes.map(shape).filter((o) => o.id !== c.id && o.schedule.length > 0);
   const base = { weekday: Number(slot.weekday), startTime: slot.startTime, endTime: slot.endTime };
@@ -113,17 +117,42 @@ export function suggestionsFor(candidate, slot, classTypes, studioRooms = [], ho
     : [];
 
   const duration = toMin(slot.endTime) - toMin(slot.startTime);
-  const first = toMin(hours.firstStart);
-  const last = toMin(hours.lastStart);
   const origin = toMin(slot.startTime);
+  const windows = windowsOn(availability, base.weekday);
+  const ranges = windows === null ? [{ first: toMin(hours.firstStart), lastStart: toMin(hours.lastStart), end: 24 * 60 }] : windows.map((w) => ({ first: toMin(w.from), lastStart: toMin(w.to) - duration, end: toMin(w.to) }));
+
+  // Andere lessen van deze trainer die dag: begin- en eindtijden waar een nieuw moment op aansluit.
+  const busy = c.trainer
+    ? others.filter((o) => o.trainer === c.trainer).flatMap((o) => o.schedule.filter((s) => Number(s.weekday) === base.weekday))
+    : [];
+  const edges = new Set(busy.flatMap((s) => [toMin(s.startTime), toMin(s.endTime)]));
+
+  const seen = new Set();
   const times = [];
-  for (let start = first; start <= last; start += STEP_MIN) {
-    if (start === origin || !(duration > 0) || start + duration > 24 * 60) continue;
+  const consider = (start) => {
+    if (seen.has(start) || start === origin || !(duration > 0) || start < 0 || start + duration > 24 * 60) return;
+    if (!ranges.some((r) => start >= r.first && start <= r.lastStart && start + duration <= r.end)) return;
+    seen.add(start);
     const t = { weekday: base.weekday, startTime: fromMin(start), endTime: fromMin(start + duration) };
-    if (isFree(t, c.trainer, c.roomKey, others)) times.push(t);
+    if (!isFree(t, c.trainer, c.roomKey, others)) return;
+    times.push({ ...t, adjacent: edges.has(start) || edges.has(start + duration) });
+  };
+  // Aansluitend op een andere les (ook als dat niet op het raster van 30 minuten valt), dan het raster.
+  for (const e of edges) {
+    consider(e);
+    consider(e - duration);
   }
-  times.sort((a, b) => Math.abs(toMin(a.startTime) - origin) - Math.abs(toMin(b.startTime) - origin) || toMin(a.startTime) - toMin(b.startTime));
+  for (const r of ranges) for (let start = r.first; start <= r.lastStart; start += STEP_MIN) consider(start);
+
+  const dist = (t) => Math.abs(toMin(t.startTime) - origin);
+  times.sort((a, b) => Number(b.adjacent) - Number(a.adjacent) || dist(a) - dist(b) || toMin(a.startTime) - toMin(b.startTime));
   return { rooms, times: times.slice(0, MAX_TIME_SUGGESTIONS) };
+}
+
+/** Welke weekmomenten (index) vallen buiten de beschikbaarheid van de trainer? */
+export function outsideAvailability(candidate, availability) {
+  const c = shape(candidate);
+  return c.schedule.map((s, i) => (withinAvailability(availability, s) ? -1 : i)).filter((i) => i >= 0);
 }
 
 /** Alle botsende paren binnen de studio (elk paar één keer), voor het overzicht "Dubbel ingepland". */

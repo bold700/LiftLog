@@ -154,8 +154,8 @@ export interface ScheduleConflict {
 export interface ScheduleSuggestion {
   /** Ruimtes die op dat tijdstip vrij zijn. */
   rooms: string[];
-  /** Vrije tijden op dezelfde dag, dichtstbijzijnde eerst. */
-  times: ClassScheduleSlot[];
+  /** Vrije tijden op dezelfde dag binnen de beschikbaarheid; aansluitend op een andere les eerst. */
+  times: (ClassScheduleSlot & { adjacent?: boolean })[];
 }
 
 export interface ScheduleCheck {
@@ -164,6 +164,8 @@ export interface ScheduleCheck {
   conflicts: ScheduleConflict[];
   /** Per weekmoment (index) dat botst. */
   suggestions: Record<number, ScheduleSuggestion>;
+  /** Weekmomenten (index) buiten de beschikbaarheid van de trainer: geen blokkade, wel een waarschuwing. */
+  outside?: number[];
 }
 
 /** Botst een weekmoment van deze (nog niet opgeslagen) lessoort met een andere, qua trainer of ruimte? */

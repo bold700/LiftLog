@@ -187,6 +187,8 @@ export const en: Messages = {
         warned: 'Saved, but {count} time slot(s) clash with another class. You can block double booking in Settings.',
         otherRoom: 'Other room',
         otherTime: 'Other time',
+        adjacent: 'back-to-back',
+        outside: 'Saved. Note: {count} time slot(s) fall outside the trainer’s availability.',
         noSuggestion: 'No free time found on this day within opening hours.',
         overviewTitle: '{count} double-booked',
         overviewHelp: 'These time slots already clash: same trainer or room at the same time. Open a class type to fix it.',

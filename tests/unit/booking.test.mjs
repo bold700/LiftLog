@@ -1392,6 +1392,29 @@ describe('vaste PT-momenten (privé-lessoort per lid)', () => {
     expect((await post(slot({ userId: 'sporter2' }), 'trainer1')).statusCode).toBe(200);
   });
 
+  it('beschikbaarheid: trainer zet eigen uren, voorstellen blijven daarbinnen, beheerder mag voor een trainer', async () => {
+    const days = { [weekday]: [{ from: '16:00', to: '21:00' }] };
+    expect((await post({ action: 'saveAvailability', days }, 'sporter1')).statusCode).toBe(403);
+    store['profiles/trainer2'] = { userId: 'trainer2', orgId: 'vanas', orgIds: ['vanas'], role: 'trainer' };
+    expect((await post({ action: 'saveAvailability', userId: 'trainer2', days }, 'trainer1')).statusCode).toBe(403);
+    const saved = await post({ action: 'saveAvailability', days }, 'trainer1');
+    expect(saved.statusCode).toBe(200);
+    expect(saved.body.days[String(weekday)]).toEqual([{ from: '16:00', to: '21:00' }]);
+    expect((await post({ action: 'getAvailability' }, 'trainer1')).body.days[String(weekday)]).toHaveLength(1);
+    store['profiles/admin1'] = { userId: 'admin1', orgId: 'vanas', orgIds: ['vanas'], role: 'admin' };
+    expect((await post({ action: 'saveAvailability', userId: 'trainer2', days }, 'admin1')).statusCode).toBe(200);
+    expect((await post({ action: 'saveAvailability', userId: 'sporter2', days }, 'admin1')).statusCode).toBe(400);
+
+    // PT-moment 18:00–19:00 staat; een tweede op 18:30 botst. Voorstellen: binnen 16:00–21:00, aansluitend eerst.
+    await post(slot(), 'trainer1');
+    const res = await post(slot({ userId: 'sporter2', startTime: '18:30', endTime: '19:30' }), 'trainer1');
+    expect(res.statusCode).toBe(409);
+    const times = res.body.suggestions.times;
+    expect(times[0].adjacent).toBe(true);
+    expect(times.map((t) => t.startTime).slice(0, 2).sort()).toEqual(['17:00', '19:00']);
+    expect(times.every((t) => t.startTime >= '16:00' && t.endTime <= '21:00')).toBe(true);
+  });
+
   it('checkSchedule meldt botsingen van een lessoort, alleen voor staf', async () => {
     await post(slot(), 'trainer1');
     const body = { action: 'checkSchedule', classType: { id: 'nieuw', name: 'Bootcamp', defaultTrainerId: 'trainer1', room: null, schedule: [{ weekday, startTime: '18:30', endTime: '19:30' }] } };
