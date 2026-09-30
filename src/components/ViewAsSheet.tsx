@@ -3,7 +3,9 @@
  * Iedereen in de studio: eerst de sporters, daarna het team (trainers en beheerders).
  * Bottom sheet op de telefoon, dialoog op een groot scherm — allebei dezelfde lijst.
  */
-import { Dialog, Drawer, List, ListItemButton, ListItemAvatar, ListItemText, ListSubheader, Typography, Box, useMediaQuery, useTheme } from '@mui/material';
+import { useEffect, useState } from 'react';
+import { Dialog, Drawer, InputAdornment, List, ListItemButton, ListItemAvatar, ListItemText, ListSubheader, TextField, Typography, Box, useMediaQuery, useTheme } from '@mui/material';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import { UserAvatar } from './UserAvatar';
 import { designTokens } from '../theme/designTokens';
 import type { Profile } from '../types';
@@ -21,13 +23,25 @@ interface ViewAsSheetProps {
 }
 
 const ROLE_LABEL: Record<string, string> = { trainer: 'Trainer', admin: 'Beheerder' };
+/** Vanaf zoveel mensen een zoekveld: na een import staan er al snel honderden leden in. */
+const SEARCH_FROM = 9;
+const nameOf = (m: Profile) => m.displayName?.trim() || m.email || m.userId;
 
 export function ViewAsSheet({ open, onClose, members, viewedUserId, ownName, ownPhotoURL, onPick }: ViewAsSheetProps) {
   const theme = useTheme();
   const wide = useMediaQuery(theme.breakpoints.up('md'));
+  const [query, setQuery] = useState('');
+  useEffect(() => {
+    if (!open) setQuery('');
+  }, [open]);
+  const q = query.trim().toLowerCase();
+  // Inactieve leden (gestopt) niet in de lijst; op naam, zoekbaar op naam en e-mail.
+  const shown = members
+    .filter((m) => !m.inactive && (!q || nameOf(m).toLowerCase().includes(q) || (m.email ?? '').toLowerCase().includes(q)))
+    .sort((a, b) => nameOf(a).localeCompare(nameOf(b), 'nl', { sensitivity: 'base' }));
   const groups = [
-    { title: 'Sporters', people: members.filter((m) => m.role === 'sporter') },
-    { title: 'Team', people: members.filter((m) => m.role !== 'sporter') },
+    { title: 'Sporters', people: shown.filter((m) => m.role === 'sporter') },
+    { title: 'Team', people: shown.filter((m) => m.role !== 'sporter') },
   ];
   // Kopjes alleen als er echt twee groepen zijn; anders is het gewoon één lijst.
   const showHeaders = groups.every((g) => g.people.length > 0);
@@ -37,6 +51,18 @@ export function ViewAsSheet({ open, onClose, members, viewedUserId, ownName, own
       <Typography variant="subtitle1" fontWeight={600} sx={{ px: 2, pt: 2, pb: 1 }}>
         Bekijk als
       </Typography>
+      {members.length >= SEARCH_FROM && (
+        <Box sx={{ px: 2, pb: 1 }}>
+          <TextField
+            size="small"
+            fullWidth
+            placeholder="Zoek op naam of e-mail"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            InputProps={{ startAdornment: <InputAdornment position="start"><SearchRoundedIcon fontSize="small" /></InputAdornment> }}
+          />
+        </Box>
+      )}
       <List sx={{ pb: 1 }}>
         <ListItemButton selected={!viewedUserId} onClick={() => onPick(null)}>
           <ListItemAvatar>
@@ -58,7 +84,7 @@ export function ViewAsSheet({ open, onClose, members, viewedUserId, ownName, own
                     <ListItemAvatar>
                       <UserAvatar name={m.displayName} photoURL={m.photoURL} size={36} />
                     </ListItemAvatar>
-                    <ListItemText primary={m.displayName?.trim() || m.email || m.userId} secondary={ROLE_LABEL[m.role]} />
+                    <ListItemText primary={nameOf(m)} secondary={ROLE_LABEL[m.role]} />
                   </ListItemButton>
                 ))}
               </Box>
@@ -70,7 +96,7 @@ export function ViewAsSheet({ open, onClose, members, viewedUserId, ownName, own
 
   if (wide) {
     return (
-      <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+      <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ sx: { maxHeight: '80vh' } }}>
         {content}
       </Dialog>
     );

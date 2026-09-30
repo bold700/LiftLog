@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildMemberImportRows, importOutcome, MAX_IMPORT_CREDITS, normalizePhone, parseImportDate, PLACEHOLDER_EMAIL_DOMAIN } from '../../src/utils/memberImport';
+import { buildMemberImportRows, fillForExisting, fillSummary, importOutcome, MAX_IMPORT_CREDITS, normalizePhone, parseImportDate, PLACEHOLDER_EMAIL_DOMAIN } from '../../src/utils/memberImport';
 import { parseCsv } from '../../src/utils/csv';
 
 describe('buildMemberImportRows', () => {
@@ -168,6 +168,18 @@ describe('buildMemberImportRows', () => {
     expect(row).toMatchObject({ phone: '0612345678', address: { street: 'Dorpsstraat 1', zip: '1234AB', city: 'Utrecht' }, memberSince: '2021-03-01' });
     expect(normalizePhone('06-12345678')).toBe('06-12345678');
     expect(normalizePhone('')).toBeNull();
+  });
+
+  it('bestaand lid: alleen lege velden aanvullen', () => {
+    const [row] = buildMemberImportRows(
+      [{ naam: 'Eva', email: 'eva@x.nl', telefoon: '0612345678', geboortedatum: '01-02-1990', geslacht: 'vrouw', 'lid sinds': '01-03-2021', adres: 'Straat 1' }],
+      new Set(['eva@x.nl']),
+      '2026-09-29'
+    );
+    const fill = fillForExisting(row, { birthDate: '1985-05-05', gender: null, phone: null, address: null, memberSince: null });
+    expect(fill).toEqual({ gender: 'vrouw', phone: '0612345678', memberSince: '2021-03-01', address: { street: 'Straat 1', zip: null, city: null } });
+    expect(fillSummary(fill)).toBe('geslacht, telefoon, adres en lid sinds');
+    expect(fillForExisting(row, { birthDate: 'x', gender: 'man', phone: '1', address: {}, memberSince: 'y' })).toEqual({});
   });
 });
 

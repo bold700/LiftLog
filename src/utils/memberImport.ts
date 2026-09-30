@@ -226,3 +226,43 @@ export const MEMBER_IMPORT_TEMPLATE: { headers: string[]; example: string[] } = 
   headers: ['naam', 'email', 'rol', 'trainer', 'credits', 'abonnement', 'status', 'geboortedatum', 'geslacht', 'telefoon', 'adres', 'postcode', 'plaats', 'lid sinds'],
   example: ['Jan de Vries', 'jan@voorbeeld.nl', 'sporter', '', '10', 'SGT 2x per week', 'actief', '31-12-1990', 'man', '0612345678', 'Dorpsstraat 1', '1234 AB', 'Utrecht', '01-03-2021'],
 };
+
+/** Wat een import mag aanvullen bij een lid dat al een account heeft. */
+export interface ImportFill {
+  birthDate?: string;
+  gender?: ImportGender;
+  phone?: string;
+  address?: { street: string | null; zip: string | null; city: string | null };
+  memberSince?: string;
+}
+
+/**
+ * Bestaand lid (zelfde e-mailadres, al in deze studio): alleen lege velden aanvullen uit het
+ * importbestand. Wat de studio of het lid zelf al invulde, blijft staan. Leeg object = niets te doen.
+ */
+export function fillForExisting(
+  row: MemberImportRow,
+  current: { birthDate?: string | null; gender?: string | null; phone?: string | null; address?: unknown; memberSince?: string | null }
+): ImportFill {
+  const fill: ImportFill = {};
+  if (row.birthDate && !current.birthDate) fill.birthDate = row.birthDate;
+  if (row.gender && !current.gender) fill.gender = row.gender;
+  if (row.phone && !current.phone) fill.phone = row.phone;
+  if (row.address && !current.address) fill.address = row.address;
+  if (row.memberSince && !current.memberSince) fill.memberSince = row.memberSince;
+  return fill;
+}
+
+const FILL_LABEL: Record<keyof ImportFill, string> = {
+  birthDate: 'geboortedatum',
+  gender: 'geslacht',
+  phone: 'telefoon',
+  address: 'adres',
+  memberSince: 'lid sinds',
+};
+
+/** "telefoon, adres en lid sinds" */
+export function fillSummary(fill: ImportFill): string {
+  const parts = (Object.keys(fill) as (keyof ImportFill)[]).map((k) => FILL_LABEL[k]);
+  return parts.length <= 1 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} en ${parts[parts.length - 1]}`;
+}

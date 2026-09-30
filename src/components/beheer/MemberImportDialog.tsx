@@ -35,9 +35,9 @@ import { importMembers } from '../../services/adminAccountService';
 import { updateProfile } from '../../services/profileService';
 import { assignPlan } from '../../services/planService';
 import { parseCsv, toCsv } from '../../utils/csv';
-import { buildMemberImportRows, importOutcome, MEMBER_IMPORT_TEMPLATE, MAX_IMPORT_ROWS, type ImportOutcome, type MemberImportRow } from '../../utils/memberImport';
+import { buildMemberImportRows, fillForExisting, fillSummary, importOutcome, MEMBER_IMPORT_TEMPLATE, MAX_IMPORT_ROWS, type ImportFill, type ImportOutcome, type MemberImportRow } from '../../utils/memberImport';
 import { generatePassword } from '../../utils/account';
-import type { Plan, ProfileRole } from '../../types';
+import type { Plan, Profile, ProfileRole } from '../../types';
 
 const OUTCOME: Record<ImportOutcome, { label: string; color: 'success' | 'default' | 'warning' | 'error' }> = {
   create: { label: 'Nieuw', color: 'success' },
@@ -73,9 +73,11 @@ interface MemberImportDialogProps {
   onImported: () => void;
   /** Abonnementen van de studio: de kolom "abonnement" koppelt op naam. */
   plans?: Plan[];
+  /** Leden van de studio: wie al een account heeft, krijgt lege velden aangevuld uit het bestand. */
+  existingMembers?: Profile[];
 }
 
-export function MemberImportDialog({ open, onClose, existingEmails, trainers, defaultTrainerId, onImported, plans = [] }: MemberImportDialogProps) {
+export function MemberImportDialog({ open, onClose, existingEmails, trainers, defaultTrainerId, onImported, plans = [], existingMembers = [] }: MemberImportDialogProps) {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const auth = useAuth();
@@ -86,6 +88,9 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
   const [rows, setRows] = useState<MemberImportRow[]>([]);
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState<ImportResult[]>([]);
+  /** Per regel: wat er bij een bestaand lid wordt aangevuld (alleen lege velden). */
+  const [fills, setFills] = useState<Record<number, { uid: string; fill: ImportFill }>>({});
+  const [updated, setUpdated] = useState<{ ok: number; failed: number }>({ ok: 0, failed: 0 });
 
   const reset = () => {
     setStep('upload');
@@ -128,6 +133,16 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
     for (const r of built) {
       if (r.planName && !planByName.has(r.planName.toLowerCase())) r.warnings.push(`Abonnement "${r.planName}" bestaat niet; zonder abonnement geïmporteerd.`);
     }
+    const byEmail = new Map(existingMembers.filter((m) => m.email).map((m) => [m.email!.toLowerCase(), m]));
+    const nextFills: Record<number, { uid: string; fill: ImportFill }> = {};
+    for (const r of built) {
+      if (r.skipReason !== 'Heeft al een account') continue;
+      const m = byEmail.get(r.email);
+      if (!m) continue;
+      const fill = fillForExisting(r, m);
+      if (Object.keys(fill).length) nextFills[r.line] = { uid: m.userId, fill };
+    }
+    setFills(nextFills);
     setRows(built);
     setStep('preview');
   };
@@ -142,6 +157,8 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
   const planByName = new Map(plans.map((p) => [p.name.trim().toLowerCase(), p]));
   const validRows = rows.filter((r) => ['create', 'createInactive'].includes(importOutcome(r)));
   const counts = rows.reduce<Record<ImportOutcome, number>>((acc, r) => ({ ...acc, [importOutcome(r)]: acc[importOutcome(r)] + 1 }), { create: 0, createInactive: 0, skip: 0, error: 0 });
+  const fillCount = Object.keys(fills).length;
+  const workCount = validRows.length + fillCount;
 
   const handleImport = async () => {
     if (!auth?.user) return;
@@ -203,6 +220,17 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
       }
       setProgress((p) => p + 1);
     }
+    // Bestaande leden: alleen lege velden aanvullen (gewone profielupdate, geen accounts).
+    let ok = 0;
+    let failed = 0;
+    for (const { uid, fill } of Object.values(fills)) {
+      await updateProfile(uid, fill).then(
+        () => ok++,
+        () => failed++
+      );
+      setProgress((p) => p + 1);
+    }
+    setUpdated({ ok, failed });
     setResults(done);
     setStep('done');
     onImported();
@@ -268,8 +296,9 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               {(Object.keys(OUTCOME) as ImportOutcome[]).map((k) => (
-                <Chip key={k} size="small" color={OUTCOME[k].color} variant={k === 'create' ? 'filled' : 'outlined'} label={`${OUTCOME[k].label}: ${counts[k]}`} />
+                <Chip key={k} size="small" color={OUTCOME[k].color} variant={k === 'create' ? 'filled' : 'outlined'} label={`${OUTCOME[k].label}: ${k === 'skip' ? counts.skip - fillCount : counts[k]}`} />
               ))}
+              {fillCount > 0 && <Chip size="small" color="info" variant="outlined" label={`Aanvullen: ${fillCount}`} />}
             </Box>
             <Box sx={{ overflowX: 'auto' }}>
               <Table size="small">
@@ -286,7 +315,8 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
                 <TableBody>
                   {rows.map((r) => {
                     const outcome = importOutcome(r);
-                    const notes = [...r.errors, ...(r.skipReason ? [r.skipReason] : []), ...r.warnings];
+                    const fill = fills[r.line];
+                    const notes = fill ? [`Heeft al een account; vult aan: ${fillSummary(fill.fill)}.`] : [...r.errors, ...(r.skipReason ? [r.skipReason] : []), ...r.warnings];
                     return (
                       <TableRow key={r.line} sx={outcome === 'skip' || outcome === 'error' ? { opacity: 0.7 } : undefined}>
                         <TableCell>{r.displayName || '—'}</TableCell>
@@ -295,7 +325,7 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
                         <TableCell>{r.credits ?? '—'}</TableCell>
                         <TableCell>{r.planName || '—'}</TableCell>
                         <TableCell>
-                          <Chip size="small" color={OUTCOME[outcome].color} variant="outlined" label={OUTCOME[outcome].label} sx={{ mb: notes.length ? 0.5 : 0 }} />
+                          <Chip size="small" color={fill ? 'info' : OUTCOME[outcome].color} variant="outlined" label={fill ? 'Aanvullen' : OUTCOME[outcome].label} sx={{ mb: notes.length ? 0.5 : 0 }} />
                           {notes.length > 0 && (
                             <Typography variant="caption" color={outcome === 'error' ? 'error' : 'text.secondary'} sx={{ display: 'block' }}>
                               {notes.join(' ')}
@@ -314,16 +344,17 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
         {step === 'importing' && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, py: 2 }}>
             <Typography variant="body2">
-              Bezig: {progress} van {validRows.length}…
+              Bezig: {progress} van {workCount}…
             </Typography>
-            <LinearProgress variant="determinate" value={validRows.length ? (progress / validRows.length) * 100 : 0} />
+            <LinearProgress variant="determinate" value={workCount ? (progress / workCount) * 100 : 0} />
           </Box>
         )}
 
         {step === 'done' && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-            <Alert severity={okCount === results.length ? 'success' : 'warning'}>
+            <Alert severity={okCount === results.length && updated.failed === 0 ? 'success' : 'warning'}>
               {okCount} van {results.length} {results.length === 1 ? 'account aangemaakt' : 'accounts aangemaakt'}.
+              {updated.ok + updated.failed > 0 && ` ${updated.ok} bestaande ${updated.ok === 1 ? 'lid' : 'leden'} aangevuld${updated.failed ? `, ${updated.failed} mislukt` : ''}.`}
             </Alert>
             <Box sx={{ overflowX: 'auto' }}>
               <Table size="small">
@@ -372,8 +403,8 @@ export function MemberImportDialog({ open, onClose, existingEmails, trainers, de
             <Button variant="text" onClick={reset} sx={{ textTransform: 'none' }}>
               Terug
             </Button>
-            <Button variant="contained" disableElevation disabled={validRows.length === 0} onClick={handleImport}>
-              {validRows.length} {validRows.length === 1 ? 'lid' : 'leden'} importeren
+            <Button variant="contained" disableElevation disabled={workCount === 0} onClick={handleImport}>
+              {fillCount > 0 ? `${validRows.length} importeren, ${fillCount} aanvullen` : `${validRows.length} ${validRows.length === 1 ? 'lid' : 'leden'} importeren`}
             </Button>
           </>
         )}
