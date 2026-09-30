@@ -74,7 +74,9 @@ export function ScheduleConflictNotice({ check, onPickRoom, onPickTime }: Props)
                   <Chip
                     key={slot.startTime}
                     size="small"
-                    label={`${day(slot.weekday).slice(0, 2)} ${slot.startTime}–${slot.endTime}`}
+                    label={`${day(slot.weekday).slice(0, 2)} ${slot.startTime}–${slot.endTime}${slot.adjacent ? ` · ${t('classTypes.schedule.conflict.adjacent')}` : ''}`}
+                    color={slot.adjacent ? 'primary' : 'default'}
+                    variant={slot.adjacent ? 'filled' : 'outlined'}
                     onClick={() => onPickTime(idx, slot)}
                   />
                 ))}

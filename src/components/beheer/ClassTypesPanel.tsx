@@ -286,6 +286,7 @@ export function ClassTypesPanel({ staff, profiles, profilesLoading, createSignal
       }
       setTypingRoom(false);
       if (checked && checked.conflicts.length > 0) notify.info(t('classTypes.schedule.conflict.warned', { count: new Set(checked.conflicts.map((c) => c.slotIndex)).size }));
+      else if (checked?.outside?.length) notify.info(t('classTypes.schedule.conflict.outside', { count: checked.outside.length }));
       else notify.success(t('classTypes.saved'));
       setConflictsKey((k) => k + 1);
       warnStaleKept(synced?.staleWithBookings);

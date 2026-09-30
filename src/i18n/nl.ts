@@ -189,6 +189,8 @@ export const nl = {
         warned: 'Opgeslagen, maar {count} moment(en) botsen met een andere les. Dubbel plannen blokkeren kan in Instellingen.',
         otherRoom: 'Andere ruimte',
         otherTime: 'Ander tijdstip',
+        adjacent: 'sluit aan',
+        outside: 'Opgeslagen. Let op: {count} moment(en) vallen buiten de beschikbaarheid van de trainer.',
         noSuggestion: 'Geen vrij moment gevonden op deze dag binnen de openingstijden.',
         overviewTitle: '{count} dubbel ingepland',
         overviewHelp: 'Deze weekmomenten botsen al: zelfde trainer of ruimte op hetzelfde moment. Open een lessoort om het recht te zetten.',

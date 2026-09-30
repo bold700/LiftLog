@@ -91,7 +91,8 @@ import { buildInvoiceEmail, mailConfigured, sendViaResend } from './_lib/invoice
 import { hashFeedToken, buildIcsFeed } from './_lib/calendarFeed.mjs';
 import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey, getOrgMollieKey, createMolliePayment, getMolliePayment } from './_lib/molliePayments.mjs';
 import { enforceRateLimit } from './_lib/requireUser.mjs';
-import { allConflicts, blocksDoubleBooking, findConflicts, hoursOf, suggestionsFor } from './_lib/scheduleConflicts.mjs';
+import { allConflicts, blocksDoubleBooking, findConflicts, hoursOf, outsideAvailability, suggestionsFor } from './_lib/scheduleConflicts.mjs';
+import { availabilityDocId, cleanAvailability } from './_lib/availability.mjs';
 import { amsterdamDate, amsterdamDateTime } from './_lib/classReminders.mjs';
 import { sendPushToUser } from './_lib/pushSend.mjs';
 import {
@@ -266,6 +267,16 @@ export default async function handler(req, res) {
       case 'checkSchedule':
         if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan het rooster controleren.', build: BUILD });
         return await checkSchedule(res, db, actOrg, body);
+      case 'getAvailability':
+        if (!isStaff) return json(res, 403, { error: 'Alleen trainers en beheerders hebben een beschikbaarheid.', build: BUILD });
+        return await getAvailability(res, db, actOrg, String(body.userId ?? '').trim() || uid);
+      case 'saveAvailability': {
+        const target = String(body.userId ?? '').trim() || uid;
+        if (!(isStaff && target === uid) && myRole !== 'admin') {
+          return json(res, 403, { error: 'Je kunt alleen je eigen beschikbaarheid wijzigen (of als beheerder die van een trainer).', build: BUILD });
+        }
+        return await saveAvailability(res, db, actOrg, uid, target, body.days);
+      }
       case 'scheduleConflicts':
         if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan het rooster controleren.', build: BUILD });
         return await listScheduleConflicts(res, db, actOrg);
@@ -1261,6 +1272,33 @@ function conflictMessage(c) {
   return `Dit moment botst met ${c.other.name} (${WEEKDAY_NL[c.other.weekday]} ${c.other.startTime}–${c.other.endTime}): ${why}.`;
 }
 
+/** Beschikbaarheid van een trainer in een studio (per weekdag blokken), of null als die niets invulde. */
+async function availabilityOf(db, orgId, userId) {
+  if (!userId) return null;
+  const snap = await db.collection('trainerAvailability').doc(availabilityDocId(orgId, userId)).get();
+  return snap.exists ? snap.data()?.days ?? null : null;
+}
+
+async function getAvailability(res, db, orgId, userId) {
+  return json(res, 200, { userId, days: await availabilityOf(db, orgId, userId), build: BUILD });
+}
+
+/** Beschikbaarheid opslaan (de trainer zelf, of een beheerder voor een trainer van de studio). */
+async function saveAvailability(res, db, orgId, uid, userId, rawDays) {
+  const tSnap = await db.collection('profiles').doc(userId).get();
+  if (!tSnap.exists || !isStaffIn(tSnap.data(), orgId)) return json(res, 400, { error: 'Deze persoon is geen trainer in jouw studio.', build: BUILD });
+  const cleaned = cleanAvailability(rawDays);
+  if (cleaned.error) return json(res, 400, { error: cleaned.error, build: BUILD });
+  await db.collection('trainerAvailability').doc(availabilityDocId(orgId, userId)).set({
+    orgId,
+    userId,
+    days: cleaned.value,
+    updatedBy: uid,
+    updatedAt: new Date().toISOString(),
+  });
+  return json(res, 200, { userId, days: cleaned.value, build: BUILD });
+}
+
 /** Lessoorten, ruimtes, openingstijden en de blokkeer-instelling van een studio. */
 async function scheduleContext(db, orgId) {
   const [typesSnap, orgSnap] = await Promise.all([db.collection('classTypes').get(), db.collection('orgs').doc(orgId).get()]);
@@ -1290,12 +1328,15 @@ async function checkSchedule(res, db, orgId, body) {
     schedule,
   };
   const sched = await scheduleContext(db, orgId);
+  const availability = await availabilityOf(db, orgId, candidate.defaultTrainerId);
   const conflicts = findConflicts(candidate, sched.types);
   const suggestions = {};
   for (const c of conflicts) {
-    if (!suggestions[c.slotIndex]) suggestions[c.slotIndex] = suggestionsFor(candidate, c.slot, sched.types, sched.rooms, sched.hours);
+    if (!suggestions[c.slotIndex]) suggestions[c.slotIndex] = suggestionsFor(candidate, c.slot, sched.types, sched.rooms, sched.hours, availability);
   }
-  return json(res, 200, { block: sched.block, conflicts, suggestions, build: BUILD });
+  // Buiten de beschikbaarheid van de trainer: geen blokkade, wel een waarschuwing.
+  const outside = outsideAvailability(candidate, availability);
+  return json(res, 200, { block: sched.block, conflicts, suggestions, outside, build: BUILD });
 }
 
 /** Alle botsingen die nu op het rooster staan, om één keer recht te zetten. */
@@ -1372,7 +1413,7 @@ async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
       return json(res, 409, {
         error: conflictMessage(conflicts[0]),
         conflicts,
-        suggestions: suggestionsFor(ct, conflicts[0].slot, sched.types, sched.rooms, sched.hours),
+        suggestions: suggestionsFor(ct, conflicts[0].slot, sched.types, sched.rooms, sched.hours, await availabilityOf(db, orgId, trainerId)),
         build: BUILD,
       });
     }

@@ -208,6 +208,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Trainer beschikbaarheid (per weekdag de uren waarop een trainer kan). Lezen en schrijven via de
+    // server (api/booking.mjs: getAvailability/saveAvailability), die de rol en studio controleert.
+    match /trainerAvailability/{id} {
+      allow read, write: if false;
+    }
+
     // Koppeling tussen een Mollie-betaling en de aankoop die hij afrondt (welk lid, welk
     // abonnement). Alleen de server (Admin SDK) leest en schrijft dit: aangemaakt door
     // purchasePlan, bijgewerkt door mollieWebhook zodra Mollie de betaalstatus meldt.
