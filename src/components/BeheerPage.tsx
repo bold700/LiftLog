@@ -30,6 +30,7 @@ import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import { useProfile } from '../context/ProfileContext';
 import { getOrg } from '../services/orgService';
+import { RescheduleRequestsCard } from './beheer/RescheduleRequestsCard';
 import { useI18n } from '../context/I18nContext';
 import { useAuth } from '../context/AuthContext';
 import { assignTrainerToSporter, getAllProfiles, getProfileByEmail, updateProfile } from '../services/profileService';
@@ -609,6 +610,7 @@ export function BeheerPage() {
       {header}
 
       <RequestsBanner profiles={profiles} onChanged={load} />
+      <RescheduleRequestsCard />
       {isAdmin && <ProcessorAgreementCard variant="banner" />}
 
       {/* Met veel leden: zoeken, filteren op rol en abonnement, sorteren (kolomkoppen of, op de telefoon, de keuzelijst). */}

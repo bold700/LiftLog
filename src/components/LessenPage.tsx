@@ -25,6 +25,8 @@ import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
 import { PageLayout, ContentCard, EmptyState } from './layout';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
+import { RescheduleDialog } from './RescheduleDialog';
+import { getRescheduleRequests, rescheduleDayLabel, type RescheduleRequest } from '../services/rescheduleService';
 import {
   getUpcomingClasses,
   getMyBookings,
@@ -210,6 +212,24 @@ export function LessenPage() {
   const [waitlistPositions, setWaitlistPositions] = useState<Record<string, number>>({});
   /** Afmelden binnen het late venster: eerst waarschuwen dat de credit vervalt. */
   const [lateCancel, setLateCancel] = useState<Booking | null>(null);
+  /** PT-moment op tijd afgemeld: meteen een ander moment kiezen (sporter vraagt aan, staf plant in). */
+  const [reschedule, setReschedule] = useState<{ classId: string; staff: boolean; memberName?: string } | null>(null);
+  /** Eigen verzoeken om te verzetten (sporter): wacht op de trainer, of afgewezen. */
+  const [myRequests, setMyRequests] = useState<RescheduleRequest[]>([]);
+  const [requestsVersion, setRequestsVersion] = useState(0);
+  useEffect(() => {
+    if (!me || isStaff) return;
+    let alive = true;
+    getRescheduleRequests().then(
+      (list) => {
+        if (alive) setMyRequests(list.filter((r) => r.status !== 'approved'));
+      },
+      () => undefined
+    );
+    return () => {
+      alive = false;
+    };
+  }, [me, isStaff, requestsVersion]);
   /**
    * Naam per trainerId, voor de trainernaam op de rij en in de reserveer-dialoog (Figma toont
    * "Kenny" onder de lestitel). Een sporter mag geen trainerprofielen lezen (firestore.rules); die
@@ -376,6 +396,7 @@ export function LessenPage() {
       try {
         const result = await cancelBooking(booking.id);
         notify?.success(result.refunded ? 'Afgemeld, je credit staat weer op je saldo.' : 'Afgemeld. De credit is vervallen.');
+        if (result.reschedule) setReschedule({ classId: result.reschedule.classId, staff: false });
         await load();
       } catch (e) {
         notify?.error(e instanceof Error ? e.message : 'Afmelden mislukt');
@@ -705,6 +726,26 @@ export function LessenPage() {
           om weer mee te doen.
         </Alert>
       )}
+      {myRequests.map((r) =>
+        r.status === 'declined' ? (
+          <Alert
+            key={r.id}
+            severity="warning"
+            sx={{ mb: 2 }}
+            action={
+              <Button color="inherit" size="small" onClick={() => setReschedule({ classId: r.fromClassId, staff: false })} sx={{ whiteSpace: 'nowrap' }}>
+                Ander moment
+              </Button>
+            }
+          >
+            Je trainer kan niet op {rescheduleDayLabel(r.date)} {r.startTime}. Je credit staat nog op je saldo; kies een ander moment.
+          </Alert>
+        ) : (
+          <Alert key={r.id} severity="info" sx={{ mb: 2 }}>
+            Aangevraagd: {r.title || 'PT-moment'} op {rescheduleDayLabel(r.date)} {r.startTime}. Wacht op bevestiging van je trainer.
+          </Alert>
+        )
+      )}
       {/* Figma "Schedule": weergave, ruimtes en legenda op één regel. Op de telefoon blijft alleen
           Week/Dag staan; de rest zit achter de filterknop in een bottom sheet. */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, rowGap: 1, mb: 2 }}>
@@ -964,6 +1005,18 @@ export function LessenPage() {
         onClose={() => setParticipantsClass(null)}
         onChanged={() => void load()}
         onStart={(cls, plan, ids) => void startClass(cls, plan, ids)}
+        onReschedule={(classId, memberName) => setReschedule({ classId, staff: true, memberName })}
+      />
+
+      <RescheduleDialog
+        classId={reschedule?.classId ?? null}
+        staff={reschedule?.staff}
+        memberName={reschedule?.memberName}
+        onClose={() => setReschedule(null)}
+        onDone={() => {
+          void load();
+          setRequestsVersion((v) => v + 1);
+        }}
       />
 
       <CancelClassDialog
@@ -1214,12 +1267,15 @@ function ParticipantsDialog({
   onClose,
   onChanged,
   onStart,
+  onReschedule,
 }: {
   cls: StudioClass | null;
   sporters: Profile[];
   onClose: () => void;
   onChanged: () => void;
   onStart: (cls: StudioClass, plan: ClassPlan, bookedUserIds: string[]) => void;
+  /** PT-moment afgemeld met credit terug: meteen een ander moment inplannen voor dit lid. */
+  onReschedule?: (classId: string, memberName: string) => void;
 }) {
   const notify = useNotify();
   const [rows, setRows] = useState<Booking[]>([]);
@@ -1287,6 +1343,7 @@ function ParticipantsDialog({
             : `${nameFor(booking.userId)} afgemeld. Binnen de afmeldtermijn, dus de credit vervalt.`
         );
       }
+      if (r.reschedule) onReschedule?.(r.reschedule.classId, nameFor(booking.userId));
     } catch (e) {
       notify?.error(e instanceof Error ? e.message : 'Verwijderen mislukt');
     } finally {

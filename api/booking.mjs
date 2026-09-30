@@ -15,6 +15,12 @@ import { applyCors } from './_lib/cors.mjs';
  *                                                        credit gaat eraf, niet die van de staf)
  *   { action: 'cancel',  bookingId }                   afmelden; credit terug binnen de annuleertermijn
  *                                                        (instelbaar per studio, zie bookingPolicy hieronder)
+ *   { action: 'rescheduleOptions', classId }         na afmelden van een PT-moment: vrije momenten bij dezelfde
+ *                                                     trainer (twee weken, binnen zijn beschikbaarheid, aansluitend eerst)
+ *   { action: 'requestReschedule', classId, date, startTime }  nieuw moment aanvragen (sporter; de trainer keurt
+ *                                                     goed) of meteen inplannen (staf)
+ *   { action: 'rescheduleRequests' }                  openstaande verzoeken (staf) of je eigen verzoeken (sporter)
+ *   { action: 'answerReschedule', requestId, approve }  verzoek goedkeuren of afwijzen (trainer of beheerder)
  *   { action: 'setStandingBooking', standingBookingId, active }  "elke week inschrijven" aan/uit zetten
  *   { action: 'generateClassOccurrences', classTypeId }  rooster meteen vullen voor deze lessoort (staf),
  *                                                        in plaats van tot de volgende cron te wachten
@@ -94,6 +100,7 @@ import { enforceRateLimit } from './_lib/requireUser.mjs';
 import { allConflicts, blocksDoubleBooking, findConflicts, hoursOf, outsideAvailability, suggestionsFor } from './_lib/scheduleConflicts.mjs';
 import { availabilityDocId, cleanAvailability } from './_lib/availability.mjs';
 import { amsterdamDate, amsterdamDateTime } from './_lib/classReminders.mjs';
+import { busyByDate, canRescheduleClass, isOffered, MIN_LEAD_MINUTES, RESCHEDULE_DAYS, rescheduleOptions, rescheduledClassId, rescheduleRequestId } from './_lib/reschedule.mjs';
 import { sendPushToUser } from './_lib/pushSend.mjs';
 import {
   creditsLowAfterBooking,
@@ -244,6 +251,15 @@ export default async function handler(req, res) {
         );
       case 'cancel':
         return await cancel(res, db, uid, myOrgs, isStaff, String(body.bookingId ?? '').trim());
+      case 'rescheduleOptions':
+        return await getRescheduleOptions(res, db, uid, actOrg, isStaff, String(body.classId ?? '').trim());
+      case 'requestReschedule':
+        return await requestReschedule(res, db, uid, actOrg, isStaff, body);
+      case 'rescheduleRequests':
+        return await listRescheduleRequests(res, db, uid, actOrg, isStaff);
+      case 'answerReschedule':
+        if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan een verzoek beantwoorden.', build: BUILD });
+        return await answerReschedule(res, db, uid, actOrg, myRole, String(body.requestId ?? '').trim(), body.approve === true);
       case 'cancelClass':
         if (!isStaff) return json(res, 403, { error: 'Alleen trainers en beheerders kunnen een les afgelasten.', build: BUILD });
         return await cancelWholeClass(res, db, uid, myOrgs, String(body.classId ?? '').trim());
@@ -655,7 +671,12 @@ async function cancel(res, db, uid, myOrgs, isStaff, bookingId) {
   if (!bookingId) return json(res, 400, { error: 'Geen reservering opgegeven.', build: BUILD });
   const { notice, ...result } = await cancelBookingCore(db, uid, myOrgs, isStaff, bookingId);
   await notifyAfterCancel(db, uid, notice, result);
-  return json(res, 200, { ...result, build: BUILD });
+  // Een PT-moment op tijd afgemeld (credit terug): de app biedt meteen een ander moment aan.
+  const reschedule =
+    result.refunded && notice?.cls && canRescheduleClass(notice.cls, notice.bookingUserId)
+      ? { classId: notice.cls.id, userId: notice.bookingUserId }
+      : null;
+  return json(res, 200, { ...result, reschedule, build: BUILD });
 }
 
 /**
@@ -980,7 +1001,7 @@ async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
       notice: {
         orgId,
         bookingUserId: String(booking.userId),
-        cls: cls ? { title: cls.title, date: cls.date, startTime: cls.startTime, trainerId: cls.trainerId ?? null } : null,
+        cls: cls ? { id: classId, title: cls.title, date: cls.date, startTime: cls.startTime, trainerId: cls.trainerId ?? null, privateFor: cls.privateFor ?? null, privateForGroup: cls.privateForGroup ?? null } : null,
         promotedCost: outcome.promotedCost ?? 0,
         heldUserId: outcome.heldUserId ?? null,
         holdUntil: outcome.holdUntil ?? null,
@@ -1297,6 +1318,290 @@ async function saveAvailability(res, db, orgId, uid, userId, rawDays) {
     updatedAt: new Date().toISOString(),
   });
   return json(res, 200, { userId, days: cleaned.value, build: BUILD });
+}
+
+// --- Verzetten na afmelden (api/_lib/reschedule.mjs) ------------------------------------------
+
+/** Vangt het antwoord van een bestaande actie op, zodat die hier hergebruikt kan worden. */
+function captureRes() {
+  return {
+    statusCode: 200,
+    body: null,
+    setHeader() {},
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    end(payload) {
+      this.body = payload ? JSON.parse(payload) : null;
+    },
+  };
+}
+
+/** De afgemelde PT-les, als de beller die mag verzetten: het lid zelf, of staf van de studio. */
+async function rescheduleSource(db, uid, orgId, isStaff, classId) {
+  if (!classId) throw refuse('Geen les opgegeven.', 400);
+  const snap = await db.collection('classes').doc(classId).get();
+  if (!snap.exists) throw refuse('Deze les bestaat niet (meer).', 404);
+  const cls = { ...snap.data(), id: classId };
+  if (orgIdOf(cls.orgId) !== orgId) throw refuse('Deze les hoort niet bij jouw studio.', 403);
+  if (!canRescheduleClass(cls, cls.privateFor)) throw refuse('Alleen een persoonlijk PT-moment met een trainer kun je verzetten.', 400);
+  if (cls.privateFor !== uid && !isStaff) throw refuse('Dit is niet jouw les.', 403);
+  return cls;
+}
+
+/**
+ * Vrije momenten voor een nieuw PT-moment bij deze trainer (zie rescheduleOptions): zelfde duur,
+ * niet op het afgemelde moment zelf (`exclude`).
+ */
+async function optionsFor(db, orgId, { trainerId, room, duration, exclude }, { ignoreRequestId = null } = {}) {
+  const now = new Date();
+  const dates = Array.from({ length: RESCHEDULE_DAYS }, (_, i) => amsterdamDate(now, i));
+  const [orgSnap, availability, classSnap, pendingSnap] = await Promise.all([
+    db.collection('orgs').doc(orgId).get(),
+    availabilityOf(db, orgId, trainerId),
+    db.collection('classes').where('date', '>=', dates[0]).where('date', '<=', dates[dates.length - 1]).get(),
+    db.collection('rescheduleRequests').where('trainerId', '==', trainerId).where('status', '==', 'pending').get(),
+  ]);
+  // Openstaande verzoeken bij deze trainer houden dat moment vrij voor wie het vroeg.
+  const pending = pendingSnap.docs.filter((d) => d.id !== ignoreRequestId).map((d) => d.data());
+  const busy = busyByDate([...classSnap.docs.map((d) => d.data()), ...pending], { trainerId, room });
+  const minStart = now.getTime() + MIN_LEAD_MINUTES * 60 * 1000;
+  return rescheduleOptions({
+    dates,
+    duration,
+    availability,
+    hours: hoursOf(orgSnap.exists ? orgSnap.data() : null),
+    busy,
+    tooSoon: (date, startTime) => amsterdamDateTime(date, startTime).getTime() < minStart,
+    exclude,
+  });
+}
+
+/** Wat optionsFor nodig heeft van de afgemelde les. */
+const slotOf = (cls) => ({
+  trainerId: cls.trainerId,
+  room: cls.room ?? null,
+  duration: toMinutes(cls.endTime) - toMinutes(cls.startTime),
+  exclude: { date: cls.date, startTime: cls.startTime },
+});
+
+const toMinutes = (hhmm) => {
+  const [h, m] = String(hhmm ?? '').split(':').map(Number);
+  return h * 60 + m;
+};
+
+async function getRescheduleOptions(res, db, uid, orgId, isStaff, classId) {
+  const cls = await rescheduleSource(db, uid, orgId, isStaff, classId);
+  const options = await optionsFor(db, orgId, slotOf(cls));
+  return json(res, 200, { classId, title: cls.title ?? '', trainerId: cls.trainerId, ...options, build: BUILD });
+}
+
+/**
+ * Nieuw moment aanvragen. Een sporter vraagt aan (de trainer krijgt een melding en keurt goed);
+ * staf plant meteen in. Eén verzoek per afgemelde les; na een afwijzing kan het opnieuw.
+ */
+async function requestReschedule(res, db, uid, orgId, isStaff, body) {
+  const cls = await rescheduleSource(db, uid, orgId, isStaff, String(body?.classId ?? '').trim());
+  const date = String(body?.date ?? '').trim();
+  const startTime = String(body?.startTime ?? '').trim();
+  const userId = cls.privateFor;
+
+  const bookings = await db.collection('bookings').where('classId', '==', cls.id).where('userId', '==', userId).get();
+  if (bookings.docs.some((d) => ['booked', 'waitlist'].includes(String(d.data().status)))) {
+    return json(res, 409, { error: 'Je staat nog ingeschreven voor deze les. Meld je eerst af.', build: BUILD });
+  }
+  const requestId = rescheduleRequestId(cls.id);
+  const reqRef = db.collection('rescheduleRequests').doc(requestId);
+  const existing = await reqRef.get();
+  if (existing.exists && ['pending', 'approved'].includes(String(existing.data().status))) {
+    return json(res, 409, { error: 'Voor deze les loopt al een verzoek.', build: BUILD });
+  }
+  const options = await optionsFor(db, orgId, slotOf(cls));
+  if (!isOffered(options, date, startTime)) {
+    return json(res, 409, { error: 'Dit moment is niet (meer) vrij. Kies een ander moment.', build: BUILD });
+  }
+  const endTime = options.days.find((d) => d.date === date).times.find((t) => t.startTime === startTime).endTime;
+  const nowIso = new Date().toISOString();
+  const request = {
+    id: requestId,
+    orgId,
+    userId,
+    trainerId: cls.trainerId,
+    fromClassId: cls.id,
+    fromDate: cls.date,
+    fromStartTime: cls.startTime,
+    title: cls.title ?? '',
+    date,
+    startTime,
+    endTime,
+    room: cls.room ?? null,
+    creditCost: Number(cls.creditCost ?? 1) || 0,
+    schemaId: cls.schemaId ?? null,
+    sessionKind: cls.sessionKind ?? '1on1',
+    description: cls.description ?? null,
+    baseClassTypeId: cls.classTypeId ?? null,
+    status: 'pending',
+    requestedBy: uid,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+  await reqRef.set(request);
+
+  if (isStaff) {
+    const done = await approveRequest(db, uid, orgId, request);
+    if (done.error) {
+      await reqRef.delete();
+      return json(res, done.status ?? 409, { error: done.error, build: BUILD });
+    }
+    return json(res, 200, { requestId, status: 'approved', classId: done.classId, build: BUILD });
+  }
+
+  try {
+    const me = await db.collection('profiles').doc(uid).get();
+    const name = String(me.data()?.displayName || 'Een sporter');
+    await sendPushToUser(db, cls.trainerId, { ...pushMessages.rescheduleRequested(request, name), data: { kind: 'rescheduleRequest' } });
+  } catch (e) {
+    console.warn('[booking] melding verzoek verzetten mislukt:', e?.message ?? e);
+  }
+  return json(res, 200, { requestId, status: 'pending', build: BUILD });
+}
+
+/**
+ * Goedkeuren: het moment nog één keer controleren, de les aanmaken en het lid inschrijven via
+ * dezelfde weg als gewoon boeken (credit eraf, zelfde regels). Lukt boeken niet, dan gaat de les weg.
+ */
+async function approveRequest(db, approverUid, orgId, request) {
+  const slot = {
+    trainerId: request.trainerId,
+    room: request.room,
+    duration: toMinutes(request.endTime) - toMinutes(request.startTime),
+    exclude: { date: request.fromDate, startTime: request.fromStartTime },
+  };
+  const options = await optionsFor(db, orgId, slot, { ignoreRequestId: request.id });
+  if (!isOffered(options, request.date, request.startTime)) {
+    return { error: 'Dit moment is inmiddels bezet of ligt te dichtbij. Wijs het verzoek af; de sporter kan een ander moment kiezen.' };
+  }
+  const classId = rescheduledClassId(request.id);
+  const nowIso = new Date().toISOString();
+  const classRef = db.collection('classes').doc(classId);
+  await classRef.set({
+    id: classId,
+    orgId,
+    title: request.title,
+    date: request.date,
+    startTime: request.startTime,
+    endTime: request.endTime,
+    trainerId: request.trainerId,
+    capacity: 1,
+    creditCost: request.creditCost,
+    schemaId: request.schemaId,
+    classTypeId: null,
+    baseClassTypeId: request.baseClassTypeId,
+    rescheduledFrom: request.fromClassId,
+    room: request.room,
+    description: request.description,
+    sessionKind: request.sessionKind,
+    privateFor: request.userId,
+    privateForGroup: null,
+    groupMemberIds: [],
+    bookedCount: 0,
+    waitlistCount: 0,
+    cancelledAt: null,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  });
+  const out = captureRes();
+  try {
+    await book(out, db, approverUid, [orgId], classId, false, true, request.userId, false, true);
+  } catch (e) {
+    out.statusCode = e?.status ?? 409;
+    out.body = { error: e?.expected ? e.message : 'Inschrijven mislukt.' };
+    if (!e?.expected) console.error('[booking] inschrijven na verzetten mislukt', e);
+  }
+  if (out.statusCode !== 200) {
+    await classRef.delete();
+    return { error: out.body?.error || 'Inschrijven mislukt.', status: out.statusCode };
+  }
+  await db.collection('rescheduleRequests').doc(request.id).set(
+    { status: 'approved', classId, answeredBy: approverUid, answeredAt: nowIso, updatedAt: nowIso },
+    { merge: true }
+  );
+  if (request.userId !== approverUid) {
+    try {
+      await sendPushToUser(db, request.userId, { ...pushMessages.rescheduleApproved(request), data: { kind: 'rescheduleAnswered' } });
+    } catch (e) {
+      console.warn('[booking] melding verzetten bevestigd mislukt:', e?.message ?? e);
+    }
+  }
+  return { classId };
+}
+
+/** Staf: openstaande verzoeken van de studio. Sporter: je eigen verzoeken voor komende momenten. */
+async function listRescheduleRequests(res, db, uid, orgId, isStaff) {
+  const today = amsterdamDate(new Date());
+  let list;
+  if (isStaff) {
+    const snap = await db.collection('rescheduleRequests').where('orgId', '==', orgId).where('status', '==', 'pending').get();
+    list = snap.docs.map((d) => d.data());
+  } else {
+    const snap = await db.collection('rescheduleRequests').where('userId', '==', uid).get();
+    list = snap.docs.map((d) => d.data()).filter((r) => r.orgId === orgId && r.date >= today);
+  }
+  list = list.filter((r) => r.date >= today || r.status === 'pending');
+  const names = {};
+  if (isStaff) {
+    for (const id of [...new Set(list.flatMap((r) => [r.userId, r.trainerId]).filter(Boolean))]) {
+      const p = await db.collection('profiles').doc(id).get();
+      names[id] = p.exists ? String(p.data()?.displayName || p.data()?.email || '') : '';
+    }
+  }
+  const requests = list
+    .sort((a, b) => String(a.date + a.startTime).localeCompare(String(b.date + b.startTime)))
+    .map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      userName: names[r.userId] ?? null,
+      trainerId: r.trainerId,
+      trainerName: names[r.trainerId] ?? null,
+      title: r.title,
+      fromClassId: r.fromClassId,
+      fromDate: r.fromDate,
+      fromStartTime: r.fromStartTime,
+      date: r.date,
+      startTime: r.startTime,
+      endTime: r.endTime,
+      status: r.status,
+      classId: r.classId ?? null,
+    }));
+  return json(res, 200, { requests, build: BUILD });
+}
+
+/** Verzoek beantwoorden: de trainer van het verzoek, of een beheerder. */
+async function answerReschedule(res, db, uid, orgId, myRole, requestId, approve) {
+  if (!requestId) return json(res, 400, { error: 'Geen verzoek opgegeven.', build: BUILD });
+  const ref = db.collection('rescheduleRequests').doc(requestId);
+  const snap = await ref.get();
+  if (!snap.exists || snap.data().orgId !== orgId) return json(res, 404, { error: 'Dit verzoek bestaat niet (meer).', build: BUILD });
+  const request = snap.data();
+  if (request.trainerId !== uid && myRole !== 'admin') {
+    return json(res, 403, { error: 'Alleen de trainer van dit moment of een beheerder kan dit verzoek beantwoorden.', build: BUILD });
+  }
+  if (request.status !== 'pending') return json(res, 409, { error: 'Dit verzoek is al beantwoord.', build: BUILD });
+
+  if (approve) {
+    const done = await approveRequest(db, uid, orgId, request);
+    if (done.error) return json(res, done.status ?? 409, { error: done.error, build: BUILD });
+    return json(res, 200, { status: 'approved', classId: done.classId, build: BUILD });
+  }
+  const nowIso = new Date().toISOString();
+  await ref.set({ status: 'declined', answeredBy: uid, answeredAt: nowIso, updatedAt: nowIso }, { merge: true });
+  try {
+    await sendPushToUser(db, request.userId, { ...pushMessages.rescheduleDeclined(request), data: { kind: 'rescheduleAnswered' } });
+  } catch (e) {
+    console.warn('[booking] melding verzoek afgewezen mislukt:', e?.message ?? e);
+  }
+  return json(res, 200, { status: 'declined', build: BUILD });
 }
 
 /** Lessoorten, ruimtes, openingstijden en de blokkeer-instelling van een studio. */

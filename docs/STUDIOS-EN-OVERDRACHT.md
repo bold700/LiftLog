@@ -121,6 +121,21 @@ De annuleertermijn staat als `FREE_CANCEL_HOURS` in `api/booking.mjs`.
 
 ---
 
+### Verzetten na afmelden (PT-moment)
+
+Meldt een sporter zich op tijd af voor een persoonlijk PT-moment (credit terug), dan biedt de app
+meteen andere momenten bij dezelfde trainer aan: de komende twee weken, minstens twee uur vooruit,
+binnen de beschikbaarheid van de trainer (of de openingstijden van de studio), waar trainer en ruimte
+vrij zijn. Momenten die direct aansluiten op een andere les van de trainer staan bovenaan.
+
+- De sporter vraagt aan; de trainer (of een beheerder) keurt goed of wijst af in Beheer → Leden.
+  Beiden krijgen een pushmelding. Goedkeuren zet een losse les op het rooster (`cls_rs_…`) en
+  schrijft de sporter in via de gewone boekingsregels (credit eraf).
+- Afgewezen: de credit staat nog op het saldo en de sporter kiest in Lessen een ander moment.
+- Meldt de trainer het lid af (Deelnemers), dan plant hij meteen zelf een nieuw moment in.
+- Verzoeken staan in `rescheduleRequests` (alleen via de server); rekenregels in
+  `api/_lib/reschedule.mjs`.
+
 ## 3b. Veilig uitproberen: de Testruimte
 
 Er is één Firebase-project. De previewomgeving van Vercel schrijft dus in dezelfde database als
