@@ -36,6 +36,10 @@ export interface AgreementInfo {
   sections: AgreementSection[];
   signed: SignedAgreement | null;
   prefill: AgreementParty & { name: string };
+  /** Eigenaar van de studio; alleen die tekent. Null: nog niet aangewezen. */
+  owner?: { uid: string; name: string } | null;
+  /** Mag de ingelogde beheerder tekenen (is hij de eigenaar)? */
+  canSign?: boolean;
 }
 
 export interface SignAgreementInput {

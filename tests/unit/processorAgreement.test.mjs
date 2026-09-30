@@ -107,8 +107,13 @@ function reset() {
       adminA: { orgId: 'vanas', orgIds: ['vanas'], role: 'admin', displayName: 'Simone' },
       trainerA: { orgId: 'vanas', orgIds: ['vanas'], role: 'trainer', displayName: 'Esther' },
       adminB: { orgId: 'studiob', orgIds: ['studiob'], role: 'admin', displayName: 'Bea' },
+      adminA2: { orgId: 'vanas', orgIds: ['vanas'], role: 'admin', displayName: 'Esther' },
+      support: { orgId: 'vanas', orgIds: ['vanas'], role: 'admin', displayName: 'Kenny', email: 'support@bold700.com' },
     },
-    orgs: { vanas: { name: 'Van As PT', business: { legalName: 'Van As Personal Training', kvk: '12345678', street: 'Dorpsstraat 1', postcode: '1234 AB', city: 'Utrecht' } }, studiob: { name: 'Studio B' } },
+    orgs: {
+      vanas: { name: 'Van As PT', ownerId: 'adminA', business: { legalName: 'Van As Personal Training', kvk: '12345678', street: 'Dorpsstraat 1', postcode: '1234 AB', city: 'Utrecht' } },
+      studiob: { name: 'Studio B', ownerId: 'adminB' },
+    },
     rateLimits: {},
     processorAgreements: {},
   };
@@ -144,7 +149,7 @@ vi.mock('../../api/_lib/invoiceEmail.mjs', async (orig) => ({
 vi.mock('../../api/_lib/firebaseAdmin.mjs', () => ({
   parseServiceAccount: () => ({ account: { client_email: 'sa@x', private_key: 'k' } }),
   getAdmin: () => ({
-    auth: { verifyIdToken: async () => ({ uid: currentUid }), getUser: async (uid) => ({ uid, email: `${uid}@example.com` }) },
+    auth: { verifyIdToken: async () => ({ uid: currentUid }), getUser: async (uid) => ({ uid, email: uid === 'support' ? 'support@bold700.com' : `${uid}@example.com` }) },
     db: {
       collection: (name) => ({ doc: (id) => docRef(name, id) }),
       runTransaction: async (fn) => fn({ get: (ref) => ref.get(), set: (ref, data) => ref.set(data), update: (ref, data) => ref.set(data, { merge: true }) }),
@@ -185,6 +190,25 @@ describe('acties verwerkersovereenkomst', () => {
     expect(r.body.sections.length).toBeGreaterThan(5);
     expect(r.body.signed).toBeNull();
     expect(r.body.prefill).toMatchObject({ legalName: 'Van As Personal Training', kvk: '12345678', name: 'Simone' });
+    expect(r.body.owner).toEqual({ uid: 'adminA', name: 'Simone' });
+    expect(r.body.canSign).toBe(true);
+  });
+
+  it('alleen de eigenaar tekent; een andere beheerder leest mee maar tekent niet', async () => {
+    const info = await post('adminA2', { action: 'processorAgreement', actingOrgId: 'vanas' });
+    expect(info.statusCode).toBe(200);
+    expect(info.body.canSign).toBe(false);
+    const r = await post('adminA2', { action: 'signProcessorAgreement', actingOrgId: 'vanas', ...validBody });
+    expect(r.statusCode).toBe(403);
+    expect(r.body.error).toMatch(/eigenaar/);
+    expect(store.orgs.vanas.processorAgreement).toBeUndefined();
+  });
+
+  it('zonder eigenaar tekent niemand: eerst een eigenaar aanwijzen', async () => {
+    delete store.orgs.vanas.ownerId;
+    const r = await post('adminA', { action: 'signProcessorAgreement', actingOrgId: 'vanas', ...validBody });
+    expect(r.statusCode).toBe(403);
+    expect(r.body.error).toMatch(/Wijs eerst de eigenaar/);
   });
 
   it('weigert een trainer', async () => {
@@ -235,5 +259,55 @@ describe('acties verwerkersovereenkomst', () => {
     const r = await post('adminA', { action: 'processorAgreementPdf', actingOrgId: 'vanas' });
     expect(r.statusCode).toBe(200);
     expect(Buffer.from(r.body.pdf, 'base64').subarray(0, 4).toString()).toBe('%PDF');
+  });
+});
+
+describe('eigenaar van de studio aanwijzen', () => {
+  beforeEach(reset);
+
+  it('de eigenaar draagt over aan een andere beheerder', async () => {
+    const r = await post('adminA', { action: 'setOwner', actingOrgId: 'vanas', targetUid: 'adminA2' });
+    expect(r.statusCode).toBe(200);
+    expect(store.orgs.vanas.ownerId).toBe('adminA2');
+    expect(store.orgs.vanas.ownerSetBy).toBe('adminA');
+  });
+
+  it('een beheerder die geen eigenaar is kan niet overdragen', async () => {
+    const r = await post('adminA2', { action: 'setOwner', actingOrgId: 'vanas', targetUid: 'adminA2' });
+    expect(r.statusCode).toBe(403);
+    expect(store.orgs.vanas.ownerId).toBe('adminA');
+  });
+
+  it('zonder eigenaar mag een beheerder er een aanwijzen', async () => {
+    delete store.orgs.vanas.ownerId;
+    const r = await post('adminA2', { action: 'setOwner', actingOrgId: 'vanas', targetUid: 'adminA' });
+    expect(r.statusCode).toBe(200);
+    expect(store.orgs.vanas.ownerId).toBe('adminA');
+  });
+
+  it('support van BOLD700 wijst aan, maar wordt zelf nooit eigenaar', async () => {
+    expect((await post('support', { action: 'setOwner', actingOrgId: 'vanas', targetUid: 'adminA2' })).statusCode).toBe(200);
+    expect(store.orgs.vanas.ownerId).toBe('adminA2');
+    const r = await post('adminA2', { action: 'setOwner', actingOrgId: 'vanas', targetUid: 'support' });
+    expect(r.statusCode).toBe(400);
+    expect(store.orgs.vanas.ownerId).toBe('adminA2');
+  });
+
+  it('de nieuwe eigenaar moet beheerder van deze studio zijn', async () => {
+    expect((await post('adminA', { action: 'setOwner', actingOrgId: 'vanas', targetUid: 'trainerA' })).statusCode).toBe(400);
+    expect((await post('adminA', { action: 'setOwner', actingOrgId: 'vanas', targetUid: 'adminB' })).statusCode).toBe(400);
+    expect(store.orgs.vanas.ownerId).toBe('adminA');
+  });
+
+  it('een trainer wijst geen eigenaar aan', async () => {
+    expect((await post('trainerA', { action: 'setOwner', actingOrgId: 'vanas', targetUid: 'trainerA' })).statusCode).toBe(403);
+  });
+
+  it('de eigenaar is niet weg te halen of terug te zetten naar trainer zonder eerst over te dragen', async () => {
+    const demote = await post('adminA2', { action: 'setRole', actingOrgId: 'vanas', targetUid: 'adminA', role: 'trainer' });
+    expect(demote.statusCode).toBe(409);
+    const del = await post('adminA2', { action: 'delete', actingOrgId: 'vanas', targetUid: 'adminA' });
+    expect(del.statusCode).toBe(409);
+    expect(store.profiles.adminA.role).toBe('admin');
   });
 });

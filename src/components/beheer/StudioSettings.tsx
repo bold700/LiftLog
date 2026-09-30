@@ -1,13 +1,15 @@
 /**
  * Beheer → Instellingen: hoe de studio werkt, los van hoe hij eruitziet (Huisstijl) en van het geld
  * (Facturatie). Boekingsbeleid, toegang tussen trainers, inactieve accounts opruimen en de
- * verwerkersovereenkomst met BOLD700.
+ * verwerkersovereenkomst met BOLD700. Bovenaan die laatste twee: wie de eigenaar is.
  */
 import { useEffect, useState } from 'react';
 import { Box, Button, CircularProgress, FormControlLabel, Switch, TextField, Typography } from '@mui/material';
 import { ContentCard } from '../layout';
 import { AccountRetentionSettings } from './AccountRetentionSettings';
 import { ProcessorAgreementCard } from './ProcessorAgreementCard';
+import { StudioOwnerCard } from './StudioOwnerCard';
+import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
 import { useNotify } from '../../context/NotifyContext';
 import { DEFAULT_GROUP_PRICING, formatEuro, groupPricingOf, groupSessionPrice } from '../../utils/groupPricing';
@@ -27,7 +29,9 @@ const DEFAULT_FREE_CANCEL_HOURS = 12;
 export function StudioSettings() {
   const profile = useProfile();
   const notify = useNotify();
+  const auth = useAuth();
   const orgId = profile?.activeOrgId ?? null;
+  const [ownerId, setOwnerId] = useState<string | null>(null);
 
   const [loaded, setLoaded] = useState(false);
   const [freeCancelHours, setFreeCancelHours] = useState(String(DEFAULT_FREE_CANCEL_HOURS));
@@ -58,6 +62,7 @@ export function StudioSettings() {
       setShowNames(org.showTrainerNames);
       setStudioRefund(org.studioCancelRefund);
       setBlockDouble(org.blockDoubleBooking);
+      setOwnerId(org.ownerId);
       const gp = groupPricingOf(org.groupPricing);
       setGroupBase(String(gp.base));
       setGroupExtra(String(gp.perExtra));
@@ -278,8 +283,10 @@ export function StudioSettings() {
         </ContentCard>
       </Box>
 
-      <AccountRetentionSettings orgId={orgId} myUid={profile?.profile?.userId} />
-      <ProcessorAgreementCard />
+      <StudioOwnerCard ownerId={ownerId} myUid={profile?.profile?.userId} myEmail={auth?.user?.email} onChanged={setOwnerId} />
+      {/* Opnieuw laden als de eigenaar verandert: wie mag instellen en tekenen verschuift mee. */}
+      <AccountRetentionSettings key={`retention-${ownerId ?? 'none'}`} orgId={orgId} myUid={profile?.profile?.userId} />
+      <ProcessorAgreementCard key={`agreement-${ownerId ?? 'none'}`} />
     </Box>
   );
 }

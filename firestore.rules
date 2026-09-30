@@ -183,9 +183,9 @@ service cloud.firestore {
       allow read: if isSignedIn() && orgId in myOrgs();
       // "Inactieve accounts verwijderen" is een beslissing van de eigenaar, niet van elke beheerder.
       // Heeft de studio (nog) geen eigenaar, dan mag een beheerder het.
-      // De ondertekende verwerkersovereenkomst zet alleen de server (api/admin-account.mjs).
+      // De ondertekende verwerkersovereenkomst en de eigenaar zet alleen de server (api/admin-account.mjs).
       allow update: if isAdminIn(orgId)
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['processorAgreement'])
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['processorAgreement', 'ownerId', 'ownerSetBy', 'ownerSetAt'])
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['accountRetention'])
             || resource.data.get('ownerId', null) == null
             || resource.data.get('ownerId', null) == request.auth.uid);

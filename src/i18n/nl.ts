@@ -92,6 +92,8 @@ export const nl = {
       trainer: 'Trainer',
       admin: 'Beheerder',
     },
+    ownerChip: 'Eigenaar',
+    supportChip: 'Support · BOLD700',
     creditsLeft: {
       one: '1 credit over',
       other: '{count} credits over',

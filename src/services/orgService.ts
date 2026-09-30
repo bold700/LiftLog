@@ -311,7 +311,7 @@ export async function getOrg(orgId: string): Promise<Org | null> {
  */
 export async function saveOrg(
   orgId: string,
-  data: { name: string; ownerId?: string | null; allowSelfSignup?: boolean; staffFullClientAccess?: boolean }
+  data: { name: string; allowSelfSignup?: boolean; staffFullClientAccess?: boolean }
 ): Promise<void> {
   if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
   const id = orgId.trim();
@@ -320,7 +320,6 @@ export async function saveOrg(
     doc(db, COLLECTION, id),
     {
       name: data.name.trim(),
-      ownerId: data.ownerId ?? null,
       allowSelfSignup: data.allowSelfSignup === true,
       staffFullClientAccess: data.staffFullClientAccess === true,
       updatedAt: serverTimestamp(),
