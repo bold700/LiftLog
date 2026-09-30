@@ -982,10 +982,15 @@ export function BeheerPage() {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         existingEmails={existingEmails}
+        existingMembers={profiles}
         plans={plans}
         trainers={trainerOptions}
         defaultTrainerId={selfId}
-        onImported={load}
+        onImported={() => {
+          void load();
+          // Ook "Bekijk als" en de sporterslijsten elders kennen de nieuwe leden meteen.
+          void profileCtx?.refreshProfile();
+        }}
       />
     </PageLayout>
     </Box>
