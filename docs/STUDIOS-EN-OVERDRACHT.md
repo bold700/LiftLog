@@ -127,9 +127,28 @@ Elk abonnement heeft "Geldt voor" (personal training, groepslessen of alle lesse
 (Beheer → Abonnementen; staat het er niet op, dan leidt de app het af uit naam en credits, zie
 `api/_lib/planCoverage.mjs`). Bij een lid staat één knop **Moment inplannen** (Profiel →
 Abonnement voor de sporter, Beheer → lid voor staf). Het werkt zoals een afspraak in Google Agenda:
-**Datum · Tijd · Herhaling**, waarbij Herhaling "Niet herhaald" (één losse afspraak) of
-"Elke week op …" (vast moment) is. Is het abonnement vol of is er geen abonnement, dan staat het
-standaard op "Niet herhaald".
+**Datum · Tijd · Herhaling**, waarbij Herhaling "Niet herhaald" (één losse afspraak),
+"Elke week op …" of "Om de week op …" (vast moment) is. Is het abonnement vol of is er geen
+abonnement, dan staat het standaard op "Niet herhaald"; past er nog maar een halve keer in, dan op
+"Om de week".
+
+**Om de week** (`everyWeeks: 2`): het moment valt in de even of de oneven weken (`weekParity`),
+geteld vanaf maandag 5 januari 1970; welke van de twee volgt uit de gekozen datum (de eerste keer).
+De app toont "Op do 1 okt, do 15 okt, do 29 okt enzovoort". Rekenkant:
+`api/_lib/classSchedule.mjs` (`weekIndex`, `onPatternWeek`, `shareWeeks`, `patternFields`), voor de
+app `src/utils/weekPattern.ts`.
+
+- Een vast PT-moment of vaste groepsles (groep) om de week: het weekmoment van de privé-lessoort
+  draagt het patroon, dus het rooster krijgt alleen lessen in die weken.
+- Een vaste les op een gewone groepsles om de week: de les staat elke week op het rooster, het lid
+  wordt alleen in zijn eigen weken ingeschreven. Is de groepsles zelf om de week, dan volgt de vaste
+  les die weken.
+- Botsingen en vrije tijden: twee momenten om de week in verschillende weken botsen niet. Zo kunnen
+  twee leden om de week hetzelfde tijdstip bij dezelfde trainer delen.
+- Abonnement: om de week telt als een halve keer per week (2x per week = bijv. 1x elke week en
+  2x om de week).
+- Van elke week naar om de week (zelfde dag en tijd opnieuw vastzetten, of Reeks wijzigen): de
+  afspraken in de weken die vervallen worden afgemeld met de credit terug.
 
 - **PT**: alleen vrije tijden bij de trainer, binnen zijn beschikbaarheid en zonder botsing met zijn
   andere lessen; "sluit aan" = direct voor of na een andere les. Geen lessoort kiezen: het wordt
@@ -137,9 +156,9 @@ standaard op "Niet herhaald".
   trainer keurt goed in Beheer → Leden (zelfde lijst als verzetten).
   - Niet herhaald: een losse afspraak tot vier weken vooruit (`singlePtOptions`, `bookSinglePt`;
     verzoek met `kind: 'single'`). De credit gaat eraf zodra hij vaststaat.
-  - Elke week: een vast PT-moment vanaf de gekozen datum.
+  - Elke week of om de week: een vast PT-moment vanaf de gekozen datum.
 - **Groepsles**: een les uit het rooster op die dag. Niet herhaald = gewoon inschrijven (of
-  wachtlijst als hij vol zit); elke week = vaste groepsles op dat weekmoment.
+  wachtlijst als hij vol zit); elke week of om de week = vaste groepsles op dat weekmoment.
 - Op een dag zonder plek toont de app de eerstvolgende dagen waarop het wel kan.
 - **Vanuit het rooster (staf)**: in Lessen → Week op een leeg vak klikken opent "Nieuwe afspraak"
   met die dag en tijd (per half uur) al ingevuld; je kiest het lid, de trainer staat op jezelf en

@@ -27,7 +27,9 @@ function toSchedule(v: unknown): ClassScheduleSlot[] {
       if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return null;
       if (typeof startTime !== 'string' || !/^\d{2}:\d{2}$/.test(startTime)) return null;
       if (typeof endTime !== 'string' || !/^\d{2}:\d{2}$/.test(endTime)) return null;
-      return { weekday, startTime, endTime };
+      // Om de week (vast PT-moment of vaste groepsles): in de even of oneven weken.
+      const r = s as Record<string, unknown>;
+      return Number(r.everyWeeks) === 2 ? { weekday, startTime, endTime, everyWeeks: 2, weekParity: num(r.weekParity, 0) } : { weekday, startTime, endTime };
     })
     .filter((s): s is ClassScheduleSlot => s != null);
 }

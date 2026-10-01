@@ -43,13 +43,16 @@ import { rescheduleDayLabel } from '../services/rescheduleService';
 import { COVERS_LABEL, isPtKind } from '../utils/planCoverage';
 import { describeStandingResult } from '../utils/standingSeries';
 import { todayIso } from '../utils/format';
+import { nlCount } from '../utils/weekPattern';
 import type { ClassType } from '../types';
 
 const WEEKDAY_LONG = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
 const DURATIONS = [30, 45, 60, 90];
 
 type Kind = 'pt' | 'group';
-type Repeat = 'once' | 'weekly';
+type Repeat = 'once' | 'weekly' | 'biweekly';
+/** "elke" of "om de week op" */
+const everyLabel = (r: Repeat) => (r === 'biweekly' ? 'om de week op' : 'elke');
 
 interface TimeOption {
   startTime: string;
@@ -60,6 +63,12 @@ interface TimeOption {
 const weekdayOf = (date: string) => {
   const [y, m, d] = date.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+};
+
+/** Zoveel dagen na een datum. */
+const addDays = (date: string, days: number) => {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 };
 
 /** Eerstvolgende datum (vanaf `from`) op deze weekdag. */
@@ -82,7 +91,7 @@ interface Props {
   trainers: { userId: string; name: string }[];
   defaultTrainerId: string | null;
   /** Staf: de hele reeks van een vast PT-moment wijzigen (andere dag, tijd of trainer) in plaats van iets nieuws. */
-  moveSeries?: { standingBookingId: string; classTypeId: string; label: string; trainerId: string | null; duration: number } | null;
+  moveSeries?: { standingBookingId: string; classTypeId: string; label: string; trainerId: string | null; duration: number; everyWeeks?: number } | null;
   onClose: () => void;
   /** Na vastzetten of aanvragen: opnieuw laden. */
   onDone: () => void;
@@ -163,10 +172,11 @@ export function PlanMomentDialog({
         if (!alive) return;
         setStatus(s);
         setKind(moveSeries || s.plan?.covers !== 'group' ? 'pt' : 'group');
-        // Ruimte in het abonnement: standaard elke week. Vol of geen abonnement: één keer.
-        const full = s.plan?.perWeek != null && s.used + s.pending >= s.plan.perWeek;
-        // Vanuit het rooster: zoals Google Agenda standaard "Niet herhaald".
-        setRepeat(moveSeries || (!initialDate && s.plan && !full) ? 'weekly' : 'once');
+        // Ruimte in het abonnement: standaard elke week (of om de week als er nog een halve keer past).
+        // Vol of geen abonnement: één keer. Vanuit het rooster: zoals Google Agenda "Niet herhaald".
+        const room = s.plan?.perWeek == null ? 1 : s.plan.perWeek - s.used - s.pending;
+        if (moveSeries) setRepeat(moveSeries.everyWeeks === 2 ? 'biweekly' : 'weekly');
+        else setRepeat(!initialDate && s.plan ? (room >= 1 ? 'weekly' : room >= 0.5 ? 'biweekly' : 'once') : 'once');
         setTrainerId(moveSeries?.trainerId || defaultTrainerId || s.trainerId || trainers[0]?.userId || '');
         if (moveSeries) setDuration(moveSeries.duration);
       },
@@ -177,17 +187,25 @@ export function PlanMomentDialog({
     };
   }, [open, userId, asStaff, defaultTrainerId, trainers, moveSeries, initialDate, initialTime]);
 
-  // PT: vrije tijden bij de trainer; per weekdag (elke week) of per datum (één keer).
+  // PT: vrije tijden bij de trainer; per weekdag (elke week of om de week) of per datum (één keer).
+  // Om de week hangt af van de week van de gekozen datum (even of oneven): dan opnieuw ophalen.
   const needsTrainer = kind === 'pt' && !!status && (asStaff || !!status.trainerId);
+  const recurringRepeat = repeat !== 'once';
+  const biweeklyFrom = repeat === 'biweekly' ? date : '';
   useEffect(() => {
     if (!open || !needsTrainer) return;
     let alive = true;
     setOptionsError(null);
     const who = asStaff ? { userId, trainerId } : {};
     const fail = (e: unknown) => alive && setOptionsError(e instanceof Error ? e.message : 'Momenten laden mislukt.');
-    if (repeat === 'weekly') {
+    if (recurringRepeat) {
       setWeekly(null);
-      getWeeklyPtOptions({ ...who, duration, ...(moveSeries ? { ignoreClassTypeId: moveSeries.classTypeId } : {}) }).then(
+      getWeeklyPtOptions({
+        ...who,
+        duration,
+        ...(moveSeries ? { ignoreClassTypeId: moveSeries.classTypeId } : {}),
+        ...(biweeklyFrom ? { everyWeeks: 2 as const, startDate: biweeklyFrom } : {}),
+      }).then(
         (r) => alive && setWeekly(r.days),
         fail
       );
@@ -198,13 +216,12 @@ export function PlanMomentDialog({
     return () => {
       alive = false;
     };
-  }, [open, needsTrainer, repeat, asStaff, userId, trainerId, duration, moveSeries]);
+  }, [open, needsTrainer, recurringRepeat, biweeklyFrom, asStaff, userId, trainerId, duration, moveSeries]);
 
   const plan = status?.plan ?? null;
   const covers = plan?.covers ?? 'all';
   const limit = plan?.perWeek ?? null;
   const taken = (status?.used ?? 0) + (status?.pending ?? 0);
-  const full = limit != null && taken >= limit;
   const allowed = (k: Kind) => covers === 'all' || covers === k;
   const weekday = weekdayOf(date);
 
@@ -221,24 +238,26 @@ export function PlanMomentDialog({
 
   // Wat er op de gekozen dag kan.
   const ptTimes: TimeOption[] =
-    repeat === 'weekly' ? (weekly?.find((d) => d.weekday === weekday)?.times ?? []) : (single?.find((d) => d.date === date)?.times ?? []);
+    recurringRepeat ? (weekly?.find((d) => d.weekday === weekday)?.times ?? []) : (single?.find((d) => d.date === date)?.times ?? []);
   const groupOnDate = groupClasses.filter((c) => c.date === date);
   const chosenClass = groupOnDate.find((c) => c.id === classId) ?? null;
   const typeById = useMemo(() => new Map(types.map((t) => [t.id, t])), [types]);
-  const classHasWeekly = (c: StudioClass | null) =>
-    !!c?.classTypeId && !!typeById.get(c.classTypeId)?.schedule.some((sl) => sl.weekday === weekdayOf(c.date) && sl.startTime === c.startTime);
+  const slotOf = (c: StudioClass | null) =>
+    c?.classTypeId ? typeById.get(c.classTypeId)?.schedule.find((sl) => sl.weekday === weekdayOf(c.date) && sl.startTime === c.startTime) : undefined;
+  const classHasWeekly = (c: StudioClass | null) => !!slotOf(c);
+  const classIsBiweekly = (c: StudioClass | null) => slotOf(c)?.everyWeeks === 2;
 
   // Andere dagen met plek, als op deze dag niets kan (of om snel te springen).
   const freeDates = useMemo(
     () =>
       kind === 'group'
         ? groupDates
-        : repeat === 'weekly'
+        : recurringRepeat
           ? (weekly ?? []).map((d) => nextDateOn(d.weekday, today)).sort()
           : (single ?? []).map((d) => d.date),
-    [kind, repeat, groupDates, weekly, single, today]
+    [kind, recurringRepeat, groupDates, weekly, single, today]
   );
-  const loading = kind === 'pt' && needsTrainer && (repeat === 'weekly' ? !weekly : !single) && !optionsError;
+  const loading = kind === 'pt' && needsTrainer && (recurringRepeat ? !weekly : !single) && !optionsError;
 
   // Nog niet zelf gekozen en vandaag kan niets: naar de eerste dag met plek.
   useEffect(() => {
@@ -269,9 +288,25 @@ export function PlanMomentDialog({
 
   const chosenTime = ptTimes.find((t) => t.startTime === startTime) ?? null;
   const weeklyPossible = moveSeries ? true : kind === 'pt' || classHasWeekly(chosenClass);
-  const effectiveRepeat: Repeat = moveSeries ? 'weekly' : kind === 'group' && !weeklyPossible ? 'once' : repeat;
+  // Een groepsles die zelf om de week is, volgt die weken: dan heet het ook zo.
+  const classBiweekly = kind === 'group' && classIsBiweekly(chosenClass);
+  const effectiveRepeat: Repeat = moveSeries
+    ? repeat === 'once'
+      ? 'weekly'
+      : repeat
+    : kind === 'group' && !weeklyPossible
+      ? 'once'
+      : classBiweekly && repeat !== 'once'
+        ? 'biweekly'
+        : repeat;
+  const recurring = effectiveRepeat !== 'once';
+  const everyWeeks = effectiveRepeat === 'biweekly' ? 2 : 1;
+  // Om de week telt als een halve keer per week.
+  const cost = effectiveRepeat === 'biweekly' ? 0.5 : 1;
+  const full = limit != null && taken + cost > limit;
+  const halfFits = limit != null && taken + 0.5 <= limit;
   // Een sporter plant geen vaste momenten buiten zijn abonnement; een losse afspraak kan altijd.
-  const memberBlocked = !moveSeries && !asStaff && effectiveRepeat === 'weekly' && (!plan || full || !allowed(kind));
+  const memberBlocked = !moveSeries && !asStaff && recurring && (!plan || full || !allowed(kind));
   const lastSingleDate = single?.length ? single[single.length - 1].date : undefined;
 
   const pickDate = (d: string) => {
@@ -291,27 +326,38 @@ export function PlanMomentDialog({
           endTime: chosenTime.endTime,
           trainerId: trainerId || null,
           fromDate: date,
+          everyWeeks,
         });
         notify.success(
-          `Reeks gewijzigd: elke ${WEEKDAY_LONG[weekday]} ${chosenTime.startTime}.${r.refunded ? ` ${r.refunded} oude afspra${r.refunded === 1 ? 'ak' : 'ken'} afgemeld, credit terug.` : ''}`
+          `Reeks gewijzigd: ${everyLabel(effectiveRepeat)} ${WEEKDAY_LONG[weekday]} ${chosenTime.startTime}.${r.refunded ? ` ${r.refunded} oude afspra${r.refunded === 1 ? 'ak' : 'ken'} afgemeld, credit terug.` : ''}`
         );
-      } else if (kind === 'pt' && chosenTime && effectiveRepeat === 'weekly') {
+      } else if (kind === 'pt' && chosenTime && recurring) {
+        const every = `${everyLabel(effectiveRepeat)} ${WEEKDAY_LONG[weekday]} ${chosenTime.startTime}`;
         if (asStaff) {
-          const r = await addPersonalSlot({ userId, weekday, startTime: chosenTime.startTime, endTime: chosenTime.endTime, trainerId: trainerId || null, startDate: date });
-          notify.success(`Vast PT-moment: elke ${WEEKDAY_LONG[weekday]} ${chosenTime.startTime}. ${describeStandingResult(r)}`);
+          const r = await addPersonalSlot({
+            userId,
+            weekday,
+            startTime: chosenTime.startTime,
+            endTime: chosenTime.endTime,
+            trainerId: trainerId || null,
+            startDate: date,
+            everyWeeks,
+          });
+          notify.success(`Vast PT-moment: ${every}. ${describeStandingResult(r)}`);
         } else {
-          await requestStandingPt({ weekday, startTime: chosenTime.startTime, endTime: chosenTime.endTime, startDate: date });
-          notify.success(`Aangevraagd: elke ${WEEKDAY_LONG[weekday]} ${chosenTime.startTime}. Je trainer bevestigt het; je krijgt een melding.`);
+          await requestStandingPt({ weekday, startTime: chosenTime.startTime, endTime: chosenTime.endTime, startDate: date, everyWeeks });
+          notify.success(`Aangevraagd: ${every}. Je trainer bevestigt het; je krijgt een melding.`);
         }
       } else if (kind === 'pt' && chosenTime) {
         const r = await bookSinglePt({ ...(asStaff ? { userId, trainerId } : {}), duration, date, startTime: chosenTime.startTime });
         notify.success(r.status === 'approved' ? `Ingepland: ${when}.` : `Aangevraagd: ${when}. Je trainer bevestigt het; je krijgt een melding.`);
-      } else if (kind === 'group' && chosenClass && effectiveRepeat === 'weekly' && chosenClass.classTypeId) {
+      } else if (kind === 'group' && chosenClass && recurring && chosenClass.classTypeId) {
         const r = await addStandingBooking({
           classTypeId: chosenClass.classTypeId,
           weekday,
           startTime: chosenClass.startTime,
           startDate: date,
+          everyWeeks,
           ...(asStaff ? { userId } : {}),
         });
         notify.success(describeStandingResult(r));
@@ -339,7 +385,7 @@ export function PlanMomentDialog({
       ? 'Wijzigen'
       : kind === 'pt' && !asStaff
         ? 'Aanvragen'
-        : effectiveRepeat === 'weekly'
+        : recurring
           ? 'Vastzetten'
           : kind === 'group'
             ? 'Inschrijven'
@@ -390,25 +436,28 @@ export function PlanMomentDialog({
             )}
             {/* Het abonnement geeft richting. */}
             {moveSeries ? null : plan ? (
-              <Alert severity={full && effectiveRepeat === 'weekly' ? 'warning' : 'info'} icon={false}>
+              <Alert severity={full && recurring ? 'warning' : 'info'} icon={false}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
                   {plan.name}
                 </Typography>
                 <Typography variant="body2">
-                  {COVERS_LABEL[plan.covers]} · {limit == null ? 'geen limiet' : `${limit}x per week`}. Vast ingepland: {status.used}
+                  {COVERS_LABEL[plan.covers]} · {limit == null ? 'geen limiet' : `${limit}x per week`}. Vast ingepland: {nlCount(status.used)}
                   {limit != null ? ` van ${limit}` : ''}
-                  {status.pending ? ` (+${status.pending} aangevraagd)` : ''}.
+                  {status.pending ? ` (+${nlCount(status.pending)} aangevraagd)` : ''}
+                  {status.used % 1 || status.pending % 1 ? ' (om de week telt als een halve)' : ''}.
                 </Typography>
-                {full && effectiveRepeat === 'weekly' && (
+                {full && recurring && (
                   <Typography variant="body2" sx={{ mt: 0.5 }}>
-                    {asStaff
-                      ? 'Het abonnement is vol. Kies "Niet herhaald" voor een losse afspraak, of zet het toch elke week vast (boven het abonnement uit).'
-                      : 'Je vaste momenten zitten vol. Kies "Niet herhaald" voor een losse afspraak; die kost een credit.'}
+                    {effectiveRepeat === 'weekly' && halfFits
+                      ? 'Elke week past niet meer in het abonnement; om de week wel.'
+                      : asStaff
+                        ? 'Het abonnement is vol. Kies "Niet herhaald" voor een losse afspraak, of zet het toch vast (boven het abonnement uit).'
+                        : 'Je vaste momenten zitten vol. Kies "Niet herhaald" voor een losse afspraak; die kost een credit.'}
                   </Typography>
                 )}
               </Alert>
             ) : (
-              <Alert severity={effectiveRepeat === 'weekly' ? 'warning' : 'info'}>
+              <Alert severity={recurring ? 'warning' : 'info'}>
                 {asStaff
                   ? 'Dit lid heeft geen abonnement. Een losse afspraak kost een credit; elke week kan ook, kies anders eerst een abonnement.'
                   : 'Je hebt nog geen abonnement. Een losse afspraak kost een credit; voor elke week kies je eerst een abonnement.'}
@@ -421,7 +470,7 @@ export function PlanMomentDialog({
                 <ToggleButton value="group">Groepsles</ToggleButton>
               </ToggleButtonGroup>
             )}
-            {!moveSeries && asStaff && plan && effectiveRepeat === 'weekly' && !allowed(kind) && (
+            {!moveSeries && asStaff && plan && recurring && !allowed(kind) && (
               <Alert severity="warning">Dit valt niet onder het abonnement ({COVERS_LABEL[plan.covers].toLowerCase()}). Je kunt het toch inplannen.</Alert>
             )}
 
@@ -511,13 +560,31 @@ export function PlanMomentDialog({
                 label="Herhaling"
                 value={effectiveRepeat}
                 onChange={(e) => setRepeat(e.target.value as Repeat)}
-                disabled={!!moveSeries || !weeklyPossible}
+                disabled={!weeklyPossible}
                 sx={{ gridColumn: { xs: '1 / -1', sm: 'auto' } }}
+                SelectProps={{
+                  // Op de telefoon (volle breedte) met de dag erbij; ernaast past "Om de week" net.
+                  renderValue: (v) => {
+                    const day = (
+                      <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>
+                        {' '}
+                        op {WEEKDAY_LONG[weekday]}
+                      </Box>
+                    );
+                    return v === 'once' ? 'Niet herhaald' : v === 'weekly' ? <>Elke week{day}</> : <>Om de week{day}</>;
+                  },
+                }}
               >
-                <MenuItem value="once">Niet herhaald</MenuItem>
-                <MenuItem value="weekly">Elke week op {WEEKDAY_LONG[weekday]}</MenuItem>
+                {!moveSeries && <MenuItem value="once">Niet herhaald</MenuItem>}
+                {!classBiweekly && <MenuItem value="weekly">Elke week op {WEEKDAY_LONG[weekday]}</MenuItem>}
+                <MenuItem value="biweekly">Om de week op {WEEKDAY_LONG[weekday]}</MenuItem>
               </TextField>
             </Box>
+            {effectiveRepeat === 'biweekly' && (kind === 'pt' ? !!chosenTime : !!chosenClass) && (
+              <Typography variant="body2" color="text.secondary">
+                Op {rescheduleDayLabel(date)}, {rescheduleDayLabel(addDays(date, 14))}, {rescheduleDayLabel(addDays(date, 28))} enzovoort.
+              </Typography>
+            )}
 
             {optionsError && <Alert severity="error">{optionsError}</Alert>}
             {kind === 'pt' && wantedTime && chosenTime && chosenTime.startTime !== wantedTime && (
@@ -528,8 +595,8 @@ export function PlanMomentDialog({
             {nothingThisDay && (
               <Typography variant="body2" color="text.secondary">
                 {kind === 'pt'
-                  ? effectiveRepeat === 'weekly'
-                    ? `Op ${WEEKDAY_LONG[weekday]} is de trainer niet vrij.`
+                  ? recurring
+                    ? `Op ${WEEKDAY_LONG[weekday]} is de trainer niet ${effectiveRepeat === 'biweekly' ? 'om de week' : 'elke week'} vrij.`
                     : 'Op deze dag is de trainer niet vrij.'
                   : 'Op deze dag is er geen groepsles.'}
                 {otherDates.length === 0 && kind === 'pt' && effectiveRepeat === 'once' ? ' Losse afspraken kun je tot vier weken vooruit plannen.' : ''}
@@ -545,7 +612,7 @@ export function PlanMomentDialog({
                     key={d}
                     size="small"
                     variant="outlined"
-                    label={effectiveRepeat === 'weekly' && kind === 'pt' ? WEEKDAY_LONG[weekdayOf(d)] : rescheduleDayLabel(d)}
+                    label={recurring && kind === 'pt' ? WEEKDAY_LONG[weekdayOf(d)] : rescheduleDayLabel(d)}
                     onClick={() => pickDate(d)}
                   />
                 ))}
@@ -558,8 +625,8 @@ export function PlanMomentDialog({
             )}
             {!asStaff && kind === 'pt' && (
               <Typography variant="caption" color="text.secondary">
-                {effectiveRepeat === 'weekly'
-                  ? 'Je trainer bevestigt het moment; daarna word je elke week automatisch ingeschreven.'
+                {recurring
+                  ? `Je trainer bevestigt het moment; daarna word je ${effectiveRepeat === 'biweekly' ? 'om de week' : 'elke week'} automatisch ingeschreven.`
                   : 'Je trainer bevestigt de afspraak; de credit gaat eraf als hij bevestigt.'}
               </Typography>
             )}

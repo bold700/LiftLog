@@ -4,6 +4,7 @@
  */
 import type { Booking, StudioClass } from '../services/classService';
 import type { StandingBooking } from '../types';
+import { onPatternWeek } from './weekPattern';
 
 /**
  * `optedOut`: het lid meldde zich die week af ("deze keer niet"); `cancelledClass`: de studio
@@ -22,8 +23,11 @@ const weekdayOf = (dateIso: string) => {
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 };
 
-export function inSeries(cls: Pick<StudioClass, 'classTypeId' | 'date' | 'startTime'>, s: Pick<StandingBooking, 'classTypeId' | 'weekday' | 'startTime'>): boolean {
-  return cls.classTypeId === s.classTypeId && cls.startTime === s.startTime && weekdayOf(cls.date) === s.weekday;
+export function inSeries(
+  cls: Pick<StudioClass, 'classTypeId' | 'date' | 'startTime'>,
+  s: Pick<StandingBooking, 'classTypeId' | 'weekday' | 'startTime' | 'everyWeeks' | 'weekParity'>
+): boolean {
+  return cls.classTypeId === s.classTypeId && cls.startTime === s.startTime && weekdayOf(cls.date) === s.weekday && onPatternWeek(s, cls.date);
 }
 
 export function isPausedOn(s: Pick<StandingBooking, 'pausedFrom' | 'pausedUntil'>, date: string): boolean {
