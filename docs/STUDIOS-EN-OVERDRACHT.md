@@ -153,6 +153,22 @@ standaard op "Niet herhaald".
 - Abonnement toewijzen: na Opslaan komen de credits van de eerste periode er meteen bij, met de
   eerste factuur. Het ledenscherm zegt dat vooraf.
 
+### Factuurritme (eigenaar)
+
+Beheer → Instellingen → **Factuurritme**, alleen de eigenaar (Firestore-regels, veld
+`orgs/{orgId}.billing = { period: 'fourWeeks' | 'month', anchorDate }`):
+
+- **Per lid** (standaard): de periode loopt vanaf de dag dat het lid begint, hele prijs.
+- **Iedereen elke 4 weken / elke maand** vanaf een startdatum: alle abonnementen met die periode
+  verlengen op dezelfde factuurdatum. Wie halverwege instapt, krijgt een eerste factuur én credits
+  naar rato van de dagen tot de eerstvolgende factuurdatum (`api/_lib/billingCycle.mjs`,
+  `firstPeriod`), bijv. "2x per week" voor € 80 met nog 14 van de 28 dagen: € 40 en 4 credits.
+  Daarna gewone periodes. Geldt bij toewijzen door staf (`assign`) en bij zelf kopen via Mollie
+  (`purchasePlan`; het bedrag op maat wordt bij de betaling vastgelegd).
+- Strippenkaarten, weekabonnementen en groepsabonnementen volgen het ritme niet.
+- Het ledenscherm toont vooraf wat Opslaan doet ("eerste factuur € 40 (14 van de 28 dagen, tot de
+  factuurdatum 2 november)").
+
 ### Afspraken wijzigen (staf)
 
 - **Eén afspraak verzetten**: bij een vast PT-moment (Beheer → lid → Afspraken) of in Lessen →

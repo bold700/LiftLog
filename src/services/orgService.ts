@@ -8,7 +8,7 @@ import { doc, getDoc, setDoc, serverTimestamp, type Timestamp } from 'firebase/f
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
 import { callBooking } from './classService';
-import type { NotificationKind, Org, OrgAccountRetention, OrgBookingPolicy, OrgBranding, OrgBusiness, OrgGroupPricing, OrgNotificationSettings, OrgPaymentsStatus } from '../types';
+import type { NotificationKind, Org, OrgAccountRetention, OrgBilling, OrgBookingPolicy, OrgBranding, OrgBusiness, OrgGroupPricing, OrgNotificationSettings, OrgPaymentsStatus } from '../types';
 import { groupPricingOf } from '../utils/groupPricing';
 
 const COLLECTION = 'orgs';
@@ -37,6 +37,7 @@ function toOrg(data: Record<string, unknown>, id: string): Org {
     groupPricing: groupPricingOf(data.groupPricing),
     notifications: toNotificationSettings(data.notifications),
     accountRetention: toAccountRetention(data.accountRetention),
+    billing: toBilling(data.billing),
     createdAt: ts(data.createdAt),
     updatedAt: ts(data.updatedAt),
   };
@@ -52,6 +53,20 @@ export function toAccountRetention(raw: unknown): OrgAccountRetention | null {
   const months = Math.round(Number(r.months));
   if (!Number.isFinite(months)) return null;
   return { enabled: r.enabled === true, months: Math.min(RETENTION_MAX_MONTHS, Math.max(RETENTION_MIN_MONTHS, months)) };
+}
+
+export function toBilling(raw: unknown): OrgBilling | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (r.period !== 'fourWeeks' && r.period !== 'month') return null;
+  if (typeof r.anchorDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(r.anchorDate)) return null;
+  return { period: r.period, anchorDate: r.anchorDate };
+}
+
+/** Factuurritme van de studio; null = per lid vanaf de startdatum. Alleen de eigenaar (Firestore-regels). */
+export async function saveBilling(orgId: string, billing: OrgBilling | null): Promise<void> {
+  if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
+  await setDoc(doc(db, COLLECTION, orgId), { billing: billing ?? null, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 /** Alleen de eigenaar mag dit wijzigen (Firestore-regels). */

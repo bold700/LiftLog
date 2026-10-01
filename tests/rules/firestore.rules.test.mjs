@@ -181,9 +181,13 @@ const retention = { enabled: true, months: 24 };
 await t('beheerder zonder eigenaar boven zich zet inactieve-accounts-instelling → mag', true, updateDoc(doc(as('admin1'), 'orgs/vanas'), { accountRetention: retention }));
 await env.withSecurityRulesDisabled(async (c) => { await updateDoc(doc(c.firestore(), 'orgs/studiob'), { ownerId: 'eigenaarB' }); });
 await t('beheerder die geen eigenaar is zet inactieve-accounts-instelling → geweigerd', false, updateDoc(doc(as('adminB'), 'orgs/studiob'), { accountRetention: retention }));
+// Factuurritme van de studio: ook een beslissing van de eigenaar.
+const billing = { period: 'fourWeeks', anchorDate: '2026-10-05' };
+await t('beheerder die geen eigenaar is zet het factuurritme → geweigerd', false, updateDoc(doc(as('adminB'), 'orgs/studiob'), { billing }));
 await t('diezelfde beheerder wijzigt iets anders van de studio → mag', true, updateDoc(doc(as('adminB'), 'orgs/studiob'), { payments: { mode: 'test' } }));
 await env.withSecurityRulesDisabled(async (c) => { await updateDoc(doc(c.firestore(), 'orgs/studiob'), { ownerId: 'adminB' }); });
 await t('eigenaar zet inactieve-accounts-instelling → mag', true, updateDoc(doc(as('adminB'), 'orgs/studiob'), { accountRetention: retention }));
+await t('eigenaar zet het factuurritme → mag', true, updateDoc(doc(as('adminB'), 'orgs/studiob'), { billing }));
 
 // Verwerkersovereenkomst: alleen de server legt een ondertekening vast, ook niet de eigen beheerder.
 await t('beheerder maakt zichzelf eigenaar van de studio → geweigerd (alleen via de server)', false, updateDoc(doc(as('admin1'), 'orgs/vanas'), { ownerId: 'admin1' }));

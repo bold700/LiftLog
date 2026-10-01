@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { Box, Button, CircularProgress, FormControlLabel, Switch, TextField, Typography } from '@mui/material';
 import { ContentCard } from '../layout';
 import { AccountRetentionSettings } from './AccountRetentionSettings';
+import { BillingCycleSettings } from './BillingCycleSettings';
 import { ProcessorAgreementCard } from './ProcessorAgreementCard';
 import { StudioOwnerCard } from './StudioOwnerCard';
 import { useAuth } from '../../context/AuthContext';
@@ -285,6 +286,7 @@ export function StudioSettings() {
 
       <StudioOwnerCard ownerId={ownerId} myUid={profile?.profile?.userId} myEmail={auth?.user?.email} onChanged={setOwnerId} />
       {/* Opnieuw laden als de eigenaar verandert: wie mag instellen en tekenen verschuift mee. */}
+      <BillingCycleSettings key={`billing-${ownerId ?? 'none'}`} orgId={orgId} myUid={profile?.profile?.userId} />
       <AccountRetentionSettings key={`retention-${ownerId ?? 'none'}`} orgId={orgId} myUid={profile?.profile?.userId} />
       <ProcessorAgreementCard key={`agreement-${ownerId ?? 'none'}`} />
     </Box>
