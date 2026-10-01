@@ -10,11 +10,13 @@ interface HeartRateZonesTableProps {
   zones: HeartRateZonesResult | null;
   /** Tekst als er nog geen zones berekend kunnen worden (geen geboortedatum). */
   emptyText?: string;
+  /** Zonder eigen rand: de omliggende kaart is de rand (Beheer → lid). */
+  bare?: boolean;
 }
 
-export function HeartRateZonesTable({ zones, emptyText }: HeartRateZonesTableProps) {
+export function HeartRateZonesTable({ zones, emptyText, bare = false }: HeartRateZonesTableProps) {
   return (
-    <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+    <Box sx={bare ? undefined : { mt: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: 1, mb: 0.5 }}>
         <Typography variant="subtitle2" fontWeight={600}>
           Hartslagzones

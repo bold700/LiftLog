@@ -1,7 +1,7 @@
 /**
  * Beheer: alle accounts en sporters op één plek. Aanvragen, sporters koppelen, accounts aanmaken,
  * profielen inzien en bijwerken (trainers en beheerders). Het lesrooster importeer je bij Workouts.
- * Zoeken, filteren op rol/volledigheid, per profiel alle velden bewerken in één dialoog,
+ * Zoeken, filteren op rol/volledigheid, per lid alle gegevens zien en bewerken op een eigen scherm,
  * en nieuwe accounts aanmaken (zonder e-mailverificatie) om voor sporters bij te houden.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -23,11 +23,17 @@ import {
   useTheme,
   FormControlLabel,
   Switch,
+  Chip,
 } from '@mui/material';
 import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
 import UploadFileRoundedIcon from '@mui/icons-material/UploadFileRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import PhoneRoundedIcon from '@mui/icons-material/PhoneRounded';
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
+import MailOutlineRoundedIcon from '@mui/icons-material/MailOutlineRounded';
+import { useShowBackButton } from '../context/TopBarBackContext';
+import type { ReactNode } from 'react';
 import { useProfile } from '../context/ProfileContext';
 import { getOrg } from '../services/orgService';
 import { RescheduleRequestsCard } from './beheer/RescheduleRequestsCard';
@@ -48,7 +54,8 @@ import { LimitationsEditor } from './LimitationsEditor';
 import { todayIso } from '../utils/format';
 import { RequestsBanner } from './beheer/RequestsBanner';
 import { ProcessorAgreementCard } from './beheer/ProcessorAgreementCard';
-import { MembersList } from './beheer/MembersList';
+import { InactiveChip, MembersList, RoleChip } from './beheer/MembersList';
+import { isSupportEmail } from '../utils/support';
 import { StandingBookingsCard } from './StandingBookingsCard';
 import { MembersToolbar } from './beheer/MembersToolbar';
 import {
@@ -133,6 +140,32 @@ function num(v: string): number | null {
   if (!t) return null;
   const n = Number(t);
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** Nederlands mobiel nummer naar het formaat van wa.me (alleen cijfers, met landcode). */
+function whatsAppNumber(phone: string): string | null {
+  const t = phone.trim();
+  if (!t) return null;
+  const digits = t.replace(/\D/g, '');
+  if (!digits) return null;
+  if (t.startsWith('+')) return digits;
+  if (digits.startsWith('00')) return digits.slice(2);
+  if (digits.startsWith('0')) return `31${digits.slice(1)}`;
+  return digits;
+}
+
+/** Kaart op het ledenscherm, zelfde stijl als de kaarten op Profiel. */
+function DetailCard({ title, children }: { title?: string; children: ReactNode }) {
+  return (
+    <Box sx={{ bgcolor: designTokens.cardBackground, borderRadius: `${designTokens.cardRadius}px`, px: { xs: 2, sm: 3 }, py: 2.5 }}>
+      {title && (
+        <Typography component="h2" sx={{ fontSize: 14, fontWeight: 500, lineHeight: '20px', mb: 1.5 }}>
+          {title}
+        </Typography>
+      )}
+      {children}
+    </Box>
+  );
 }
 
 /** Formulier voor een nieuw account (aangemaakt door trainer/beheerder). */
@@ -358,18 +391,45 @@ export function BeheerPage() {
     }
   };
 
+  // Een lid openen is een eigen scherm: terug (pijl in de bovenbalk, veeggebaar, Android-terugknop,
+  // of "Leden") brengt je naar de ledenlijst.
   const openEditor = (p: Profile) => {
     setTarget(p);
     setEdit(toEditState(p, memberships[p.userId]?.planId ?? ''));
     setMessage(null);
     setCreditValue(String(credits[p.userId] ?? 0));
     setCreditError(null);
+    window.history.pushState({ liftlogMember: p.userId }, '');
+    window.scrollTo({ top: 0 });
   };
 
   const closeEditor = () => {
+    if ((window.history.state as { liftlogMember?: string } | null)?.liftlogMember) {
+      window.history.back();
+      return;
+    }
     setTarget(null);
     setEdit(null);
   };
+
+  const memberOpen = !!target;
+  useShowBackButton(memberOpen);
+  useEffect(() => {
+    if (!memberOpen) return;
+    const onPop = () => {
+      setTarget(null);
+      setEdit(null);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [memberOpen]);
+
+  // Na opslaan of (de)activeren de nieuwste gegevens van dit lid tonen, zonder het formulier te wissen.
+  useEffect(() => {
+    if (!target) return;
+    const fresh = profiles.find((p) => p.userId === target.userId);
+    if (fresh && fresh !== target) setTarget(fresh);
+  }, [profiles, target]);
 
   const handleCreditAdjust = async () => {
     if (!target) return;
@@ -431,7 +491,6 @@ export function BeheerPage() {
       await load();
       await profileCtx?.refreshProfile();
       setMessage({ type: 'success', text: `Profiel van ${edit.displayName.trim() || target.email || 'gebruiker'} bijgewerkt.` });
-      closeEditor();
     } catch (e) {
       setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Opslaan mislukt.' });
     } finally {
@@ -502,6 +561,266 @@ export function BeheerPage() {
   // Afgeleide waarden in de editor, live uit de formulierwaarden.
   const editAge = edit ? ageOnDate(edit.birthDate || null, todayIso()) : null;
   const editZones = edit ? heartRateZones(editAge, num(edit.restingHr)) : null;
+
+  const editDirty =
+    !!target && !!edit && JSON.stringify(edit) !== JSON.stringify(toEditState(target, memberships[target.userId]?.planId ?? ''));
+
+  // Het scherm van één lid: alles zien en bijwerken. Bovenaan naam en contact (bellen, WhatsApp,
+  // mail met één tik), daaronder de kaarten zoals op Profiel.
+  const memberDetail =
+    target && edit ? (
+      <Box>
+        {/* Terug naar de ledenlijst: de pijl in de bovenbalk (of het veeggebaar). */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
+            <Button onClick={() => setEdit(toEditState(target, memberships[target.userId]?.planId ?? ''))} disabled={!editDirty || saving}>
+              Wijzigingen ongedaan
+            </Button>
+            <Button variant="contained" disableElevation onClick={handleSave} disabled={saving || !editDirty}>
+              {saving ? 'Bezig…' : 'Opslaan'}
+            </Button>
+          </Box>
+        </Box>
+
+        {message && (
+          <Alert severity={message.type} sx={{ mb: 2 }} onClose={() => setMessage(null)}>
+            {message.text}
+          </Alert>
+        )}
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+          <UserAvatar name={edit.displayName || target.displayName} photoURL={target.photoURL} size={72} />
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography variant="h5" sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>
+              {target.displayName?.trim() || target.email || target.userId}
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
+              <RoleChip role={target.role} owner={target.userId === ownerId} support={isSupportEmail(target.email)} />
+              {target.inactive && <InactiveChip />}
+              <Typography variant="body2" color="text.secondary">
+                {[
+                  target.memberSince
+                    ? `Lid sinds ${new Date(`${target.memberSince}T12:00:00`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                    : null,
+                  editAge != null ? `${editAge} jaar` : null,
+                  paysAsMember(target) ? t('admin.creditsLeft', { count: credits[target.userId] ?? 0 }) : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1.5 }}>
+              {target.phone && (
+                <Chip icon={<PhoneRoundedIcon />} label={target.phone} component="a" href={`tel:${target.phone.replace(/\s/g, '')}`} clickable variant="outlined" />
+              )}
+              {target.phone && whatsAppNumber(target.phone) && (
+                <Chip
+                  icon={<WhatsAppIcon />}
+                  label="WhatsApp"
+                  component="a"
+                  href={`https://wa.me/${whatsAppNumber(target.phone)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  clickable
+                  variant="outlined"
+                />
+              )}
+              {target.email && (
+                <Chip icon={<MailOutlineRoundedIcon />} label={target.email} component="a" href={`mailto:${target.email}`} clickable variant="outlined" />
+              )}
+            </Box>
+          </Box>
+        </Box>
+
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 2, alignItems: 'start' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <DetailCard title="Contactgegevens">
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                <TextField label="Naam" size="small" fullWidth value={edit.displayName} onChange={(e) => setEdit({ ...edit, displayName: e.target.value })} sx={{ gridColumn: { sm: '1 / -1' } }} />
+                <TextField label="Telefoon" size="small" fullWidth value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} inputProps={{ inputMode: 'tel' }} />
+                <TextField label="E-mail" size="small" fullWidth value={target.email ?? ''} disabled helperText="Wijzigen via Bekijk als → Profiel → Account." />
+                <TextField label="Adres" size="small" fullWidth value={edit.street} onChange={(e) => setEdit({ ...edit, street: e.target.value })} sx={{ gridColumn: { sm: '1 / -1' } }} />
+                <TextField label="Postcode" size="small" fullWidth value={edit.zip} onChange={(e) => setEdit({ ...edit, zip: e.target.value })} />
+                <TextField label="Plaats" size="small" fullWidth value={edit.city} onChange={(e) => setEdit({ ...edit, city: e.target.value })} />
+              </Box>
+            </DetailCard>
+
+            <DetailCard title="Persoonlijke gegevens">
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                <TextField label="Geboortedatum" type="date" size="small" fullWidth value={edit.birthDate} onChange={(e) => setEdit({ ...edit, birthDate: e.target.value })} InputLabelProps={{ shrink: true }} />
+                <TextField select label="Geslacht" size="small" fullWidth value={edit.gender || 'none'} onChange={(e) => setEdit({ ...edit, gender: e.target.value === 'none' ? '' : (e.target.value as EditState['gender']) })}>
+                  <MenuItem value="none">Niet opgegeven</MenuItem>
+                  <MenuItem value="man">Man</MenuItem>
+                  <MenuItem value="vrouw">Vrouw</MenuItem>
+                  <MenuItem value="anders">Anders</MenuItem>
+                </TextField>
+                <NumberField label="Lengte (cm)" size="small" fullWidth value={edit.heightCm} onChange={(v) => setEdit({ ...edit, heightCm: v })} />
+                <NumberField label="Doelgewicht (kg)" decimal size="small" fullWidth value={edit.weightGoalKg} onChange={(v) => setEdit({ ...edit, weightGoalKg: v })} />
+                {!edit.healthRefused && (
+                  <NumberField label="Rusthartslag (bpm)" size="small" fullWidth value={edit.restingHr} onChange={(v) => setEdit({ ...edit, restingHr: v })} />
+                )}
+                {LEADERBOARD_ENABLED && (
+                  <TextField select label="Ranglijst" size="small" fullWidth value={edit.leaderboardVisibility} onChange={(e) => setEdit({ ...edit, leaderboardVisibility: e.target.value as LeaderboardVisibility })}>
+                    <MenuItem value="named">Met naam</MenuItem>
+                    <MenuItem value="anonymous">Anoniem</MenuItem>
+                    <MenuItem value="hidden">Niet op de ranglijst</MenuItem>
+                  </TextField>
+                )}
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>
+                Geboortedatum en geslacht zijn nodig voor het vetpercentage uit huidplooien; lengte voor BMI; rusthartslag voor hartslagzones op maat.
+              </Typography>
+            </DetailCard>
+
+            <DetailCard>
+              <HeartRateZonesTable
+                bare
+                zones={editZones}
+                emptyText="Vul de geboortedatum in om de hartslagzones van deze sporter te zien. Met rusthartslag worden ze op maat berekend."
+              />
+            </DetailCard>
+          </Box>
+
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <DetailCard title="Rol en trainer">
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                <TextField
+                  select
+                  label="Rol"
+                  size="small"
+                  fullWidth
+                  value={edit.role}
+                  onChange={(e) => setEdit({ ...edit, role: e.target.value as ProfileRole })}
+                  disabled={target.userId === selfId}
+                  helperText={target.userId === selfId ? 'Je eigen rol wijzig je niet hier.' : ' '}
+                >
+                  <MenuItem value="sporter">Sporter</MenuItem>
+                  <MenuItem value="trainer">Trainer</MenuItem>
+                  {(isAdmin || edit.role === 'admin') && <MenuItem value="admin">Beheerder</MenuItem>}
+                </TextField>
+                <TextField
+                  select
+                  label="Trainer"
+                  size="small"
+                  fullWidth
+                  value={paysAsMember(edit) ? edit.trainerId || 'none' : 'none'}
+                  onChange={(e) => setEdit({ ...edit, trainerId: e.target.value === 'none' ? '' : e.target.value })}
+                  disabled={!paysAsMember(edit)}
+                  helperText={!paysAsMember(edit) ? 'Alleen voor wie als lid traint.' : ' '}
+                >
+                  <MenuItem value="none">Geen trainer</MenuItem>
+                  {trainers.map((tr) => (
+                    <MenuItem key={tr.userId} value={tr.userId}>
+                      {tr.displayName?.trim() || tr.email || tr.userId}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Box>
+              {/* Staf die zelf ook lessen volgt: betaalt dan credits en krijgt abonnement en facturen. */}
+              {edit.role !== 'sporter' && (isAdmin || edit.trainsAsMember) && (
+                <Box>
+                  <FormControlLabel
+                    control={<Switch checked={edit.trainsAsMember} disabled={!isAdmin} onChange={(e) => setEdit({ ...edit, trainsAsMember: e.target.checked })} />}
+                    label="Traint ook mee als lid"
+                  />
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    {edit.trainsAsMember
+                      ? 'Boeken kost credits, en abonnement en facturen werken zoals bij een sporter.'
+                      : 'Uit: boekt gratis mee als trainer, zonder abonnement of facturen.'}
+                  </Typography>
+                </Box>
+              )}
+            </DetailCard>
+
+            <DetailCard title="Abonnement en credits">
+              <TextField
+                select
+                label={t('plans.membership')}
+                size="small"
+                fullWidth
+                value={edit.planId}
+                onChange={(e) => setEdit({ ...edit, planId: e.target.value })}
+                // Een lopend abonnement kun je altijd nog stoppen (nodig voordat meetrainen uit kan).
+                disabled={!paysAsMember(edit) && !edit.planId}
+                helperText={!paysAsMember(edit) ? (edit.planId ? 'Zet op geen abonnement om meetrainen uit te zetten.' : 'Alleen voor wie als lid traint.') : ' '}
+              >
+                <MenuItem value="">{t('plans.none')}</MenuItem>
+                {plans
+                  .filter((pl) => pl.status === 'active' || pl.id === edit.planId)
+                  .map((pl) => (
+                    <MenuItem key={pl.id} value={pl.id}>
+                      {pl.name}
+                    </MenuItem>
+                  ))}
+              </TextField>
+              {paysAsMember(edit) && (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5, mt: 1 }}>
+                  <NumberField label="Credits" size="small" value={creditValue} onChange={setCreditValue} sx={{ width: 120 }} />
+                  <Button size="small" variant="outlined" disabled={creditBusy || Number(creditValue) === (credits[target.userId] ?? 0)} onClick={() => void handleCreditAdjust()}>
+                    Credits opslaan
+                  </Button>
+                  {creditError && (
+                    <Typography variant="caption" color="error.main" sx={{ width: '100%' }}>
+                      {creditError}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+            </DetailCard>
+
+            {/* Vaste lessen van dit lid: de trainer zet een klant vast in (bijv. elke zaterdag HIIT). */}
+            {paysAsMember(edit) && paysAsMember(target) && (
+              <Box sx={{ bgcolor: designTokens.cardBackground, borderRadius: `${designTokens.cardRadius}px`, px: { xs: 2, sm: 3 }, py: 2.5 }}>
+                <StandingBookingsCard userId={target.userId} asStaff embedded trainers={trainerOptions} defaultTrainerId={edit.trainerId || null} />
+              </Box>
+            )}
+
+            {/* De editor heeft zijn eigen kop "Bijzonderheden". */}
+            <DetailCard title={edit.healthRefused ? 'Bijzonderheden' : undefined}>
+              {edit.healthRefused ? (
+                <Typography variant="body2" color="text.secondary">
+                  Dit lid heeft geen toestemming gegeven voor gezondheidsgegevens: rusthartslag en blessures worden niet bijgehouden.
+                </Typography>
+              ) : (
+                <LimitationsEditor value={edit.limitations} onChange={(limitations) => setEdit({ ...edit, limitations })} disabled={saving} />
+              )}
+            </DetailCard>
+
+            {canDeleteTarget && (
+              <DetailCard title="Account">
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  {target.inactive
+                    ? 'Dit lid staat op inactief: kan niet boeken. Activeren zet de vaste lessen weer aan.'
+                    : 'Deactiveren meldt komende lessen af en stopt het abonnement; de geschiedenis blijft. Verwijderen wist het account definitief.'}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  <Button
+                    variant="outlined"
+                    onClick={() => {
+                      setStatusError(null);
+                      setStatusTarget(target);
+                    }}
+                    disabled={saving}
+                  >
+                    {target.inactive ? 'Activeren' : 'Deactiveren'}
+                  </Button>
+                  <Button color="error" startIcon={<DeleteOutlineRoundedIcon />} onClick={openDelete} disabled={saving}>
+                    Verwijderen
+                  </Button>
+                </Box>
+              </DetailCard>
+            )}
+          </Box>
+        </Box>
+
+        {/* Telefoon: opslaan ook onderaan, na het scrollen door alle kaarten. */}
+        <Box sx={{ display: { xs: 'flex', lg: 'none' }, justifyContent: 'flex-end', gap: 1, mt: 2 }}>
+          <Button variant="contained" disableElevation onClick={handleSave} disabled={saving || !editDirty}>
+            {saving ? 'Bezig…' : 'Opslaan'}
+          </Button>
+        </Box>
+      </Box>
+    ) : null;
 
   if (!isTrainer) {
     return (
@@ -607,239 +926,45 @@ export function BeheerPage() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
     <PageLayout maxWidth={ADMIN_MAX_WIDTH}>
-      {header}
+      {memberDetail ?? (
+        <>
+          {header}
 
-      <RequestsBanner profiles={profiles} onChanged={load} />
-      <RescheduleRequestsCard />
-      {isAdmin && <ProcessorAgreementCard variant="banner" />}
+          <RequestsBanner profiles={profiles} onChanged={load} />
+          <RescheduleRequestsCard />
+          {isAdmin && <ProcessorAgreementCard variant="banner" />}
 
-      {/* Met veel leden: zoeken, filteren op rol en abonnement, sorteren (kolomkoppen of, op de telefoon, de keuzelijst). */}
-      <MembersToolbar
-        filter={memberFilter}
-        onFilter={setMemberFilter}
-        sort={memberSort}
-        onSort={setMemberSort}
-        plans={memberPlans}
-        shown={visible.length}
-        total={profiles.length}
-      />
-      {message && (
-        <Alert severity={message.type} sx={{ mb: 2 }} onClose={() => setMessage(null)}>
-          {message.text}
-        </Alert>
+          {/* Met veel leden: zoeken, filteren op rol en abonnement, sorteren (kolomkoppen of, op de telefoon, de keuzelijst). */}
+          <MembersToolbar
+            filter={memberFilter}
+            onFilter={setMemberFilter}
+            sort={memberSort}
+            onSort={setMemberSort}
+            plans={memberPlans}
+            shown={visible.length}
+            total={profiles.length}
+          />
+          {message && (
+            <Alert severity={message.type} sx={{ mb: 2 }} onClose={() => setMessage(null)}>
+              {message.text}
+            </Alert>
+          )}
+
+          <MembersList
+            profiles={visible}
+            credits={credits}
+            memberships={memberships}
+            selfId={selfId}
+            loading={loading}
+            hasAny={profiles.length > 0}
+            onOpen={openEditor}
+            sort={memberSort}
+            onSort={setMemberSort}
+            ownerId={ownerId}
+          />
+        </>
       )}
 
-      <MembersList
-        profiles={visible}
-        credits={credits}
-        memberships={memberships}
-        selfId={selfId}
-        loading={loading}
-        hasAny={profiles.length > 0}
-        onOpen={openEditor}
-        sort={memberSort}
-        onSort={setMemberSort}
-        ownerId={ownerId}
-      />
-
-      <Dialog open={!!target && !!edit} onClose={closeEditor} maxWidth="sm" fullWidth fullScreen={fullScreen}>
-        <DialogTitle>Profiel bewerken</DialogTitle>
-        {edit && target && (
-          <DialogContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-              <UserAvatar name={edit.displayName || target.displayName} photoURL={target.photoURL} size={48} />
-              <Box sx={{ minWidth: 0 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-                  {target.email || target.userId}
-                </Typography>
-                {target.memberSince && (
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                    Lid sinds {new Date(`${target.memberSince}T12:00:00`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}
-                  </Typography>
-                )}
-                {editAge != null && editZones && (
-                  <Typography variant="caption" color="text.secondary">
-                    {editAge} jaar · max {editZones.maxHr} bpm · Z2 {editZones.zones[1].lowBpm}–{editZones.zones[1].highBpm}
-                    {editZones.method === 'percent-max' ? ' (zonder rusthartslag)' : ''}
-                  </Typography>
-                )}
-              </Box>
-            </Box>
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, pt: 0.5 }}>
-              <TextField label="Naam" size="small" fullWidth autoFocus value={edit.displayName} onChange={(e) => setEdit({ ...edit, displayName: e.target.value })} sx={{ gridColumn: { sm: '1 / -1' } }} />
-              <TextField
-                select
-                label="Rol"
-                size="small"
-                fullWidth
-                value={edit.role}
-                onChange={(e) => setEdit({ ...edit, role: e.target.value as ProfileRole })}
-                disabled={target.userId === selfId}
-                helperText={target.userId === selfId ? 'Je eigen rol wijzig je niet hier.' : ' '}
-              >
-                <MenuItem value="sporter">Sporter</MenuItem>
-                <MenuItem value="trainer">Trainer</MenuItem>
-                {(isAdmin || edit.role === 'admin') && <MenuItem value="admin">Beheerder</MenuItem>}
-              </TextField>
-              <TextField
-                select
-                label="Trainer"
-                size="small"
-                fullWidth
-                value={paysAsMember(edit) ? edit.trainerId || 'none' : 'none'}
-                onChange={(e) => setEdit({ ...edit, trainerId: e.target.value === 'none' ? '' : e.target.value })}
-                disabled={!paysAsMember(edit)}
-                helperText={!paysAsMember(edit) ? 'Alleen voor wie als lid traint.' : ' '}
-              >
-                <MenuItem value="none">Geen trainer</MenuItem>
-                {trainers.map((tr) => (
-                  <MenuItem key={tr.userId} value={tr.userId}>
-                    {tr.displayName?.trim() || tr.email || tr.userId}
-                  </MenuItem>
-                ))}
-              </TextField>
-              {/* Staf die zelf ook lessen volgt: betaalt dan credits en krijgt abonnement en facturen. */}
-              {edit.role !== 'sporter' && (isAdmin || edit.trainsAsMember) && (
-                <Box sx={{ gridColumn: { sm: '1 / -1' }, mt: -1 }}>
-                  <FormControlLabel
-                    control={<Switch checked={edit.trainsAsMember} disabled={!isAdmin} onChange={(e) => setEdit({ ...edit, trainsAsMember: e.target.checked })} />}
-                    label="Traint ook mee als lid"
-                  />
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                    {edit.trainsAsMember
-                      ? 'Boeken kost credits, en abonnement en facturen werken zoals bij een sporter.'
-                      : 'Uit: boekt gratis mee als trainer, zonder abonnement of facturen.'}
-                  </Typography>
-                </Box>
-              )}
-              <TextField
-                select
-                label={t('plans.membership')}
-                size="small"
-                fullWidth
-                value={edit.planId}
-                onChange={(e) => setEdit({ ...edit, planId: e.target.value })}
-                // Een lopend abonnement kun je altijd nog stoppen (nodig voordat meetrainen uit kan).
-                disabled={!paysAsMember(edit) && !edit.planId}
-                helperText={!paysAsMember(edit) ? (edit.planId ? 'Zet op geen abonnement om meetrainen uit te zetten.' : 'Alleen voor wie als lid traint.') : ' '}
-                sx={{ gridColumn: { sm: '1 / -1' } }}
-              >
-                <MenuItem value="">{t('plans.none')}</MenuItem>
-                {plans
-                  .filter((pl) => pl.status === 'active' || pl.id === edit.planId)
-                  .map((pl) => (
-                    <MenuItem key={pl.id} value={pl.id}>
-                      {pl.name}
-                    </MenuItem>
-                  ))}
-              </TextField>
-              {paysAsMember(edit) && (
-                <Box
-                  sx={{
-                    gridColumn: { sm: '1 / -1' },
-                    p: 1.5,
-                    borderRadius: `${designTokens.cardRadius}px`,
-                    bgcolor: designTokens.cardBackgroundHigh,
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    alignItems: 'center',
-                    gap: 1.5,
-                  }}
-                >
-                  <NumberField label="Credits" size="small" value={creditValue} onChange={setCreditValue} sx={{ width: 100 }} />
-                  <Button size="small" variant="outlined" disabled={creditBusy || Number(creditValue) === (credits[target.userId] ?? 0)} onClick={() => void handleCreditAdjust()}>
-                    Opslaan
-                  </Button>
-                  {creditError && (
-                    <Typography variant="caption" color="error.main" sx={{ width: '100%' }}>
-                      {creditError}
-                    </Typography>
-                  )}
-                </Box>
-              )}
-              {/* Vaste lessen van dit lid: de trainer zet een klant vast in (bijv. elke zaterdag HIIT). */}
-              {paysAsMember(edit) && paysAsMember(target) && (
-                <Box sx={{ gridColumn: { sm: '1 / -1' }, p: 2, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackgroundHigh }}>
-                  <StandingBookingsCard
-                    userId={target.userId}
-                    asStaff
-                    embedded
-                    trainers={trainerOptions}
-                    defaultTrainerId={edit.trainerId || null}
-                  />
-                </Box>
-              )}
-              <TextField label="Geboortedatum" type="date" size="small" fullWidth value={edit.birthDate} onChange={(e) => setEdit({ ...edit, birthDate: e.target.value })} InputLabelProps={{ shrink: true }} />
-              <TextField select label="Geslacht" size="small" fullWidth value={edit.gender || 'none'} onChange={(e) => setEdit({ ...edit, gender: e.target.value === 'none' ? '' : (e.target.value as EditState['gender']) })}>
-                <MenuItem value="none">Niet opgegeven</MenuItem>
-                <MenuItem value="man">Man</MenuItem>
-                <MenuItem value="vrouw">Vrouw</MenuItem>
-                <MenuItem value="anders">Anders</MenuItem>
-              </TextField>
-              <NumberField label="Lengte (cm)" size="small" fullWidth value={edit.heightCm} onChange={(v) => setEdit({ ...edit, heightCm: v })} />
-              {!edit.healthRefused && (
-                <NumberField label="Rusthartslag (bpm)" size="small" fullWidth value={edit.restingHr} onChange={(v) => setEdit({ ...edit, restingHr: v })} />
-              )}
-              <NumberField label="Doelgewicht (kg)" decimal size="small" fullWidth value={edit.weightGoalKg} onChange={(v) => setEdit({ ...edit, weightGoalKg: v })} />
-              <TextField label="Telefoon" size="small" fullWidth value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} inputProps={{ inputMode: 'tel' }} />
-              <TextField label="Adres" size="small" fullWidth value={edit.street} onChange={(e) => setEdit({ ...edit, street: e.target.value })} sx={{ gridColumn: { sm: '1 / -1' } }} />
-              <TextField label="Postcode" size="small" fullWidth value={edit.zip} onChange={(e) => setEdit({ ...edit, zip: e.target.value })} />
-              <TextField label="Plaats" size="small" fullWidth value={edit.city} onChange={(e) => setEdit({ ...edit, city: e.target.value })} />
-              {LEADERBOARD_ENABLED && (
-                <TextField select label="Ranglijst" size="small" fullWidth value={edit.leaderboardVisibility} onChange={(e) => setEdit({ ...edit, leaderboardVisibility: e.target.value as LeaderboardVisibility })}>
-                  <MenuItem value="named">Met naam</MenuItem>
-                  <MenuItem value="anonymous">Anoniem</MenuItem>
-                  <MenuItem value="hidden">Niet op de ranglijst</MenuItem>
-                </TextField>
-              )}
-            </Box>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-              Geboortedatum en geslacht zijn nodig voor het vetpercentage uit huidplooien; lengte voor BMI; rusthartslag voor hartslagzones op maat.
-            </Typography>
-            <Box sx={{ mt: 2 }}>
-              {edit.healthRefused ? (
-                <Typography variant="caption" color="text.secondary">
-                  Dit lid heeft geen toestemming gegeven voor gezondheidsgegevens: rusthartslag en blessures worden niet bijgehouden.
-                </Typography>
-              ) : (
-                <LimitationsEditor
-                  value={edit.limitations}
-                  onChange={(limitations) => setEdit({ ...edit, limitations })}
-                  disabled={saving}
-                />
-              )}
-            </Box>
-
-            <HeartRateZonesTable
-              zones={editZones}
-              emptyText="Vul de geboortedatum in om de hartslagzones van deze sporter te zien. Met rusthartslag worden ze op maat berekend."
-            />
-          </DialogContent>
-        )}
-        <DialogActions sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-          {canDeleteTarget && target && (
-            <Button
-              onClick={() => {
-                setStatusError(null);
-                setStatusTarget(target);
-              }}
-              disabled={saving}
-            >
-              {target.inactive ? 'Activeren' : 'Deactiveren'}
-            </Button>
-          )}
-          {canDeleteTarget && (
-            <Button color="error" startIcon={<DeleteOutlineRoundedIcon />} onClick={openDelete} disabled={saving} sx={{ mr: 'auto' }}>
-              Verwijderen
-            </Button>
-          )}
-          <Button onClick={closeEditor}>Annuleren</Button>
-          <Button variant="contained" onClick={handleSave} disabled={saving}>
-            {saving ? 'Bezig…' : 'Opslaan'}
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       <Dialog open={!!statusTarget} onClose={() => !statusBusy && setStatusTarget(null)} maxWidth="xs" fullWidth>
         <DialogTitle>{statusTarget?.inactive ? 'Lid activeren' : 'Lid deactiveren'}</DialogTitle>
