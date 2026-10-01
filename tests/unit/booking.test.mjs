@@ -1285,6 +1285,9 @@ describe('vaste lessen vanuit het profiel', () => {
     store['classes/w2'] = cls(d2);
     store['classes/w3'] = cls(d3);
     store['classes/anders'] = cls(d1, { startTime: '18:00' });
+    // Een sporter plant zelf alleen in wat zijn abonnement toestaat.
+    store['plans/plan_sgt'] = { orgId: 'vanas', name: 'Small Group Training - 2x per week', price: 0, period: 'month', credits: 8 };
+    store['memberships/mb_s1'] = { orgId: 'vanas', userId: 'sporter1', planId: 'plan_sgt', status: 'active' };
   });
 
   it('boekt meteen de weken die al op het rooster staan', async () => {
@@ -2318,5 +2321,66 @@ describe('verzetten na afmelden (PT-moment)', () => {
     await post({ action: 'cancel', bookingId: booked.body.bookingId });
     expect((await post({ action: 'requestReschedule', classId: 'pt1', date: D, startTime: '19:00' })).statusCode).toBe(409);
     expect((await post({ action: 'requestReschedule', classId: 'pt1', date: D, startTime: '09:00' })).statusCode).toBe(409);
+  });
+});
+
+describe('abonnement bepaalt wat je vast inplant', () => {
+  const allWeek = Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), [{ from: '16:00', to: '21:00' }]]));
+  beforeEach(() => {
+    store['profiles/sporter1'].trainerId = 'trainer1';
+    store['trainerAvailability/vanas__trainer1'] = { orgId: 'vanas', userId: 'trainer1', days: allWeek };
+    store['plans/plan_pt'] = { orgId: 'vanas', name: 'Personal Training - 2x per week', price: 0, period: 'fourWeeks', credits: 8 };
+    store['memberships/mb_pt'] = { orgId: 'vanas', userId: 'sporter1', planId: 'plan_pt', status: 'active' };
+    store['classTypes/ct_group'] = {
+      orgId: 'vanas', name: 'Classic Strength', capacity: 8, creditCost: 1, defaultTrainerId: 'trainer1', sessionKind: 'group',
+      schedule: [{ weekday: 2, startTime: '09:00', endTime: '10:00' }],
+    };
+  });
+
+  it('status: waarvoor het abonnement geldt en hoe vaak per week', async () => {
+    const r = await post({ action: 'planStatus' });
+    expect(r.body).toMatchObject({ plan: { id: 'plan_pt', covers: 'pt', perWeek: 2 }, used: 0, pending: 0, trainerId: 'trainer1' });
+  });
+
+  it('sporter vraagt vaste PT-momenten aan binnen zijn abonnement; de trainer keurt goed', async () => {
+    const opts = await post({ action: 'weeklyPtOptions' });
+    expect(opts.body.trainerId).toBe('trainer1');
+    const monday = opts.body.days.find((d) => d.weekday === 1);
+    expect(monday.times.map((t) => t.startTime)).toContain('17:00');
+
+    const a = await post({ action: 'requestStandingPt', weekday: 1, startTime: '17:00', endTime: '18:00' });
+    expect(a.body).toMatchObject({ status: 'pending' });
+    expect((await post({ action: 'requestStandingPt', weekday: 1, startTime: '17:00', endTime: '18:00' })).statusCode).toBe(409);
+    expect((await post({ action: 'requestStandingPt', weekday: 3, startTime: '18:00', endTime: '19:00' })).body.status).toBe('pending');
+    // 2x per week: een derde gaat niet.
+    const third = await post({ action: 'requestStandingPt', weekday: 5, startTime: '18:00', endTime: '19:00' });
+    expect(third.statusCode).toBe(409);
+    expect(third.body.error).toMatch(/2x per week/);
+
+    // De trainer ziet de verzoeken en keurt het eerste goed: vast PT-moment, zonder gekozen lessoort.
+    const list = await post({ action: 'rescheduleRequests' }, 'trainer1');
+    expect(list.body.requests.filter((r) => r.kind === 'standing')).toHaveLength(2);
+    const ok = await post({ action: 'answerReschedule', requestId: a.body.requestId, approve: true }, 'trainer1');
+    expect(ok.statusCode).toBe(200);
+    expect(store['classTypes/ctp_sporter1_1_1700']).toMatchObject({ name: 'Personal Training', privateFor: 'sporter1', defaultTrainerId: 'trainer1', sessionKind: '1on1' });
+    expect(store['standingBookings/sb_ctp_sporter1_1_1700_sporter1_1_1700']).toMatchObject({ active: true });
+    expect(store[`rescheduleRequests/${a.body.requestId}`].status).toBe('approved');
+  });
+
+  it('een PT-abonnement geeft geen vaste groepsles, en zonder abonnement niets', async () => {
+    const r = await post({ action: 'addStandingBooking', classTypeId: 'ct_group', weekday: 2, startTime: '09:00' });
+    expect(r.statusCode).toBe(409);
+    expect(r.body.error).toMatch(/personal training/);
+    delete store['memberships/mb_pt'];
+    const none = await post({ action: 'addStandingBooking', classTypeId: 'ct_group', weekday: 2, startTime: '09:00' });
+    expect(none.body.error).toMatch(/geen abonnement/);
+    // Staf mag het wel (de app waarschuwt).
+    expect((await post({ action: 'addStandingBooking', classTypeId: 'ct_group', weekday: 2, startTime: '09:00', userId: 'sporter1' }, 'trainer1')).statusCode).toBe(200);
+  });
+
+  it('staf zet een PT-moment vast zonder lessoort te kiezen', async () => {
+    const r = await post({ action: 'addPersonalSlot', userId: 'sporter1', weekday: 4, startTime: '19:00', endTime: '20:00', trainerId: 'trainer1' }, 'trainer1');
+    expect(r.statusCode).toBe(200);
+    expect(store['classTypes/ctp_sporter1_4_1900']).toMatchObject({ name: 'Personal Training', creditCost: 1, baseClassTypeId: null });
   });
 });

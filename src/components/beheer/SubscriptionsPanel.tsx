@@ -23,6 +23,7 @@ import { useI18n } from '../../context/I18nContext';
 import { FullScreenDialogTitle } from './FullScreenDialogTitle';
 import { useNotify } from '../../context/NotifyContext';
 import { deletePlan, getPlans, newPlanId, savePlan } from '../../services/planService';
+import { COVERS_LABEL, PLAN_COVERS, coverageLabel, coversOf, perWeekOf, type PlanCovers } from '../../utils/planCoverage';
 import { NumberField } from '../NumberField';
 import { isGroupHolder } from '../../utils/groupPricing';
 import { designTokens } from '../../theme/designTokens';
@@ -51,10 +52,13 @@ interface Draft {
   availableTo: Plan['availableTo'];
   status: Plan['status'];
   vatRate: VatRate;
+  /** Waar het abonnement voor geldt en hoe vaak per week ('' = geen limiet). */
+  covers: PlanCovers;
+  perWeek: string;
   createdAt?: string;
 }
 
-const emptyDraft = (): Draft => ({ id: newPlanId(), name: '', price: '', period: 'month', unlimited: false, credits: '8', validityMonths: '', rollover: 'expire', availableTo: 'all', status: 'active', vatRate: DEFAULT_VAT_RATE });
+const emptyDraft = (): Draft => ({ id: newPlanId(), name: '', price: '', period: 'month', unlimited: false, credits: '8', validityMonths: '', rollover: 'expire', availableTo: 'all', status: 'active', vatRate: DEFAULT_VAT_RATE, covers: 'all', perWeek: '' });
 const toDraft = (p: Plan): Draft => ({
   id: p.id,
   name: p.name,
@@ -67,6 +71,8 @@ const toDraft = (p: Plan): Draft => ({
   availableTo: p.availableTo,
   status: p.status,
   vatRate: p.vatRate,
+  covers: coversOf(p),
+  perWeek: perWeekOf(p) == null ? '' : String(perWeekOf(p)),
   createdAt: p.createdAt || undefined,
 });
 
@@ -161,6 +167,8 @@ export function SubscriptionsPanel({ memberships, credits, createSignal, onChang
         availableTo: draft.availableTo,
         status: draft.status,
         vatRate: draft.vatRate,
+        covers: draft.covers,
+        perWeek: draft.perWeek.trim() ? Math.max(1, Math.round(Number(draft.perWeek) || 1)) : null,
         createdAt: draft.createdAt,
       });
       notify.success(t('plans.saved'));
@@ -264,7 +272,7 @@ export function SubscriptionsPanel({ memberships, credits, createSignal, onChang
                 {p.status === 'paused' && <Chip size="small" label={t('plans.paused')} sx={{ height: 20, fontSize: 11, bgcolor: designTokens.cardBackgroundHigh }} />}
               </Box>
               <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-                {allowanceLine(p)}
+                {allowanceLine(p)} · {coverageLabel(p)}
               </Typography>
             </Box>
             <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
@@ -322,6 +330,24 @@ export function SubscriptionsPanel({ memberships, credits, createSignal, onChang
           <MenuItem value="unlimited">{t('plans.unlimited')}</MenuItem>
         </TextField>
         {!draft.unlimited && <NumberField label={t('plans.credits')} size="small" fullWidth value={draft.credits} onChange={(v) => setDraft({ ...draft, credits: v })} />}
+      </Box>
+      {/* Wat het lid hiermee vast mag inplannen (Profiel → Moment inplannen). */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+        <TextField select label="Geldt voor" size="small" fullWidth value={draft.covers} onChange={(e) => setDraft({ ...draft, covers: e.target.value as PlanCovers })}>
+          {PLAN_COVERS.map((c) => (
+            <MenuItem key={c} value={c}>
+              {COVERS_LABEL[c]}
+            </MenuItem>
+          ))}
+        </TextField>
+        <NumberField
+          label="Keer per week"
+          size="small"
+          fullWidth
+          value={draft.perWeek}
+          onChange={(v) => setDraft({ ...draft, perWeek: v })}
+          helperText="Zoveel vaste momenten mag het lid inplannen. Leeg = geen limiet."
+        />
       </Box>
       {draft.period === 'once' && (
         <NumberField label={t('plans.validity')} size="small" fullWidth value={draft.validityMonths} onChange={(v) => setDraft({ ...draft, validityMonths: v })} helperText={t('plans.validityHelp')} />

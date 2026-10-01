@@ -693,6 +693,12 @@ export interface Plan {
   status: 'active' | 'paused';
   /** Btw-percentage dat in de prijs zit (0, 9 of 21). Sport en fitness vallen doorgaans onder 9. */
   vatRate: VatRate;
+  /**
+   * Waar het abonnement voor geldt (personal training, groepslessen of alles) en hoe vaak per week
+   * (null = geen limiet). Ontbreekt het, dan leidt de app het af uit naam en credits (utils/planCoverage).
+   */
+  covers?: 'pt' | 'group' | 'all';
+  perWeek?: number | null;
   createdAt: string;
   updatedAt: string;
 }

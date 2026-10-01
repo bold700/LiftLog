@@ -28,16 +28,14 @@ import {
   Typography,
 } from '@mui/material';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
-import PersonAddAlt1RoundedIcon from '@mui/icons-material/PersonAddAlt1Rounded';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PauseRoundedIcon from '@mui/icons-material/PauseRounded';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import StopRoundedIcon from '@mui/icons-material/StopRounded';
 import { useI18n } from '../context/I18nContext';
+import { PlanMomentDialog } from './PlanMomentDialog';
 import { useNotify } from '../context/NotifyContext';
 import {
-  addPersonalSlot,
-  addStandingBooking,
   bookClass,
   cancelBooking,
   getMyBookings,
@@ -96,8 +94,7 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [menu, setMenu] = useState<{ anchor: HTMLElement; s: StandingBooking } | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
-  const [ptOpen, setPtOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
   const [pauseFor, setPauseFor] = useState<StandingBooking | null>(null);
   const [skip, setSkip] = useState<{ booking: Booking; cls: StudioClass } | null>(null);
   /** Sporter: namen van de server, alleen als de studio "naam van de trainer tonen" aan heeft. */
@@ -182,23 +179,17 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
         <Typography component="h2" sx={{ fontSize: 14, fontWeight: 500, lineHeight: '20px' }}>
           Vaste lessen
         </Typography>
-        <Box sx={{ display: 'flex', gap: 0.5 }}>
-          {asStaff && (
-            <Button size="small" startIcon={<PersonAddAlt1RoundedIcon />} onClick={() => setPtOpen(true)} disabled={busy} sx={{ textTransform: 'none' }}>
-              PT-moment
-            </Button>
-          )}
-          <Button size="small" startIcon={<AddRoundedIcon />} onClick={() => setAddOpen(true)} disabled={busy} sx={{ textTransform: 'none' }}>
-            Vaste les
-          </Button>
-        </Box>
+        {/* Eén knop: wat er kan hangt af van het abonnement (PT-momenten, groepslessen of allebei). */}
+        <Button size="small" startIcon={<AddRoundedIcon />} onClick={() => setPlanOpen(true)} disabled={busy} sx={{ textTransform: 'none' }}>
+          Moment inplannen
+        </Button>
       </Box>
 
       {sorted.length === 0 && (
         <Typography variant="body2" color="text.secondary">
           {asStaff
-            ? 'Nog geen vaste lessen. Zet dit lid vast in voor een groepsles die elke week terugkomt, of plan een vast PT-moment; de lessen worden dan automatisch geboekt.'
-            : 'Nog geen vaste lessen. Schrijf je vast in voor een les die elke week terugkomt; je wordt dan automatisch geboekt.'}
+            ? 'Nog geen vaste momenten. Plan vaste PT-momenten of groepslessen in, passend bij het abonnement; de lessen worden dan elke week automatisch geboekt.'
+            : 'Nog geen vaste momenten. Plan ze in volgens je abonnement; je wordt dan elke week automatisch ingeschreven.'}
         </Typography>
       )}
 
@@ -332,31 +323,16 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
         )}
       </Menu>
 
-      <AddStandingDialog
-        open={addOpen}
+      <PlanMomentDialog
+        open={planOpen}
+        userId={userId}
+        asStaff={asStaff}
         types={publicTypes}
-        weekdayLabel={weekdayLabel}
-        onClose={() => setAddOpen(false)}
-        onAdd={(input) => {
-          setAddOpen(false);
-          void run(() => addStandingBooking({ ...input, ...(asStaff ? { userId } : {}) }));
-        }}
+        trainers={trainers}
+        defaultTrainerId={defaultTrainerId}
+        onClose={() => setPlanOpen(false)}
+        onDone={() => void load()}
       />
-
-      {asStaff && (
-        <PersonalSlotDialog
-          open={ptOpen}
-          types={publicTypes}
-          trainers={trainers}
-          defaultTrainerId={defaultTrainerId}
-          weekdayLabel={weekdayLabel}
-          onClose={() => setPtOpen(false)}
-          onAdd={(input) => {
-            setPtOpen(false);
-            void run(() => addPersonalSlot({ ...input, userId }));
-          }}
-        />
-      )}
 
       <PauseDialog
         standing={pauseFor}
@@ -397,97 +373,6 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
         </DialogActions>
       </Dialog>
     </Box>
-  );
-}
-
-function AddStandingDialog({
-  open,
-  types,
-  weekdayLabel,
-  onClose,
-  onAdd,
-}: {
-  open: boolean;
-  types: ClassType[];
-  weekdayLabel: (wd: number) => string;
-  onClose: () => void;
-  onAdd: (input: { classTypeId: string; weekday: number; startTime: string; startDate: string }) => void;
-}) {
-  // Alle weekmomenten van alle lessoorten met een vast rooster, maandag eerst.
-  const options = useMemo(
-    () =>
-      types
-        .flatMap((ct) =>
-          ct.schedule.map((sl) => ({
-            key: `${ct.id}|${sl.weekday}|${sl.startTime}`,
-            classTypeId: ct.id,
-            weekday: sl.weekday,
-            startTime: sl.startTime,
-            label: `${ct.name} · ${weekdayLabel(sl.weekday)} ${sl.startTime}–${sl.endTime}`,
-            cost: ct.creditCost,
-          }))
-        )
-        .sort(
-          (a, b) =>
-            WEEK_ORDER.indexOf(a.weekday) - WEEK_ORDER.indexOf(b.weekday) || a.startTime.localeCompare(b.startTime) || a.label.localeCompare(b.label)
-        ),
-    [types, weekdayLabel]
-  );
-  const [key, setKey] = useState('');
-  const [startDate, setStartDate] = useState(todayIso());
-  useEffect(() => {
-    if (open) {
-      setKey('');
-      setStartDate(todayIso());
-    }
-  }, [open]);
-  const chosen = options.find((o) => o.key === key);
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>Vaste les</DialogTitle>
-      <DialogContent>
-        <DialogContentText sx={{ mb: 2 }}>
-          Elke week automatisch ingeschreven. De lessen die al op het rooster staan worden meteen geboekt; elke les kost de credits van die lessoort.
-        </DialogContentText>
-        {options.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            Er zijn nog geen lessoorten met een vast weekmoment (Beheer → Lessoorten).
-          </Typography>
-        ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            <TextField select label="Les" value={key} onChange={(e) => setKey(e.target.value)} fullWidth>
-              {options.map((o) => (
-                <MenuItem key={o.key} value={o.key}>
-                  {o.label}
-                  {o.cost > 0 ? ` · ${o.cost === 1 ? '1 credit' : `${o.cost} credits`}` : ''}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              label="Vanaf"
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              inputProps={{ min: todayIso() }}
-              fullWidth
-            />
-          </Box>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Annuleren</Button>
-        <Button
-          variant="contained"
-          disableElevation
-          disabled={!chosen || !startDate}
-          onClick={() => chosen && onAdd({ classTypeId: chosen.classTypeId, weekday: chosen.weekday, startTime: chosen.startTime, startDate })}
-        >
-          Vastzetten
-        </Button>
-      </DialogActions>
-    </Dialog>
   );
 }
 

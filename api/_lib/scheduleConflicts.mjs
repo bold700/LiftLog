@@ -180,3 +180,44 @@ export function allConflicts(classTypes) {
   }
   return out.sort((x, y) => x.a.weekday - y.a.weekday || toMin(x.a.startTime) - toMin(y.a.startTime));
 }
+
+/**
+ * Vrije weekmomenten voor een nieuw vast PT-moment bij deze trainer (Moment inplannen): per
+ * weekdag de begintijden (zelfde duur) binnen zijn beschikbaarheid, of de openingstijden als hij
+ * niets invulde, waarop hij geen andere vaste les heeft. `extraBusy` zijn openstaande verzoeken
+ * ({ weekday, startTime, endTime }). Momenten die direct aansluiten op een andere les van de
+ * trainer krijgen `adjacent: true` en staan per dag vooraan.
+ */
+export function weeklyFreeSlots({ trainerId, classTypes, availability = null, hours = DEFAULT_HOURS, duration = 60, extraBusy = [] }) {
+  const trainer = trainerKey(trainerId);
+  const mine = trainer ? classTypes.map(shape).filter((o) => o.trainer === trainer).flatMap((o) => o.schedule) : [];
+  const days = [];
+  for (let weekday = 0; weekday <= 6; weekday++) {
+    const windows = windowsOn(availability, weekday);
+    const ranges =
+      windows === null
+        ? [{ first: toMin(hours.firstStart), lastStart: toMin(hours.lastStart), end: 24 * 60 }]
+        : windows.map((w) => ({ first: toMin(w.from), lastStart: toMin(w.to) - duration, end: toMin(w.to) }));
+    const busy = [...mine, ...extraBusy]
+      .filter((s) => Number(s.weekday) === weekday)
+      .map((s) => ({ start: toMin(s.startTime), end: toMin(s.endTime) }));
+    const edges = new Set(busy.flatMap((b) => [b.start, b.end]));
+    const seen = new Set();
+    const times = [];
+    const consider = (start) => {
+      if (seen.has(start) || start < 0 || start + duration > 24 * 60) return;
+      seen.add(start);
+      if (!ranges.some((r) => start >= r.first && start <= r.lastStart && start + duration <= r.end)) return;
+      if (busy.some((b) => start < b.end && b.start < start + duration)) return;
+      times.push({ weekday, startTime: fromMin(start), endTime: fromMin(start + duration), adjacent: edges.has(start) || edges.has(start + duration) });
+    };
+    for (const e of edges) {
+      consider(e);
+      consider(e - duration);
+    }
+    for (const r of ranges) for (let s = r.first; s <= r.lastStart; s += STEP_MIN) consider(s);
+    times.sort((a, b) => Number(b.adjacent) - Number(a.adjacent) || toMin(a.startTime) - toMin(b.startTime));
+    if (times.length) days.push({ weekday, times });
+  }
+  return days;
+}

@@ -40,6 +40,18 @@ export interface RescheduleRequest {
   endTime: string;
   status: RescheduleStatus;
   classId: string | null;
+  /** 'standing': een aangevraagd vast PT-moment (elke week), geen verzette les. */
+  kind?: 'reschedule' | 'standing';
+  weekday?: number | null;
+  startDate?: string | null;
+}
+
+const WEEKDAY_LONG = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
+
+/** "elke maandag 17:00–18:00" (vast PT-moment) of "do 8 okt 17:00–18:00" (verzette les). */
+export function requestWhen(r: Pick<RescheduleRequest, 'kind' | 'weekday' | 'date' | 'startTime' | 'endTime'>): string {
+  if (r.kind === 'standing' && r.weekday != null) return `elke ${WEEKDAY_LONG[r.weekday]} ${r.startTime}–${r.endTime}`;
+  return `${rescheduleDayLabel(r.date)} ${r.startTime}–${r.endTime}`;
 }
 
 export function getRescheduleOptions(classId: string): Promise<RescheduleOptions> {

@@ -59,6 +59,7 @@ const clockTime = (iso) => {
   const t = Date.parse(String(iso || ''));
   return Number.isFinite(t) ? CLOCK_FMT.format(new Date(t)) : '';
 };
+const WEEKDAY_LONG = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
 const when = (cls) => [dayLabel(cls?.date), shortTime(cls?.startTime)].filter(Boolean).join(' ');
 
 export const messages = {
@@ -67,6 +68,25 @@ export const messages = {
     return {
       title: 'Verzoek om te verzetten',
       body: `${memberName || 'Een sporter'} vraagt ${req?.title || 'een PT-moment'} aan op ${when(req)}. Keur het goed of wijs het af in Beheer.`,
+    };
+  },
+  /** Aan de trainer: een sporter vraagt een vast PT-moment aan (elke week). */
+  standingRequested(req, memberName) {
+    return {
+      title: 'Vast PT-moment aangevraagd',
+      body: `${memberName || 'Een sporter'} wil elke ${WEEKDAY_LONG[Number(req?.weekday)] ?? 'week'} om ${shortTime(req?.startTime)} trainen. Keur het goed of wijs het af in Beheer.`,
+    };
+  },
+  standingApproved(req) {
+    return {
+      title: 'Vast PT-moment staat vast',
+      body: `Elke ${WEEKDAY_LONG[Number(req?.weekday)] ?? 'week'} om ${shortTime(req?.startTime)}. Je wordt elke week automatisch ingeschreven.`,
+    };
+  },
+  standingDeclined(req) {
+    return {
+      title: 'Vast PT-moment niet bevestigd',
+      body: `Je trainer kan niet elke ${WEEKDAY_LONG[Number(req?.weekday)] ?? 'week'} om ${shortTime(req?.startTime)}. Kies onder Profiel een ander moment.`,
     };
   },
   /** Aan de sporter: het nieuwe moment staat vast (de credit is afgeschreven zoals bij boeken). */
