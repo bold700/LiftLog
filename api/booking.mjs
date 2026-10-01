@@ -521,6 +521,8 @@ async function book(res, db, uid, myOrgs, classId, weekly, isStaff, targetUserId
   const preOrg = preSnap.exists ? orgIdOf(preSnap.data().orgId) : null;
   let unlimited = false;
   if (preOrg && myOrgs.includes(preOrg)) {
+    // Gaat vandaag een gepland abonnement in, dan eerst dat (credits van de eerste periode).
+    await startScheduledMemberships(db, { orgId: preOrg, userId: beneficiaryUid }).catch(() => 0);
     const m = await activeMembership(db, preOrg, beneficiaryUid);
     if (m) {
       await settleMembership(db, newId, db.collection('memberships').doc(m.id), new Date().toISOString());
@@ -2459,20 +2461,73 @@ async function assign(res, db, uid, myOrgs, body) {
     orgId = sharedOrg(myOrgs, targetSnap.data() ?? {});
     if (!orgId) return json(res, 403, { error: 'Dit lid zit niet in jouw studio.', build: BUILD });
   }
-  const billTo = group ? group.payerId : targetUserId;
-  const groupFields = group ? { groupId: group.id } : {};
-  const groupAccountFields = group ? { groupId: group.id, memberIds: group.memberIds, unit: 'eur' } : {};
 
   const planSnap = await db.collection('plans').doc(planId).get();
   if (!planSnap.exists || orgIdOf(planSnap.data().orgId) !== orgId) return json(res, 404, { error: 'Abonnement niet gevonden.', build: BUILD });
   const plan = { id: planSnap.id, ...planSnap.data() };
 
+  // Ingangsdatum in de toekomst: alleen vastleggen. Op die dag start het abonnement pas (eerste
+  // factuur en credits), zie startScheduledMemberships. Tot dan blijft een lopend abonnement gewoon lopen.
+  const startDay = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.startDate ?? '')) ? String(body.startDate) : null;
+  if (startDay && startDay > amsterdamDate(new Date())) {
+    if (group) return json(res, 400, { error: 'Een groepsabonnement gaat meteen in.', build: BUILD });
+    const nowIso = new Date().toISOString();
+    await cancelScheduled(db, orgId, targetUserId, nowIso);
+    const id = newId('mb');
+    await db.collection('memberships').doc(id).set({
+      id,
+      orgId,
+      userId: targetUserId,
+      planId: plan.id,
+      planName: plan.name,
+      status: 'scheduled',
+      startsOn: startDay,
+      byUserId: uid,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    });
+    return json(res, 200, { membershipId: id, scheduled: true, startsOn: startDay, balance: null, first: null, build: BUILD });
+  }
+
+  const r = await beginMembership(db, { orgId, targetUserId, plan, group, byUserId: uid });
+  return json(res, 200, { ...r, build: BUILD });
+}
+
+/** Geplande (nog niet gestarte) abonnementen van een lid laten vervallen: de nieuwe keuze geldt. */
+async function cancelScheduled(db, orgId, userId, nowIso, exceptId = null) {
+  const snap = await db.collection('memberships').where('orgId', '==', orgId).where('userId', '==', userId).where('status', '==', 'scheduled').get();
+  for (const d of snap.docs) {
+    if (d.id === exceptId) continue;
+    await db.collection('memberships').doc(d.id).set({ status: 'cancelled', cancelledAt: nowIso, updatedAt: nowIso }, { merge: true });
+  }
+}
+
+/**
+ * Een abonnement laten ingaan: een lopend abonnement stopt, de eerste factuur (met nummer) en de
+ * credits komen erbij. Volgt het factuurritme van de studio: de eerste periode is dan op maat tot
+ * de eerstvolgende factuurdatum. `startDay` is de ingangsdatum (bij een gepland abonnement dat
+ * later start dan gepland: de periode telt vanaf die dag). `membershipId`: het geplande document.
+ */
+async function beginMembership(db, { orgId, targetUserId, plan, group = null, byUserId, membershipId = newId('mb'), startDay = null }) {
+  const billTo = group ? group.payerId : targetUserId;
+  const groupFields = group ? { groupId: group.id } : {};
+  const groupAccountFields = group ? { groupId: group.id, memberIds: group.memberIds, unit: 'eur' } : {};
+  const today = amsterdamDate(new Date());
   const nowIso = new Date().toISOString();
+  const day = startDay && startDay <= today ? startDay : today;
+  // Vandaag: het tijdstip van nu; een dag die al voorbij is: vanaf het begin van die dag.
+  const startIso = day === today ? nowIso : `${day}T00:00:00.000Z`;
+
+  await cancelScheduled(db, orgId, targetUserId, nowIso, membershipId);
   const current = await activeMembership(db, orgId, targetUserId);
   // Factureert de studio op een vast ritme (eigenaar, Beheer → Instellingen), dan is de eerste
   // periode op maat: tot de eerstvolgende factuurdatum, prijs en credits naar rato.
-  const first = group ? null : await firstPeriodFor(db, orgId, plan);
-  const membership = { ...newMembership({ id: newId('mb'), orgId, userId: targetUserId, plan, nowIso, byUserId: uid, first }), ...(group ? { billToUserId: billTo, groupId: group.id } : {}) };
+  const first = group ? null : await firstPeriodFor(db, orgId, plan, day);
+  const membership = {
+    ...newMembership({ id: membershipId, orgId, userId: targetUserId, plan, nowIso: startIso, byUserId, first }),
+    ...(startDay ? { startsOn: startDay } : {}),
+    ...(group ? { billToUserId: billTo, groupId: group.id } : {}),
+  };
   // Groep: de prijs van het abonnement komt als tegoed in euro's op de groep (zie groups.mjs).
   const credits = group ? euros(plan.price) : first && first.credits != null ? first.credits : plan.credits == null ? 0 : Number(plan.credits) || 0;
 
@@ -2482,12 +2537,12 @@ async function assign(res, db, uid, myOrgs, body) {
     const saldo = Number(aSnap.exists ? aSnap.data().balance : 0) || 0;
     const orgRef = db.collection('orgs').doc(orgId);
     const orgSnap = await tx.get(orgRef);
-    if (current) tx.set(db.collection('memberships').doc(current.id), { status: 'cancelled', cancelledAt: nowIso, updatedAt: nowIso }, { merge: true });
+    if (current && current.id !== membershipId) tx.set(db.collection('memberships').doc(current.id), { status: 'cancelled', cancelledAt: nowIso, updatedAt: nowIso }, { merge: true });
     tx.set(db.collection('memberships').doc(membership.id), membership);
     // Eerste post: de eerste periode (maand of de kaart zelf), tenzij het plan gratis is. Met factuurnummer.
     if ((first ? first.amount : Number(plan.price) || 0) > 0) {
       const invoiceNumber = reserveInvoiceNumber(tx, orgRef, orgSnap, nowIso);
-      const charge = newCharge({ id: newId('ch'), orgId, userId: billTo, plan, membershipId: membership.id, periodStartIso: nowIso, nowIso, invoiceNumber, first });
+      const charge = newCharge({ id: newId('ch'), orgId, userId: billTo, plan, membershipId: membership.id, periodStartIso: startIso, nowIso, invoiceNumber, first });
       tx.set(db.collection('charges').doc(charge.id), { ...charge, ...groupFields });
     }
     if (credits > 0) {
@@ -2500,20 +2555,59 @@ async function assign(res, db, uid, myOrgs, body) {
         reason: 'plan',
         planId: plan.id,
         note: `${plan.name} gestart`,
-        byUserId: uid,
+        byUserId,
         createdAt: nowIso,
       });
     }
     return group ? euros(saldo + credits) : saldo + credits;
   });
 
-  return json(res, 200, { membershipId: membership.id, balance, first, build: BUILD });
+  return { membershipId: membership.id, balance, first };
+}
+
+/**
+ * Geplande abonnementen die vandaag (of eerder) ingaan laten starten. Loopt bij boeken, bij het
+ * openen van Beheer (renewDue) en in de avondronde, zodat het op de ingangsdatum gebeurt ook als
+ * niemand de app opent. Elk gepland abonnement wordt maar één keer gestart (eerst "claimen").
+ */
+async function startScheduledMemberships(db, { orgId = null, userId = null } = {}) {
+  const today = amsterdamDate(new Date());
+  let q = db.collection('memberships').where('status', '==', 'scheduled');
+  if (orgId) q = q.where('orgId', '==', orgId);
+  if (userId) q = q.where('userId', '==', userId);
+  const snap = await q.get();
+  let started = 0;
+  for (const d of snap.docs) {
+    const m = d.data();
+    if (!m.startsOn || m.startsOn > today) continue;
+    const ref = db.collection('memberships').doc(d.id);
+    const claimed = await db.runTransaction(async (tx) => {
+      const s = await tx.get(ref);
+      if (!s.exists || s.data().status !== 'scheduled') return false;
+      tx.set(ref, { status: 'starting', updatedAt: new Date().toISOString() }, { merge: true });
+      return true;
+    });
+    if (!claimed) continue;
+    const planSnap = await db.collection('plans').doc(String(m.planId)).get();
+    if (!planSnap.exists) {
+      await ref.set({ status: 'cancelled', cancelledAt: new Date().toISOString(), cancelReason: 'Abonnement bestaat niet meer.' }, { merge: true });
+      continue;
+    }
+    try {
+      await beginMembership(db, { orgId: m.orgId, targetUserId: m.userId, plan: { id: planSnap.id, ...planSnap.data() }, byUserId: m.byUserId || 'system', membershipId: d.id, startDay: m.startsOn });
+      started += 1;
+    } catch (e) {
+      console.warn('[booking] gepland abonnement starten mislukt:', e?.message ?? e);
+      await ref.set({ status: 'scheduled', updatedAt: new Date().toISOString() }, { merge: true });
+    }
+  }
+  return started;
 }
 
 /** De eerste periode volgens het factuurritme van de studio, of null (zie api/_lib/billingCycle.mjs). */
-async function firstPeriodFor(db, orgId, plan) {
+async function firstPeriodFor(db, orgId, plan, day = amsterdamDate(new Date())) {
   const orgSnap = await db.collection('orgs').doc(orgId).get();
-  return firstPeriod(plan, billingOf(orgSnap.exists ? orgSnap.data() : null), amsterdamDate(new Date()));
+  return firstPeriod(plan, billingOf(orgSnap.exists ? orgSnap.data() : null), day);
 }
 
 /** Lidmaatschap stoppen; credits die er staan blijven staan. */
@@ -2529,9 +2623,12 @@ async function unassign(res, db, uid, myOrgs, body) {
     if (!orgId) return json(res, 403, { error: 'Dit lid zit niet in jouw studio.', build: BUILD });
   }
 
+  const nowIso = new Date().toISOString();
+  // Een gepland abonnement (ingangsdatum later) vervalt altijd mee; `scheduledOnly`: alleen dat.
+  await cancelScheduled(db, orgId, targetUserId, nowIso);
+  if (body?.scheduledOnly === true) return json(res, 200, { stopped: false, build: BUILD });
   const current = await activeMembership(db, orgId, targetUserId);
   if (!current) return json(res, 200, { stopped: false, build: BUILD });
-  const nowIso = new Date().toISOString();
   await db.collection('memberships').doc(current.id).set({ status: 'cancelled', cancelledAt: nowIso, byUserId: uid, updatedAt: nowIso }, { merge: true });
   return json(res, 200, { stopped: true, build: BUILD });
 }
@@ -2675,6 +2772,8 @@ async function settlePurchase(db, checkout, paymentId) {
 async function renewDue(res, db, myOrgs, body) {
   const orgId = orgIdOf(body?.orgId);
   if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Niet jouw studio.', build: BUILD });
+  // Eerst geplande abonnementen die vandaag ingaan laten starten, dan de verlengingen.
+  await startScheduledMemberships(db, { orgId }).catch((e) => console.warn('[booking] geplande abonnementen:', e?.message ?? e));
   const nowIso = new Date().toISOString();
   const snap = await db.collection('memberships').where('orgId', '==', orgId).where('status', '==', 'active').get();
   let steps = 0;
@@ -3311,6 +3410,11 @@ async function eveningRun(req, res, db) {
   // Vangnet: vastgehouden wachtlijstplekken die niemand meer heeft afgerond (normaal gebeurt dat
   // zodra iemand het rooster opent, boekt of afmeldt).
   report.holdsSettled = await settleExpiredHolds(db).catch(() => 0);
+  // Abonnementen met een ingangsdatum van vandaag laten starten (eerste factuur en credits).
+  report.membershipsStarted = await startScheduledMemberships(db).catch((e) => {
+    console.error('[eveningRun] geplande abonnementen starten mislukte:', e);
+    return 0;
+  });
   // Automatisch afschrijven: verlengingen bijwerken en open facturen met machtiging incasseren.
   try {
     report.autoCollect = await runAutoCollect(db, appOrigin(req));

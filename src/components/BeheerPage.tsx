@@ -52,6 +52,10 @@ import { HeartRateZonesTable } from './HeartRateZonesTable';
 import { LimitationsEditor } from './LimitationsEditor';
 import { todayIso } from '../utils/format';
 import { firstPeriod } from '../utils/billingCycle';
+
+/** "2 november" (zonder jaar); leeg bij een ongeldige datum. */
+const longDay = (date: string) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T12:00:00`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' }) : '';
 import { RequestsBanner } from './beheer/RequestsBanner';
 import { ProcessorAgreementCard } from './beheer/ProcessorAgreementCard';
 import { InactiveChip, MembersList, RoleChip } from './beheer/MembersList';
@@ -77,7 +81,7 @@ import { WaitlistsPanel } from './beheer/WaitlistsPanel';
 import { ClassPlanningPanel } from './beheer/ClassPlanningPanel';
 import { ExerciseLibraryPanel } from './beheer/ExerciseLibraryPanel';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
-import { assignPlan, getActiveMembershipsForOrg, getPlans, renewDue, unassignPlan } from '../services/planService';
+import { assignPlan, cancelScheduledPlan, getActiveMembershipsForOrg, getPlans, getScheduledMembershipsForOrg, renewDue, unassignPlan } from '../services/planService';
 import { getCreditBalancesForOrg, grantCredits, setMemberActive, setTrainsAsMember } from '../services/classService';
 import { paysAsMember } from '../utils/orgRoles';
 import { NumberField } from './NumberField';
@@ -219,6 +223,10 @@ export function BeheerPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [credits, setCredits] = useState<Record<string, number>>({});
   const [memberships, setMemberships] = useState<Record<string, Membership>>({});
+  /** Abonnementen met een ingangsdatum later (nog geen factuur, nog geen credits). */
+  const [scheduledPlans, setScheduledPlans] = useState<Record<string, Membership>>({});
+  /** Ingangsdatum van een nieuw gekozen abonnement; vandaag = meteen. */
+  const [planStart, setPlanStart] = useState(todayIso());
   const [plans, setPlans] = useState<Plan[]>([]);
   const [newPlanSignal, setNewPlanSignal] = useState(0);
   const [newGroupSignal, setNewGroupSignal] = useState(0);
@@ -271,11 +279,12 @@ export function BeheerPage() {
     try {
       // Eerst openstaande verlengingen laten verwerken (idempotent), dan pas saldo's en lidmaatschappen lezen.
       await renewDue().catch(() => null);
-      const [list, balances, active, planList] = await Promise.all([
+      const [list, balances, active, planList, scheduled] = await Promise.all([
         getAllProfiles(),
         getCreditBalancesForOrg().catch(() => ({})),
         getActiveMembershipsForOrg().catch(() => ({})),
         getPlans().catch(() => []),
+        getScheduledMembershipsForOrg().catch(() => ({})),
       ]);
       list.sort((a, b) =>
         (a.displayName || a.email || a.userId).localeCompare(b.displayName || b.email || b.userId, undefined, { sensitivity: 'base' })
@@ -283,6 +292,7 @@ export function BeheerPage() {
       setProfiles(list);
       setCredits(balances);
       setMemberships(active);
+      setScheduledPlans(scheduled);
       setPlans(planList);
     } catch (e) {
       setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Profielen laden mislukt.' });
@@ -404,6 +414,7 @@ export function BeheerPage() {
   const openEditor = (p: Profile) => {
     setTarget(p);
     setEdit(toEditState(p, memberships[p.userId]?.planId ?? ''));
+    setPlanStart(todayIso());
     setMessage(null);
     setCreditValue(String(credits[p.userId] ?? 0));
     setCreditError(null);
@@ -495,8 +506,9 @@ export function BeheerPage() {
       // Abonnement gewijzigd? Dat loopt via de server (saldo en grootboek in één keer).
       const hadPlan = memberships[target.userId]?.planId ?? '';
       if (edit.planId !== hadPlan) {
-        if (edit.planId) await assignPlan(target.userId, edit.planId);
+        if (edit.planId) await assignPlan(target.userId, edit.planId, planStart > todayIso() ? planStart : undefined);
         else await unassignPlan(target.userId);
+        setPlanStart(todayIso());
       }
       // Meetrainen als lid (staf): na het abonnement, want uitzetten kan pas zonder abonnement.
       if (edit.role !== 'sporter' && edit.trainsAsMember !== !!target.trainsAsMember) {
@@ -507,6 +519,21 @@ export function BeheerPage() {
       setMessage({ type: 'success', text: `Profiel van ${edit.displayName.trim() || target.email || 'gebruiker'} bijgewerkt.` });
     } catch (e) {
       setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Opslaan mislukt.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Een gepland abonnement (nog niet ingegaan) annuleren; het huidige blijft. */
+  const handleCancelScheduled = async () => {
+    if (!target) return;
+    setSaving(true);
+    try {
+      await cancelScheduledPlan(target.userId);
+      await load();
+      setMessage({ type: 'success', text: 'Geplande start geannuleerd.' });
+    } catch (e) {
+      setMessage({ type: 'error', text: e instanceof Error ? e.message : 'Annuleren mislukt.' });
     } finally {
       setSaving(false);
     }
@@ -769,12 +796,27 @@ export function BeheerPage() {
                     </MenuItem>
                   ))}
               </TextField>
+              {scheduledPlans[target.userId] && (
+                <Alert
+                  severity="info"
+                  sx={{ mb: 1 }}
+                  action={
+                    <Button color="inherit" size="small" disabled={saving} onClick={() => void handleCancelScheduled()}>
+                      Annuleren
+                    </Button>
+                  }
+                >
+                  Gepland: {scheduledPlans[target.userId].planName} gaat in op {longDay(scheduledPlans[target.userId].startsOn ?? '')}. Dan pas de eerste
+                  factuur en de credits.
+                </Alert>
+              )}
               {(() => {
                 // Zeg vooraf wat Opslaan doet: credits van de eerste periode erbij en de eerste factuur.
                 const chosen = edit.planId && edit.planId !== (memberships[target.userId]?.planId ?? '') ? plans.find((pl) => pl.id === edit.planId) : null;
                 if (!chosen) return null;
+                const later = planStart > todayIso();
                 // Factureert de studio op een vast ritme, dan is de eerste periode op maat (tot de factuurdatum).
-                const first = firstPeriod(chosen, billing, todayIso());
+                const first = firstPeriod(chosen, billing, later ? planStart : todayIso());
                 const credits = first ? first.credits : chosen.credits;
                 const amount = first ? first.amount : chosen.price;
                 const parts = [
@@ -783,10 +825,26 @@ export function BeheerPage() {
                 ].filter(Boolean);
                 const until = first && !first.full ? new Date(`${first.until}T12:00:00`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' }) : null;
                 return (
-                  <Alert severity="info" sx={{ mb: 1 }}>
-                    Na Opslaan: {parts.join(' en ')}
-                    {first && until ? ` (${first.days} van de ${first.totalDays} dagen, tot de factuurdatum ${until})` : ''}. {coverageLabel(chosen)}.
-                  </Alert>
+                  <>
+                    {/* Ingangsdatum: vandaag = meteen; later = tot dan geen factuur en geen credits uit dit abonnement. */}
+                    <TextField
+                      size="small"
+                      type="date"
+                      label="Gaat in op"
+                      value={planStart}
+                      onChange={(e) => setPlanStart(e.target.value || todayIso())}
+                      InputLabelProps={{ shrink: true }}
+                      inputProps={{ min: todayIso() }}
+                      sx={{ mb: 1.5, maxWidth: 220 }}
+                    />
+                    <Alert severity="info" sx={{ mb: 1 }}>
+                      {later ? `Op ${longDay(planStart)}` : 'Na Opslaan'}: {parts.join(' en ')}
+                      {first && until ? ` (${first.days} van de ${first.totalDays} dagen, tot de factuurdatum ${until})` : ''}. {coverageLabel(chosen)}.
+                      {later
+                        ? ` Tot dan geen factuur en geen credits uit dit abonnement${memberships[target.userId] ? '; het huidige abonnement loopt door' : ''}. Wil je nu al inplannen, geef dan zelf credits.`
+                        : ''}
+                    </Alert>
+                  </>
                 );
               })()}
               {paysAsMember(edit) && (

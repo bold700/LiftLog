@@ -729,8 +729,10 @@ export interface Membership {
   userId: string;
   planId: string;
   planName: string;
-  status: 'active' | 'cancelled' | 'expired';
+  /** 'scheduled': gaat later in (ingangsdatum `startsOn`); tot dan geen factuur en geen credits. */
+  status: 'active' | 'cancelled' | 'expired' | 'scheduled' | 'starting';
   startedAt: string;
+  startsOn?: string | null;
   nextRenewalAt: string | null;
   expiresAt: string | null;
   lastRenewedAt: string | null;
