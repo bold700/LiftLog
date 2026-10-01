@@ -12,7 +12,7 @@ import { useI18n } from '../context/I18nContext';
 import { useNotify } from '../context/NotifyContext';
 import { getMyMembership, getPlans, purchasePlan } from '../services/planService';
 import { getCreditBalance } from '../services/classService';
-import { canShareFiles, downloadInvoicePdf, getMyCharges, shareInvoicePdf } from '../services/chargeService';
+import { canShareFiles, downloadInvoicePdf, getInvoiceLink, getMyCharges, shareInvoicePdf } from '../services/chargeService';
 import { useBranding } from '../context/BrandingContext';
 import { designTokens } from '../theme/designTokens';
 import type { Charge, Membership, Plan } from '../types';
@@ -243,6 +243,20 @@ export function SubscriptionCard({ userId }: { userId: string }) {
     }
   };
 
+  /** Open factuur betalen: via de betaallink van de studio (Mollie), net als bij een aankoop. */
+  const pay = async (c: Charge) => {
+    setDownloading(c.id);
+    try {
+      const r = await getInvoiceLink(c.id);
+      if (r.payUrl) window.location.href = r.payUrl;
+      else notify.info(t('billing.payNotSet'));
+    } catch (e) {
+      notify.error(t('billing.failed'), e);
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   const invoices = charges.length > 0 && (
     <Box
       sx={{
@@ -278,6 +292,11 @@ export function SubscriptionCard({ userId }: { userId: string }) {
           <Typography variant="body2" fontWeight={600} sx={{ flexShrink: 0 }}>
             {euro(c.amount)}
           </Typography>
+          {c.status === 'open' && c.collectStatus !== 'pending' && c.amount > 0 && (
+            <Button size="small" variant="contained" disableElevation disabled={downloading === c.id} onClick={() => void pay(c)} sx={{ flexShrink: 0 }}>
+              {t('billing.payNow')}
+            </Button>
+          )}
           {shareable && (
             <IconButton size="small" aria-label={t('billing.share')} disabled={downloading === c.id} onClick={() => void download(c, true)}>
               <IosShareRoundedIcon fontSize="small" />

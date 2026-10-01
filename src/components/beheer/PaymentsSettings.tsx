@@ -8,10 +8,10 @@
  * Dat maakt dit scherm ook zonder een echt Mollie-account al bruikbaar om vast klaar te zetten.
  */
 import { useState } from 'react';
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Switch, TextField, Typography } from '@mui/material';
 import { useI18n } from '../../context/I18nContext';
 import { useNotify } from '../../context/NotifyContext';
-import { removePaymentKey, savePaymentKey, setPaymentMode } from '../../services/orgService';
+import { removePaymentKey, savePaymentKey, setAutoCollect, setPaymentMode } from '../../services/orgService';
 import { ContentCard } from '../layout';
 import type { OrgPaymentsStatus } from '../../types';
 
@@ -93,6 +93,20 @@ export function PaymentsSettings({ orgId, payments, onChange }: PaymentsSettings
     }
   };
 
+  const [savingAuto, setSavingAuto] = useState(false);
+  const handleAutoCollect = async (on: boolean) => {
+    setSavingAuto(true);
+    try {
+      await setAutoCollect(orgId, on);
+      onChange({ ...payments, autoCollect: on });
+      notify.success(on ? t('payments.autoCollectSaved') : t('payments.autoCollectOff'));
+    } catch (e) {
+      notify.error(t('payments.saveFailed'), e);
+    } finally {
+      setSavingAuto(false);
+    }
+  };
+
   const keyBlock = (mode: Mode) => {
     const last4 = mode === 'test' ? payments.testKeyLast4 : payments.liveKeyLast4;
     const orgName = mode === 'test' ? payments.testOrganizationName : payments.liveOrganizationName;
@@ -161,6 +175,23 @@ export function PaymentsSettings({ orgId, payments, onChange }: PaymentsSettings
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
         {keyBlock('test')}
         {keyBlock('live')}
+      </Box>
+
+      {/* Automatisch afschrijven: alleen zinvol met een gekoppelde sleutel. */}
+      <Box sx={{ mt: 2.5 }}>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={payments.autoCollect}
+              disabled={savingAuto || !(payments.mode === 'test' ? payments.testKeyLast4 : payments.liveKeyLast4)}
+              onChange={(e) => void handleAutoCollect(e.target.checked)}
+            />
+          }
+          label={t('payments.autoCollect')}
+        />
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+          {t('payments.autoCollectHelp')}
+        </Typography>
       </Box>
 
       <Dialog open={!!confirmRemove} onClose={() => setConfirmRemove(null)} maxWidth="xs" fullWidth>

@@ -228,6 +228,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Klant en machtiging bij Mollie per lid (automatisch afschrijven), apart voor test en live.
+    // Alleen de server (api/booking.mjs) leest en schrijft dit.
+    match /mollieCustomers/{id} {
+      allow read, write: if false;
+    }
+
     // Profielen.
     // - Lezen: eigen profiel, en verder alleen binnen je eigen studio (je eigen sporters, of
     //   als trainer/beheerder de ledenlijst en ranglijst van je studio).

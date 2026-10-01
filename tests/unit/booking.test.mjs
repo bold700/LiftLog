@@ -1088,6 +1088,140 @@ describe('betalingen (Mollie)', () => {
       }
     });
   });
+
+  describe('betaallink per factuur en automatisch afschrijven', () => {
+    const token = 'a'.repeat(32);
+    const webhook = async (id) => {
+      const res = makeRawRes();
+      await handler({ method: 'POST', headers: {}, query: { mollieWebhook: 'vanas' }, body: { id } }, res);
+      return res;
+    };
+    const getPay = async () => {
+      const res = makeRawRes();
+      await handler({ method: 'GET', headers: {}, query: { pay: token } }, res);
+      return res;
+    };
+    /** Nagebootst Mollie: klanten, betalingen (met of zonder checkout) en per betaling een status. */
+    const mockMollie = () => {
+      const realFetch = globalThis.fetch;
+      const calls = [];
+      const payments = {};
+      let n = 0;
+      globalThis.fetch = async (url, init) => {
+        const u = String(url);
+        const body = init?.body ? JSON.parse(init.body) : null;
+        calls.push({ url: u, body });
+        if (u === 'https://api.mollie.com/v2/customers') return { ok: true, json: async () => ({ id: 'cst_1' }) };
+        if (u === 'https://api.mollie.com/v2/payments') {
+          n += 1;
+          const id = `tr_${n}`;
+          payments[id] = { status: 'open', body };
+          const recurring = body.sequenceType === 'recurring';
+          return { ok: true, json: async () => ({ id, status: 'open', ...(recurring ? {} : { _links: { checkout: { href: `https://mollie.test/checkout/${id}` } } }) }) };
+        }
+        const m = u.match(/\/v2\/payments\/(tr_\d+)$/);
+        if (m && payments[m[1]]) {
+          const p = payments[m[1]];
+          return { ok: true, json: async () => ({ id: m[1], status: p.status, customerId: p.body.customerId ?? null, mandateId: p.mandateId ?? null, sequenceType: p.body.sequenceType ?? null }) };
+        }
+        return { ok: false, status: 404, json: async () => ({}) };
+      };
+      return { calls, payments, created: () => calls.filter((c) => c.url === 'https://api.mollie.com/v2/payments'), restore: () => (globalThis.fetch = realFetch) };
+    };
+
+    const ORIGINAL_SECRET = process.env.CRON_SECRET;
+    beforeEach(() => {
+      process.env.CRON_SECRET = 'test-secret';
+      store['orgs/vanas'] = { ...(store['orgs/vanas'] ?? {}), name: 'Van As', payments: { mode: 'test' } };
+      store['orgSecrets/vanas'] = { mollieTestKey: 'test_abcdefghij1234' };
+      store['plans/pl4'] = { orgId: 'vanas', name: '2x per week', period: 'fourWeeks', price: 80, credits: 8, status: 'active' };
+      store['charges/ch1'] = {
+        orgId: 'vanas', userId: 'sporter1', membershipId: 'mb1', planId: 'pl4', planName: '2x per week', description: '2x per week',
+        amount: 80, status: 'open', issuedAt: '2026-09-01T00:00:00.000Z', dueAt: '2026-09-01T00:00:00.000Z', invoiceNumber: 'VAS-1', invoiceToken: token,
+      };
+    });
+    afterEach(() => {
+      if (ORIGINAL_SECRET === undefined) delete process.env.CRON_SECRET;
+      else process.env.CRON_SECRET = ORIGINAL_SECRET;
+    });
+
+    it('betaallink: maakt een Mollie-betaling, stuurt door, en hergebruikt die even', async () => {
+      const mollie = mockMollie();
+      try {
+        const res = await getPay();
+        expect(res.statusCode).toBe(302);
+        expect(res.headers.Location).toBe('https://mollie.test/checkout/tr_1');
+        expect(mollie.created()[0].body).toMatchObject({ amount: { currency: 'EUR', value: '80.00' }, metadata: { chargeId: 'ch1' } });
+        expect(mollie.created()[0].body.sequenceType).toBeUndefined();
+        expect(store['mollieCheckouts/tr_1']).toMatchObject({ kind: 'charge', chargeId: 'ch1', userId: 'sporter1', status: 'pending' });
+        // Nog een keer op de link: dezelfde betaling, geen nieuwe.
+        expect((await getPay()).headers.Location).toBe('https://mollie.test/checkout/tr_1');
+        expect(mollie.created()).toHaveLength(1);
+
+        // Betaald: de factuur staat op betaald, een dubbele melding verandert niets.
+        mollie.payments.tr_1.status = 'paid';
+        expect((await webhook('tr_1')).statusCode).toBe(200);
+        expect(store['charges/ch1']).toMatchObject({ status: 'paid', paidBy: 'mollie', molliePaymentId: 'tr_1' });
+        await webhook('tr_1');
+        expect(store['mollieCheckouts/tr_1'].status).toBe('completed');
+        // Daarna zegt de link dat het al betaald is.
+        const after = await getPay();
+        expect(after.statusCode).toBe(200);
+        expect(after.body).toContain('al betaald');
+      } finally {
+        mollie.restore();
+      }
+    });
+
+    it('zonder Mollie bij de studio: geen betaling, wel uitleg', async () => {
+      delete store['orgSecrets/vanas'];
+      const res = await getPay();
+      expect(res.statusCode).toBe(409);
+      expect(res.body).toContain('Maak het bedrag over');
+    });
+
+    it('de factuurlink geeft de betaallink mee voor een open factuur', async () => {
+      const res = await post({ action: 'invoiceLink', chargeId: 'ch1' });
+      expect(res.statusCode).toBe(200);
+      expect(res.body.payUrl).toMatch(new RegExp(`/b/${token}$`));
+      expect(res.body.text).toContain('Direct betalen');
+    });
+
+    it('automatisch afschrijven: eerste betaling geeft een machtiging, de avondronde schrijft de volgende factuur af', async () => {
+      store['orgs/vanas'].payments.autoCollect = true;
+      const mollie = mockMollie();
+      try {
+        await getPay();
+        expect(mollie.created()[0].body).toMatchObject({ sequenceType: 'first', customerId: 'cst_1' });
+        mollie.payments.tr_1.status = 'paid';
+        mollie.payments.tr_1.mandateId = 'mdt_1';
+        await webhook('tr_1');
+        expect(store['mollieCustomers/vanas__sporter1'].test).toMatchObject({ customerId: 'cst_1', mandateId: 'mdt_1' });
+
+        // Volgende periode: een nieuwe open factuur, en een die nog niet vervallen is.
+        const now = new Date().toISOString();
+        store['charges/ch2'] = { ...store['charges/ch1'], status: 'open', invoiceToken: null, invoiceNumber: 'VAS-2', dueAt: now, payCheckout: null, paidBy: null };
+        store['charges/ch3'] = { ...store['charges/ch2'], invoiceNumber: 'VAS-3', dueAt: '2999-01-01T00:00:00.000Z' };
+        const cron = makeRes();
+        await handler({ method: 'GET', headers: { authorization: 'Bearer test-secret' }, query: { cron: 'evening' } }, cron);
+        expect(cron.body.autoCollect).toMatchObject({ studios: 1, started: 1 });
+        const incasso = mollie.created()[1].body;
+        expect(incasso).toMatchObject({ sequenceType: 'recurring', customerId: 'cst_1', mandateId: 'mdt_1', amount: { value: '80.00' } });
+        expect(incasso.redirectUrl).toBeUndefined();
+        expect(store['charges/ch2']).toMatchObject({ collectStatus: 'pending', collectPaymentId: 'tr_2' });
+        expect(store['charges/ch3'].collectStatus).toBeUndefined();
+
+        // Incasso mislukt: de factuur blijft open, met "mislukt" erbij; geen nieuwe poging vanzelf.
+        mollie.payments.tr_2.status = 'failed';
+        await webhook('tr_2');
+        expect(store['charges/ch2']).toMatchObject({ status: 'open', collectStatus: 'failed' });
+        await handler({ method: 'GET', headers: { authorization: 'Bearer test-secret' }, query: { cron: 'evening' } }, makeRes());
+        expect(mollie.created()).toHaveLength(2);
+      } finally {
+        mollie.restore();
+      }
+    });
+  });
 });
 
 describe('terugkerende lessen (cron)', () => {

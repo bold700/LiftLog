@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey, createMolliePayment, getMolliePayment } from '../../api/_lib/molliePayments.mjs';
+import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey, createMollieCustomer, createMolliePayment, getMolliePayment } from '../../api/_lib/molliePayments.mjs';
 
 describe('mollie-sleutel: formaat', () => {
   it('accepteert een testsleutel in testmodus en een livesleutel in livemodus', () => {
@@ -94,7 +94,7 @@ describe('eenmalige betaling aanmaken', () => {
       webhookUrl: 'https://vorm.app/mollie-webhook/vanas',
       fetchImpl,
     });
-    expect(r).toEqual({ id: 'tr_abc', checkoutUrl: 'https://mollie.com/checkout/tr_abc' });
+    expect(r).toEqual({ id: 'tr_abc', checkoutUrl: 'https://mollie.com/checkout/tr_abc', status: null });
     expect(calls[0].url).toBe('https://api.mollie.com/v2/payments');
     expect(calls[0].method).toBe('POST');
     expect(calls[0].body).toEqual({
@@ -120,6 +120,47 @@ describe('eenmalige betaling aanmaken', () => {
   });
 });
 
+describe('automatisch afschrijven (machtiging)', () => {
+  it('maakt een klant aan en geeft het klant-id terug', async () => {
+    const calls = [];
+    const fetchImpl = async (url, init) => {
+      calls.push({ url, body: JSON.parse(init.body) });
+      return { ok: true, json: async () => ({ id: 'cst_1' }) };
+    };
+    const id = await createMollieCustomer({ apiKey: 'test_x', name: 'Emma', email: 'emma@example.com', metadata: { userId: 'u1' }, fetchImpl });
+    expect(id).toBe('cst_1');
+    expect(calls[0]).toEqual({ url: 'https://api.mollie.com/v2/customers', body: { name: 'Emma', email: 'emma@example.com', metadata: { userId: 'u1' } } });
+  });
+
+  it('eerste betaling: klant en sequenceType gaan mee, met checkout', async () => {
+    let body;
+    const fetchImpl = async (_url, init) => {
+      body = JSON.parse(init.body);
+      return { ok: true, json: async () => ({ id: 'tr_1', status: 'open', _links: { checkout: { href: 'https://mollie.com/checkout/tr_1' } } }) };
+    };
+    const r = await createMolliePayment({ apiKey: 'test_x', amount: 80, description: 'F', redirectUrl: 'https://x/r', webhookUrl: 'https://x/w', customerId: 'cst_1', sequenceType: 'first', fetchImpl });
+    expect(r.checkoutUrl).toBe('https://mollie.com/checkout/tr_1');
+    expect(body).toMatchObject({ customerId: 'cst_1', sequenceType: 'first', redirectUrl: 'https://x/r' });
+  });
+
+  it('incasso: geen redirect en geen checkout nodig, wel de machtiging', async () => {
+    let body;
+    const fetchImpl = async (_url, init) => {
+      body = JSON.parse(init.body);
+      return { ok: true, json: async () => ({ id: 'tr_2', status: 'pending' }) };
+    };
+    const r = await createMolliePayment({ apiKey: 'test_x', amount: 80, description: 'F', redirectUrl: 'https://x/r', webhookUrl: 'https://x/w', customerId: 'cst_1', mandateId: 'mdt_1', sequenceType: 'recurring', fetchImpl });
+    expect(r).toEqual({ id: 'tr_2', checkoutUrl: null, status: 'pending' });
+    expect(body).toMatchObject({ customerId: 'cst_1', mandateId: 'mdt_1', sequenceType: 'recurring' });
+    expect(body.redirectUrl).toBeUndefined();
+  });
+
+  it('na een eerste betaling staat de machtiging bij de betaling', async () => {
+    const fetchImpl = async () => ({ ok: true, json: async () => ({ id: 'tr_1', status: 'paid', customerId: 'cst_1', mandateId: 'mdt_1', sequenceType: 'first' }) });
+    expect(await getMolliePayment({ apiKey: 'test_x', paymentId: 'tr_1', fetchImpl })).toEqual({ id: 'tr_1', status: 'paid', customerId: 'cst_1', mandateId: 'mdt_1', sequenceType: 'first' });
+  });
+});
+
 describe('betaling ophalen', () => {
   it('geeft id en status terug', async () => {
     const calls = [];
@@ -128,7 +169,7 @@ describe('betaling ophalen', () => {
       return { ok: true, json: async () => ({ id: 'tr_abc', status: 'paid' }) };
     };
     const r = await getMolliePayment({ apiKey: 'test_abcdefghij1234', paymentId: 'tr_abc', fetchImpl });
-    expect(r).toEqual({ id: 'tr_abc', status: 'paid' });
+    expect(r).toEqual({ id: 'tr_abc', status: 'paid', mandateId: null, customerId: null, sequenceType: null });
     expect(calls[0]).toEqual({ url: 'https://api.mollie.com/v2/payments/tr_abc', auth: 'Bearer test_abcdefghij1234' });
   });
 

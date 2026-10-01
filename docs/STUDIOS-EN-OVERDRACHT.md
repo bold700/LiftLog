@@ -169,6 +169,35 @@ Beheer → Instellingen → **Factuurritme**, alleen de eigenaar (Firestore-rege
 - Het ledenscherm toont vooraf wat Opslaan doet ("eerste factuur € 40 (14 van de 28 dagen, tot de
   factuurdatum 2 november)").
 
+### Betalen via Mollie: betaallink en automatisch afschrijven
+
+Advies aan studio's: laat alles via Mollie lopen. Credits toekennen en zelf factureren (overmaken,
+op betaald zetten in Facturatie) blijft kunnen als tijdelijke oplossing.
+
+- **Betaallink per factuur.** Heeft de studio een Mollie-sleutel (Beheer → Facturatie → Betalingen),
+  dan heeft elke open factuur een vaste betaallink `/b/{code}` (zelfde code als de factuurlink
+  `/f/{code}`). Die staat in de factuurmail (knop "Direct betalen via iDEAL"), in de WhatsApp-tekst
+  en bij Facturatie; het lid ziet bij Profiel → Facturen een knop **Betalen**. Elke klik maakt een
+  verse Mollie-betaling (10 minuten hergebruikt), zodat een link nooit verloopt. Na betalen zet de
+  webhook de factuur op betaald (`paidBy: 'mollie'`) en mailt de betaalde factuur.
+- **Automatisch afschrijven** (schakelaar bij Betalingen, `orgs.payments.autoCollect`; eerst testen
+  in de testmodus): bij een terugkerend abonnement is de eerste betaling (zelf kopen, of de
+  betaallink van de eerste factuur) er een met machtiging (`sequenceType: 'first'`). Klant en
+  machtiging per lid staan in `mollieCustomers/{orgId}__{userId}` (alleen de server; apart voor test
+  en live). De avondronde (`eveningRun` → `runAutoCollect`) werkt dan per studio de verlengingen
+  bij en schrijft elke open, vervallen factuur van een lid met machtiging af
+  (`sequenceType: 'recurring'`). Facturatie toont "Incasso loopt" en daarna betaald, of
+  "Incasso mislukt": dan blijft de factuur open, probeert de app het niet vanzelf opnieuw en kan
+  het lid via de betaallink betalen.
+
+Testen (testmodus, testsleutel van Mollie):
+1. Betalingen: testsleutel koppelen, modus Testen, Automatisch afschrijven aan.
+2. Een lid een abonnement per 4 weken geven; bij Facturatie de betaallink openen en in de
+   Mollie-testpagina "Betaald" kiezen → factuur op betaald, machtiging opgeslagen.
+3. Een volgende factuur laten ontstaan (of de verlengdatum in Firestore naar vandaag zetten) en
+   de avondronde laten lopen → "Incasso loopt", daarna betaald (in testmodus meldt Mollie de
+   uitkomst vanzelf).
+
 ### Afspraken wijzigen (staf)
 
 - **Eén afspraak verzetten**: bij een vast PT-moment (Beheer → lid → Afspraken) of in Lessen →

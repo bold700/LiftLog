@@ -106,7 +106,7 @@ import { buildInvoicePdf, invoiceFileName } from './_lib/invoicePdf.mjs';
 import { logoToDataUrl } from './_lib/invoiceLogo.mjs';
 import { buildInvoiceEmail, mailConfigured, sendViaResend } from './_lib/invoiceEmail.mjs';
 import { hashFeedToken, buildIcsFeed } from './_lib/calendarFeed.mjs';
-import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey, getOrgMollieKey, createMolliePayment, getMolliePayment } from './_lib/molliePayments.mjs';
+import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey, getOrgMollieKey, createMollieCustomer, createMolliePayment, getMolliePayment } from './_lib/molliePayments.mjs';
 import { enforceRateLimit } from './_lib/requireUser.mjs';
 import { allConflicts, blocksDoubleBooking, findConflicts, hoursOf, outsideAvailability, suggestionsFor, weeklyFreeSlots } from './_lib/scheduleConflicts.mjs';
 import { coversOf, perWeekOf, planCoversKind } from './_lib/planCoverage.mjs';
@@ -193,8 +193,9 @@ export default async function handler(req, res) {
   const cronName = req.method === 'GET' ? String(req.query?.cron ?? '') : '';
   const isCron = cronName === 'generateClasses' || cronName === 'evening' || cronName === 'classReminders';
   const feedToken = req.method === 'GET' ? String(req.query?.feed ?? '').trim() : '';
+  const payToken = req.method === 'GET' ? String(req.query?.pay ?? '').trim() : '';
   const mollieWebhookOrgId = req.method === 'POST' ? String(req.query?.mollieWebhook ?? '').trim() : '';
-  if (req.method !== 'POST' && !publicToken && !isCron && !feedToken) return json(res, 405, { error: 'Method not allowed', build: BUILD });
+  if (req.method !== 'POST' && !publicToken && !isCron && !feedToken && !payToken) return json(res, 405, { error: 'Method not allowed', build: BUILD });
 
   const admin = getAdmin();
   if (admin.error) {
@@ -205,6 +206,7 @@ export default async function handler(req, res) {
 
   if (publicToken) return publicInvoice(res, db, publicToken);
   if (feedToken) return calendarFeed(res, db, feedToken);
+  if (payToken) return payInvoice(req, res, db, payToken);
   if (cronName === 'generateClasses') return generateClasses(req, res, db);
   // 'classReminders' is de oude naam van de avondronde; blijft werken tot de cron is omgezet.
   if (cronName === 'evening' || cronName === 'classReminders') return eveningRun(req, res, db);
@@ -2566,10 +2568,15 @@ async function purchasePlan(req, res, db, uid, myOrgs, body) {
   const orgName = orgSnap.exists ? String(orgSnap.data()?.name || orgId) : orgId;
   const origin = appOrigin(req);
 
+  // Automatisch afschrijven aan (Beheer → Facturatie → Betalingen) en een terugkerend abonnement:
+  // deze eerste betaling geeft meteen de machtiging voor de volgende periodes.
+  const withMandate = autoCollectOn(orgSnap.exists ? orgSnap.data() : null) && plan.period !== 'once';
   let payment;
   try {
+    const customerId = withMandate ? await ensureMollieCustomer(db, mollie, orgId, uid) : null;
     payment = await createMolliePayment({
       apiKey: mollie.apiKey,
+      ...(customerId ? { customerId, sequenceType: 'first' } : {}),
       amount: first ? first.amount : price,
       description: `${plan.name} — ${orgName}`,
       redirectUrl: `${origin}/?aankoop=${encodeURIComponent(planId)}#profiel`,
@@ -2759,14 +2766,16 @@ async function invoice(res, db, uid, myOrgs, isStaff, chargeId) {
  * e-mailadres heeft; de aanroeper beslist dan zelf wat daarmee te doen (foutmelding, of gewoon
  * doorgaan — een aankoop mag nooit vastlopen op een niet-verstuurde factuurmail).
  */
-async function deliverInvoiceEmail(db, chargeId) {
+async function deliverInvoiceEmail(db, chargeId, origin = appOrigin(null)) {
   if (!mailConfigured()) return null;
   const charge = await loadInvoiceCharge(db, chargeId);
   const r = await renderInvoice(db, charge);
   const to = r.member.email.trim();
   if (!to) return null;
 
-  const mail = buildInvoiceEmail({ lang: r.lang, business: r.business, charge, member: r.member, logoUrl: r.logoPrintUrl, brandColor: r.brandColor });
+  // Open factuur en de studio betaalt via Mollie: een knop "Direct betalen via iDEAL" in de mail.
+  const payUrl = await payUrlFor(db, charge, origin);
+  const mail = buildInvoiceEmail({ lang: r.lang, business: r.business, charge, member: r.member, logoUrl: r.logoPrintUrl, brandColor: r.brandColor, payUrl });
   const messageId = await sendViaResend({
     fromName: r.business.legalName,
     to,
@@ -2840,36 +2849,279 @@ async function mollieWebhook(req, res, db, orgId) {
 
   if (payment.status === 'paid') {
     try {
-      await settlePurchase(db, checkout, paymentId);
+      // Een factuur betaald (betaallink of incasso), of een zelf-aankoop.
+      if (checkout.kind === 'charge') await settleChargePayment(db, checkout, paymentId, appOrigin(req));
+      else await settlePurchase(db, checkout, paymentId);
+      // Eerste betaling met machtiging: voortaan kan de app zelf afschrijven.
+      if (payment.mandateId && payment.customerId) await saveMandate(db, checkout, mollie.mode, payment);
     } catch (e) {
-      console.error('[booking] aankoop verwerken mislukt:', e);
+      console.error('[booking] betaling verwerken mislukt:', e);
       return plain(500, 'retry');
     }
   } else if (['failed', 'expired', 'canceled'].includes(payment.status)) {
-    await checkoutRef.set({ status: payment.status, updatedAt: new Date().toISOString() }, { merge: true });
+    const at = new Date().toISOString();
+    await checkoutRef.set({ status: payment.status, updatedAt: at }, { merge: true });
+    // Incasso mislukt (bijv. te weinig saldo of machtiging ingetrokken): de factuur blijft open,
+    // de studio ziet het in Facturatie en het lid kan via de betaallink alsnog betalen.
+    if (checkout.kind === 'charge' && checkout.recurring) {
+      await db.collection('charges').doc(String(checkout.chargeId)).set({ collectStatus: 'failed', collectFailedAt: at, collectFailReason: payment.status, updatedAt: at }, { merge: true });
+    }
   }
   return plain(200, 'ok');
+}
+
+// --- Betalen via Mollie: betaallink per factuur en automatisch afschrijven -------------------
+//
+// Elke open factuur heeft een vaste betaallink (/b/{code}, dezelfde code als de factuurlink). Wie
+// erop klikt krijgt een verse Mollie-betaling; zo verloopt een link in WhatsApp of de mail nooit.
+// Staat automatisch afschrijven aan (orgs.payments.autoCollect), dan is de eerste betaling van een
+// terugkerend abonnement er een met machtiging (sequenceType 'first'); daarna schrijft de dagelijkse
+// ronde nieuwe facturen zelf af (sequenceType 'recurring'). Klant en machtiging per lid staan in
+// `mollieCustomers` (alleen de server), apart voor test en live.
+
+/** Staat automatisch afschrijven aan bij deze studio? */
+const autoCollectOn = (org) => org?.payments?.autoCollect === true;
+
+/** Hoe lang een aangemaakte Mollie-betaling hergebruikt wordt voor dezelfde betaallink. */
+const PAY_REUSE_MS = 10 * 60 * 1000;
+
+/** Klant bij Mollie voor dit lid (in de huidige modus), aangemaakt als die er nog niet is. */
+async function ensureMollieCustomer(db, mollie, orgId, userId) {
+  const ref = db.collection('mollieCustomers').doc(accountId(orgId, userId));
+  const snap = await ref.get();
+  const current = snap.exists ? snap.data()?.[mollie.mode] : null;
+  if (current?.customerId) return current.customerId;
+  const p = await db.collection('profiles').doc(userId).get();
+  const customerId = await createMollieCustomer({
+    apiKey: mollie.apiKey,
+    name: String(p.data()?.displayName || '').trim() || undefined,
+    email: String(p.data()?.email || '').trim() || undefined,
+    metadata: { orgId, userId },
+  });
+  const at = new Date().toISOString();
+  await ref.set({ orgId, userId, [mollie.mode]: { customerId, mandateId: null, createdAt: at }, updatedAt: at }, { merge: true });
+  return customerId;
+}
+
+/** Na een eerste betaling: de machtiging bewaren, zodat volgende facturen vanzelf afgeschreven worden. */
+async function saveMandate(db, checkout, mode, payment) {
+  const at = new Date().toISOString();
+  await db.collection('mollieCustomers').doc(accountId(checkout.orgId, checkout.userId)).set(
+    { orgId: checkout.orgId, userId: checkout.userId, [mode]: { customerId: payment.customerId, mandateId: payment.mandateId, mandateAt: at }, updatedAt: at },
+    { merge: true }
+  );
+}
+
+/** Code voor de openbare factuur- en betaallink; één keer gemaakt en daarna gelijk. */
+async function ensureInvoiceToken(db, charge) {
+  if (charge.invoiceToken) return charge.invoiceToken;
+  const invoiceToken = randomBytes(16).toString('hex');
+  await db.collection('charges').doc(charge.id).set({ invoiceToken, updatedAt: new Date().toISOString() }, { merge: true });
+  charge.invoiceToken = invoiceToken;
+  return invoiceToken;
+}
+
+/** Betaallink voor een open factuur, of null (al betaald, of de studio betaalt niet via Mollie). */
+async function payUrlFor(db, charge, origin) {
+  if (!charge || charge.status !== 'open' || !(Number(charge.amount) > 0)) return null;
+  if (!(await getOrgMollieKey(db, orgIdOf(charge.orgId)))) return null;
+  return `${origin}/b/${await ensureInvoiceToken(db, charge)}`;
+}
+
+/**
+ * GET /b/{code}: een open factuur betalen. Maakt een Mollie-betaling (of hergebruikt een net
+ * gemaakte) en stuurt door naar de betaalpagina. Geen inlog; de code is het geheim, net als bij
+ * /f/{code}. Hoort de factuur bij een terugkerend abonnement en staat automatisch afschrijven aan,
+ * dan geeft deze betaling ook de machtiging af.
+ */
+async function payInvoice(req, res, db, token) {
+  const plain = (status, text) => {
+    res.statusCode = status;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.end(text);
+  };
+  if (!/^[0-9a-f]{32}$/.test(token)) return plain(404, 'Factuur niet gevonden.');
+  const snap = await db.collection('charges').where('invoiceToken', '==', token).get();
+  const d = snap.docs[0];
+  if (!d) return plain(404, 'Factuur niet gevonden.');
+  const charge = { id: d.id, ...d.data() };
+  if (charge.status === 'paid') return plain(200, 'Deze factuur is al betaald. Dank je wel!');
+  if (charge.status !== 'open' || !(Number(charge.amount) > 0)) return plain(409, 'Deze factuur kan niet (meer) online betaald worden. Neem contact op met de studio.');
+  const orgId = orgIdOf(charge.orgId);
+  const mollie = await getOrgMollieKey(db, orgId);
+  if (!mollie) return plain(409, 'Online betalen is bij deze studio nog niet ingesteld. Maak het bedrag over zoals op de factuur staat.');
+
+  const redirect = (url) => {
+    res.statusCode = 302;
+    res.setHeader('Location', url);
+    res.setHeader('Cache-Control', 'no-store');
+    res.end();
+  };
+  const recent = charge.payCheckout;
+  if (recent?.url && recent.mode === mollie.mode && Date.now() - Date.parse(recent.at) < PAY_REUSE_MS) return redirect(recent.url);
+
+  const orgSnap = await db.collection('orgs').doc(orgId).get();
+  const org = orgSnap.exists ? orgSnap.data() : {};
+  const loaded = await loadInvoiceCharge(db, charge.id);
+  const planPeriod = loaded.membershipId && loaded.planId ? (await db.collection('plans').doc(String(loaded.planId)).get()).data()?.period : null;
+  const recurringPlan = !!planPeriod && planPeriod !== 'once';
+  const withMandate = autoCollectOn(org) && recurringPlan;
+  const origin = appOrigin(req);
+  let payment;
+  try {
+    const customerId = withMandate ? await ensureMollieCustomer(db, mollie, orgId, String(loaded.userId)) : null;
+    payment = await createMolliePayment({
+      apiKey: mollie.apiKey,
+      amount: loaded.amount,
+      description: `Factuur ${loaded.invoiceNumber} — ${org.name || orgId}`,
+      redirectUrl: `${origin}/?betaald=${encodeURIComponent(loaded.id)}#profiel`,
+      webhookUrl: `${origin}/mollie-webhook/${orgId}`,
+      ...(customerId ? { customerId, sequenceType: 'first' } : {}),
+      metadata: { chargeId: loaded.id },
+    });
+  } catch (e) {
+    console.error('[booking] betaallink: Mollie-betaling aanmaken mislukt:', e);
+    return plain(502, 'Betalen bij Mollie lukte nu niet. Probeer het zo nog eens.');
+  }
+  const at = new Date().toISOString();
+  await db.collection('mollieCheckouts').doc(payment.id).set({
+    kind: 'charge',
+    chargeId: loaded.id,
+    orgId,
+    userId: String(loaded.userId),
+    mode: mollie.mode,
+    status: 'pending',
+    withMandate,
+    createdAt: at,
+    updatedAt: at,
+  });
+  await db.collection('charges').doc(loaded.id).set({ payCheckout: { paymentId: payment.id, url: payment.checkoutUrl, mode: mollie.mode, at }, updatedAt: at }, { merge: true });
+  return redirect(payment.checkoutUrl);
+}
+
+/** Factuur betaald via Mollie (betaallink of incasso): op betaald, en de betaalde factuur mailen. */
+async function settleChargePayment(db, checkout, paymentId, origin) {
+  const at = new Date().toISOString();
+  const chargeRef = db.collection('charges').doc(String(checkout.chargeId));
+  const done = await db.runTransaction(async (tx) => {
+    const checkoutRef = db.collection('mollieCheckouts').doc(paymentId);
+    const cSnap = await tx.get(checkoutRef);
+    if (!cSnap.exists || cSnap.data().status !== 'pending') return false;
+    const chSnap = await tx.get(chargeRef);
+    tx.set(checkoutRef, { status: 'completed', completedAt: at, updatedAt: at }, { merge: true });
+    // Al op betaald gezet (bijv. toch overgemaakt en afgevinkt): niets dubbel boeken.
+    if (!chSnap.exists || chSnap.data().status !== 'open') return false;
+    tx.set(
+      chargeRef,
+      { status: 'paid', paidAt: at, paidBy: 'mollie', molliePaymentId: paymentId, ...(checkout.recurring ? { collectStatus: 'paid' } : {}), payCheckout: null, updatedAt: at },
+      { merge: true }
+    );
+    return true;
+  });
+  if (!done) return;
+  try {
+    await deliverInvoiceEmail(db, String(checkout.chargeId), origin);
+  } catch (e) {
+    console.warn('[booking] betaalde factuur mailen mislukt:', e?.message ?? e);
+  }
+}
+
+/**
+ * Dagelijkse ronde, per studio met automatisch afschrijven: eerst de verlengingen bijwerken (zodat
+ * de facturen van de nieuwe periode er staan), dan elke open, vervallen factuur van een lid met een
+ * machtiging afschrijven. Een mislukte incasso wordt niet vanzelf opnieuw geprobeerd: de studio ziet
+ * hem in Facturatie en het lid kan via de betaallink betalen.
+ */
+async function runAutoCollect(db, origin) {
+  const nowIso = new Date().toISOString();
+  const report = { studios: 0, renewed: 0, started: 0, skipped: 0 };
+  const orgs = await db.collection('orgs').get();
+  for (const orgDoc of orgs.docs) {
+    const org = orgDoc.data();
+    if (!autoCollectOn(org)) continue;
+    const orgId = orgDoc.id;
+    const mollie = await getOrgMollieKey(db, orgId);
+    if (!mollie) continue;
+    report.studios += 1;
+
+    const memberships = await db.collection('memberships').where('orgId', '==', orgId).where('status', '==', 'active').get();
+    for (const m of memberships.docs) {
+      if (!m.data().nextRenewalAt || m.data().nextRenewalAt > nowIso) continue;
+      const r = await settleMembership(db, newId, db.collection('memberships').doc(m.id), nowIso).catch(() => ({ steps: 0 }));
+      report.renewed += r.steps;
+    }
+
+    const open = await db.collection('charges').where('orgId', '==', orgId).where('status', '==', 'open').get();
+    for (const c of open.docs) {
+      const charge = { id: c.id, ...c.data() };
+      if (charge.collectStatus === 'pending' || charge.collectStatus === 'failed') continue;
+      // Het lid is net zelf aan het betalen via de betaallink: niet ook nog afschrijven.
+      if (charge.payCheckout?.at && Date.now() - Date.parse(charge.payCheckout.at) < 60 * 60 * 1000) continue;
+      if (charge.dueAt && charge.dueAt > nowIso) continue;
+      if (!(Number(charge.amount) > 0)) continue;
+      const cust = await db.collection('mollieCustomers').doc(accountId(orgId, String(charge.userId))).get();
+      const mandate = cust.exists ? cust.data()?.[mollie.mode] : null;
+      if (!mandate?.customerId || !mandate?.mandateId) {
+        report.skipped += 1;
+        continue;
+      }
+      const loaded = await loadInvoiceCharge(db, charge.id);
+      try {
+        const payment = await createMolliePayment({
+          apiKey: mollie.apiKey,
+          amount: loaded.amount,
+          description: `Factuur ${loaded.invoiceNumber} — ${org.name || orgId}`,
+          webhookUrl: `${origin}/mollie-webhook/${orgId}`,
+          customerId: mandate.customerId,
+          mandateId: mandate.mandateId,
+          sequenceType: 'recurring',
+          metadata: { chargeId: loaded.id },
+        });
+        const at = new Date().toISOString();
+        await db.collection('mollieCheckouts').doc(payment.id).set({
+          kind: 'charge',
+          recurring: true,
+          chargeId: loaded.id,
+          orgId,
+          userId: String(loaded.userId),
+          mode: mollie.mode,
+          status: 'pending',
+          createdAt: at,
+          updatedAt: at,
+        });
+        await db.collection('charges').doc(loaded.id).set({ collectStatus: 'pending', collectPaymentId: payment.id, collectStartedAt: at, updatedAt: at }, { merge: true });
+        report.started += 1;
+      } catch (e) {
+        const at = new Date().toISOString();
+        console.warn('[autoCollect] incasso starten mislukt:', e?.message ?? e);
+        await db.collection('charges').doc(loaded.id).set({ collectStatus: 'failed', collectFailedAt: at, collectFailReason: String(e?.message || e).slice(0, 200), updatedAt: at }, { merge: true });
+      }
+    }
+  }
+  return report;
 }
 
 /** Basis-URL van de app voor openbare links: uit de aanvraag, of vast via PUBLIC_APP_ORIGIN. */
 function appOrigin(req) {
   const fixed = String(process.env.PUBLIC_APP_ORIGIN ?? '').trim();
   if (fixed) return fixed.replace(/\/+$/, '');
+  if (!req) return 'https://lift-log-phi.vercel.app';
   const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'lift-log-phi.vercel.app').split(',')[0].trim();
   const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
   return `${proto}://${host}`;
 }
 
 /** Korte WhatsApp-tekst bij de factuurlink, in de taal van het lid. */
-function invoiceMessage(lang, { firstName, number, studio, amount, due, url, paid }) {
+function invoiceMessage(lang, { firstName, number, studio, amount, due, url, paid, payUrl = null }) {
   if (lang === 'en') {
     return paid
       ? `Hi ${firstName}, here is your invoice ${number} from ${studio} (${amount}, paid). View and download: ${url}`
-      : `Hi ${firstName}, here is your invoice ${number} from ${studio}: ${amount}, due before ${due}. View and download: ${url}`;
+      : `Hi ${firstName}, here is your invoice ${number} from ${studio}: ${amount}, due before ${due}.${payUrl ? ` Pay now: ${payUrl}` : ''} View and download: ${url}`;
   }
   return paid
     ? `Hoi ${firstName}, hier is je factuur ${number} van ${studio} (${amount}, betaald). Bekijken en downloaden: ${url}`
-    : `Hoi ${firstName}, hier is je factuur ${number} van ${studio}: ${amount}, te betalen vóór ${due}. Bekijken en downloaden: ${url}`;
+    : `Hoi ${firstName}, hier is je factuur ${number} van ${studio}: ${amount}, te betalen vóór ${due}.${payUrl ? ` Direct betalen: ${payUrl}` : ''} Bekijken en downloaden: ${url}`;
 }
 
 /**
@@ -2902,8 +3154,9 @@ async function invoiceLink(req, res, db, uid, myOrgs, isStaff, chargeId) {
   const issued = charge.invoiceIssuedAt || charge.issuedAt || new Date().toISOString();
   const due = new Date(dueDateOf(issued)).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
   const firstName = String(memberData.displayName || '').trim().split(/\s+/)[0] || (lang === 'en' ? 'there' : 'daar');
-  const text = invoiceMessage(lang, { firstName, number: charge.invoiceNumber, studio: business.legalName, amount, due, url, paid: charge.status === 'paid' });
-  return json(res, 200, { invoiceNumber: charge.invoiceNumber, url, text, build: BUILD });
+  const payUrl = await payUrlFor(db, charge, appOrigin(req));
+  const text = invoiceMessage(lang, { firstName, number: charge.invoiceNumber, studio: business.legalName, amount, due, url, paid: charge.status === 'paid', payUrl });
+  return json(res, 200, { invoiceNumber: charge.invoiceNumber, url, payUrl, text, build: BUILD });
 }
 
 /** GET /f/{token}: de PDF voor wie de link heeft. Geen inlog; de code is het geheim. */
@@ -3058,6 +3311,13 @@ async function eveningRun(req, res, db) {
   // Vangnet: vastgehouden wachtlijstplekken die niemand meer heeft afgerond (normaal gebeurt dat
   // zodra iemand het rooster opent, boekt of afmeldt).
   report.holdsSettled = await settleExpiredHolds(db).catch(() => 0);
+  // Automatisch afschrijven: verlengingen bijwerken en open facturen met machtiging incasseren.
+  try {
+    report.autoCollect = await runAutoCollect(db, appOrigin(req));
+  } catch (e) {
+    console.error('[eveningRun] automatisch afschrijven mislukte:', e);
+    report.autoCollect = { error: String(e?.message || e) };
+  }
   return json(res, 200, { ...report, build: BUILD });
 }
 

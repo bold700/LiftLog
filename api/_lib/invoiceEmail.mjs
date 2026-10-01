@@ -18,6 +18,8 @@ const T = {
     before: (due) => `vóór ${due}`,
     transfer: (iban, name, nr) => (iban ? `Maak het bedrag over naar ${iban} t.n.v. ${name}, onder vermelding van ${nr}.` : `Vermeld bij het betalen het factuurnummer ${nr}.`),
     paid: (date) => `Deze factuur is betaald op ${date}. Dank je wel!`,
+    payOnline: 'Direct betalen via iDEAL',
+    orTransfer: 'Of maak het bedrag over:',
     questions: 'Vragen over deze factuur? Antwoord gewoon op deze mail.',
     bye: 'Groet,',
     footer: (studio) => `Je ontvangt deze mail omdat je lid bent van ${studio}. Verstuurd met VORM.`,
@@ -34,6 +36,8 @@ const T = {
     before: (due) => `before ${due}`,
     transfer: (iban, name, nr) => (iban ? `Please transfer the amount to ${iban} in the name of ${name}, quoting ${nr}.` : `Please quote invoice number ${nr} when paying.`),
     paid: (date) => `This invoice was paid on ${date}. Thank you!`,
+    payOnline: 'Pay now with iDEAL',
+    orTransfer: 'Or transfer the amount:',
     questions: 'Questions about this invoice? Just reply to this email.',
     bye: 'Kind regards,',
     footer: (studio) => `You receive this email because you are a member of ${studio}. Sent with VORM.`,
@@ -61,7 +65,7 @@ function describe(charge, locale) {
 /**
  * @returns {{ subject: string, html: string, text: string }}
  */
-export function buildInvoiceEmail({ lang, business, charge, member, logoUrl = null, brandColor = null }) {
+export function buildInvoiceEmail({ lang, business, charge, member, logoUrl = null, brandColor = null, payUrl = null }) {
   const t = T[lang === 'en' ? 'en' : 'nl'];
   const L = t.locale;
   const brand = /^#[0-9a-f]{6}$/i.test(String(brandColor ?? '')) ? brandColor : '#426833';
@@ -74,6 +78,8 @@ export function buildInvoiceEmail({ lang, business, charge, member, logoUrl = nu
   const firstName = String(member.name || '').trim().split(/\s+/)[0] || member.name;
   const paid = charge.status === 'paid';
   const payLine = paid ? t.paid(longDate(charge.paidAt || issued, L)) : t.transfer(business.iban, studio, nr);
+  // Online betalen (Mollie) als de studio dat heeft ingericht; overmaken blijft kunnen.
+  const online = !paid && payUrl ? payUrl : null;
   const details = [
     studio,
     [business.street, [business.postcode, business.city].filter(Boolean).join(' ')].filter(Boolean).join(' · '),
@@ -84,7 +90,7 @@ export function buildInvoiceEmail({ lang, business, charge, member, logoUrl = nu
     .join(' · ');
 
   const subject = t.subject(nr, studio, amount);
-  const text = [t.hi(firstName), '', t.body(desc, amount, due), '', `${t.toPay}: ${amount} (${t.before(due)})`, payLine, '', t.questions, '', t.bye, studio, '', details, t.footer(studio)].join('\n');
+  const text = [t.hi(firstName), '', t.body(desc, amount, due), '', `${t.toPay}: ${amount} (${t.before(due)})`, ...(online ? [`${t.payOnline}: ${online}`, t.orTransfer] : []), payLine, '', t.questions, '', t.bye, studio, '', details, t.footer(studio)].join('\n');
 
   const logo = logoUrl
     ? `<img src="${esc(logoUrl)}" width="40" height="40" alt="" style="display:block;width:40px;height:40px;border-radius:10px;object-fit:contain;background:#ffffff;">`
@@ -101,7 +107,8 @@ export function buildInvoiceEmail({ lang, business, charge, member, logoUrl = nu
     <td style="padding:18px 20px;"><div style="font-size:12px;font-weight:600;color:#43483f;">${esc(t.toPay)}</div><div style="font-size:12px;color:#43483f;margin-top:3px;">${esc(desc)}</div></td>
     <td align="right" style="padding:18px 20px;"><div style="font-size:24px;font-weight:600;">${esc(amount)}</div><div style="font-size:12px;color:#43483f;margin-top:3px;">${esc(t.before(due))}</div></td>
   </tr></table>
-  <p style="margin:20px 0 0;font-size:12px;line-height:1.45;color:#43483f;">${esc(payLine)}</p>
+  ${online ? `<p style="margin:20px 0 0;"><a href="${esc(online)}" style="display:inline-block;padding:10px 20px;border-radius:20px;background:${esc(brand)};color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">${esc(t.payOnline)}</a></p>` : ''}
+  <p style="margin:20px 0 0;font-size:12px;line-height:1.45;color:#43483f;">${online ? `${esc(t.orTransfer)} ` : ''}${esc(payLine)}</p>
   <p style="margin:20px 0 0;font-size:14px;line-height:1.45;">${esc(t.questions)}</p>
   <p style="margin:20px 0 0;font-size:14px;line-height:1.45;">${esc(t.bye)}<br>${esc(studio)}</p>
 </td></tr></table>

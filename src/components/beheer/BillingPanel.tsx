@@ -46,7 +46,7 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
   const [downloading, setDownloading] = useState(false);
   const [sending, setSending] = useState(false);
   const [mailReady, setMailReady] = useState(false);
-  const [link, setLink] = useState<{ chargeId: string; url: string; text: string } | null>(null);
+  const [link, setLink] = useState<{ chargeId: string; url: string; payUrl: string | null; text: string } | null>(null);
 
   useEffect(() => {
     void getMailStatus()
@@ -125,7 +125,7 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
     setLink(null);
     void getInvoiceLink(selectedId)
       .then((r) => {
-        if (alive) setLink({ chargeId: selectedId, url: r.url, text: r.text });
+        if (alive) setLink({ chargeId: selectedId, url: r.url, payUrl: r.payUrl ?? null, text: r.text });
       })
       .catch(() => undefined);
     return () => {
@@ -232,6 +232,12 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
                   {nameOf(c.userId)}
                 </Typography>
                 {overdue && <Chip size="small" label={t('billing.overdue')} sx={{ height: 20, fontSize: 11, bgcolor: designTokens.cardBackgroundHigh }} />}
+                {c.status === 'open' && c.collectStatus === 'pending' && (
+                  <Chip size="small" label={t('billing.collectPending')} sx={{ height: 20, fontSize: 11, bgcolor: designTokens.primaryContainer, color: designTokens.onPrimaryContainer }} />
+                )}
+                {c.status === 'open' && c.collectStatus === 'failed' && (
+                  <Chip size="small" label={t('billing.collectFailed')} sx={{ height: 20, fontSize: 11, bgcolor: designTokens.tertiaryContainer, color: designTokens.onTertiaryContainer }} />
+                )}
               </Box>
               <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
                 {c.description}
@@ -305,7 +311,12 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
       {field(t('billing.description'), selected.description)}
       {field(t('billing.amount'), `${euro(selected.amount)} · ${t('billing.vatLine', { rate: vat.rate, vat: euro2(vat.vat) })}`)}
       {field(t('billing.due'), fmt(selected.dueAt, true))}
-      {field(t('billing.status'), selected.status === 'paid' && selected.paidAt ? `${t('billing.paid')} · ${fmt(selected.paidAt, true)}` : statusLabel(selected))}
+      {field(
+        t('billing.status'),
+        selected.status === 'paid' && selected.paidAt
+          ? `${t('billing.paid')} · ${fmt(selected.paidAt, true)}${selected.paidBy === 'mollie' ? ` · ${t('billing.paidViaMollie')}` : ''}`
+          : `${statusLabel(selected)}${selected.collectStatus === 'pending' ? ` · ${t('billing.collectPending')}` : selected.collectStatus === 'failed' ? ` · ${t('billing.collectFailed')}` : ''}`
+      )}
       <TextField label={t('billing.note')} size="small" fullWidth multiline minRows={2} value={note} onChange={(e) => setNote(e.target.value)} />
 
       {/* Factuur: nummer, PDF, later ook versturen per mail (ontwerp "Invoice"). */}
@@ -330,6 +341,11 @@ export function BillingPanel({ profiles, memberships, plans, selfId, exportSigna
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75, wordBreak: 'break-all' }}>
           {link && link.chargeId === selected.id ? t('billing.linkLine', { url: link.url.replace(/^https?:\/\//, '') }) : ''}
         </Typography>
+        {link && link.chargeId === selected.id && link.payUrl && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25, wordBreak: 'break-all' }}>
+            {t('billing.payLine', { url: link.payUrl.replace(/^https?:\/\//, '') })}
+          </Typography>
+        )}
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
           {!mailReady ? t('billing.emailSoon') : selected.invoiceSentAt ? t('billing.sent', { date: fmt(selected.invoiceSentAt), email: selected.invoiceSentTo ?? '' }) : t('billing.notSent')}
         </Typography>

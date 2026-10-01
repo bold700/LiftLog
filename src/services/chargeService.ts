@@ -34,6 +34,9 @@ function toCharge(data: Record<string, unknown>, id: string): Charge {
     invoiceIssuedAt: str(data.invoiceIssuedAt),
     invoiceSentAt: str(data.invoiceSentAt),
     invoiceSentTo: str(data.invoiceSentTo),
+    molliePaymentId: str(data.molliePaymentId),
+    paidBy: str(data.paidBy),
+    collectStatus: data.collectStatus === 'pending' || data.collectStatus === 'paid' || data.collectStatus === 'failed' ? data.collectStatus : null,
   };
 }
 
@@ -114,7 +117,8 @@ export async function shareInvoicePdf(chargeId: string, text: string): Promise<{
 }
 
 /** Openbare link naar de factuur (zonder inloggen te openen) plus een korte WhatsApp-tekst in de taal van het lid. */
-export function getInvoiceLink(chargeId: string): Promise<{ invoiceNumber: string; url: string; text: string }> {
+/** Factuurlink en, als de studio via Mollie betaalt en de factuur open is, de betaallink (/b/…). */
+export function getInvoiceLink(chargeId: string): Promise<{ invoiceNumber: string; url: string; payUrl: string | null; text: string }> {
   return callBooking({ action: 'invoiceLink', chargeId });
 }
 

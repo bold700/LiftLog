@@ -63,6 +63,10 @@
       "destination": "/api/booking?invoice=:token"
     },
     {
+      "source": "/b/:token",
+      "destination": "/api/booking?pay=:token"
+    },
+    {
       "source": "/kalender/:token",
       "destination": "/api/booking?feed=:token"
     },
