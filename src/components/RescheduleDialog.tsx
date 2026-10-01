@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Typography } from '@mui/material';
 import { useNotify } from '../context/NotifyContext';
+import { moveOccurrence } from '../services/classService';
 import {
   getRescheduleOptions,
   requestReschedule,
@@ -21,13 +22,15 @@ interface Props {
   staff?: boolean;
   /** Naam van het lid (bij staf). */
   memberName?: string;
+  /** Staf verzet een afspraak die nog geboekt staat: credit terug, nieuw moment meteen vast. */
+  moveBookingId?: string | null;
   onClose: () => void;
   onDone?: () => void;
 }
 
 const sameSlot = (a: RescheduleTime | null, b: RescheduleTime) => !!a && a.date === b.date && a.startTime === b.startTime;
 
-export function RescheduleDialog({ classId, staff = false, memberName, onClose, onDone }: Props) {
+export function RescheduleDialog({ classId, staff = false, memberName, moveBookingId = null, onClose, onDone }: Props) {
   const notify = useNotify();
   const [options, setOptions] = useState<RescheduleOptions | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +63,9 @@ export function RescheduleDialog({ classId, staff = false, memberName, onClose, 
     if (!classId || !picked) return;
     setSaving(true);
     try {
-      const r = await requestReschedule(classId, picked.date, picked.startTime);
+      const r = moveBookingId
+        ? { ...(await moveOccurrence(moveBookingId, picked.date, picked.startTime)), status: 'approved' as const }
+        : await requestReschedule(classId, picked.date, picked.startTime);
       const when = `${rescheduleDayLabel(picked.date)} ${picked.startTime}`;
       notify?.success(
         r.status === 'approved'
@@ -90,10 +95,12 @@ export function RescheduleDialog({ classId, staff = false, memberName, onClose, 
 
   return (
     <Dialog open={!!classId} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Ander moment kiezen</DialogTitle>
+      <DialogTitle>{moveBookingId ? 'Afspraak verzetten' : 'Ander moment kiezen'}</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          {staff
+          {moveBookingId
+            ? `Verzet deze afspraak${memberName ? ` van ${memberName}` : ''}. De credit van de oude afspraak komt terug en het nieuwe moment staat meteen vast.`
+            : staff
             ? `Kies een nieuw moment${memberName ? ` voor ${memberName}` : ''}. Het staat meteen vast; de credit gaat eraf zoals bij boeken.`
             : 'Je credit staat weer op je saldo. Kies een nieuw moment bij je trainer; die bevestigt het.'}
         </Typography>

@@ -138,6 +138,15 @@ Abonnement voor de sporter, Beheer → lid voor staf):
 - Abonnement toewijzen: na Opslaan komen de credits van de eerste periode er meteen bij, met de
   eerste factuur. Het ledenscherm zegt dat vooraf.
 
+### Afspraken wijzigen (staf)
+
+- **Eén afspraak verzetten**: bij een vast PT-moment (Beheer → lid → Vaste lessen) of in Lessen →
+  Deelnemers. Kies een vrij moment bij de trainer; de oude afspraak gaat eraf met de credit terug
+  (ook binnen de afmeldtermijn) en het nieuwe moment staat meteen vast (`moveOccurrence`).
+- **Hele reeks wijzigen**: ⋮ bij een vast PT-moment → andere dag, tijd of trainer vanaf een datum.
+  Afspraken van de oude reeks vanaf die datum gaan eraf met de credit terug (`moveStandingPt`).
+- In het rooster staat bij een PT-moment wie het is en bij welke trainer ("Emma L" / "PT – Kenny").
+
 ### Verzetten na afmelden (PT-moment)
 
 Meldt een sporter zich op tijd af voor een persoonlijk PT-moment (credit terug), dan biedt de app

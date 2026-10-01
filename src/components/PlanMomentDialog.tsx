@@ -27,7 +27,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useNotify } from '../context/NotifyContext';
-import { addPersonalSlot, addStandingBooking } from '../services/classService';
+import { addPersonalSlot, addStandingBooking, moveStandingPt } from '../services/classService';
 import { getPlanStatus, getWeeklyPtOptions, requestStandingPt, type PlanStatus, type WeeklySlot } from '../services/planMomentService';
 import { COVERS_LABEL, isPtKind } from '../utils/planCoverage';
 import { describeStandingResult } from '../utils/standingSeries';
@@ -51,12 +51,14 @@ interface Props {
   /** Staf: trainers om uit te kiezen bij een PT-moment. */
   trainers: { userId: string; name: string }[];
   defaultTrainerId: string | null;
+  /** Staf: de hele reeks van een vast PT-moment wijzigen (andere dag, tijd of trainer) in plaats van iets nieuws. */
+  moveSeries?: { standingBookingId: string; classTypeId: string; label: string; trainerId: string | null; duration: number } | null;
   onClose: () => void;
   /** Na vastzetten of aanvragen: opnieuw laden. */
   onDone: () => void;
 }
 
-export function PlanMomentDialog({ open, userId, asStaff, types, trainers, defaultTrainerId, onClose, onDone }: Props) {
+export function PlanMomentDialog({ open, userId, asStaff, types, trainers, defaultTrainerId, moveSeries = null, onClose, onDone }: Props) {
   const notify = useNotify();
   const [status, setStatus] = useState<PlanStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -84,15 +86,16 @@ export function PlanMomentDialog({ open, userId, asStaff, types, trainers, defau
       (s) => {
         if (!alive) return;
         setStatus(s);
-        setMode(s.plan?.covers === 'group' ? 'group' : 'pt');
-        setTrainerId(defaultTrainerId || s.trainerId || trainers[0]?.userId || '');
+        setMode(moveSeries || s.plan?.covers !== 'group' ? 'pt' : 'group');
+        setTrainerId(moveSeries?.trainerId || defaultTrainerId || s.trainerId || trainers[0]?.userId || '');
+        if (moveSeries) setDuration(moveSeries.duration);
       },
       (e) => alive && setStatusError(e instanceof Error ? e.message : 'Abonnement laden mislukt.')
     );
     return () => {
       alive = false;
     };
-  }, [open, userId, asStaff, defaultTrainerId, trainers]);
+  }, [open, userId, asStaff, defaultTrainerId, trainers, moveSeries]);
 
   // PT: vrije weekmomenten bij de trainer, opnieuw bij een andere trainer of duur.
   useEffect(() => {
@@ -102,7 +105,7 @@ export function PlanMomentDialog({ open, userId, asStaff, types, trainers, defau
     setDays(null);
     setDaysError(null);
     setSlot(null);
-    getWeeklyPtOptions({ ...(asStaff ? { userId, trainerId } : {}), duration }).then(
+    getWeeklyPtOptions({ ...(asStaff ? { userId, trainerId } : {}), duration, ...(moveSeries ? { ignoreClassTypeId: moveSeries.classTypeId } : {}) }).then(
       (r) => {
         if (!alive) return;
         const sorted = [...r.days].sort((a, b) => WEEK_ORDER.indexOf(a.weekday) - WEEK_ORDER.indexOf(b.weekday));
@@ -114,7 +117,7 @@ export function PlanMomentDialog({ open, userId, asStaff, types, trainers, defau
     return () => {
       alive = false;
     };
-  }, [open, status, mode, asStaff, userId, trainerId, duration]);
+  }, [open, status, mode, asStaff, userId, trainerId, duration, moveSeries]);
 
   const plan = status?.plan ?? null;
   const covers = plan?.covers ?? 'all';
@@ -123,7 +126,7 @@ export function PlanMomentDialog({ open, userId, asStaff, types, trainers, defau
   const full = limit != null && taken >= limit;
   // Wat het abonnement toestaat; staf mag alles (met waarschuwing).
   const allowed = (m: Mode) => covers === 'all' || covers === m;
-  const memberBlocked = !asStaff && (!plan || full || !allowed(mode));
+  const memberBlocked = !moveSeries && !asStaff && (!plan || full || !allowed(mode));
 
   const groupOptions = useMemo(
     () =>
@@ -147,7 +150,19 @@ export function PlanMomentDialog({ open, userId, asStaff, types, trainers, defau
   const submit = async () => {
     setSaving(true);
     try {
-      if (mode === 'pt' && slot) {
+      if (moveSeries && slot) {
+        const r = await moveStandingPt({
+          standingBookingId: moveSeries.standingBookingId,
+          weekday: slot.weekday,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          trainerId: trainerId || null,
+          fromDate: startDate,
+        });
+        notify.success(
+          `Reeks gewijzigd: elke ${WEEKDAY_LONG[slot.weekday]} ${slot.startTime}.${r.refunded ? ` ${r.refunded} oude afspra${r.refunded === 1 ? 'ak' : 'ken'} afgemeld, credit terug.` : ''}`
+        );
+      } else if (mode === 'pt' && slot) {
         if (asStaff) {
           const r = await addPersonalSlot({ userId, weekday: slot.weekday, startTime: slot.startTime, endTime: slot.endTime, trainerId: trainerId || null, startDate });
           notify.success(`Vast PT-moment: elke ${WEEKDAY_LONG[slot.weekday]} ${slot.startTime}. ${describeStandingResult(r)}`);
@@ -178,7 +193,7 @@ export function PlanMomentDialog({ open, userId, asStaff, types, trainers, defau
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Moment inplannen</DialogTitle>
+      <DialogTitle>{moveSeries ? 'Reeks wijzigen' : 'Moment inplannen'}</DialogTitle>
       <DialogContent>
         {statusError && <Alert severity="error">{statusError}</Alert>}
         {!status && !statusError && (
@@ -188,8 +203,19 @@ export function PlanMomentDialog({ open, userId, asStaff, types, trainers, defau
         )}
         {status && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {moveSeries && (
+              <Alert severity="info" icon={false}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  {moveSeries.label}
+                </Typography>
+                <Typography variant="body2">
+                  Kies de nieuwe dag en tijd. Vanaf de gekozen datum geldt het nieuwe moment; afspraken van de oude reeks vanaf die datum worden afgemeld
+                  met de credit terug.
+                </Typography>
+              </Alert>
+            )}
             {/* Het abonnement bepaalt wat er kan. */}
-            {plan ? (
+            {moveSeries ? null : plan ? (
               <Alert severity={full ? 'warning' : 'info'} icon={false}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
                   {plan.name}
@@ -215,13 +241,13 @@ export function PlanMomentDialog({ open, userId, asStaff, types, trainers, defau
               </Alert>
             )}
 
-            {(asStaff || (plan && covers === 'all')) && (
+            {!moveSeries && (asStaff || (plan && covers === 'all')) && (
               <ToggleButtonGroup size="small" exclusive value={mode} onChange={(_, v: Mode | null) => v && setMode(v)}>
                 <ToggleButton value="pt">Personal training</ToggleButton>
                 <ToggleButton value="group">Groepsles</ToggleButton>
               </ToggleButtonGroup>
             )}
-            {asStaff && plan && !allowed(mode) && (
+            {!moveSeries && asStaff && plan && !allowed(mode) && (
               <Alert severity="warning">Dit valt niet onder het abonnement ({COVERS_LABEL[plan.covers].toLowerCase()}). Je kunt het toch inplannen.</Alert>
             )}
 
@@ -320,7 +346,7 @@ export function PlanMomentDialog({ open, userId, asStaff, types, trainers, defau
       <DialogActions>
         <Button onClick={onClose}>Annuleren</Button>
         <Button variant="contained" disableElevation disabled={!canSubmit} onClick={() => void submit()}>
-          {saving ? 'Bezig…' : asStaff || mode === 'group' ? 'Vastzetten' : 'Aanvragen'}
+          {saving ? 'Bezig…' : moveSeries ? 'Wijzigen' : asStaff || mode === 'group' ? 'Vastzetten' : 'Aanvragen'}
         </Button>
       </DialogActions>
     </Dialog>

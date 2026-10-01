@@ -1,3 +1,4 @@
+import type { ClassLabel } from '../../utils/classLabel';
 import { useEffect, useMemo, useState } from 'react';
 import { Box, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { SESSION_KIND_COLORS, classHasStarted, spotOpenFor, type StudioClass, type Booking } from '../../services/classService';
@@ -16,6 +17,8 @@ interface Props {
   classesByDate: Map<string, StudioClass[]>;
   bookingByClass: Map<string, Booking>;
   trainerNames: Record<string, string>;
+  /** Wat er op het blok staat (PT-moment: wie en bij welke trainer); standaard de naam van de les. */
+  labelFor?: (cls: StudioClass) => ClassLabel;
   today: string;
   onOpenClass: (cls: StudioClass) => void;
   /** Tik op een datum in de kop: naar die dag in de Dag-weergave. */
@@ -41,7 +44,7 @@ function useNowMinutes(): number {
  * Lessen die tegelijk vallen staan naast elkaar. Kleuren volgen Figma "Book a class": open = Primary
  * Container, ingeschreven = Tertiary Container, vol/afgelast = Surface Container High.
  */
-export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames, today, onOpenClass, onSelectDay }: Props) {
+export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames, labelFor, today, onOpenClass, onSelectDay }: Props) {
   const nowMin = useNowMinutes();
   const theme = useTheme();
   // Op de telefoon is een dagkolom ~40px: lessen die tegelijk vallen passen niet naast elkaar.
@@ -208,17 +211,18 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
                 const booked = mine?.status === 'booked';
                 const started = classHasStarted(cls);
                 const muted = !!cls.cancelledAt || started || (full && !mine) || (onWaitlist && !canClaim);
+                const label = labelFor ? labelFor(cls) : { title: cls.title, sub: null };
                 const top = (startMin - startHour * 60) * pxPerMin;
                 const height = Math.max((endMin - startMin) * pxPerMin - 2, 18);
                 const short = height < 40;
                 // Naast elkaar is er geen ruimte om woorden te breken: één regel met puntjes.
-                const oneLine = short || lanes > 1;
+                const oneLine = short || lanes > 1 || !!label.sub;
                 return (
                   <Box
                     key={cls.id}
                     role="button"
                     tabIndex={0}
-                    aria-label={`${cls.title} ${cls.startTime}${cls.endTime ? `–${cls.endTime}` : ''}`}
+                    aria-label={`${label.title}${label.sub ? `, ${label.sub}` : ''} ${cls.startTime}${cls.endTime ? `–${cls.endTime}` : ''}`}
                     onClick={() => onOpenClass(cls)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
@@ -259,8 +263,13 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
                           : { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 3, overflowWrap: 'break-word' }),
                       }}
                     >
-                      {cls.title}
+                      {label.title}
                     </Typography>
+                    {label.sub && (
+                      <Typography sx={{ fontSize: { xs: 10, md: 11 }, lineHeight: { xs: '13px', md: '15px' }, fontWeight: 500 }} noWrap>
+                        {label.sub}
+                      </Typography>
+                    )}
                     {!short && (
                       <Typography sx={{ fontSize: { xs: 10, md: 11 }, lineHeight: { xs: '13px', md: '15px' }, opacity: 0.85 }} noWrap>
                         {cls.startTime}
@@ -289,7 +298,7 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
                               : full
                                 ? 'Vol'
                                 : `${Math.max(0, cls.capacity - cls.bookedCount)} vrij`}
-                        {trainerNames[cls.trainerId] ? ` · ${trainerNames[cls.trainerId]}` : ''}
+                        {!label.sub && trainerNames[cls.trainerId] ? ` · ${trainerNames[cls.trainerId]}` : ''}
                       </Typography>
                     )}
                   </Box>

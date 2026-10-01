@@ -34,6 +34,8 @@ import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import StopRoundedIcon from '@mui/icons-material/StopRounded';
 import { useI18n } from '../context/I18nContext';
 import { PlanMomentDialog } from './PlanMomentDialog';
+import { RescheduleDialog } from './RescheduleDialog';
+import EditCalendarRoundedIcon from '@mui/icons-material/EditCalendarRounded';
 import { useNotify } from '../context/NotifyContext';
 import {
   bookClass,
@@ -95,6 +97,10 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
   const [busy, setBusy] = useState(false);
   const [menu, setMenu] = useState<{ anchor: HTMLElement; s: StandingBooking } | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
+  /** Staf: hele reeks van een PT-moment wijzigen. */
+  const [moveSeries, setMoveSeries] = useState<StandingBooking | null>(null);
+  /** Eén afspraak verzetten (staf direct) of na afmelden een ander moment kiezen (sporter). */
+  const [moveOne, setMoveOne] = useState<{ classId: string; bookingId: string | null } | null>(null);
   const [pauseFor, setPauseFor] = useState<StandingBooking | null>(null);
   const [skip, setSkip] = useState<{ booking: Booking; cls: StudioClass } | null>(null);
   /** Sporter: namen van de server, alleen als de studio "naam van de trainer tonen" aan heeft. */
@@ -238,8 +244,18 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
                               : 'text.secondary',
                       }}
                     />
+                    {booking && asStaff && ct?.privateFor && booking.status === 'booked' && (
+                      <Button size="small" onClick={() => setMoveOne({ classId: cls.id, bookingId: booking.id })} disabled={busy} sx={{ ml: 'auto', textTransform: 'none', minWidth: 0 }}>
+                        Verzetten
+                      </Button>
+                    )}
                     {booking && (
-                      <Button size="small" onClick={() => setSkip({ booking, cls })} disabled={busy} sx={{ ml: 'auto', textTransform: 'none', minWidth: 0 }}>
+                      <Button
+                        size="small"
+                        onClick={() => setSkip({ booking, cls })}
+                        disabled={busy}
+                        sx={{ ml: asStaff && ct?.privateFor && booking.status === 'booked' ? 0 : 'auto', textTransform: 'none', minWidth: 0 }}
+                      >
                         Deze keer niet
                       </Button>
                     )}
@@ -267,6 +283,19 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
       })}
 
       <Menu anchorEl={menu?.anchor} open={!!menu} onClose={() => setMenu(null)}>
+        {asStaff && menu?.s.active && typeById.get(menu.s.classTypeId)?.privateFor && (
+          <MenuItem
+            onClick={() => {
+              setMoveSeries(menu.s);
+              setMenu(null);
+            }}
+          >
+            <ListItemIcon>
+              <EditCalendarRoundedIcon fontSize="small" />
+            </ListItemIcon>
+            Reeks wijzigen (dag, tijd of trainer)
+          </MenuItem>
+        )}
         {menu?.s.active && !menu.s.pausedFrom && (
           <MenuItem
             onClick={() => {
@@ -334,6 +363,36 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
         onDone={() => void load()}
       />
 
+      <PlanMomentDialog
+        open={!!moveSeries}
+        userId={userId}
+        asStaff={asStaff}
+        types={publicTypes}
+        trainers={trainers}
+        defaultTrainerId={defaultTrainerId}
+        moveSeries={
+          moveSeries
+            ? {
+                standingBookingId: moveSeries.id,
+                classTypeId: moveSeries.classTypeId,
+                label: `${typeById.get(moveSeries.classTypeId)?.name ?? 'PT-moment'} · ${slotLabel(moveSeries)}`,
+                trainerId: typeById.get(moveSeries.classTypeId)?.defaultTrainerId ?? null,
+                duration: seriesDuration(typeById.get(moveSeries.classTypeId), moveSeries),
+              }
+            : null
+        }
+        onClose={() => setMoveSeries(null)}
+        onDone={() => void load()}
+      />
+
+      <RescheduleDialog
+        classId={moveOne?.classId ?? null}
+        staff={asStaff}
+        moveBookingId={moveOne?.bookingId ?? null}
+        onClose={() => setMoveOne(null)}
+        onDone={() => void load()}
+      />
+
       <PauseDialog
         standing={pauseFor}
         label={pauseFor ? `${typeById.get(pauseFor.classTypeId)?.name ?? 'Lessoort'} · ${slotLabel(pauseFor)}` : ''}
@@ -364,6 +423,8 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
               if (b)
                 void run(async () => {
                   const r = await cancelBooking(b.id);
+                  // PT-moment op tijd afgemeld: meteen een ander moment kiezen (sporter vraagt aan, staf plant in).
+                  if (r.reschedule) setMoveOne({ classId: r.reschedule.classId, bookingId: null });
                   return { cancelled: 1, refunded: r.refunded ? 1 : 0 };
                 });
             }}
@@ -425,6 +486,14 @@ function PauseDialog({
       </DialogActions>
     </Dialog>
   );
+}
+
+/** Duur in minuten van het weekmoment van een vaste les (standaard een uur). */
+function seriesDuration(ct: ClassType | undefined, s: Pick<StandingBooking, 'weekday' | 'startTime'>): number {
+  const slot = ct?.schedule.find((sl) => sl.weekday === s.weekday && sl.startTime === s.startTime);
+  if (!slot) return 60;
+  const m = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  return Math.max(30, m(slot.endTime) - m(slot.startTime));
 }
 
 /** Een uur na de begintijd, als voorstel voor de eindtijd. */
