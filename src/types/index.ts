@@ -580,6 +580,9 @@ export interface ClassScheduleSlot {
   startTime: string;
   /** HH:MM */
   endTime: string;
+  /** Om de week (2) in de even of oneven weken (`weekParity` 0/1); zonder = elke week. */
+  everyWeeks?: number;
+  weekParity?: number | null;
 }
 
 /** Vorm van een sessie, voor de legenda en kleurcodering op het rooster (Figma "05 · Schedule"). */
@@ -637,6 +640,9 @@ export interface StandingBooking {
   weekday: number;
   /** HH:MM, hoort bij een ClassScheduleSlot van de lessoort. */
   startTime: string;
+  /** 2 = om de week, in de even of oneven weken (`weekParity`, zie utils/weekPattern); anders elke week. */
+  everyWeeks?: number;
+  weekParity?: number | null;
   /** Uit: blijft bestaan (voor de geschiedenis), maar de cron slaat 'm over. */
   active: boolean;
   /** Vanaf deze datum (YYYY-MM-DD); null = meteen. */

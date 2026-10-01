@@ -61,6 +61,8 @@ const clockTime = (iso) => {
 };
 const WEEKDAY_LONG = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
 const when = (cls) => [dayLabel(cls?.date), shortTime(cls?.startTime)].filter(Boolean).join(' ');
+/** "elke" of "om de week op" voor een vast moment. */
+const every = (req) => (Number(req?.everyWeeks) === 2 ? 'om de week op' : 'elke');
 
 export const messages = {
   /** Aan de trainer: een sporter meldde een PT-moment af en vraagt een ander moment aan. */
@@ -77,23 +79,23 @@ export const messages = {
       body: `${memberName || 'Een sporter'} wil op ${when(req)} trainen. Keur het goed of wijs het af in Beheer.`,
     };
   },
-  /** Aan de trainer: een sporter vraagt een vast PT-moment aan (elke week). */
+  /** Aan de trainer: een sporter vraagt een vast PT-moment aan (elke week of om de week). */
   standingRequested(req, memberName) {
     return {
       title: 'Vast PT-moment aangevraagd',
-      body: `${memberName || 'Een sporter'} wil elke ${WEEKDAY_LONG[Number(req?.weekday)] ?? 'week'} om ${shortTime(req?.startTime)} trainen. Keur het goed of wijs het af in Beheer.`,
+      body: `${memberName || 'Een sporter'} wil ${every(req)} ${WEEKDAY_LONG[Number(req?.weekday)] ?? 'week'} om ${shortTime(req?.startTime)} trainen. Keur het goed of wijs het af in Beheer.`,
     };
   },
   standingApproved(req) {
     return {
       title: 'Vast PT-moment staat vast',
-      body: `Elke ${WEEKDAY_LONG[Number(req?.weekday)] ?? 'week'} om ${shortTime(req?.startTime)}. Je wordt elke week automatisch ingeschreven.`,
+      body: `${Number(req?.everyWeeks) === 2 ? 'Om de week op' : 'Elke'} ${WEEKDAY_LONG[Number(req?.weekday)] ?? 'week'} om ${shortTime(req?.startTime)}. Je wordt ${Number(req?.everyWeeks) === 2 ? 'om de week' : 'elke week'} automatisch ingeschreven.`,
     };
   },
   standingDeclined(req) {
     return {
       title: 'Vast PT-moment niet bevestigd',
-      body: `Je trainer kan niet elke ${WEEKDAY_LONG[Number(req?.weekday)] ?? 'week'} om ${shortTime(req?.startTime)}. Kies onder Profiel een ander moment.`,
+      body: `Je trainer kan niet ${every(req)} ${WEEKDAY_LONG[Number(req?.weekday)] ?? 'week'} om ${shortTime(req?.startTime)}. Kies onder Profiel een ander moment.`,
     };
   },
   /** Aan de sporter: het nieuwe moment staat vast (de credit is afgeschreven zoals bij boeken). */

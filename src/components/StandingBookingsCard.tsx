@@ -163,7 +163,8 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
     if (!s.active) return 'Gestopt';
     const ct = typeById.get(s.classTypeId);
     const who = ct?.privateFor && trainerName(ct.defaultTrainerId) ? ` · bij ${trainerName(ct.defaultTrainerId)}` : '';
-    const kind = ct?.privateFor ? 'PT-moment, elke week' : ct?.privateForGroup ? 'Groepsles, elke week' : 'Elke week';
+    const every = s.everyWeeks === 2 ? 'om de week' : 'elke week';
+    const kind = ct?.privateFor ? `PT-moment, ${every}` : ct?.privateForGroup ? `Groepsles, ${every}` : every.charAt(0).toUpperCase() + every.slice(1);
     if (s.pausedFrom) return `Pauze ${shortDate(s.pausedFrom)}${s.pausedUntil ? ` t/m ${shortDate(s.pausedUntil)}` : ', tot je hervat'}${who}`;
     if (s.startDate && s.startDate > today) return `${kind}, vanaf ${shortDate(s.startDate)}${who}`;
     return `${kind}${who}`;
@@ -415,6 +416,7 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
                 label: `${typeById.get(moveSeries.classTypeId)?.name ?? 'PT-moment'} · ${slotLabel(moveSeries)}`,
                 trainerId: typeById.get(moveSeries.classTypeId)?.defaultTrainerId ?? null,
                 duration: seriesDuration(typeById.get(moveSeries.classTypeId), moveSeries),
+                everyWeeks: moveSeries.everyWeeks,
               }
             : null
         }

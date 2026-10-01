@@ -129,7 +129,10 @@ import {
   expectedIdsForSchedule,
   canReopenPrivateClass,
   inStandingSeries,
+  isBiweekly,
   missingOccurrences,
+  onPatternWeek,
+  patternFields,
   occurrencesForSchedule,
   personalClassTypeId,
   privateClassEmptyAfter,
@@ -1267,22 +1270,24 @@ async function addStandingBooking(res, db, uid, myOrgs, isStaff, body) {
   }
   const slot = (Array.isArray(ct.schedule) ? ct.schedule : []).find((sl) => Number(sl.weekday) === weekday && sl.startTime === startTime);
   if (!slot) return json(res, 400, { error: 'Dit weekmoment staat niet (meer) bij deze lessoort.', build: BUILD });
+  // Om de week: een les die zelf om de week is, volgt die weken; anders kiest het lid (even/oneven vanaf de startdatum).
+  const pattern = isBiweekly(slot) ? { everyWeeks: 2, weekParity: Number(slot.weekParity ?? 0) } : patternFields(body?.everyWeeks, startDate, weekday);
 
   // Een sporter plant zelf alleen in wat zijn abonnement toestaat (soort les, keer per week). Staf
   // ziet in de app een waarschuwing maar beslist zelf.
   if (!isStaff && !ct.privateForGroup) {
     const status = await planUsage(db, orgId, targetUserId);
-    const refusal = planRefusal(status, ct.sessionKind, standingBookingId(classTypeId, targetUserId, weekday, startTime));
+    const refusal = planRefusal(status, ct.sessionKind, standingBookingId(classTypeId, targetUserId, weekday, startTime), weightOf(pattern));
     if (refusal) return json(res, 409, { error: refusal, build: BUILD });
   }
 
-  const standing = await writeStanding(db, { orgId, userId: targetUserId, classTypeId, weekday, startTime, startDate, createdByUserId: uid });
+  const standing = await writeStanding(db, { orgId, userId: targetUserId, classTypeId, weekday, startTime, startDate, createdByUserId: uid, pattern });
   const counts = await bookExistingForStanding(db, standing);
   return json(res, 200, { standingBookingId: standing.id, ...counts, build: BUILD });
 }
 
 /** De vaste les (weer) vastleggen, actief en zonder pauze. Deterministische id: nooit dubbel. */
-async function writeStanding(db, { orgId, userId, classTypeId, weekday, startTime, startDate, createdByUserId }) {
+async function writeStanding(db, { orgId, userId, classTypeId, weekday, startTime, startDate, createdByUserId, pattern = {} }) {
   const id = standingBookingId(classTypeId, userId, weekday, startTime);
   const now = new Date().toISOString();
   const standing = {
@@ -1292,6 +1297,9 @@ async function writeStanding(db, { orgId, userId, classTypeId, weekday, startTim
     classTypeId,
     weekday,
     startTime,
+    // Elke week (1) of om de week (2, in de even of oneven weken).
+    everyWeeks: isBiweekly(pattern) ? 2 : 1,
+    weekParity: isBiweekly(pattern) ? Number(pattern.weekParity ?? 0) : null,
     active: true,
     startDate,
     pausedFrom: null,
@@ -1373,12 +1381,21 @@ async function planUsage(db, orgId, userId) {
     db.collection('rescheduleRequests').where('userId', '==', userId).where('status', '==', 'pending').get(),
   ]);
   const standingIds = standingSnap.docs.map((d) => d.id);
-  const pending = pendingSnap.docs.filter((d) => d.data().kind === 'standing' && d.data().orgId === orgId).length;
-  return { plan, standingIds, used: standingIds.length, pending };
+  // Om de week telt als een halve keer per week.
+  const weights = Object.fromEntries(standingSnap.docs.map((d) => [d.id, weightOf(d.data())]));
+  const used = sumWeights(Object.values(weights));
+  const pending = sumWeights(pendingSnap.docs.filter((d) => d.data().kind === 'standing' && d.data().orgId === orgId).map((d) => weightOf(d.data())));
+  return { plan, standingIds, weights, used, pending };
 }
 
+/** Hoe zwaar een vast moment telt voor "x per week": elke week 1, om de week 0,5. */
+const weightOf = (item) => (isBiweekly(item) ? 0.5 : 1);
+const sumWeights = (list) => Math.round(list.reduce((a, b) => a + b, 0) * 2) / 2;
+/** "1,5" */
+const nlNumber = (n) => String(n).replace('.', ',');
+
 /** Waarom een sporter dit niet zelf mag inplannen, of null. `standingId` telt niet mee als hij er al staat. */
-function planRefusal(status, sessionKind, standingId = null) {
+function planRefusal(status, sessionKind, standingId = null, cost = 1) {
   const { plan } = status;
   if (!plan) return 'Je hebt nog geen abonnement. Kies er een onder Profiel → Abonnement, of vraag het de studio.';
   if (!planCoversKind(plan, sessionKind ?? 'group')) {
@@ -1387,9 +1404,10 @@ function planRefusal(status, sessionKind, standingId = null) {
       : 'Je abonnement is voor groepslessen; een PT-moment kun je niet vast inplannen.';
   }
   const limit = perWeekOf(plan);
-  const already = standingId && status.standingIds.includes(standingId) ? 1 : 0;
-  if (limit != null && status.used + status.pending - already >= limit) {
-    return `Je abonnement is voor ${limit}x per week en je hebt er al ${status.used + status.pending - already} ingepland.`;
+  const already = standingId && status.standingIds.includes(standingId) ? status.weights?.[standingId] ?? 1 : 0;
+  const planned = status.used + status.pending - already;
+  if (limit != null && planned + cost > limit) {
+    return `Je abonnement is voor ${limit}x per week en je hebt er al ${nlNumber(planned)} ingepland.`;
   }
   return null;
 }
@@ -1409,7 +1427,7 @@ async function planStatus(res, db, uid, orgId, isStaff, userId) {
 }
 
 /** Vrije weekmomenten bij een trainer (sporter: zijn eigen trainer; staf: de gekozen trainer). */
-async function freeWeeklySlots(db, orgId, trainerId, duration, ignoreClassTypeId = null) {
+async function freeWeeklySlots(db, orgId, trainerId, duration, ignoreClassTypeId = null, pattern = null) {
   const [sched, availability, pendingSnap] = await Promise.all([
     scheduleContext(db, orgId),
     availabilityOf(db, orgId, trainerId),
@@ -1417,7 +1435,7 @@ async function freeWeeklySlots(db, orgId, trainerId, duration, ignoreClassTypeId
   ]);
   const extraBusy = pendingSnap.docs.map((d) => d.data()).filter((r) => r.kind === 'standing');
   const classTypes = ignoreClassTypeId ? sched.types.filter((t) => t.id !== ignoreClassTypeId) : sched.types;
-  return weeklyFreeSlots({ trainerId, classTypes, availability, hours: sched.hours, duration, extraBusy });
+  return weeklyFreeSlots({ trainerId, classTypes, availability, hours: sched.hours, duration, extraBusy, pattern });
 }
 
 const cleanDuration = (v) => {
@@ -1438,7 +1456,10 @@ async function weeklyPtOptions(res, db, uid, orgId, isStaff, body) {
   const duration = cleanDuration(body?.duration);
   // Reeks wijzigen (staf): het huidige moment van dit lid telt niet als bezet.
   const ignore = isStaff ? String(body?.ignoreClassTypeId ?? '').trim() || null : null;
-  return json(res, 200, { trainerId, duration, days: await freeWeeklySlots(db, orgId, trainerId, duration, ignore), build: BUILD });
+  // Om de week: per weekdag de even of oneven week vanaf de startdatum; de andere week is dan niet bezet.
+  const startDate = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.startDate ?? '')) ? String(body.startDate) : todayIso();
+  const pattern = Number(body?.everyWeeks) === 2 ? (weekday) => patternFields(2, startDate, weekday) : null;
+  return json(res, 200, { trainerId, duration, days: await freeWeeklySlots(db, orgId, trainerId, duration, ignore, pattern), build: BUILD });
 }
 
 /**
@@ -1456,11 +1477,12 @@ async function requestStandingPt(res, db, uid, orgId, isStaff, body) {
   const trainerId = String(me.data()?.trainerId ?? '');
   if (!trainerId) return json(res, 409, { error: 'Je hebt nog geen vaste trainer. Vraag de studio om er een te koppelen.', build: BUILD });
 
-  const refusal = planRefusal(await planUsage(db, orgId, uid), '1on1');
+  const pattern = patternFields(body?.everyWeeks, startDate, weekday);
+  const refusal = planRefusal(await planUsage(db, orgId, uid), '1on1', null, weightOf(pattern));
   if (refusal) return json(res, 409, { error: refusal, build: BUILD });
 
   const duration = toMinutes(endTime) - toMinutes(startTime);
-  const days = await freeWeeklySlots(db, orgId, trainerId, cleanDuration(duration));
+  const days = await freeWeeklySlots(db, orgId, trainerId, cleanDuration(duration), null, pattern);
   const offered = days.some((d) => d.weekday === weekday && d.times.some((t) => t.startTime === startTime && t.endTime === endTime));
   if (!offered) return json(res, 409, { error: 'Dit moment is niet (meer) vrij. Kies een ander moment.', build: BUILD });
 
@@ -1480,6 +1502,7 @@ async function requestStandingPt(res, db, uid, orgId, isStaff, body) {
     startTime,
     endTime,
     startDate,
+    ...pattern,
     date: startDate,
     status: 'pending',
     requestedBy: uid,
@@ -1505,6 +1528,7 @@ async function approveStandingRequest(db, approverUid, orgId, request) {
     endTime: request.endTime,
     startDate: request.startDate,
     trainerId: request.trainerId,
+    everyWeeks: request.everyWeeks ?? 1,
   });
   if (out.statusCode !== 200) return { error: out.body?.error || 'Vastzetten mislukt.', status: out.statusCode };
   const nowIso = new Date().toISOString();
@@ -1637,6 +1661,8 @@ async function moveStandingPt(res, db, uid, myOrgs, body) {
     trainerId: String(body?.trainerId ?? '').trim() || ct.defaultTrainerId || '',
     startDate: fromDate,
     ignoreClassTypeId: standing.classTypeId,
+    // Zonder keuze blijft het ritme (elke week of om de week) zoals het was.
+    everyWeeks: body?.everyWeeks ?? standing.everyWeeks ?? 1,
   });
   if (out.statusCode !== 200) return json(res, out.statusCode, { ...out.body, build: BUILD });
 
@@ -1656,7 +1682,7 @@ async function moveStandingPt(res, db, uid, myOrgs, body) {
     try {
       await sendPushToUser(db, standing.userId, {
         title: 'Vast PT-moment gewijzigd',
-        body: `Vanaf ${fromDate.split('-').reverse().join('-')}: elke ${WEEKDAY_NAMES[Number(body?.weekday)] ?? 'week'} om ${String(body?.startTime ?? '')}.`,
+        body: `Vanaf ${fromDate.split('-').reverse().join('-')}: ${Number(body?.everyWeeks ?? standing.everyWeeks) === 2 ? 'om de week op' : 'elke'} ${WEEKDAY_NAMES[Number(body?.weekday)] ?? 'week'} om ${String(body?.startTime ?? '')}.`,
         data: { kind: 'standingChanged' },
       });
     } catch (e) {
@@ -1964,6 +1990,7 @@ async function listRescheduleRequests(res, db, uid, orgId, isStaff) {
       classId: r.classId ?? null,
       kind: r.kind === 'standing' || r.kind === 'single' ? r.kind : 'reschedule',
       weekday: r.kind === 'standing' ? Number(r.weekday) : null,
+      everyWeeks: r.kind === 'standing' && isBiweekly(r) ? 2 : null,
       startDate: r.startDate ?? null,
     }));
   return json(res, 200, { requests, build: BUILD });
@@ -2079,6 +2106,8 @@ async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
     return json(res, 400, { error: 'Kies een dag en een begin- en eindtijd.', build: BUILD });
   }
   if (endTime <= startTime) return json(res, 400, { error: 'De eindtijd ligt voor de begintijd.', build: BUILD });
+  // Om de week: in de even of oneven weken, vanaf de eerste keer op of na de startdatum.
+  const pattern = patternFields(body?.everyWeeks, startDate, weekday);
 
   const group = groupId ? await loadGroup(db, myOrgs, groupId) : null;
   if (!group) await requireMemberOfMyOrgs(db, myOrgs, userId);
@@ -2113,7 +2142,7 @@ async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
     creditCost: base.creditCost ?? 1,
     defaultTrainerId: trainerId,
     schemaId: base.schemaId ?? null,
-    schedule: [{ weekday, startTime, endTime }],
+    schedule: [{ weekday, startTime, endTime, ...pattern }],
     room: base.room ?? null,
     sessionKind: base.sessionKind ?? '1on1',
     description: base.description ?? null,
@@ -2145,9 +2174,21 @@ async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
   // zo meteen geboekt.
   const standings = [];
   for (const memberId of group ? group.memberIds : [userId]) {
-    standings.push(await writeStanding(db, { orgId, userId: memberId, classTypeId: id, weekday, startTime, startDate, createdByUserId: uid }));
+    standings.push(await writeStanding(db, { orgId, userId: memberId, classTypeId: id, weekday, startTime, startDate, createdByUserId: uid, pattern }));
   }
-  if (existing.exists) await syncClassType(db, id, ct);
+  if (existing.exists) {
+    // Van elke week naar om de week (of naar de andere week): de afspraken in de weken die vervallen
+    // worden afgemeld met de credit terug; daarna haalt het opruimen de lege lessen weg.
+    if (isBiweekly(pattern)) {
+      for (const standing of standings) {
+        await cancelSeriesBookings(db, uid, myOrgs, true, { ...standing, everyWeeks: 1 }, (date) => date >= startDate && !onPatternWeek(pattern, date), {
+          forceRefund: true,
+          silent: true,
+        });
+      }
+    }
+    await syncClassType(db, id, ct);
+  }
   const generated = await generateForClassType(db, id, ct);
   const counts = { booked: 0, skippedFull: 0, skippedNoCredits: 0 };
   for (const standing of standings) {
@@ -2220,7 +2261,7 @@ async function syncGroupSlots(db, uid, myOrgs, group, prevMemberIds) {
       await sRef.delete();
     }
     for (const memberId of added) {
-      const standing = await writeStanding(db, { orgId: orgIdOf(ct.orgId), userId: memberId, classTypeId: d.id, weekday: slot.weekday, startTime: slot.startTime, startDate: todayIso(), createdByUserId: uid });
+      const standing = await writeStanding(db, { orgId: orgIdOf(ct.orgId), userId: memberId, classTypeId: d.id, weekday: slot.weekday, startTime: slot.startTime, startDate: todayIso(), createdByUserId: uid, pattern: slot });
       await bookExistingForStanding(db, standing);
     }
   }

@@ -2694,3 +2694,113 @@ describe('afspraken wijzigen: één afspraak of de hele reeks (staf)', () => {
     expect((await post({ action: 'moveStandingPt', standingBookingId: 'x', weekday: 1, startTime: '10:00', endTime: '11:00' })).statusCode).toBe(403);
   });
 });
+
+describe('om de week (vaste PT-momenten en vaste lessen)', () => {
+  const inDays = (n) => amsterdamDate(new Date(), n);
+  const first = inDays(3);
+  const weekday = new Date(`${first}T12:00:00Z`).getUTCDay();
+  const ctId = (user) => `ctp_${user}_${weekday}_1800`;
+  const classesOf = (id) =>
+    Object.entries(store)
+      .filter(([k, v]) => k.startsWith('classes/') && v.classTypeId === id && v.date >= first)
+      .map(([k, v]) => ({ ...v, id: k.slice('classes/'.length) }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  const activeOf = (user) => Object.values(store).filter((v) => v.userId === user && v.classId && ['booked', 'waitlist'].includes(v.status));
+  const slot = (extra = {}) => ({ action: 'addPersonalSlot', userId: 'sporter1', weekday, startTime: '18:00', endTime: '19:00', trainerId: 'trainer1', startDate: first, ...extra });
+  const daysBetween = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+
+  beforeEach(() => {
+    store['creditAccounts/vanas__sporter1'].balance = 20;
+    store['profiles/sporter1'].trainerId = 'trainer1';
+    store['trainerAvailability/vanas__trainer1'] = {
+      orgId: 'vanas', userId: 'trainer1', days: Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), [{ from: '16:00', to: '21:00' }]])),
+    };
+  });
+
+  it('staf zet een PT-moment om de week: lessen alleen in de eigen weken, elke keer geboekt', async () => {
+    const r = await post(slot({ everyWeeks: 2 }), 'trainer1');
+    expect(r.statusCode).toBe(200);
+    expect(store[`classTypes/${ctId('sporter1')}`].schedule[0]).toMatchObject({ weekday, startTime: '18:00', everyWeeks: 2 });
+    expect(store[`standingBookings/${r.body.standingBookingId}`]).toMatchObject({ everyWeeks: 2, weekParity: expect.any(Number) });
+    const classes = classesOf(ctId('sporter1'));
+    expect(classes[0].date).toBe(first);
+    expect(classes.length).toBeGreaterThanOrEqual(3);
+    for (let i = 1; i < classes.length; i++) expect(daysBetween(classes[i - 1].date, classes[i].date)).toBe(14);
+    expect(activeOf('sporter1')).toHaveLength(classes.length);
+  });
+
+  it('twee leden delen om de week hetzelfde tijdstip bij dezelfde trainer; elke week erbij botst wel', async () => {
+    expect((await post(slot({ everyWeeks: 2 }), 'trainer1')).statusCode).toBe(200);
+    const other = await post(slot({ userId: 'sporter2', everyWeeks: 2, startDate: inDays(10) }), 'trainer1');
+    expect(other.statusCode).toBe(200);
+    // Zelfde week als sporter1: botst.
+    store['profiles/sporter3'] = { ...store['profiles/sporter2'], userId: 'sporter3' };
+    const same = await post(slot({ userId: 'sporter3', everyWeeks: 2, startDate: inDays(17) }), 'trainer1');
+    expect(same.statusCode).toBe(409);
+    const weekly = await post(slot({ userId: 'sporter3' }), 'trainer1');
+    expect(weekly.statusCode).toBe(409);
+    // Samen vullen ze elke week precies één keer.
+    const dates = [...classesOf(ctId('sporter1')), ...classesOf(ctId('sporter2'))].map((c) => c.date).sort();
+    expect(new Set(dates).size).toBe(dates.length);
+    for (let i = 1; i < dates.length; i++) expect(daysBetween(dates[i - 1], dates[i])).toBe(7);
+  });
+
+  it('van elke week naar om de week: de vervallen weken worden afgemeld met de credit terug', async () => {
+    expect((await post(slot(), 'trainer1')).statusCode).toBe(200);
+    const before = classesOf(ctId('sporter1')).length;
+    const balance = store['creditAccounts/vanas__sporter1'].balance;
+    const r = await post(slot({ everyWeeks: 2 }), 'trainer1');
+    expect(r.statusCode).toBe(200);
+    const after = classesOf(ctId('sporter1'));
+    expect(after.length).toBe(Math.ceil(before / 2));
+    for (let i = 1; i < after.length; i++) expect(daysBetween(after[i - 1].date, after[i].date)).toBe(14);
+    expect(activeOf('sporter1')).toHaveLength(after.length);
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(balance + (before - after.length));
+  });
+
+  it('abonnement 2x per week: om de week telt als een halve', async () => {
+    store['plans/plan_pt'] = { orgId: 'vanas', name: 'PT 2x per week', price: 0, period: 'fourWeeks', credits: 8 };
+    store['memberships/mb_pt'] = { orgId: 'vanas', userId: 'sporter1', planId: 'plan_pt', status: 'active' };
+    const a = await post({ action: 'requestStandingPt', weekday: 1, startTime: '17:00', endTime: '18:00', everyWeeks: 2 });
+    expect(a.body.status).toBe('pending');
+    expect(store[`rescheduleRequests/${a.body.requestId}`]).toMatchObject({ everyWeeks: 2, weekParity: expect.any(Number) });
+    expect((await post({ action: 'requestStandingPt', weekday: 3, startTime: '17:00', endTime: '18:00' })).body.status).toBe('pending');
+    expect((await post({ action: 'planStatus' })).body).toMatchObject({ used: 0, pending: 1.5 });
+    // Nog een halve past, een hele niet.
+    const whole = await post({ action: 'requestStandingPt', weekday: 5, startTime: '17:00', endTime: '18:00' });
+    expect(whole.statusCode).toBe(409);
+    expect(whole.body.error).toMatch(/al 1,5 ingepland/);
+    expect((await post({ action: 'requestStandingPt', weekday: 5, startTime: '17:00', endTime: '18:00', everyWeeks: 2 })).body.status).toBe('pending');
+
+    const list = await post({ action: 'rescheduleRequests' }, 'trainer1');
+    expect(list.body.requests.find((x) => x.id === a.body.requestId)).toMatchObject({ kind: 'standing', everyWeeks: 2 });
+    expect((await post({ action: 'answerReschedule', requestId: a.body.requestId, approve: true }, 'trainer1')).statusCode).toBe(200);
+    expect(store['classTypes/ctp_sporter1_1_1700'].schedule[0]).toMatchObject({ everyWeeks: 2 });
+    expect((await post({ action: 'planStatus' })).body).toMatchObject({ used: 0.5, pending: 1.5 });
+  });
+
+  it('vrije momenten om de week: wat de trainer in de andere week heeft, is vrij', async () => {
+    expect((await post(slot({ everyWeeks: 2 }), 'trainer1')).statusCode).toBe(200);
+    const has1800 = (body) => body.days.find((d) => d.weekday === weekday)?.times.some((t) => t.startTime === '18:00') ?? false;
+    expect(has1800((await post({ action: 'weeklyPtOptions' })).body)).toBe(false);
+    expect(has1800((await post({ action: 'weeklyPtOptions', everyWeeks: 2, startDate: first })).body)).toBe(false);
+    expect(has1800((await post({ action: 'weeklyPtOptions', everyWeeks: 2, startDate: inDays(10) })).body)).toBe(true);
+  });
+
+  it('vaste groepsles om de week: alleen elke andere week geboekt', async () => {
+    const dates = [0, 7, 14, 21].map((n) => inDays(3 + n));
+    store['classTypes/ct_bw'] = {
+      orgId: 'vanas', name: 'Bootcamp', capacity: 8, creditCost: 1, defaultTrainerId: 'trainer1', sessionKind: 'group',
+      schedule: [{ weekday, startTime: '09:00', endTime: '10:00' }],
+    };
+    dates.forEach((date, i) => {
+      store[`classes/bw${i}`] = {
+        orgId: 'vanas', title: 'Bootcamp', date, startTime: '09:00', endTime: '10:00', trainerId: 'trainer1', capacity: 8, creditCost: 1,
+        classTypeId: 'ct_bw', bookedCount: 0, waitlistCount: 0,
+      };
+    });
+    const r = await post({ action: 'addStandingBooking', classTypeId: 'ct_bw', weekday, startTime: '09:00', startDate: first, everyWeeks: 2, userId: 'sporter1' }, 'trainer1');
+    expect(r.statusCode).toBe(200);
+    expect(activeOf('sporter1').map((b) => b.classId).sort()).toEqual(['bw0', 'bw2']);
+  });
+});

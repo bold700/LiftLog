@@ -170,6 +170,7 @@ function toStandingBooking(data: Record<string, unknown>, id: string): StandingB
     classTypeId: str(data.classTypeId),
     weekday: num(data.weekday),
     startTime: str(data.startTime, '00:00'),
+    ...(Number(data.everyWeeks) === 2 ? { everyWeeks: 2, weekParity: num(data.weekParity) } : {}),
     active: data.active !== false,
     startDate: typeof data.startDate === 'string' ? data.startDate : null,
     pausedFrom: typeof data.pausedFrom === 'string' ? data.pausedFrom : null,
@@ -503,6 +504,8 @@ export function addStandingBooking(input: {
   startTime: string;
   startDate?: string;
   userId?: string;
+  /** 2 = om de week (vanaf de week van de startdatum); anders elke week. */
+  everyWeeks?: 1 | 2;
 }): Promise<StandingResult & { standingBookingId: string }> {
   return callBooking({ action: 'addStandingBooking', ...input });
 }
@@ -528,6 +531,8 @@ export function addPersonalSlot(input: {
   endTime: string;
   trainerId: string | null;
   startDate: string;
+  /** 2 = om de week (vanaf de week van de startdatum); anders elke week. */
+  everyWeeks?: 1 | 2;
 }): Promise<StandingResult & { classTypeId: string; standingBookingId: string }> {
   return callBooking({ action: 'addPersonalSlot', ...input });
 }
@@ -543,6 +548,8 @@ export function moveStandingPt(input: {
   endTime: string;
   trainerId: string | null;
   fromDate: string;
+  /** Zonder: het ritme blijft zoals het was. */
+  everyWeeks?: 1 | 2;
 }): Promise<StandingResult & { classTypeId: string; cancelled?: number; refunded?: number }> {
   return callBooking({ action: 'moveStandingPt', ...input });
 }

@@ -43,14 +43,18 @@ export interface RescheduleRequest {
   /** 'standing': een aangevraagd vast PT-moment (elke week); 'single': één losse PT-afspraak. */
   kind?: 'reschedule' | 'standing' | 'single';
   weekday?: number | null;
+  /** 2 = om de week (vast moment). */
+  everyWeeks?: number | null;
   startDate?: string | null;
 }
 
 const WEEKDAY_LONG = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
 
 /** "elke maandag 17:00–18:00" (vast PT-moment) of "do 8 okt 17:00–18:00" (verzette les). */
-export function requestWhen(r: Pick<RescheduleRequest, 'kind' | 'weekday' | 'date' | 'startTime' | 'endTime'>): string {
-  if (r.kind === 'standing' && r.weekday != null) return `elke ${WEEKDAY_LONG[r.weekday]} ${r.startTime}–${r.endTime}`;
+export function requestWhen(r: Pick<RescheduleRequest, 'kind' | 'weekday' | 'everyWeeks' | 'date' | 'startTime' | 'endTime'>): string {
+  if (r.kind === 'standing' && r.weekday != null) {
+    return `${r.everyWeeks === 2 ? 'om de week op' : 'elke'} ${WEEKDAY_LONG[r.weekday]} ${r.startTime}–${r.endTime}`;
+  }
   return `${rescheduleDayLabel(r.date)} ${r.startTime}–${r.endTime}`;
 }
 

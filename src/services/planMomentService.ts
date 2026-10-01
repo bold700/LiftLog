@@ -8,7 +8,7 @@ import type { PlanCovers } from '../utils/planCoverage';
 
 export interface PlanStatus {
   plan: { id: string; name: string; covers: PlanCovers; perWeek: number | null } | null;
-  /** Actieve vaste momenten (groepslessen en PT samen). */
+  /** Actieve vaste momenten (groepslessen en PT samen); om de week telt als 0,5. */
   used: number;
   /** Aangevraagde vaste PT-momenten die nog op de trainer wachten. */
   pending: number;
@@ -26,7 +26,15 @@ export function getPlanStatus(userId?: string): Promise<PlanStatus> {
   return callBooking({ action: 'planStatus', ...(userId ? { userId } : {}) });
 }
 
-export function getWeeklyPtOptions(input: { userId?: string; trainerId?: string; duration: number; ignoreClassTypeId?: string }): Promise<{
+export function getWeeklyPtOptions(input: {
+  userId?: string;
+  trainerId?: string;
+  duration: number;
+  ignoreClassTypeId?: string;
+  /** Om de week: vrij in de even of oneven week vanaf `startDate` (de andere week telt niet). */
+  everyWeeks?: 1 | 2;
+  startDate?: string;
+}): Promise<{
   trainerId: string;
   duration: number;
   days: { weekday: number; times: WeeklySlot[] }[];
@@ -34,7 +42,13 @@ export function getWeeklyPtOptions(input: { userId?: string; trainerId?: string;
   return callBooking({ action: 'weeklyPtOptions', ...input });
 }
 
-export function requestStandingPt(input: { weekday: number; startTime: string; endTime: string; startDate: string }): Promise<{ requestId: string; status: 'pending' }> {
+export function requestStandingPt(input: {
+  weekday: number;
+  startTime: string;
+  endTime: string;
+  startDate: string;
+  everyWeeks?: 1 | 2;
+}): Promise<{ requestId: string; status: 'pending' }> {
   return callBooking({ action: 'requestStandingPt', ...input });
 }
 

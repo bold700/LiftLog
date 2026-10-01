@@ -159,3 +159,55 @@ describe('vaste lessen: welke datum telt mee', () => {
     expect(standingAppliesOn(sb({ pausedFrom: '2026-10-10', pausedUntil: null }), '2027-01-02')).toBe(false);
   });
 });
+
+describe('om de week', async () => {
+  const { weekIndex, onPatternWeek, shareWeeks, parityFrom, patternFields } = await import('../../api/_lib/classSchedule.mjs');
+  const { findConflicts } = await import('../../api/_lib/scheduleConflicts.mjs');
+
+  it('weken tellen vanaf maandag 5 januari 1970', () => {
+    expect(weekIndex('1970-01-05')).toBe(0);
+    expect(weekIndex('1970-01-11')).toBe(0);
+    expect(weekIndex('1970-01-12')).toBe(1);
+    expect(weekIndex('1970-01-04')).toBe(-1);
+    // Over een jaarwisseling en zomertijd heen blijft het per 7 dagen.
+    expect(weekIndex('2026-10-26') - weekIndex('2026-10-19')).toBe(1);
+  });
+
+  it('even of oneven week vanaf de eerste keer op of na de startdatum', () => {
+    // Do 1 okt 2026 → eerste maandag is 5 okt; een donderdag is diezelfde dag.
+    expect(parityFrom('2026-10-01', 1)).toBe(((weekIndex('2026-10-05') % 2) + 2) % 2);
+    expect(parityFrom('2026-10-01', 4)).toBe(((weekIndex('2026-10-01') % 2) + 2) % 2);
+    expect(patternFields(1, '2026-10-01', 4)).toEqual({});
+    expect(patternFields(2, '2026-10-01', 4)).toEqual({ everyWeeks: 2, weekParity: parityFrom('2026-10-01', 4) });
+  });
+
+  it('valt in de eigen weken; elke week valt altijd', () => {
+    const p = patternFields(2, '2026-10-01', 4);
+    expect(onPatternWeek(p, '2026-10-01')).toBe(true);
+    expect(onPatternWeek(p, '2026-10-08')).toBe(false);
+    expect(onPatternWeek(p, '2026-10-15')).toBe(true);
+    expect(onPatternWeek({}, '2026-10-08')).toBe(true);
+  });
+
+  it('rooster en vaste les volgen het patroon', () => {
+    const slot = { weekday: 4, startTime: '18:00', endTime: '19:00', ...patternFields(2, '2026-10-01', 4) };
+    const dates = occurrencesForSchedule([slot], '2026-10-01', 4).map((o) => o.date);
+    expect(dates).toEqual(['2026-10-01', '2026-10-15']);
+    const standing = { classTypeId: 'ct', weekday: 4, startTime: '18:00', active: true, ...slot };
+    expect(inStandingSeries({ classTypeId: 'ct', startTime: '18:00', date: '2026-10-08' }, standing)).toBe(false);
+    expect(standingAppliesOn(standing, '2026-10-08')).toBe(false);
+    expect(standingAppliesOn(standing, '2026-10-15')).toBe(true);
+  });
+
+  it('om de week in verschillende weken botst niet', () => {
+    const even = { everyWeeks: 2, weekParity: 0 };
+    const odd = { everyWeeks: 2, weekParity: 1 };
+    expect(shareWeeks(even, odd)).toBe(false);
+    expect(shareWeeks(even, even)).toBe(true);
+    expect(shareWeeks(even, {})).toBe(true);
+    const ct = (id, p) => ({ id, name: id, defaultTrainerId: 't1', schedule: [{ weekday: 1, startTime: '18:00', endTime: '19:00', ...p }] });
+    expect(findConflicts(ct('a', even), [ct('b', odd)])).toHaveLength(0);
+    expect(findConflicts(ct('a', even), [ct('b', even)])).toHaveLength(1);
+    expect(findConflicts(ct('a', {}), [ct('b', odd)])).toHaveLength(1);
+  });
+});

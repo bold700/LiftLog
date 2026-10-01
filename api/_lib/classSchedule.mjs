@@ -22,6 +22,52 @@ export function standingBookingId(classTypeId, userId, weekday, startTime) {
   return `sb_${classTypeId}_${userId}_${weekday}_${startTime.replace(':', '')}`;
 }
 
+// --- Om de week ---------------------------------------------------------------------------
+//
+// Een weekmoment kan elke week zijn of om de week (`everyWeeks: 2`). Om de week valt dan in de
+// even of de oneven weken (`weekParity` 0 of 1), geteld vanaf een vaste maandag. Zo kunnen twee
+// leden om de week hetzelfde tijdstip delen: de een in de even, de ander in de oneven weken.
+
+const DAY_MS = 86_400_000;
+/** Maandag 5 januari 1970: week 0. */
+const EPOCH_MONDAY = Date.UTC(1970, 0, 5);
+
+/** Weeknummer (vanaf maandag) van een datum "YYYY-MM-DD". */
+export function weekIndex(dateIso) {
+  const [y, m, d] = String(dateIso).split('-').map(Number);
+  return Math.floor((Date.UTC(y, m - 1, d) - EPOCH_MONDAY) / (7 * DAY_MS));
+}
+
+const mod2 = (n) => ((n % 2) + 2) % 2;
+
+/** Is dit om de week? (Alles anders is elke week.) */
+export const isBiweekly = (item) => Number(item?.everyWeeks) === 2;
+
+/** Valt dit weekmoment (elke week, of om de week in zijn even/oneven week) in de week van deze datum? */
+export function onPatternWeek(item, dateIso) {
+  if (!isBiweekly(item)) return true;
+  return mod2(weekIndex(dateIso)) === mod2(Number(item.weekParity ?? 0));
+}
+
+/** Kunnen twee weekmomenten in dezelfde week vallen? Alleen niet bij om de week in verschillende weken. */
+export function shareWeeks(a, b) {
+  if (!isBiweekly(a) || !isBiweekly(b)) return true;
+  return mod2(Number(a.weekParity ?? 0)) === mod2(Number(b.weekParity ?? 0));
+}
+
+/** Even of oneven week van de eerste keer op of na `startDate` op deze weekdag. */
+export function parityFrom(startDate, weekday) {
+  const [y, m, d] = String(startDate).split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + ((Number(weekday) - dt.getUTCDay() + 7) % 7));
+  return mod2(weekIndex(dt.toISOString().slice(0, 10)));
+}
+
+/** Patroonvelden voor opslag: om de week met zijn week, of niets (elke week). */
+export function patternFields(everyWeeks, startDate, weekday) {
+  return Number(everyWeeks) === 2 ? { everyWeeks: 2, weekParity: parityFrom(startDate, weekday) } : {};
+}
+
 function isoDay(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -46,7 +92,7 @@ export function occurrencesForSchedule(schedule, fromDateIso, weeksAhead) {
   for (const day of days) {
     const iso = isoDay(day);
     for (const slot of schedule) {
-      if (slot.weekday === day.getDay()) out.push({ date: iso, startTime: slot.startTime, endTime: slot.endTime });
+      if (slot.weekday === day.getDay() && onPatternWeek(slot, iso)) out.push({ date: iso, startTime: slot.startTime, endTime: slot.endTime });
     }
   }
   return out;
@@ -142,7 +188,8 @@ export function inStandingSeries(cls, standing) {
     cls.classTypeId === standing.classTypeId &&
     cls.startTime === standing.startTime &&
     typeof cls.date === 'string' &&
-    weekdayOf(cls.date) === Number(standing.weekday)
+    weekdayOf(cls.date) === Number(standing.weekday) &&
+    onPatternWeek(standing, cls.date)
   );
 }
 
@@ -154,6 +201,8 @@ export function inStandingSeries(cls, standing) {
 export function standingAppliesOn(standing, dateIso) {
   if (!standing || standing.active === false) return false;
   if (standing.startDate && dateIso < standing.startDate) return false;
+  // Om de week: alleen in zijn eigen (even of oneven) week.
+  if (!onPatternWeek(standing, dateIso)) return false;
   if (standing.pausedFrom && dateIso >= standing.pausedFrom && (!standing.pausedUntil || dateIso <= standing.pausedUntil)) return false;
   return true;
 }

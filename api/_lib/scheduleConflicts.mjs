@@ -10,6 +10,7 @@
  * Pure functies zonder Firestore, zodat server en tests hetzelfde rekenen.
  */
 import { windowsOn, withinAvailability } from './availability.mjs';
+import { shareWeeks } from './classSchedule.mjs';
 
 /** Standaard openingstijden: eerste les om 06:00, laatste les begint om 21:00. */
 export const DEFAULT_HOURS = { firstStart: '06:00', lastStart: '21:00' };
@@ -38,8 +39,9 @@ export function hoursOf(orgData) {
   };
 }
 
+// Om de week in verschillende weken (even/oneven) botst niet: die vallen nooit in dezelfde week.
 const overlaps = (a, b) =>
-  Number(a.weekday) === Number(b.weekday) && toMin(a.startTime) < toMin(b.endTime) && toMin(b.startTime) < toMin(a.endTime);
+  Number(a.weekday) === Number(b.weekday) && toMin(a.startTime) < toMin(b.endTime) && toMin(b.startTime) < toMin(a.endTime) && shareWeeks(a, b);
 
 /** Een lessoort teruggebracht tot wat telt voor botsingen. */
 const shape = (ct) => ({
@@ -188,7 +190,7 @@ export function allConflicts(classTypes) {
  * ({ weekday, startTime, endTime }). Momenten die direct aansluiten op een andere les van de
  * trainer krijgen `adjacent: true` en staan per dag vooraan.
  */
-export function weeklyFreeSlots({ trainerId, classTypes, availability = null, hours = DEFAULT_HOURS, duration = 60, extraBusy = [] }) {
+export function weeklyFreeSlots({ trainerId, classTypes, availability = null, hours = DEFAULT_HOURS, duration = 60, extraBusy = [], pattern = null }) {
   const trainer = trainerKey(trainerId);
   const mine = trainer ? classTypes.map(shape).filter((o) => o.trainer === trainer).flatMap((o) => o.schedule) : [];
   const days = [];
@@ -198,8 +200,10 @@ export function weeklyFreeSlots({ trainerId, classTypes, availability = null, ho
       windows === null
         ? [{ first: toMin(hours.firstStart), lastStart: toMin(hours.lastStart), end: 24 * 60 }]
         : windows.map((w) => ({ first: toMin(w.from), lastStart: toMin(w.to) - duration, end: toMin(w.to) }));
+    // Om de week (`pattern`, of per weekdag een functie): wat in de andere week valt, is voor dit moment niet bezet.
+    const pat = (typeof pattern === 'function' ? pattern(weekday) : pattern) ?? {};
     const busy = [...mine, ...extraBusy]
-      .filter((s) => Number(s.weekday) === weekday)
+      .filter((s) => Number(s.weekday) === weekday && shareWeeks(pat, s))
       .map((s) => ({ start: toMin(s.startTime), end: toMin(s.endTime) }));
     const edges = new Set(busy.flatMap((b) => [b.start, b.end]));
     const seen = new Set();
