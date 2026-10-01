@@ -53,6 +53,7 @@ import { LimitationsEditor } from './LimitationsEditor';
 import { NumberField } from './NumberField';
 import { PrivacyCard } from './PrivacyCard';
 import { AvailabilityCard } from './AvailabilityCard';
+import { AbsenceCard } from './AbsenceCard';
 import { useColorMode, type ColorModePreference } from '../context/ColorModeContext';
 import { segmentedToggleSx } from '../theme/segmentedToggle';
 import { LEADERBOARD_ENABLED } from '../config/features';
@@ -848,6 +849,7 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
             {limitationsCard}
             {/* Trainers en beheerders: op welke uren ze kunnen (ook via "Bekijk als" door een beheerder). */}
             {uid && (effectiveRole === 'trainer' || effectiveRole === 'admin') && <AvailabilityCard userId={uid} />}
+            {uid && (effectiveRole === 'trainer' || effectiveRole === 'admin') && <AbsenceCard userId={uid} />}
           </Box>
         </Box>
       )}

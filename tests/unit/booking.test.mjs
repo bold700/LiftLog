@@ -2804,3 +2804,97 @@ describe('om de week (vaste PT-momenten en vaste lessen)', () => {
     expect(activeOf('sporter1').map((b) => b.classId).sort()).toEqual(['bw0', 'bw2']);
   });
 });
+
+describe('afwezigheid trainer en invaller', () => {
+  const D = amsterdamDate(new Date(), 3);
+  const D2 = amsterdamDate(new Date(), 10);
+  const cls = (id, date, trainerId, startTime = '18:00', endTime = '19:00', extra = {}) => ({
+    orgId: 'vanas', title: 'Bootcamp', date, startTime, endTime, trainerId, capacity: 8, creditCost: 1, bookedCount: 1, waitlistCount: 0, ...extra,
+  });
+  beforeEach(() => {
+    sentPushes = [];
+    store['profiles/trainer1'] = { ...store['profiles/trainer1'], displayName: 'Kenny' };
+    store['profiles/trainer2'] = { userId: 'trainer2', orgId: 'vanas', orgIds: ['vanas'], role: 'trainer', displayName: 'Simone' };
+    store['profiles/admin1'] = { userId: 'admin1', orgId: 'vanas', orgIds: ['vanas'], role: 'admin', displayName: 'Anne' };
+    store['classes/a1'] = cls('a1', D, 'trainer1');
+    store['classes/a2'] = cls('a2', D2, 'trainer1');
+    store['bookings/ab1'] = { orgId: 'vanas', classId: 'a1', userId: 'sporter1', status: 'booked' };
+    store['pushTokens/tok_s1'] = { userId: 'sporter1', orgId: 'vanas', platform: 'web' };
+  });
+
+  it('afwezig met vaste invaller: de les gaat naar de invaller, het lid krijgt een melding; weghalen zet terug', async () => {
+    const r = await post({ action: 'saveAbsence', kind: 'dates', from: D, until: D, substituteId: 'trainer2' }, 'trainer1');
+    expect(r.statusCode).toBe(200);
+    expect(r.body).toMatchObject({ assigned: 1, open: 0 });
+    expect(store['classes/a1']).toMatchObject({ trainerId: 'trainer2', originalTrainerId: 'trainer1', substituteVia: r.body.absence.id });
+    expect(store['classes/a2'].trainerId).toBe('trainer1');
+    expect(sentPushes).toHaveLength(1);
+    expect(sentPushes[0].tokens).toEqual(['tok_s1']);
+    expect(sentPushes[0].notification.body).toMatch(/Simone geeft de les in plaats van Kenny/);
+
+    const overview = await post({ action: 'absenceOverview' }, 'admin1');
+    expect(overview.body.open).toHaveLength(0);
+    expect(overview.body.covered).toEqual([expect.objectContaining({ classId: 'a1', trainerName: 'Simone', originalTrainerName: 'Kenny' })]);
+
+    const del = await post({ action: 'deleteAbsence', id: r.body.absence.id }, 'trainer1');
+    expect(del.body).toMatchObject({ deleted: true, restored: 1 });
+    expect(store['classes/a1']).toMatchObject({ trainerId: 'trainer1', originalTrainerId: null });
+  });
+
+  it('invaller niet vrij: de les blijft open, met voorstellen (vrij eerst, met reden als bezet)', async () => {
+    store['classes/b1'] = cls('b1', D, 'trainer2', '18:30', '19:30', { title: 'Yoga' });
+    const r = await post({ action: 'saveAbsence', kind: 'dates', from: D, until: D2, substituteId: 'trainer2' }, 'trainer1');
+    expect(r.body).toMatchObject({ assigned: 1, open: 1 });
+    expect(store['classes/a1'].trainerId).toBe('trainer1');
+    expect(store['classes/a2'].trainerId).toBe('trainer2');
+    const overview = await post({ action: 'absenceOverview' }, 'trainer2');
+    expect(overview.body.open).toHaveLength(1);
+    const open = overview.body.open[0];
+    expect(open).toMatchObject({ classId: 'a1', trainerName: 'Kenny' });
+    expect(open.options[0]).toMatchObject({ userId: 'admin1', busy: null });
+    expect(open.options.find((o) => o.userId === 'trainer2')).toMatchObject({ preferred: true, busy: 'geeft dan Yoga' });
+    // Eén klik: toewijzen aan een vrije trainer.
+    const set = await post({ action: 'setClassTrainer', classId: 'a1', trainerId: 'admin1' }, 'trainer2');
+    expect(set.statusCode).toBe(200);
+    expect(store['classes/a1']).toMatchObject({ trainerId: 'admin1', originalTrainerId: 'trainer1' });
+    expect((await post({ action: 'absenceOverview' }, 'trainer2')).body.open).toHaveLength(0);
+  });
+
+  it('andere trainer voor één les: niet als die afwezig is of al een les heeft; een sporter mag het niet', async () => {
+    expect((await post({ action: 'setClassTrainer', classId: 'a1', trainerId: 'trainer2' })).statusCode).toBe(403);
+    store['classes/b1'] = cls('b1', D, 'trainer2', '18:30', '19:30');
+    const busy = await post({ action: 'setClassTrainer', classId: 'a1', trainerId: 'trainer2' }, 'trainer1');
+    expect(busy.statusCode).toBe(409);
+    delete store['classes/b1'];
+    await post({ action: 'saveAbsence', kind: 'dates', from: D, until: D, trainerId: 'trainer2' }, 'admin1');
+    const absent = await post({ action: 'setClassTrainer', classId: 'a1', trainerId: 'trainer2' }, 'trainer1');
+    expect(absent.statusCode).toBe(409);
+    expect(absent.body.error).toMatch(/afwezig/);
+    const ok = await post({ action: 'setClassTrainer', classId: 'a1', trainerId: 'admin1' }, 'trainer1');
+    expect(ok.statusCode).toBe(200);
+    // Terug naar de eigen trainer: geen invaller meer.
+    await post({ action: 'setClassTrainer', classId: 'a1', trainerId: 'trainer1' }, 'trainer1');
+    expect(store['classes/a1']).toMatchObject({ trainerId: 'trainer1', originalTrainerId: null });
+  });
+
+  it('alleen je eigen afwezigheid, of als beheerder die van een trainer; geldig invullen', async () => {
+    expect((await post({ action: 'saveAbsence', kind: 'dates', from: D, trainerId: 'trainer1' }, 'trainer2')).statusCode).toBe(403);
+    expect((await post({ action: 'saveAbsence', kind: 'dates', from: D, trainerId: 'trainer1' }, 'admin1')).statusCode).toBe(200);
+    expect((await post({ action: 'saveAbsence', kind: 'dates', from: D2, until: D }, 'trainer1')).body.error).toMatch(/voor de begindatum/);
+    expect((await post({ action: 'saveAbsence', kind: 'monthly', from: D, weekday: 4 }, 'trainer1')).body.error).toMatch(/hoeveelste/);
+    const m = await post({ action: 'saveAbsence', kind: 'monthly', from: D, nth: 1, weekday: 4 }, 'trainer1');
+    expect(m.body.absence.label).toBe('elke 1e donderdag van de maand');
+    const list = await post({ action: 'listAbsences', trainerId: 'trainer1' }, 'trainer1');
+    expect(list.body.absences).toHaveLength(2);
+    expect((await post({ action: 'listAbsences' })).statusCode).toBe(403);
+  });
+
+  it('een losse PT-afspraak wordt niet aangeboden op een dag dat de trainer afwezig is', async () => {
+    store['profiles/sporter1'].trainerId = 'trainer1';
+    const before = await post({ action: 'singlePtOptions', duration: 60 });
+    expect(before.body.days.some((d) => d.date === D2)).toBe(true);
+    await post({ action: 'saveAbsence', kind: 'dates', from: D2, until: D2 }, 'trainer1');
+    const after = await post({ action: 'singlePtOptions', duration: 60 });
+    expect(after.body.days.some((d) => d.date === D2)).toBe(false);
+  });
+});

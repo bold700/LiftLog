@@ -13,6 +13,7 @@ import {
   DialogActions,
   FormControlLabel,
   IconButton,
+  MenuItem,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -57,6 +58,7 @@ import {
   releaseHold,
   grantCredits,
 } from '../services/classService';
+import { setClassTrainer } from '../services/absenceService';
 import { getOrg } from '../services/orgService';
 import { getColleagues } from '../services/profileService';
 import { designTokens } from '../theme/designTokens';
@@ -1033,7 +1035,11 @@ export function LessenPage() {
 
       <BookConfirmDialog
         cls={confirmClass}
-        trainerName={confirmClass ? trainerNames[confirmClass.trainerId] : undefined}
+        trainerName={
+          confirmClass && trainerNames[confirmClass.trainerId]
+            ? `${trainerNames[confirmClass.trainerId]}${confirmClass.originalTrainerId ? ' (invaller)' : ''}`
+            : undefined
+        }
         credits={credits}
         isStaff={isStaff && !me.trainsAsMember}
         freeCancelHours={freeCancelHours}
@@ -1052,6 +1058,7 @@ export function LessenPage() {
       <ParticipantsDialog
         cls={participantsClass}
         sporters={profileCtx?.allSporters ?? []}
+        trainers={trainerOptions}
         onClose={() => setParticipantsClass(null)}
         onChanged={() => void load()}
         onStart={(cls, plan, ids) => void startClass(cls, plan, ids)}
@@ -1339,6 +1346,7 @@ function BookConfirmDialog({
 function ParticipantsDialog({
   cls,
   sporters,
+  trainers = [],
   onClose,
   onChanged,
   onStart,
@@ -1347,6 +1355,8 @@ function ParticipantsDialog({
 }: {
   cls: StudioClass | null;
   sporters: Profile[];
+  /** Andere trainer op deze ene les (invaller). */
+  trainers?: { userId: string; name: string }[];
   onClose: () => void;
   onChanged: () => void;
   onStart: (cls: StudioClass, plan: ClassPlan, bookedUserIds: string[]) => void;
@@ -1366,6 +1376,29 @@ function ParticipantsDialog({
   const [plan, setPlan] = useState<ClassPlan | null>(null);
   const [planWorkouts, setPlanWorkouts] = useState<Schema[] | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
+  const [trainerSaving, setTrainerSaving] = useState(false);
+  const [classTrainer, setClassTrainerState] = useState<{ trainerId: string; originalTrainerId: string | null } | null>(null);
+  useEffect(() => {
+    setClassTrainerState(cls ? { trainerId: cls.trainerId, originalTrainerId: cls.originalTrainerId ?? null } : null);
+  }, [cls]);
+
+  /** Andere trainer voor alleen deze les (of terug naar de eigen trainer). */
+  const changeTrainer = async (trainerId: string) => {
+    if (!cls || !classTrainer || trainerId === classTrainer.trainerId) return;
+    setTrainerSaving(true);
+    try {
+      await setClassTrainer(cls.id, trainerId);
+      const original = classTrainer.originalTrainerId ?? classTrainer.trainerId;
+      setClassTrainerState({ trainerId, originalTrainerId: trainerId === original ? null : original });
+      const name = trainers.find((t) => t.userId === trainerId)?.name ?? 'De trainer';
+      notify?.success(`${name} geeft deze les. Wie is ingeschreven krijgt een melding.`);
+      onChanged();
+    } catch (e) {
+      notify?.error(e instanceof Error ? e.message : 'Trainer wijzigen mislukt');
+    } finally {
+      setTrainerSaving(false);
+    }
+  };
 
   useEffect(() => {
     setPlan(null);
@@ -1493,6 +1526,31 @@ function ParticipantsDialog({
           {dayLabel(cls.date)} · {cls.startTime}
           {cls.endTime ? `–${cls.endTime}` : ''}
         </Typography>
+
+        {trainers.length > 1 && classTrainer && !classHasStarted(cls) && (
+          <TextField
+            select
+            size="small"
+            fullWidth
+            label="Trainer (alleen deze les)"
+            value={trainers.some((t) => t.userId === classTrainer.trainerId) ? classTrainer.trainerId : ''}
+            onChange={(e) => void changeTrainer(e.target.value)}
+            disabled={trainerSaving}
+            helperText={
+              classTrainer.originalTrainerId
+                ? `Invaller voor ${trainers.find((t) => t.userId === classTrainer.originalTrainerId)?.name ?? 'de eigen trainer'}`
+                : 'Een invaller kiezen verandert alleen deze les, niet de vaste trainer.'
+            }
+            sx={{ mb: 2 }}
+          >
+            {trainers.map((t) => (
+              <MenuItem key={t.userId} value={t.userId}>
+                {t.name}
+                {t.userId === classTrainer.originalTrainerId ? ' · eigen trainer' : ''}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
 
         <Box sx={{ p: 1.5, mb: 2, borderRadius: 2, border: `1px solid ${designTokens.cardBorder}` }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

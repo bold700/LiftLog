@@ -95,6 +95,7 @@ import { getAdmin, getStorageBucket } from './_lib/firebaseAdmin.mjs';
 import { runAccountRetention } from './_lib/accountRetention.mjs';
 import { clearPublishedLeaderboard } from './_lib/leaderboardCleanup.mjs';
 import { orgIdOf, newId } from './_lib/liftlogData.mjs';
+import { absenceCovers, absenceLabel, absenceOn, busyReason, cleanAbsence, substituteOptions } from './_lib/absence.mjs';
 import { actingOrg, isAdminIn, isInactiveIn, isStaffAnywhere, isStaffIn, orgsOf, paysAsMemberIn, roleIn } from './_lib/orgRoles.mjs';
 import { randomBytes } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -326,6 +327,21 @@ export default async function handler(req, res) {
         }
         return await saveAvailability(res, db, actOrg, uid, target, body.days);
       }
+      case 'listAbsences':
+        if (!isStaff) return json(res, 403, { error: 'Alleen trainers en beheerders.', build: BUILD });
+        return await listAbsences(res, db, actOrg, String(body.trainerId ?? '').trim() || null);
+      case 'saveAbsence':
+        if (!isStaff) return json(res, 403, { error: 'Alleen trainers en beheerders.', build: BUILD });
+        return await saveAbsence(res, db, uid, actOrg, myRole, body);
+      case 'deleteAbsence':
+        if (!isStaff) return json(res, 403, { error: 'Alleen trainers en beheerders.', build: BUILD });
+        return await deleteAbsence(res, db, uid, actOrg, myRole, String(body.id ?? '').trim());
+      case 'absenceOverview':
+        if (!isStaff) return json(res, 403, { error: 'Alleen trainers en beheerders.', build: BUILD });
+        return await absenceOverview(res, db, actOrg);
+      case 'setClassTrainer':
+        if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan de trainer van een les wijzigen.', build: BUILD });
+        return await setClassTrainer(res, db, actOrg, body);
       case 'scheduleConflicts':
         if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan het rooster controleren.', build: BUILD });
         return await listScheduleConflicts(res, db, actOrg);
@@ -1369,6 +1385,235 @@ async function saveAvailability(res, db, orgId, uid, userId, rawDays) {
   return json(res, 200, { userId, days: cleaned.value, build: BUILD });
 }
 
+// --- Afwezigheid en invallers (api/_lib/absence.mjs) ------------------------------------------
+
+/** Trainers en beheerders van de studio, met naam. */
+async function orgTrainers(db, orgId) {
+  const snap = await db.collection('profiles').where('orgIds', 'array-contains', orgId).get();
+  return snap.docs
+    .map((d) => ({ userId: d.id, ...d.data() }))
+    .filter((p) => isStaffIn(p, orgId))
+    .map((p) => ({ userId: p.userId, name: String(p.displayName || p.email || 'Trainer') }));
+}
+
+/** Afwezigheden van de studio die nog niet voorbij zijn. */
+async function currentAbsences(db, orgId) {
+  const today = todayIso();
+  const snap = await db.collection('trainerAbsences').where('orgId', '==', orgId).get();
+  return snap.docs.map((d) => ({ ...d.data(), id: d.id })).filter((a) => !a.until || a.until >= today);
+}
+
+/** Lessen van de studio van vandaag tot zover het rooster vooruit staat, nog niet begonnen. */
+async function upcomingOrgClasses(db, orgId) {
+  const from = todayIso();
+  const until = amsterdamDate(new Date(), WEEKS_AHEAD * 7);
+  const snap = await db.collection('classes').where('date', '>=', from).where('date', '<=', until).get();
+  const now = Date.now();
+  return snap.docs
+    .map((d) => ({ ...d.data(), id: d.id }))
+    .filter((c) => orgIdOf(c.orgId) === orgId && (classStartsAt(c)?.getTime() ?? 0) > now);
+}
+
+/**
+ * Een andere trainer op één les zetten. De oorspronkelijke trainer blijft bewaard
+ * (`originalTrainerId`), zodat terugzetten kan en de app "invaller" kan tonen. Wie is ingeschreven
+ * krijgt een melding.
+ */
+async function assignClassTrainer(db, cls, trainerId, { via = null, names = {} } = {}) {
+  const original = cls.originalTrainerId || cls.trainerId || null;
+  const back = trainerId === original;
+  const update = {
+    trainerId,
+    originalTrainerId: back ? null : original,
+    substituteVia: back ? null : via,
+    updatedAt: new Date().toISOString(),
+  };
+  await db.collection('classes').doc(cls.id).set(update, { merge: true });
+  Object.assign(cls, update);
+  const bookings = await db.collection('bookings').where('classId', '==', cls.id).get();
+  const who = names[trainerId] || 'een andere trainer';
+  const message = back
+    ? { title: `${cls.title || 'Les'}: toch ${who}`, body: `${dayLabelNl(cls.date)} ${cls.startTime} geeft ${who} de les weer zelf.` }
+    : pushMessages.substitute(cls, who, names[original] || null, dayLabelNl(cls.date));
+  for (const d of bookings.docs) {
+    const b = d.data();
+    if (!['booked', 'waitlist'].includes(String(b.status))) continue;
+    try {
+      await sendPushToUser(db, String(b.userId), { ...message, data: { kind: 'classChanged', classId: cls.id } });
+    } catch (e) {
+      console.warn('[booking] melding invaller mislukt:', e?.message ?? e);
+    }
+  }
+}
+
+/**
+ * Afwezigheden met een vaste invaller toepassen: lessen van de afwezige trainer op die dagen gaan
+ * naar de invaller, als die vrij is. Wat niet lukt, blijft open staan in Beheer (Lessen zonder
+ * trainer). Bij opslaan van een afwezigheid en elke avond (nieuwe lessen op het rooster).
+ */
+async function applyAbsences(db, orgId, onlyIds = null) {
+  const absences = await currentAbsences(db, orgId);
+  const active = absences.filter((a) => a.substituteId && (!onlyIds || onlyIds.includes(a.id)));
+  if (active.length === 0) return { assigned: 0 };
+  const [classes, trainers] = await Promise.all([upcomingOrgClasses(db, orgId), orgTrainers(db, orgId)]);
+  const names = Object.fromEntries(trainers.map((t) => [t.userId, t.name]));
+  const availability = {};
+  let assigned = 0;
+  for (const cls of classes.sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`))) {
+    if (cls.cancelledAt) continue;
+    const absence = absenceOn(active, cls.trainerId, cls.date);
+    if (!absence || !names[absence.substituteId]) continue;
+    if (!(absence.substituteId in availability)) availability[absence.substituteId] = await availabilityOf(db, orgId, absence.substituteId);
+    if (busyReason(absence.substituteId, cls, { classes, absences, availability: availability[absence.substituteId] })) continue;
+    await assignClassTrainer(db, cls, absence.substituteId, { via: absence.id, names });
+    assigned++;
+  }
+  return { assigned };
+}
+
+/** Elke avond: voor alle studio's met een vaste invaller (nieuwe lessen op het rooster). */
+async function runAbsences(db) {
+  const snap = await db.collection('trainerAbsences').get();
+  const today = todayIso();
+  const orgs = [...new Set(snap.docs.map((d) => d.data()).filter((a) => a.substituteId && (!a.until || a.until >= today)).map((a) => orgIdOf(a.orgId)))];
+  let assigned = 0;
+  for (const orgId of orgs) assigned += (await applyAbsences(db, orgId)).assigned;
+  return assigned;
+}
+
+/** Wie mag afwezigheid van deze trainer beheren: de trainer zelf, of een beheerder. */
+async function requireAbsenceTrainer(db, uid, orgId, myRole, trainerId) {
+  if (trainerId !== uid && myRole !== 'admin') throw refuse('Je kunt alleen je eigen afwezigheid beheren (of als beheerder die van een trainer).', 403);
+  const snap = await db.collection('profiles').doc(trainerId).get();
+  if (!snap.exists || !isStaffIn(snap.data(), orgId) || !orgsOf(snap.data()).includes(orgId)) throw refuse('Deze persoon is geen trainer in jouw studio.', 400);
+}
+
+async function listAbsences(res, db, orgId, trainerId) {
+  const all = await currentAbsences(db, orgId);
+  const list = (trainerId ? all.filter((a) => a.trainerId === trainerId) : all).sort((a, b) => a.from.localeCompare(b.from));
+  return json(res, 200, { absences: list.map((a) => ({ ...a, label: absenceLabel(a) })), build: BUILD });
+}
+
+async function saveAbsence(res, db, uid, orgId, myRole, body) {
+  const trainerId = String(body?.trainerId ?? '').trim() || uid;
+  await requireAbsenceTrainer(db, uid, orgId, myRole, trainerId);
+  const cleaned = cleanAbsence(body, todayIso());
+  if (cleaned.error) return json(res, 400, { error: cleaned.error, build: BUILD });
+  const value = cleaned.value;
+  if (value.substituteId) {
+    if (value.substituteId === trainerId) return json(res, 400, { error: 'Kies een andere trainer als invaller.', build: BUILD });
+    const s = await db.collection('profiles').doc(value.substituteId).get();
+    if (!s.exists || !isStaffIn(s.data(), orgId) || !orgsOf(s.data()).includes(orgId)) {
+      return json(res, 400, { error: 'De invaller is geen trainer in jouw studio.', build: BUILD });
+    }
+  }
+  const existingId = String(body?.id ?? '').trim();
+  let id = existingId;
+  const now = new Date().toISOString();
+  let createdAt = now;
+  if (existingId) {
+    const snap = await db.collection('trainerAbsences').doc(existingId).get();
+    if (!snap.exists || snap.data().orgId !== orgId || snap.data().trainerId !== trainerId) return json(res, 404, { error: 'Deze afwezigheid bestaat niet (meer).', build: BUILD });
+    createdAt = snap.data().createdAt ?? now;
+  } else {
+    id = `ab_${trainerId}_${randomBytes(4).toString('hex')}`;
+  }
+  const absence = { id, orgId, trainerId, ...value, createdBy: uid, createdAt, updatedAt: now };
+  await db.collection('trainerAbsences').doc(id).set(absence);
+  const { assigned } = await applyAbsences(db, orgId, [id]);
+  const classes = await upcomingOrgClasses(db, orgId);
+  const open = classes.filter((c) => !c.cancelledAt && c.trainerId === trainerId && absenceCovers(absence, c.date)).length;
+  return json(res, 200, { absence: { ...absence, label: absenceLabel(absence) }, assigned, open, build: BUILD });
+}
+
+/** Afwezigheid weghalen: lessen die via deze afwezigheid naar een invaller gingen, gaan terug. */
+async function deleteAbsence(res, db, uid, orgId, myRole, id) {
+  const ref = db.collection('trainerAbsences').doc(id);
+  const snap = id ? await ref.get() : null;
+  if (!snap?.exists || snap.data().orgId !== orgId) return json(res, 404, { error: 'Deze afwezigheid bestaat niet (meer).', build: BUILD });
+  await requireAbsenceTrainer(db, uid, orgId, myRole, snap.data().trainerId);
+  const [classes, trainers] = await Promise.all([upcomingOrgClasses(db, orgId), orgTrainers(db, orgId)]);
+  const names = Object.fromEntries(trainers.map((t) => [t.userId, t.name]));
+  let restored = 0;
+  for (const cls of classes) {
+    if (cls.substituteVia !== id || !cls.originalTrainerId) continue;
+    await assignClassTrainer(db, cls, cls.originalTrainerId, { names });
+    restored++;
+  }
+  await ref.delete();
+  return json(res, 200, { deleted: true, restored, build: BUILD });
+}
+
+/**
+ * Beheer → Lessen zonder trainer: komende lessen waarvan de trainer afwezig is, met wie kan
+ * invallen (vrij eerst, de vaste invaller bovenaan). En de lessen die al een invaller hebben.
+ */
+async function absenceOverview(res, db, orgId) {
+  const [absences, classes, trainers] = await Promise.all([currentAbsences(db, orgId), upcomingOrgClasses(db, orgId), orgTrainers(db, orgId)]);
+  const names = Object.fromEntries(trainers.map((t) => [t.userId, t.name]));
+  const availability = {};
+  for (const t of trainers) availability[t.userId] = await availabilityOf(db, orgId, t.userId);
+  const sorted = classes.filter((c) => !c.cancelledAt).sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`));
+  const summary = (c) => ({
+    classId: c.id,
+    title: String(c.title ?? ''),
+    date: c.date,
+    startTime: c.startTime,
+    endTime: c.endTime,
+    trainerId: c.trainerId ?? null,
+    trainerName: names[c.trainerId] ?? null,
+    bookedCount: Number(c.bookedCount) || 0,
+    privateFor: c.privateFor ?? null,
+  });
+  const open = [];
+  for (const c of sorted) {
+    const absence = absenceOn(absences, c.trainerId, c.date);
+    if (!absence) continue;
+    open.push({
+      ...summary(c),
+      absenceLabel: absenceLabel(absence),
+      options: substituteOptions(c, {
+        trainers,
+        absentId: c.trainerId,
+        preferredId: absence.substituteId ?? null,
+        classes,
+        absences,
+        availabilityOf: (id) => availability[id] ?? null,
+      }),
+    });
+  }
+  const covered = sorted
+    .filter((c) => c.originalTrainerId && c.originalTrainerId !== c.trainerId)
+    .map((c) => ({ ...summary(c), originalTrainerId: c.originalTrainerId, originalTrainerName: names[c.originalTrainerId] ?? null }));
+  return json(res, 200, { open, covered, build: BUILD });
+}
+
+/** Andere trainer op één les (alleen deze keer), of terug naar de eigen trainer. */
+async function setClassTrainer(res, db, orgId, body) {
+  const classId = String(body?.classId ?? '').trim();
+  const trainerId = String(body?.trainerId ?? '').trim();
+  const snap = classId ? await db.collection('classes').doc(classId).get() : null;
+  if (!snap?.exists || orgIdOf(snap.data().orgId) !== orgId) return json(res, 404, { error: 'Deze les bestaat niet (meer).', build: BUILD });
+  const cls = { ...snap.data(), id: snap.id };
+  if (!trainerId) return json(res, 400, { error: 'Kies een trainer.', build: BUILD });
+  if (cls.trainerId === trainerId) return json(res, 200, { trainerId, build: BUILD });
+  const trainers = await orgTrainers(db, orgId);
+  if (!trainers.some((t) => t.userId === trainerId)) return json(res, 400, { error: 'Deze trainer hoort niet bij jouw studio.', build: BUILD });
+  const [absences, sameDay, sched] = await Promise.all([
+    currentAbsences(db, orgId),
+    db.collection('classes').where('date', '==', cls.date).get(),
+    scheduleContext(db, orgId),
+  ]);
+  const classes = sameDay.docs.map((d) => ({ ...d.data(), id: d.id })).filter((c) => orgIdOf(c.orgId) === orgId);
+  // Beschikbaarheid telt hier niet: de trainer kiest bewust. Afwezig of al een les: dan niet.
+  const reason = busyReason(trainerId, cls, { classes, absences, availability: null });
+  const name = trainers.find((t) => t.userId === trainerId)?.name ?? 'Deze trainer';
+  if (reason === 'afwezig') return json(res, 409, { error: `${name} is die dag afwezig.`, build: BUILD });
+  if (reason && sched.block) return json(res, 409, { error: `${name} ${reason}.`, build: BUILD });
+  await assignClassTrainer(db, cls, trainerId, { names: Object.fromEntries(trainers.map((t) => [t.userId, t.name])) });
+  return json(res, 200, { trainerId, originalTrainerId: cls.originalTrainerId ?? null, build: BUILD });
+}
+
 // --- Abonnement en vaste momenten (api/_lib/planCoverage.mjs) -----------------------------------
 
 /** Abonnement van een lid en hoeveel vaste momenten er al staan (of aangevraagd zijn). */
@@ -1772,18 +2017,20 @@ async function rescheduleSource(db, uid, orgId, isStaff, classId) {
 async function optionsFor(db, orgId, { trainerId, room, duration, exclude }, { ignoreRequestId = null, days = RESCHEDULE_DAYS } = {}) {
   const now = new Date();
   const dates = Array.from({ length: days }, (_, i) => amsterdamDate(now, i));
-  const [orgSnap, availability, classSnap, pendingSnap] = await Promise.all([
+  const [orgSnap, availability, classSnap, pendingSnap, absences] = await Promise.all([
     db.collection('orgs').doc(orgId).get(),
     availabilityOf(db, orgId, trainerId),
     db.collection('classes').where('date', '>=', dates[0]).where('date', '<=', dates[dates.length - 1]).get(),
     db.collection('rescheduleRequests').where('trainerId', '==', trainerId).where('status', '==', 'pending').get(),
+    currentAbsences(db, orgId),
   ]);
   // Openstaande verzoeken bij deze trainer houden dat moment vrij voor wie het vroeg.
   const pending = pendingSnap.docs.filter((d) => d.id !== ignoreRequestId).map((d) => d.data());
   const busy = busyByDate([...classSnap.docs.map((d) => d.data()), ...pending], { trainerId, room });
   const minStart = now.getTime() + MIN_LEAD_MINUTES * 60 * 1000;
   return rescheduleOptions({
-    dates,
+    // Op dagen dat de trainer afwezig is, biedt de app hem niet aan.
+    dates: dates.filter((d) => !absenceOn(absences, trainerId, d)),
     duration,
     availability,
     hours: hoursOf(orgSnap.exists ? orgSnap.data() : null),
@@ -3454,6 +3701,11 @@ async function eveningRun(req, res, db) {
   // Abonnementen met een ingangsdatum van vandaag laten starten (eerste factuur en credits).
   report.membershipsStarted = await startScheduledMemberships(db).catch((e) => {
     console.error('[eveningRun] geplande abonnementen starten mislukte:', e);
+    return 0;
+  });
+  // Afwezige trainers met een vaste invaller: nieuwe lessen op het rooster naar de invaller.
+  report.substitutes = await runAbsences(db).catch((e) => {
+    console.error('[eveningRun] invallers toewijzen mislukte:', e);
     return 0;
   });
   // Automatisch afschrijven: verlengingen bijwerken en open facturen met machtiging incasseren.
