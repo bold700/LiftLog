@@ -141,6 +141,10 @@ standaard op "Niet herhaald".
 - **Groepsles**: een les uit het rooster op die dag. Niet herhaald = gewoon inschrijven (of
   wachtlijst als hij vol zit); elke week = vaste groepsles op dat weekmoment.
 - Op een dag zonder plek toont de app de eerstvolgende dagen waarop het wel kan.
+- **Vanuit het rooster (staf)**: in Lessen → Week op een leeg vak klikken opent "Nieuwe afspraak"
+  met die dag en tijd (per half uur) al ingevuld; je kiest het lid, de trainer staat op jezelf en
+  Herhaling op "Niet herhaald". Is de trainer op die tijd niet vrij, dan staat de dichtstbijzijnde
+  vrije tijd klaar. In de Dag-weergave doet de knop **Afspraak** hetzelfde.
 - Onder de vaste lessen staan de **losse afspraken** van het lid (ook verzette lessen en losse
   groepslessen), met Afmelden en voor staf Verzetten.
 - Een sporter plant niet meer vaste momenten in dan zijn abonnement toestaat (soort en keer per

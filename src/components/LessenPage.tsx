@@ -22,6 +22,7 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import { PageLayout, ContentCard, EmptyState } from './layout';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
@@ -63,13 +64,15 @@ import { segmentedToggleSx, filterPillSx } from '../theme/segmentedToggle';
 import { FilterGroup, FilterSheet } from './FilterSheet';
 import { addWeeks, todayIso } from '../utils/format';
 import { WeekTimeGrid } from './lessen/WeekTimeGrid';
+import { PlanMomentDialog } from './PlanMomentDialog';
+import { getClassTypes } from '../services/classTypeService';
 import { ClassPlanDialog, ExerciseLines } from './beheer/ClassPlanDialog';
 import { getClassPlan, type ClassPlan } from '../services/classPlanService';
 import { getPlannableWorkouts } from '../services/workoutFirestore';
 import { createGroupSession } from '../services/groupSessionService';
 import { ClassSessionView } from './groupSession/ClassSessionView';
 import { useShowBackButton } from '../context/TopBarBackContext';
-import type { GroupSession, Profile, Schema, SessionKind, StandingBooking } from '../types';
+import type { ClassType, GroupSession, Profile, Schema, SessionKind, StandingBooking } from '../types';
 
 /** Zonder eigen instelling geldt dit aantal uur, zoals de server standaard hanteert. */
 const DEFAULT_FREE_CANCEL_HOURS = 12;
@@ -168,6 +171,9 @@ export function LessenPage() {
   const [confirmClass, setConfirmClass] = useState<StudioClass | null>(null);
   const [cancelConfirmClass, setCancelConfirmClass] = useState<StudioClass | null>(null);
   const [participantsClass, setParticipantsClass] = useState<StudioClass | null>(null);
+  /** Staf klikt op een leeg stuk van het rooster: nieuwe afspraak op die dag en tijd. */
+  const [createAt, setCreateAt] = useState<{ date: string; time: string } | null>(null);
+  const [publicTypes, setPublicTypes] = useState<ClassType[]>([]);
   // Les geven: het groepsles-scherm met de ingeschreven sporters (Figma "Group session").
   const [live, setLive] = useState<{ cls: StudioClass; plan: ClassPlan; session: GroupSession; participants: Profile[] } | null>(
     null
@@ -256,6 +262,22 @@ export function LessenPage() {
     return weekStart < today() ? weekStart : today();
   }, [selectedDate]);
   const loadedOnce = useRef(false);
+
+  // Nieuwe afspraak vanuit het rooster (staf): leden, trainers en de lessoorten (voor "elke week").
+  const memberOptions = useMemo(
+    () => (profileCtx?.allSporters ?? []).map((p) => ({ userId: p.userId, name: p.displayName?.trim() || p.email || p.userId })),
+    [profileCtx?.allSporters]
+  );
+  const trainerOptions = useMemo(
+    () => Object.entries(trainerNames).map(([userId, name]) => ({ userId, name })).sort((a, b) => a.name.localeCompare(b.name)),
+    [trainerNames]
+  );
+  useEffect(() => {
+    if (!createAt || publicTypes.length) return;
+    getClassTypes()
+      .then((all) => setPublicTypes(all.filter((t) => !t.privateFor && !t.privateForGroup)))
+      .catch(() => undefined);
+  }, [createAt, publicTypes.length]);
 
   const load = useCallback(async () => {
     if (!me) return;
@@ -894,6 +916,14 @@ export function LessenPage() {
               <ChevronRightRoundedIcon fontSize="small" />
             </IconButton>
           </Box>
+          {/* Staf: zoals in de week op een leeg vak klikken, maar dan als knop (de dag is een lijst). */}
+          {isStaff && selectedDate >= today() && (
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: -1, mb: 1 }}>
+              <Button size="small" startIcon={<AddRoundedIcon />} onClick={() => setCreateAt({ date: selectedDate, time: '' })} sx={{ textTransform: 'none' }}>
+                Afspraak
+              </Button>
+            </Box>
+          )}
           {isStaff && myDayOnly && (
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
               {dayClasses.length === 1 ? '1 sessie' : `${dayClasses.length} sessies`}
@@ -967,6 +997,7 @@ export function LessenPage() {
                   setSelectedDate(d);
                   setViewMode('day');
                 }}
+                onCreateAt={isStaff ? (date, time) => setCreateAt({ date, time }) : undefined}
               />
             </>
           )}
@@ -1030,6 +1061,26 @@ export function LessenPage() {
           setReschedule({ classId, staff: true, memberName, moveBookingId: bookingId });
         }}
       />
+
+      {isStaff && (
+        <PlanMomentDialog
+          open={!!createAt}
+          userId=""
+          members={memberOptions}
+          asStaff
+          types={publicTypes}
+          classes={classes}
+          trainers={trainerOptions}
+          defaultTrainerId={me?.userId ?? null}
+          initialDate={createAt?.date ?? null}
+          initialTime={createAt?.time ?? null}
+          onClose={() => setCreateAt(null)}
+          onDone={() => {
+            void load();
+            setRequestsVersion((v) => v + 1);
+          }}
+        />
+      )}
 
       <RescheduleDialog
         classId={reschedule?.classId ?? null}
