@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -85,12 +86,44 @@ interface Props {
   onClose: () => void;
   /** Na vastzetten of aanvragen: opnieuw laden. */
   onDone: () => void;
+  /** Vanuit het rooster (staf): eerst een lid kiezen; `userId` is dan leeg. */
+  members?: { userId: string; name: string }[];
+  /** Vanuit het rooster: aangeklikte dag en tijd. Standaard dan "Niet herhaald". */
+  initialDate?: string | null;
+  initialTime?: string | null;
+}
+
+const toMin = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+};
+
+/** De optie die het dichtst bij de gewenste tijd ligt. */
+function nearestBy<T>(items: T[], time: (t: T) => string, wanted: string): T | undefined {
+  const w = toMin(wanted);
+  return items.reduce<T | undefined>((best, t) => (!best || Math.abs(toMin(time(t)) - w) < Math.abs(toMin(time(best)) - w) ? t : best), undefined);
 }
 
 const NO_CLASSES: StudioClass[] = [];
 
-export function PlanMomentDialog({ open, userId, asStaff, types, classes = NO_CLASSES, trainers, defaultTrainerId, moveSeries = null, onClose, onDone }: Props) {
+export function PlanMomentDialog({
+  open,
+  userId: fixedUserId,
+  asStaff,
+  types,
+  classes = NO_CLASSES,
+  trainers,
+  defaultTrainerId,
+  moveSeries = null,
+  onClose,
+  onDone,
+  members,
+  initialDate = null,
+  initialTime = null,
+}: Props) {
   const notify = useNotify();
+  const [picked, setPicked] = useState<{ userId: string; name: string } | null>(null);
+  const userId = fixedUserId || picked?.userId || '';
   const [status, setStatus] = useState<PlanStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [kind, setKind] = useState<Kind>('pt');
@@ -109,16 +142,22 @@ export function PlanMomentDialog({ open, userId, asStaff, types, classes = NO_CL
 
   const today = todayIso();
 
-  // Bij openen: abonnement en wat er al staat.
+  // Opnieuw open: opnieuw een lid kiezen.
+  useEffect(() => {
+    if (open) setPicked(null);
+  }, [open]);
+
+  // Bij openen (en na het kiezen van een lid): abonnement en wat er al staat.
   useEffect(() => {
     if (!open) return;
     let alive = true;
     setStatus(null);
     setStatusError(null);
-    setStartTime('');
+    setStartTime(initialTime ?? '');
     setClassId('');
-    setDate(todayIso());
-    setDateTouched(false);
+    setDate(initialDate ?? todayIso());
+    setDateTouched(!!initialDate);
+    if (!userId) return;
     getPlanStatus(asStaff ? userId : undefined).then(
       (s) => {
         if (!alive) return;
@@ -126,7 +165,8 @@ export function PlanMomentDialog({ open, userId, asStaff, types, classes = NO_CL
         setKind(moveSeries || s.plan?.covers !== 'group' ? 'pt' : 'group');
         // Ruimte in het abonnement: standaard elke week. Vol of geen abonnement: één keer.
         const full = s.plan?.perWeek != null && s.used + s.pending >= s.plan.perWeek;
-        setRepeat(moveSeries || (s.plan && !full) ? 'weekly' : 'once');
+        // Vanuit het rooster: zoals Google Agenda standaard "Niet herhaald".
+        setRepeat(moveSeries || (!initialDate && s.plan && !full) ? 'weekly' : 'once');
         setTrainerId(moveSeries?.trainerId || defaultTrainerId || s.trainerId || trainers[0]?.userId || '');
         if (moveSeries) setDuration(moveSeries.duration);
       },
@@ -135,7 +175,7 @@ export function PlanMomentDialog({ open, userId, asStaff, types, classes = NO_CL
     return () => {
       alive = false;
     };
-  }, [open, userId, asStaff, defaultTrainerId, trainers, moveSeries]);
+  }, [open, userId, asStaff, defaultTrainerId, trainers, moveSeries, initialDate, initialTime]);
 
   // PT: vrije tijden bij de trainer; per weekdag (elke week) of per datum (één keer).
   const needsTrainer = kind === 'pt' && !!status && (asStaff || !!status.trainerId);
@@ -207,19 +247,23 @@ export function PlanMomentDialog({ open, userId, asStaff, types, classes = NO_CL
     if (!has) setDate(freeDates[0]);
   }, [dateTouched, loading, freeDates, groupDates, kind, date, ptTimes.length]);
 
-  // Tijd: de eerste die aansluit, anders de eerste vrije. Groepsles: de eerste van die dag.
+  // Tijd: vanuit het rooster de aangeklikte (of de dichtstbijzijnde vrije); anders de eerste die
+  // aansluit, of de eerste vrije. Groepsles: de les die het dichtst bij de aangeklikte tijd begint.
+  const wantedTime = initialTime && date === initialDate ? initialTime : null;
   const timesKey = ptTimes.map((t) => t.startTime).join(',');
   useEffect(() => {
     if (kind !== 'pt') return;
     if (ptTimes.some((t) => t.startTime === startTime)) return;
-    setStartTime((ptTimes.find((t) => t.adjacent) ?? ptTimes[0])?.startTime ?? '');
+    const pick = wantedTime ? nearestBy(ptTimes, (t) => t.startTime, wantedTime) : (ptTimes.find((t) => t.adjacent) ?? ptTimes[0]);
+    setStartTime(pick?.startTime ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, timesKey]);
   const groupKey = groupOnDate.map((c) => c.id).join(',');
   useEffect(() => {
     if (kind !== 'group') return;
     if (groupOnDate.some((c) => c.id === classId)) return;
-    setClassId(groupOnDate[0]?.id ?? '');
+    const pick = wantedTime ? nearestBy(groupOnDate, (c) => c.startTime, wantedTime) : groupOnDate[0];
+    setClassId(pick?.id ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, groupKey]);
 
@@ -305,10 +349,28 @@ export function PlanMomentDialog({ open, userId, asStaff, types, classes = NO_CL
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{moveSeries ? 'Reeks wijzigen' : 'Moment inplannen'}</DialogTitle>
+      <DialogTitle>{moveSeries ? 'Reeks wijzigen' : members ? 'Nieuwe afspraak' : 'Moment inplannen'}</DialogTitle>
       <DialogContent>
+        {members && (
+          <Autocomplete
+            options={members}
+            value={picked}
+            onChange={(_, v) => setPicked(v)}
+            getOptionLabel={(m) => m.name}
+            isOptionEqualToValue={(a, b) => a.userId === b.userId}
+            renderInput={(params) => <TextField {...params} label="Lid" size="small" autoFocus={!picked} />}
+            noOptionsText="Geen lid gevonden"
+            sx={{ mt: 1, mb: 2 }}
+          />
+        )}
+        {members && !userId && initialDate && (
+          <Typography variant="body2" color="text.secondary">
+            {rescheduleDayLabel(initialDate)}
+            {initialTime ? ` om ${initialTime}` : ''}. Kies voor wie de afspraak is.
+          </Typography>
+        )}
         {statusError && <Alert severity="error">{statusError}</Alert>}
-        {!status && !statusError && (
+        {userId && !status && !statusError && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
             <CircularProgress size={24} />
           </Box>
@@ -458,6 +520,11 @@ export function PlanMomentDialog({ open, userId, asStaff, types, classes = NO_CL
             </Box>
 
             {optionsError && <Alert severity="error">{optionsError}</Alert>}
+            {kind === 'pt' && wantedTime && chosenTime && chosenTime.startTime !== wantedTime && (
+              <Typography variant="body2" color="text.secondary">
+                Om {wantedTime} is de trainer niet vrij; de dichtstbijzijnde vrije tijd staat klaar.
+              </Typography>
+            )}
             {nothingThisDay && (
               <Typography variant="body2" color="text.secondary">
                 {kind === 'pt'

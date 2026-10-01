@@ -23,6 +23,8 @@ interface Props {
   onOpenClass: (cls: StudioClass) => void;
   /** Tik op een datum in de kop: naar die dag in de Dag-weergave. */
   onSelectDay: (date: string) => void;
+  /** Staf: klik op een leeg stuk van het rooster → nieuwe afspraak op die dag en tijd (per half uur). */
+  onCreateAt?: (date: string, time: string) => void;
 }
 
 /** Minuten sinds middernacht nu, elke minuut bijgewerkt (voor de lijn "nu"). */
@@ -44,13 +46,25 @@ function useNowMinutes(): number {
  * Lessen die tegelijk vallen staan naast elkaar. Kleuren volgen Figma "Book a class": open = Primary
  * Container, ingeschreven = Tertiary Container, vol/afgelast = Surface Container High.
  */
-export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames, labelFor, today, onOpenClass, onSelectDay }: Props) {
+export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames, labelFor, today, onOpenClass, onSelectDay, onCreateAt }: Props) {
   const nowMin = useNowMinutes();
   const theme = useTheme();
   // Op de telefoon is een dagkolom ~40px: lessen die tegelijk vallen passen niet naast elkaar.
   const compact = useMediaQuery(theme.breakpoints.down('md'));
   const weekClasses = useMemo(() => days.flatMap((d) => classesByDate.get(d) ?? []), [days, classesByDate]);
-  const [startHour, endHour] = useMemo(() => hourRange(weekClasses), [weekClasses]);
+  // Wie kan inplannen, ziet ook de vroege en late uren (07–22), zodat daar geklikt kan worden.
+  const [startHour, endHour] = useMemo(() => {
+    const [s, e] = hourRange(weekClasses);
+    return onCreateAt ? [Math.min(s, 7), Math.max(e, 22)] : [s, e];
+  }, [weekClasses, onCreateAt]);
+  const [hover, setHover] = useState<{ date: string; min: number } | null>(null);
+  /** Minuut van de dag op de plek van de muis/vinger, afgerond op een half uur. */
+  const slotAt = (e: React.MouseEvent<HTMLElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const min = startHour * 60 + Math.floor((e.clientY - rect.top) / pxPerMin / 30) * 30;
+    return Math.max(startHour * 60, Math.min(min, endHour * 60 - 30));
+  };
+  const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
   const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i);
   const gridHeight = (endHour - startHour) * HOUR_PX;
   const pxPerMin = HOUR_PX / 60;
@@ -154,9 +168,14 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
           return (
             <Box
               key={d}
+              // Alleen een klik op de lege achtergrond (niet op een les) maakt een nieuwe afspraak.
+              onClick={onCreateAt ? (e) => e.target === e.currentTarget && onCreateAt(d, hhmm(slotAt(e))) : undefined}
+              onMouseMove={onCreateAt ? (e) => setHover(e.target === e.currentTarget ? { date: d, min: slotAt(e) } : null) : undefined}
+              onMouseLeave={onCreateAt ? () => setHover(null) : undefined}
               sx={{
                 position: 'relative',
                 height: gridHeight,
+                cursor: onCreateAt ? 'pointer' : 'default',
                 borderLeft: `1px solid ${designTokens.cardBorder}`,
                 // Uurlijnen als achtergrond, zodat ze niet over de blokken heen vallen.
                 backgroundImage: `repeating-linear-gradient(to bottom, ${designTokens.cardBorder} 0, ${designTokens.cardBorder} 1px, transparent 1px, transparent ${HOUR_PX}px)`,
@@ -304,6 +323,29 @@ export function WeekTimeGrid({ days, classesByDate, bookingByClass, trainerNames
                   </Box>
                 );
               })}
+              {onCreateAt && hover?.date === d && (
+                <Box
+                  aria-hidden
+                  sx={{
+                    position: 'absolute',
+                    left: 2,
+                    right: 2,
+                    top: (hover.min - startHour * 60) * pxPerMin + 1,
+                    height: 30 * pxPerMin - 2,
+                    borderRadius: 1,
+                    border: `1px dashed ${designTokens.outline}`,
+                    color: 'text.secondary',
+                    fontSize: 11,
+                    lineHeight: `${30 * pxPerMin - 4}px`,
+                    px: 0.75,
+                    pointerEvents: 'none',
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  + {hhmm(hover.min)}
+                </Box>
+              )}
               {showNow && d === today && (
                 <Box
                   aria-hidden
