@@ -72,6 +72,13 @@ export const messages = {
       body: `${memberName || 'Een sporter'} vraagt ${req?.title || 'een PT-moment'} aan op ${when(req)}. Keur het goed of wijs het af in Beheer.`,
     };
   },
+  /** Aan wie is ingeschreven: een andere trainer geeft deze les (invaller). */
+  substitute(cls, name, originalName, dayLabelText) {
+    return {
+      title: `${cls?.title || 'Les'}: invaller`,
+      body: `${dayLabelText || cls?.date || ''} ${shortTime(cls?.startTime)}: ${name} geeft de les${originalName ? ` in plaats van ${originalName}` : ''}.`.trim(),
+    };
+  },
   /** Aan de trainer: een sporter vraagt één losse PT-afspraak aan. */
   singleRequested(req, memberName) {
     return {

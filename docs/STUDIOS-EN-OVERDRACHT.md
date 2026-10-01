@@ -252,6 +252,27 @@ vrij zijn. Momenten die direct aansluiten op een andere les van de trainer staan
 - Verzoeken staan in `rescheduleRequests` (alleen via de server); rekenregels in
   `api/_lib/reschedule.mjs`.
 
+### Afwezigheid en invallers
+
+Profiel → **Afwezigheid** (trainer zelf, of een beheerder voor een trainer):
+
+- **Losse dagen**: van … t/m … (vakantie, ziek, cursus).
+- **Elke maand**: bijv. "1e donderdag van de maand" (1e t/m 4e of de laatste), vanaf een datum en
+  eventueel t/m een datum.
+- Optioneel een **vaste invaller**. De lessen van de trainer op die dagen gaan dan naar de invaller,
+  als die vrij is (niet afwezig, geen andere les, binnen zijn beschikbaarheid). Wie is ingeschreven
+  krijgt een pushmelding. Elke avond loopt dit opnieuw voor nieuwe lessen op het rooster.
+- Lessen die nog geen invaller hebben staan in Beheer → Leden bij **Lessen zonder trainer**, met wie
+  vrij is (de vaste invaller bovenaan, bezet met de reden erbij) en één knop Toewijzen. Niemand vrij?
+  Gelast de les af in Lessen.
+- Eén les een andere trainer geven: open de les (Deelnemers) → **Trainer (alleen deze les)**. De
+  vaste trainer van de lessoort blijft hetzelfde. Terugzetten kan in hetzelfde veld.
+- Afwezigheid weghalen: lessen die via die afwezigheid naar een invaller gingen, gaan terug.
+- Een losse PT-afspraak of verzetten biedt geen dagen aan waarop de trainer afwezig is.
+- Opslag: `trainerAbsences/{id}` (alleen via de server); een les met invaller heeft
+  `originalTrainerId` (en `substituteVia` als het via een afwezigheid ging). Rekenregels in
+  `api/_lib/absence.mjs`.
+
 ## 3b. Veilig uitproberen: de Testruimte
 
 Er is één Firebase-project. De previewomgeving van Vercel schrijft dus in dezelfde database als

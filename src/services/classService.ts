@@ -51,6 +51,8 @@ export interface StudioClass {
   startTime: string;
   endTime: string | null;
   trainerId: string;
+  /** Invaller: de eigen trainer van deze les (de trainer was afwezig of iemand anders geeft 'm). */
+  originalTrainerId?: string | null;
   capacity: number;
   /** Wat de les kost. Standaard één credit. */
   creditCost: number;
@@ -118,6 +120,7 @@ function toClass(data: Record<string, unknown>, id: string): StudioClass {
     startTime: str(data.startTime, '00:00'),
     endTime: data.endTime ? str(data.endTime) : null,
     trainerId: str(data.trainerId),
+    originalTrainerId: typeof data.originalTrainerId === 'string' && data.originalTrainerId ? data.originalTrainerId : null,
     capacity: num(data.capacity),
     creditCost: num(data.creditCost, 1),
     bookedCount: num(data.bookedCount),
