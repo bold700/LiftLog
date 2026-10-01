@@ -221,6 +221,15 @@ await t('sporter leest zijn eigen checkout-post → geweigerd', false, getDoc(do
 await t('beheerder leest een checkout-post van zijn studio → geweigerd', false, getDoc(doc(as('admin1'), 'mollieCheckouts/tr_test1')));
 await t('sporter maakt zelf een checkout-post aan → geweigerd', false, setDoc(doc(as('sporter1'), 'mollieCheckouts/tr_nieuw'), { orgId: 'vanas', userId: 'sporter1', planId: 'pl1', status: 'pending' }));
 
+// mollieCustomers: klant en machtiging bij Mollie per lid (automatisch afschrijven). Alleen de server.
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'mollieCustomers/vanas__sporter1'), { orgId: 'vanas', userId: 'sporter1', test: { customerId: 'cst_1', mandateId: 'mdt_1' } });
+});
+await t('sporter leest zijn eigen machtiging → geweigerd', false, getDoc(doc(as('sporter1'), 'mollieCustomers/vanas__sporter1')));
+await t('beheerder leest een machtiging van zijn studio → geweigerd', false, getDoc(doc(as('admin1'), 'mollieCustomers/vanas__sporter1')));
+await t('sporter zet zelf een machtiging → geweigerd', false, setDoc(doc(as('sporter1'), 'mollieCustomers/vanas__sporter1'), { test: { mandateId: 'nep' } }));
+await t('beheerder zet automatisch afschrijven aan → mag', true, updateDoc(doc(as('admin1'), 'orgs/vanas'), { 'payments.autoCollect': true }));
+
 // Meldingen (Beheer → Meldingen): de schakelaars staan op het studio-document, alleen de eigenaar
 // zet ze om. Berichten van de studio (broadcasts) lopen alleen via de server.
 await t('beheerder zet een automatische melding uit → mag', true, updateDoc(doc(as('admin1'), 'orgs/vanas'), { notifications: { birthday: false } }));

@@ -118,7 +118,14 @@ export function toPaymentsStatus(raw: unknown): OrgPaymentsStatus {
     liveConnectedAt: str(p.liveConnectedAt),
     testOrganizationName: str(p.testOrganizationName),
     liveOrganizationName: str(p.liveOrganizationName),
+    autoCollect: p.autoCollect === true,
   };
+}
+
+/** Automatisch afschrijven aan/uit (beheerder; geen geheim, gewone write op het studiodoc). */
+export async function setAutoCollect(orgId: string, on: boolean): Promise<void> {
+  if (!isFirebaseConfigured() || !db) throw new Error('Firebase niet geconfigureerd');
+  await setDoc(doc(db, COLLECTION, orgId), { payments: { autoCollect: on }, updatedAt: serverTimestamp() }, { merge: true });
 }
 
 /**

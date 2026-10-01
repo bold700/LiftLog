@@ -70,26 +70,49 @@ export async function getOrgMollieKey(db, orgId) {
 }
 
 /**
- * Eenmalige betaling aanmaken. `redirectUrl` is waar de browser na afloop naartoe gaat,
- * `webhookUrl` is waar Mollie de statuswijziging meldt (zie mollieWebhook in api/booking.mjs) —
- * geeft de betaal-id en de checkout-URL terug waar de browser heen moet.
+ * Betaling aanmaken. `redirectUrl` is waar de browser na afloop naartoe gaat, `webhookUrl` is waar
+ * Mollie de statuswijziging meldt (zie mollieWebhook in api/booking.mjs) — geeft de betaal-id en
+ * de checkout-URL terug waar de browser heen moet.
+ *
+ * Automatisch afschrijven (incasso) gaat in twee stappen, met een klant bij Mollie (`customerId`):
+ * - `sequenceType: 'first'`: het lid betaalt één keer zelf (iDEAL e.d.) en geeft daarmee een
+ *   machtiging af;
+ * - `sequenceType: 'recurring'`: daarna schrijft de server zelf af op die machtiging, zonder
+ *   checkout (dus ook zonder checkout-URL).
  */
-export async function createMolliePayment({ apiKey, amount, description, redirectUrl, webhookUrl, fetchImpl = fetch }) {
+export async function createMolliePayment({ apiKey, amount, description, redirectUrl, webhookUrl, customerId, sequenceType, mandateId, metadata, fetchImpl = fetch }) {
+  const recurring = sequenceType === 'recurring';
   const res = await fetchImpl('https://api.mollie.com/v2/payments', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       amount: { currency: 'EUR', value: (Math.round(Number(amount) * 100) / 100).toFixed(2) },
       description,
-      redirectUrl,
+      ...(recurring ? {} : { redirectUrl }),
       webhookUrl,
+      ...(customerId ? { customerId } : {}),
+      ...(sequenceType ? { sequenceType } : {}),
+      ...(mandateId ? { mandateId } : {}),
+      ...(metadata ? { metadata } : {}),
     }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.detail || `Mollie kon geen betaling aanmaken (${res.status}).`);
-  const checkoutUrl = data?._links?.checkout?.href;
-  if (!data?.id || !checkoutUrl) throw new Error('Mollie gaf geen betaal-URL terug.');
-  return { id: data.id, checkoutUrl };
+  const checkoutUrl = data?._links?.checkout?.href ?? null;
+  if (!data?.id || (!recurring && !checkoutUrl)) throw new Error('Mollie gaf geen betaal-URL terug.');
+  return { id: data.id, checkoutUrl, status: data?.status ?? null };
+}
+
+/** Klant bij Mollie aanmaken (nodig voor een machtiging). Geeft het klant-id terug. */
+export async function createMollieCustomer({ apiKey, name, email, metadata, fetchImpl = fetch }) {
+  const res = await fetchImpl('https://api.mollie.com/v2/customers', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...(name ? { name } : {}), ...(email ? { email } : {}), ...(metadata ? { metadata } : {}) }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data?.id) throw new Error(data?.detail || `Mollie kon geen klant aanmaken (${res.status}).`);
+  return data.id;
 }
 
 /**
@@ -102,5 +125,12 @@ export async function getMolliePayment({ apiKey, paymentId, fetchImpl = fetch })
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.detail || `Mollie kon de betaling niet ophalen (${res.status}).`);
-  return { id: data.id, status: data.status };
+  return {
+    id: data.id,
+    status: data.status,
+    // Na een eerste betaling (sequenceType 'first') staat hier de machtiging voor latere incasso's.
+    mandateId: data.mandateId ?? null,
+    customerId: data.customerId ?? null,
+    sequenceType: data.sequenceType ?? null,
+  };
 }

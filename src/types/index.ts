@@ -445,6 +445,8 @@ export interface OrgPaymentsStatus {
   /** Naam van de Mollie-organisatie die de sleutel opleverde, ter herkenning ("Verbonden met …"). */
   testOrganizationName: string | null;
   liveOrganizationName: string | null;
+  /** Automatisch afschrijven (incasso via een Mollie-machtiging); de dagelijkse ronde doet het werk. */
+  autoCollect: boolean;
 }
 
 export interface OrgBusiness {
@@ -765,6 +767,10 @@ export interface Charge {
   invoiceSentTo: string | null;
   /** Alleen bij een zelf-aankoop via Mollie: het betaal-id, ter herkenning in Beheer. */
   molliePaymentId?: string | null;
+  /** 'mollie' als de factuur via Mollie is betaald (betaallink, incasso of zelf-aankoop). */
+  paidBy?: string | null;
+  /** Automatisch afschrijven: loopt, gelukt of mislukt (dan blijft de factuur open). */
+  collectStatus?: 'pending' | 'paid' | 'failed' | null;
 }
 
 export type SchemaAudience = 'single' | 'multiple' | 'open' | 'group';
