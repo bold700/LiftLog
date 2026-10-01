@@ -95,3 +95,27 @@ describe('scheduleConflicts', () => {
     expect(withinAvailability(r.value, { weekday: 1, startTime: '11:30', endTime: '12:30' })).toBe(false);
   });
 });
+
+describe('vrije weekmomenten voor een vast PT-moment', () => {
+  it('binnen de beschikbaarheid, zonder andere vaste lessen van de trainer, aansluitend eerst', async () => {
+    const { weeklyFreeSlots } = await import('../../api/_lib/scheduleConflicts.mjs');
+    const classTypes = [
+      { id: 'a', defaultTrainerId: 't1', schedule: [{ weekday: 1, startTime: '18:00', endTime: '19:00' }] },
+      { id: 'b', defaultTrainerId: 't2', schedule: [{ weekday: 1, startTime: '16:00', endTime: '17:00' }] },
+    ];
+    const availability = { 1: [{ from: '16:00', to: '20:00' }], 2: [] };
+    const days = weeklyFreeSlots({ trainerId: 't1', classTypes, availability, duration: 60, extraBusy: [{ weekday: 1, startTime: '16:00', endTime: '17:00' }] });
+    // Alleen maandag (dinsdag vrij, andere dagen niets ingevuld = 0 uren want availability is ingevuld).
+    expect(days.map((d) => d.weekday)).toEqual([1]);
+    const mon = days[0].times;
+    expect(mon.filter((t) => t.adjacent).map((t) => t.startTime)).toEqual(['17:00', '19:00']);
+    expect(mon.map((t) => t.startTime)).toEqual(['17:00', '19:00']);
+  });
+
+  it('zonder beschikbaarheid: openingstijden van de studio, elke dag', async () => {
+    const { weeklyFreeSlots } = await import('../../api/_lib/scheduleConflicts.mjs');
+    const days = weeklyFreeSlots({ trainerId: 't1', classTypes: [], hours: { firstStart: '06:00', lastStart: '07:00' }, duration: 60 });
+    expect(days).toHaveLength(7);
+    expect(days[0].times.map((t) => t.startTime)).toEqual(['06:00', '06:30', '07:00']);
+  });
+});

@@ -26,7 +26,7 @@ import { PageLayout, ContentCard, EmptyState } from './layout';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
 import { RescheduleDialog } from './RescheduleDialog';
-import { getRescheduleRequests, rescheduleDayLabel, type RescheduleRequest } from '../services/rescheduleService';
+import { getRescheduleRequests, requestWhen, type RescheduleRequest } from '../services/rescheduleService';
 import {
   getUpcomingClasses,
   getMyBookings,
@@ -733,16 +733,21 @@ export function LessenPage() {
             severity="warning"
             sx={{ mb: 2 }}
             action={
-              <Button color="inherit" size="small" onClick={() => setReschedule({ classId: r.fromClassId, staff: false })} sx={{ whiteSpace: 'nowrap' }}>
-                Ander moment
-              </Button>
+              r.kind !== 'standing' ? (
+                <Button color="inherit" size="small" onClick={() => setReschedule({ classId: r.fromClassId, staff: false })} sx={{ whiteSpace: 'nowrap' }}>
+                  Ander moment
+                </Button>
+              ) : undefined
             }
           >
-            Je trainer kan niet op {rescheduleDayLabel(r.date)} {r.startTime}. Je credit staat nog op je saldo; kies een ander moment.
+            {r.kind === 'standing'
+              ? `Je trainer kan niet ${requestWhen(r)}. Kies onder Profiel → Abonnement een ander vast moment.`
+              : `Je trainer kan niet op ${requestWhen(r)}. Je credit staat nog op je saldo; kies een ander moment.`}
           </Alert>
         ) : (
           <Alert key={r.id} severity="info" sx={{ mb: 2 }}>
-            Aangevraagd: {r.title || 'PT-moment'} op {rescheduleDayLabel(r.date)} {r.startTime}. Wacht op bevestiging van je trainer.
+            Aangevraagd: {r.kind === 'standing' ? 'vast PT-moment' : r.title || 'PT-moment'} {r.kind === 'standing' ? '' : 'op '}
+            {requestWhen(r)}. Wacht op bevestiging van je trainer.
           </Alert>
         )
       )}

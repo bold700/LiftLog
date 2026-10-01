@@ -20,6 +20,11 @@ import { applyCors } from './_lib/cors.mjs';
  *   { action: 'requestReschedule', classId, date, startTime }  nieuw moment aanvragen (sporter; de trainer keurt
  *                                                     goed) of meteen inplannen (staf)
  *   { action: 'rescheduleRequests' }                  openstaande verzoeken (staf) of je eigen verzoeken (sporter)
+ *   { action: 'planStatus', userId? }                 abonnement van het lid: waarvoor, hoe vaak per week, hoeveel
+ *                                                     vaste momenten er al staan (Moment inplannen)
+ *   { action: 'weeklyPtOptions', userId?, trainerId?, duration? }  vrije weekmomenten voor een vast PT-moment
+ *   { action: 'requestStandingPt', weekday, startTime, endTime, startDate }  sporter vraagt een vast PT-moment aan;
+ *                                                     de trainer keurt goed (zelfde lijst als verzetten)
  *   { action: 'answerReschedule', requestId, approve }  verzoek goedkeuren of afwijzen (trainer of beheerder)
  *   { action: 'setStandingBooking', standingBookingId, active }  "elke week inschrijven" aan/uit zetten
  *   { action: 'generateClassOccurrences', classTypeId }  rooster meteen vullen voor deze lessoort (staf),
@@ -97,7 +102,8 @@ import { buildInvoiceEmail, mailConfigured, sendViaResend } from './_lib/invoice
 import { hashFeedToken, buildIcsFeed } from './_lib/calendarFeed.mjs';
 import { last4, mollieKeyFormatError, secretFieldFor, verifyMollieKey, getOrgMollieKey, createMolliePayment, getMolliePayment } from './_lib/molliePayments.mjs';
 import { enforceRateLimit } from './_lib/requireUser.mjs';
-import { allConflicts, blocksDoubleBooking, findConflicts, hoursOf, outsideAvailability, suggestionsFor } from './_lib/scheduleConflicts.mjs';
+import { allConflicts, blocksDoubleBooking, findConflicts, hoursOf, outsideAvailability, suggestionsFor, weeklyFreeSlots } from './_lib/scheduleConflicts.mjs';
+import { coversOf, perWeekOf, planCoversKind } from './_lib/planCoverage.mjs';
 import { availabilityDocId, cleanAvailability } from './_lib/availability.mjs';
 import { amsterdamDate, amsterdamDateTime } from './_lib/classReminders.mjs';
 import { busyByDate, canRescheduleClass, isOffered, MIN_LEAD_MINUTES, RESCHEDULE_DAYS, rescheduleOptions, rescheduledClassId, rescheduleRequestId } from './_lib/reschedule.mjs';
@@ -255,6 +261,12 @@ export default async function handler(req, res) {
         return await getRescheduleOptions(res, db, uid, actOrg, isStaff, String(body.classId ?? '').trim());
       case 'requestReschedule':
         return await requestReschedule(res, db, uid, actOrg, isStaff, body);
+      case 'planStatus':
+        return await planStatus(res, db, uid, actOrg, isStaff, String(body.userId ?? '').trim() || uid);
+      case 'weeklyPtOptions':
+        return await weeklyPtOptions(res, db, uid, actOrg, isStaff, body);
+      case 'requestStandingPt':
+        return await requestStandingPt(res, db, uid, actOrg, isStaff, body);
       case 'rescheduleRequests':
         return await listRescheduleRequests(res, db, uid, actOrg, isStaff);
       case 'answerReschedule':
@@ -1235,6 +1247,14 @@ async function addStandingBooking(res, db, uid, myOrgs, isStaff, body) {
   const slot = (Array.isArray(ct.schedule) ? ct.schedule : []).find((sl) => Number(sl.weekday) === weekday && sl.startTime === startTime);
   if (!slot) return json(res, 400, { error: 'Dit weekmoment staat niet (meer) bij deze lessoort.', build: BUILD });
 
+  // Een sporter plant zelf alleen in wat zijn abonnement toestaat (soort les, keer per week). Staf
+  // ziet in de app een waarschuwing maar beslist zelf.
+  if (!isStaff && !ct.privateForGroup) {
+    const status = await planUsage(db, orgId, targetUserId);
+    const refusal = planRefusal(status, ct.sessionKind, standingBookingId(classTypeId, targetUserId, weekday, startTime));
+    if (refusal) return json(res, 409, { error: refusal, build: BUILD });
+  }
+
   const standing = await writeStanding(db, { orgId, userId: targetUserId, classTypeId, weekday, startTime, startDate, createdByUserId: uid });
   const counts = await bookExistingForStanding(db, standing);
   return json(res, 200, { standingBookingId: standing.id, ...counts, build: BUILD });
@@ -1318,6 +1338,162 @@ async function saveAvailability(res, db, orgId, uid, userId, rawDays) {
     updatedAt: new Date().toISOString(),
   });
   return json(res, 200, { userId, days: cleaned.value, build: BUILD });
+}
+
+// --- Abonnement en vaste momenten (api/_lib/planCoverage.mjs) -----------------------------------
+
+/** Abonnement van een lid en hoeveel vaste momenten er al staan (of aangevraagd zijn). */
+async function planUsage(db, orgId, userId) {
+  const membership = await activeMembership(db, orgId, userId);
+  const planSnap = membership?.planId ? await db.collection('plans').doc(String(membership.planId)).get() : null;
+  const plan = planSnap?.exists ? { id: planSnap.id, ...planSnap.data() } : null;
+  const [standingSnap, pendingSnap] = await Promise.all([
+    db.collection('standingBookings').where('orgId', '==', orgId).where('userId', '==', userId).where('active', '==', true).get(),
+    db.collection('rescheduleRequests').where('userId', '==', userId).where('status', '==', 'pending').get(),
+  ]);
+  const standingIds = standingSnap.docs.map((d) => d.id);
+  const pending = pendingSnap.docs.filter((d) => d.data().kind === 'standing' && d.data().orgId === orgId).length;
+  return { plan, standingIds, used: standingIds.length, pending };
+}
+
+/** Waarom een sporter dit niet zelf mag inplannen, of null. `standingId` telt niet mee als hij er al staat. */
+function planRefusal(status, sessionKind, standingId = null) {
+  const { plan } = status;
+  if (!plan) return 'Je hebt nog geen abonnement. Kies er een onder Profiel → Abonnement, of vraag het de studio.';
+  if (!planCoversKind(plan, sessionKind ?? 'group')) {
+    return coversOf(plan) === 'pt'
+      ? 'Je abonnement is voor personal training; een groepsles kun je niet vast inplannen.'
+      : 'Je abonnement is voor groepslessen; een PT-moment kun je niet vast inplannen.';
+  }
+  const limit = perWeekOf(plan);
+  const already = standingId && status.standingIds.includes(standingId) ? 1 : 0;
+  if (limit != null && status.used + status.pending - already >= limit) {
+    return `Je abonnement is voor ${limit}x per week en je hebt er al ${status.used + status.pending - already} ingepland.`;
+  }
+  return null;
+}
+
+async function planStatus(res, db, uid, orgId, isStaff, userId) {
+  if (userId !== uid && !isStaff) return json(res, 403, { error: 'Alleen je eigen abonnement.', build: BUILD });
+  const [status, profileSnap] = await Promise.all([planUsage(db, orgId, userId), db.collection('profiles').doc(userId).get()]);
+  if (!profileSnap.exists || !orgsOf(profileSnap.data()).includes(orgId)) return json(res, 404, { error: 'Dit lid hoort niet bij jouw studio.', build: BUILD });
+  const { plan } = status;
+  return json(res, 200, {
+    plan: plan ? { id: plan.id, name: String(plan.name ?? ''), covers: coversOf(plan), perWeek: perWeekOf(plan) } : null,
+    used: status.used,
+    pending: status.pending,
+    trainerId: profileSnap.exists ? profileSnap.data()?.trainerId ?? null : null,
+    build: BUILD,
+  });
+}
+
+/** Vrije weekmomenten bij een trainer (sporter: zijn eigen trainer; staf: de gekozen trainer). */
+async function freeWeeklySlots(db, orgId, trainerId, duration) {
+  const [sched, availability, pendingSnap] = await Promise.all([
+    scheduleContext(db, orgId),
+    availabilityOf(db, orgId, trainerId),
+    db.collection('rescheduleRequests').where('trainerId', '==', trainerId).where('status', '==', 'pending').get(),
+  ]);
+  const extraBusy = pendingSnap.docs.map((d) => d.data()).filter((r) => r.kind === 'standing');
+  return weeklyFreeSlots({ trainerId, classTypes: sched.types, availability, hours: sched.hours, duration, extraBusy });
+}
+
+const cleanDuration = (v) => {
+  const n = Math.round(Number(v) || 60);
+  return Math.min(180, Math.max(30, n));
+};
+
+async function weeklyPtOptions(res, db, uid, orgId, isStaff, body) {
+  // Sporter: altijd bij zijn eigen trainer. Staf: de gekozen trainer, anders die van het lid.
+  const userId = isStaff ? String(body?.userId ?? '').trim() || uid : uid;
+  let trainerId = isStaff ? String(body?.trainerId ?? '').trim() : '';
+  if (!trainerId) {
+    const p = await db.collection('profiles').doc(userId).get();
+    if (!p.exists || !orgsOf(p.data()).includes(orgId)) return json(res, 404, { error: 'Dit lid hoort niet bij jouw studio.', build: BUILD });
+    trainerId = String(p.data()?.trainerId ?? '');
+  }
+  if (!trainerId) return json(res, 409, { error: 'Er is nog geen vaste trainer gekozen.', build: BUILD });
+  const duration = cleanDuration(body?.duration);
+  return json(res, 200, { trainerId, duration, days: await freeWeeklySlots(db, orgId, trainerId, duration), build: BUILD });
+}
+
+/**
+ * Sporter vraagt een vast PT-moment aan bij zijn eigen trainer: binnen zijn abonnement (soort en
+ * keer per week) en op een vrij weekmoment. De trainer keurt goed in Beheer (zelfde lijst als
+ * verzetten); dan zet de server het moment vast zoals staf dat doet.
+ */
+async function requestStandingPt(res, db, uid, orgId, isStaff, body) {
+  if (isStaff) return json(res, 400, { error: 'Als trainer of beheerder plan je een PT-moment direct in.', build: BUILD });
+  const weekday = Number(body?.weekday);
+  const startTime = String(body?.startTime ?? '').trim();
+  const endTime = String(body?.endTime ?? '').trim();
+  const startDate = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.startDate ?? '')) ? String(body.startDate) : todayIso();
+  const me = await db.collection('profiles').doc(uid).get();
+  const trainerId = String(me.data()?.trainerId ?? '');
+  if (!trainerId) return json(res, 409, { error: 'Je hebt nog geen vaste trainer. Vraag de studio om er een te koppelen.', build: BUILD });
+
+  const refusal = planRefusal(await planUsage(db, orgId, uid), '1on1');
+  if (refusal) return json(res, 409, { error: refusal, build: BUILD });
+
+  const duration = toMinutes(endTime) - toMinutes(startTime);
+  const days = await freeWeeklySlots(db, orgId, trainerId, cleanDuration(duration));
+  const offered = days.some((d) => d.weekday === weekday && d.times.some((t) => t.startTime === startTime && t.endTime === endTime));
+  if (!offered) return json(res, 409, { error: 'Dit moment is niet (meer) vrij. Kies een ander moment.', build: BUILD });
+
+  const id = `rs_${uid}_${weekday}_${startTime.replace(':', '')}`;
+  const ref = db.collection('rescheduleRequests').doc(id);
+  const existing = await ref.get();
+  if (existing.exists && existing.data().status === 'pending') return json(res, 409, { error: 'Dit moment heb je al aangevraagd.', build: BUILD });
+  const nowIso = new Date().toISOString();
+  const request = {
+    id,
+    kind: 'standing',
+    orgId,
+    userId: uid,
+    trainerId,
+    title: 'Personal Training',
+    weekday,
+    startTime,
+    endTime,
+    startDate,
+    date: startDate,
+    status: 'pending',
+    requestedBy: uid,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+  await ref.set(request);
+  try {
+    await sendPushToUser(db, trainerId, { ...pushMessages.standingRequested(request, String(me.data()?.displayName || 'Een sporter')), data: { kind: 'rescheduleRequest' } });
+  } catch (e) {
+    console.warn('[booking] melding vast PT-moment aangevraagd mislukt:', e?.message ?? e);
+  }
+  return json(res, 200, { requestId: id, status: 'pending', build: BUILD });
+}
+
+/** Goedkeuren van een aangevraagd vast PT-moment: vastzetten zoals staf dat doet (met botsingscontrole). */
+async function approveStandingRequest(db, approverUid, orgId, request) {
+  const out = captureRes();
+  await addPersonalSlot(out, db, approverUid, [orgId], true, {
+    userId: request.userId,
+    weekday: request.weekday,
+    startTime: request.startTime,
+    endTime: request.endTime,
+    startDate: request.startDate,
+    trainerId: request.trainerId,
+  });
+  if (out.statusCode !== 200) return { error: out.body?.error || 'Vastzetten mislukt.', status: out.statusCode };
+  const nowIso = new Date().toISOString();
+  await db.collection('rescheduleRequests').doc(request.id).set(
+    { status: 'approved', classTypeId: out.body?.classTypeId ?? null, answeredBy: approverUid, answeredAt: nowIso, updatedAt: nowIso },
+    { merge: true }
+  );
+  try {
+    await sendPushToUser(db, request.userId, { ...pushMessages.standingApproved(request), data: { kind: 'rescheduleAnswered' } });
+  } catch (e) {
+    console.warn('[booking] melding vast PT-moment bevestigd mislukt:', e?.message ?? e);
+  }
+  return { classTypeId: out.body?.classTypeId ?? null };
 }
 
 // --- Verzetten na afmelden (api/_lib/reschedule.mjs) ------------------------------------------
@@ -1573,6 +1749,9 @@ async function listRescheduleRequests(res, db, uid, orgId, isStaff) {
       endTime: r.endTime,
       status: r.status,
       classId: r.classId ?? null,
+      kind: r.kind === 'standing' ? 'standing' : 'reschedule',
+      weekday: r.kind === 'standing' ? Number(r.weekday) : null,
+      startDate: r.startDate ?? null,
     }));
   return json(res, 200, { requests, build: BUILD });
 }
@@ -1588,6 +1767,22 @@ async function answerReschedule(res, db, uid, orgId, myRole, requestId, approve)
     return json(res, 403, { error: 'Alleen de trainer van dit moment of een beheerder kan dit verzoek beantwoorden.', build: BUILD });
   }
   if (request.status !== 'pending') return json(res, 409, { error: 'Dit verzoek is al beantwoord.', build: BUILD });
+
+  if (request.kind === 'standing') {
+    if (approve) {
+      const done = await approveStandingRequest(db, uid, orgId, request);
+      if (done.error) return json(res, done.status ?? 409, { error: done.error, build: BUILD });
+      return json(res, 200, { status: 'approved', build: BUILD });
+    }
+    const at = new Date().toISOString();
+    await ref.set({ status: 'declined', answeredBy: uid, answeredAt: at, updatedAt: at }, { merge: true });
+    try {
+      await sendPushToUser(db, request.userId, { ...pushMessages.standingDeclined(request), data: { kind: 'rescheduleAnswered' } });
+    } catch (e) {
+      console.warn('[booking] melding vast PT-moment afgewezen mislukt:', e?.message ?? e);
+    }
+    return json(res, 200, { status: 'declined', build: BUILD });
+  }
 
   if (approve) {
     const done = await approveRequest(db, uid, orgId, request);
@@ -1650,6 +1845,9 @@ async function listScheduleConflicts(res, db, orgId) {
   return json(res, 200, { block: sched.block, conflicts: allConflicts(sched.types), build: BUILD });
 }
 
+/** Een vast PT-moment zonder gekozen lessoort. */
+const DEFAULT_PT_BASE = { name: 'Personal Training', creditCost: 1, sessionKind: '1on1', schemaId: null, room: null, description: null, defaultTrainerId: null };
+
 async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
   if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan een PT-moment vastzetten.', build: BUILD });
   // Met `groupId`: een vaste groepsles voor alle leden van de groep (Beheer → Groepen).
@@ -1661,7 +1859,9 @@ async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
   const endTime = String(body?.endTime ?? '').trim();
   const startDate = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.startDate ?? '')) ? String(body.startDate) : todayIso();
   const isTime = (v) => /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
-  if (!(userId || groupId) || !baseClassTypeId) return json(res, 400, { error: 'Kies een lid en een lessoort.', build: BUILD });
+  // Een PT-moment voor één lid heeft geen lessoort nodig: dan "Personal Training", 1-op-1, 1 credit.
+  // Een vaste groepsles (groep) gaat wel uit van een lessoort.
+  if (!(userId || groupId) || (groupId && !baseClassTypeId)) return json(res, 400, { error: 'Kies een lid en een lessoort.', build: BUILD });
   if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6 || !isTime(startTime) || !isTime(endTime)) {
     return json(res, 400, { error: 'Kies een dag en een begin- en eindtijd.', build: BUILD });
   }
@@ -1669,9 +1869,9 @@ async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
 
   const group = groupId ? await loadGroup(db, myOrgs, groupId) : null;
   if (!group) await requireMemberOfMyOrgs(db, myOrgs, userId);
-  const baseSnap = await db.collection('classTypes').doc(baseClassTypeId).get();
-  if (!baseSnap.exists) return json(res, 404, { error: 'Deze lessoort bestaat niet (meer).', build: BUILD });
-  const base = baseSnap.data();
+  const baseSnap = baseClassTypeId ? await db.collection('classTypes').doc(baseClassTypeId).get() : null;
+  if (baseSnap && !baseSnap.exists) return json(res, 404, { error: 'Deze lessoort bestaat niet (meer).', build: BUILD });
+  const base = baseSnap ? baseSnap.data() : { ...DEFAULT_PT_BASE, orgId: myOrgs[0] };
   const orgId = orgIdOf(base.orgId);
   if (!myOrgs.includes(orgId)) return json(res, 403, { error: 'Deze lessoort hoort niet bij jouw studio.', build: BUILD });
   if (base.privateFor || base.privateForGroup) return json(res, 400, { error: 'Kies een gewone lessoort als basis.', build: BUILD });
@@ -1706,7 +1906,7 @@ async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
     description: base.description ?? null,
     privateFor: group ? null : userId,
     ...(group ? { privateForGroup: group.id, groupMemberIds: group.memberIds } : {}),
-    baseClassTypeId,
+    baseClassTypeId: baseClassTypeId || null,
     createdAt: existing.exists ? existing.data().createdAt ?? now : now,
     updatedAt: now,
   };

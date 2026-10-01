@@ -56,6 +56,7 @@ import { RequestsBanner } from './beheer/RequestsBanner';
 import { ProcessorAgreementCard } from './beheer/ProcessorAgreementCard';
 import { InactiveChip, MembersList, RoleChip } from './beheer/MembersList';
 import { isSupportEmail } from '../utils/support';
+import { coverageLabel } from '../utils/planCoverage';
 import { StandingBookingsCard } from './StandingBookingsCard';
 import { MembersToolbar } from './beheer/MembersToolbar';
 import {
@@ -753,6 +754,20 @@ export function BeheerPage() {
                     </MenuItem>
                   ))}
               </TextField>
+              {(() => {
+                // Zeg vooraf wat Opslaan doet: credits van de eerste periode erbij en de eerste factuur.
+                const chosen = edit.planId && edit.planId !== (memberships[target.userId]?.planId ?? '') ? plans.find((pl) => pl.id === edit.planId) : null;
+                if (!chosen) return null;
+                const parts = [
+                  chosen.credits == null ? 'onbeperkt boeken' : `+${chosen.credits} credits`,
+                  chosen.price > 0 ? `eerste factuur € ${chosen.price.toLocaleString('nl-NL')}` : null,
+                ].filter(Boolean);
+                return (
+                  <Alert severity="info" sx={{ mb: 1 }}>
+                    Na Opslaan: {parts.join(' en ')}. {coverageLabel(chosen)}.
+                  </Alert>
+                );
+              })()}
               {paysAsMember(edit) && (
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5, mt: 1 }}>
                   <NumberField label="Credits" size="small" value={creditValue} onChange={setCreditValue} sx={{ width: 120 }} />

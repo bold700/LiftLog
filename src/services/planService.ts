@@ -39,6 +39,8 @@ function toPlan(data: Record<string, unknown>, id: string): Plan {
     availableTo: data.availableTo === 'invite' ? 'invite' : 'all',
     status: data.status === 'paused' ? 'paused' : 'active',
     vatRate: toVatRate(data.vatRate),
+    ...(data.covers === 'pt' || data.covers === 'group' || data.covers === 'all' ? { covers: data.covers } : {}),
+    ...('perWeek' in data ? { perWeek: data.perWeek == null ? null : num(data.perWeek, 0) || null } : {}),
     createdAt: str(data.createdAt) ?? '',
     updatedAt: str(data.updatedAt) ?? '',
   };
@@ -88,6 +90,8 @@ export async function savePlan(input: Omit<Plan, 'orgId' | 'createdAt' | 'update
       availableTo: input.availableTo,
       status: input.status,
       vatRate: input.vatRate,
+      ...(input.covers ? { covers: input.covers } : {}),
+      ...(input.perWeek !== undefined ? { perWeek: input.perWeek } : {}),
       createdAt: input.createdAt || new Date().toISOString(),
       updatedAt: serverTimestamp(),
     },

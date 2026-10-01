@@ -121,6 +121,23 @@ De annuleertermijn staat als `FREE_CANCEL_HOURS` in `api/booking.mjs`.
 
 ---
 
+### Abonnement en vaste momenten (Moment inplannen)
+
+Elk abonnement heeft "Geldt voor" (personal training, groepslessen of alle lessen) en "Keer per week"
+(Beheer → Abonnementen; staat het er niet op, dan leidt de app het af uit naam en credits, zie
+`api/_lib/planCoverage.mjs`). Bij een lid staat één knop **Moment inplannen** (Profiel →
+Abonnement voor de sporter, Beheer → lid voor staf):
+
+- **PT**: vrije weekmomenten bij de trainer, binnen zijn beschikbaarheid en zonder botsing met zijn
+  andere vaste lessen; aansluitende momenten eerst. Geen lessoort meer kiezen: het wordt
+  "Personal Training", 1-op-1, 1 credit. Staf zet het meteen vast; een sporter vraagt aan en de
+  trainer keurt goed in Beheer → Leden (zelfde lijst als verzetten).
+- **Groepslessen**: de weekmomenten van de groepslessen op het rooster; meteen vast.
+- Een sporter plant niet meer in dan zijn abonnement toestaat (soort en keer per week; de server
+  controleert dat). Staf krijgt een waarschuwing en beslist zelf.
+- Abonnement toewijzen: na Opslaan komen de credits van de eerste periode er meteen bij, met de
+  eerste factuur. Het ledenscherm zegt dat vooraf.
+
 ### Verzetten na afmelden (PT-moment)
 
 Meldt een sporter zich op tijd af voor een persoonlijk PT-moment (credit terug), dan biedt de app

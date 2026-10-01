@@ -521,7 +521,8 @@ export function removeGroupSlot(classTypeId: string): Promise<{ removed: boolean
 export function addPersonalSlot(input: {
   userId?: string;
   groupId?: string;
-  baseClassTypeId: string;
+  /** Leeg bij een PT-moment voor één lid: dan "Personal Training", 1-op-1, 1 credit. */
+  baseClassTypeId?: string;
   weekday: number;
   startTime: string;
   endTime: string;
