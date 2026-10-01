@@ -744,8 +744,8 @@ export function LessenPage() {
             severity="warning"
             sx={{ mb: 2 }}
             action={
-              r.kind !== 'standing' ? (
-                <Button color="inherit" size="small" onClick={() => setReschedule({ classId: r.fromClassId, staff: false })} sx={{ whiteSpace: 'nowrap' }}>
+              r.kind !== 'standing' && r.fromClassId ? (
+                <Button color="inherit" size="small" onClick={() => setReschedule({ classId: r.fromClassId ?? '', staff: false })} sx={{ whiteSpace: 'nowrap' }}>
                   Ander moment
                 </Button>
               ) : undefined
@@ -753,7 +753,9 @@ export function LessenPage() {
           >
             {r.kind === 'standing'
               ? `Je trainer kan niet ${requestWhen(r)}. Kies onder Profiel → Abonnement een ander vast moment.`
-              : `Je trainer kan niet op ${requestWhen(r)}. Je credit staat nog op je saldo; kies een ander moment.`}
+              : r.kind === 'single'
+                ? `Je trainer kan niet op ${requestWhen(r)}. Kies onder Profiel een ander moment.`
+                : `Je trainer kan niet op ${requestWhen(r)}. Je credit staat nog op je saldo; kies een ander moment.`}
           </Alert>
         ) : (
           <Alert key={r.id} severity="info" sx={{ mb: 2 }}>

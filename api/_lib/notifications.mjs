@@ -70,6 +70,13 @@ export const messages = {
       body: `${memberName || 'Een sporter'} vraagt ${req?.title || 'een PT-moment'} aan op ${when(req)}. Keur het goed of wijs het af in Beheer.`,
     };
   },
+  /** Aan de trainer: een sporter vraagt één losse PT-afspraak aan. */
+  singleRequested(req, memberName) {
+    return {
+      title: 'PT-afspraak aangevraagd',
+      body: `${memberName || 'Een sporter'} wil op ${when(req)} trainen. Keur het goed of wijs het af in Beheer.`,
+    };
+  },
   /** Aan de trainer: een sporter vraagt een vast PT-moment aan (elke week). */
   standingRequested(req, memberName) {
     return {

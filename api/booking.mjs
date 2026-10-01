@@ -272,6 +272,10 @@ export default async function handler(req, res) {
         return await weeklyPtOptions(res, db, uid, actOrg, isStaff, body);
       case 'requestStandingPt':
         return await requestStandingPt(res, db, uid, actOrg, isStaff, body);
+      case 'singlePtOptions':
+        return await singlePtOptions(res, db, uid, actOrg, isStaff, body);
+      case 'bookSinglePt':
+        return await bookSinglePt(res, db, uid, actOrg, isStaff, body);
       case 'rescheduleRequests':
         return await listRescheduleRequests(res, db, uid, actOrg, isStaff);
       case 'answerReschedule':
@@ -1511,6 +1515,95 @@ async function approveStandingRequest(db, approverUid, orgId, request) {
   return { classTypeId: out.body?.classTypeId ?? null };
 }
 
+// --- Losse afspraak: één keer een PT-moment, geen reeks ----------------------------------------
+
+/** Zoveel dagen vooruit (vandaag meegeteld) bieden we een losse PT-afspraak aan. */
+const SINGLE_PT_DAYS = 28;
+
+/** Voor wie en bij welke trainer: een sporter bij zijn eigen trainer; staf kiest lid en trainer. */
+async function singlePtParties(db, uid, orgId, isStaff, body) {
+  const userId = isStaff ? String(body?.userId ?? '').trim() || uid : uid;
+  const p = await db.collection('profiles').doc(userId).get();
+  if (!p.exists || !orgsOf(p.data()).includes(orgId)) throw refuse('Dit lid hoort niet bij jouw studio.', 404);
+  const trainerId = (isStaff ? String(body?.trainerId ?? '').trim() : '') || String(p.data()?.trainerId ?? '');
+  if (!trainerId) throw refuse(isStaff ? 'Kies een trainer.' : 'Je hebt nog geen vaste trainer. Vraag de studio om er een te koppelen.', 409);
+  if (trainerId !== uid) {
+    const t = await db.collection('profiles').doc(trainerId).get();
+    if (!t.exists || !isStaffIn(t.data(), orgId) || !orgsOf(t.data()).includes(orgId)) throw refuse('Deze trainer hoort niet bij jouw studio.', 400);
+  }
+  return { userId, trainerId, member: p.data() };
+}
+
+/** Vrije momenten voor een losse PT-afspraak: de komende vier weken, binnen de beschikbaarheid. */
+async function singlePtOptions(res, db, uid, orgId, isStaff, body) {
+  const { trainerId } = await singlePtParties(db, uid, orgId, isStaff, body);
+  const duration = cleanDuration(body?.duration);
+  const options = await optionsFor(db, orgId, { trainerId, room: null, duration, exclude: null }, { days: SINGLE_PT_DAYS });
+  return json(res, 200, { trainerId, duration, ...options, build: BUILD });
+}
+
+/**
+ * Een losse PT-afspraak: staf plant meteen in (credit eraf zoals bij boeken), een sporter vraagt
+ * aan en de trainer keurt goed in dezelfde lijst als verzetten. Dat loopt via hetzelfde verzoek als
+ * verzetten (kind 'single'), zodat goedkeuren, afwijzen en meldingen hetzelfde werken.
+ */
+async function bookSinglePt(res, db, uid, orgId, isStaff, body) {
+  const { userId, trainerId, member } = await singlePtParties(db, uid, orgId, isStaff, body);
+  const date = String(body?.date ?? '').trim();
+  const startTime = String(body?.startTime ?? '').trim();
+  const duration = cleanDuration(body?.duration);
+  if (!isStaff && isInactiveIn(member, orgId)) return json(res, 403, { error: 'Je lidmaatschap bij deze studio staat op inactief.', build: BUILD });
+  const options = await optionsFor(db, orgId, { trainerId, room: null, duration, exclude: null }, { days: SINGLE_PT_DAYS });
+  if (!isOffered(options, date, startTime)) return json(res, 409, { error: 'Dit moment is niet (meer) vrij. Kies een ander moment.', build: BUILD });
+  const endTime = options.days.find((d) => d.date === date).times.find((t) => t.startTime === startTime).endTime;
+
+  const requestId = `r1_${userId}_${date.replaceAll('-', '')}_${startTime.replace(':', '')}`;
+  const reqRef = db.collection('rescheduleRequests').doc(requestId);
+  const existing = await reqRef.get();
+  if (existing.exists && existing.data().status === 'pending') return json(res, 409, { error: 'Dit moment is al aangevraagd.', build: BUILD });
+  const nowIso = new Date().toISOString();
+  const request = {
+    id: requestId,
+    kind: 'single',
+    orgId,
+    userId,
+    trainerId,
+    fromClassId: null,
+    fromDate: null,
+    fromStartTime: null,
+    title: DEFAULT_PT_BASE.name,
+    date,
+    startTime,
+    endTime,
+    room: null,
+    creditCost: DEFAULT_PT_BASE.creditCost,
+    schemaId: null,
+    sessionKind: DEFAULT_PT_BASE.sessionKind,
+    description: null,
+    baseClassTypeId: null,
+    status: 'pending',
+    requestedBy: uid,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+  await reqRef.set(request);
+
+  if (isStaff) {
+    const done = await approveRequest(db, uid, orgId, request);
+    if (done.error) {
+      await reqRef.delete();
+      return json(res, done.status ?? 409, { error: done.error, build: BUILD });
+    }
+    return json(res, 200, { requestId, status: 'approved', classId: done.classId, build: BUILD });
+  }
+  try {
+    await sendPushToUser(db, trainerId, { ...pushMessages.singleRequested(request, String(member?.displayName || 'Een sporter')), data: { kind: 'rescheduleRequest' } });
+  } catch (e) {
+    console.warn('[booking] melding losse afspraak aangevraagd mislukt:', e?.message ?? e);
+  }
+  return json(res, 200, { requestId, status: 'pending', build: BUILD });
+}
+
 // --- Afspraken wijzigen: één afspraak of de hele reeks (staf) ---------------------------------
 
 const WEEKDAY_NAMES = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
@@ -1645,9 +1738,9 @@ async function rescheduleSource(db, uid, orgId, isStaff, classId) {
  * Vrije momenten voor een nieuw PT-moment bij deze trainer (zie rescheduleOptions): zelfde duur,
  * niet op het afgemelde moment zelf (`exclude`).
  */
-async function optionsFor(db, orgId, { trainerId, room, duration, exclude }, { ignoreRequestId = null } = {}) {
+async function optionsFor(db, orgId, { trainerId, room, duration, exclude }, { ignoreRequestId = null, days = RESCHEDULE_DAYS } = {}) {
   const now = new Date();
-  const dates = Array.from({ length: RESCHEDULE_DAYS }, (_, i) => amsterdamDate(now, i));
+  const dates = Array.from({ length: days }, (_, i) => amsterdamDate(now, i));
   const [orgSnap, availability, classSnap, pendingSnap] = await Promise.all([
     db.collection('orgs').doc(orgId).get(),
     availabilityOf(db, orgId, trainerId),
@@ -1769,7 +1862,7 @@ async function approveRequest(db, approverUid, orgId, request) {
     duration: toMinutes(request.endTime) - toMinutes(request.startTime),
     exclude: { date: request.fromDate, startTime: request.fromStartTime },
   };
-  const options = await optionsFor(db, orgId, slot, { ignoreRequestId: request.id });
+  const options = await optionsFor(db, orgId, slot, { ignoreRequestId: request.id, days: request.kind === 'single' ? SINGLE_PT_DAYS : RESCHEDULE_DAYS });
   if (!isOffered(options, request.date, request.startTime)) {
     return { error: 'Dit moment is inmiddels bezet of ligt te dichtbij. Wijs het verzoek af; de sporter kan een ander moment kiezen.' };
   }
@@ -1864,7 +1957,7 @@ async function listRescheduleRequests(res, db, uid, orgId, isStaff) {
       endTime: r.endTime,
       status: r.status,
       classId: r.classId ?? null,
-      kind: r.kind === 'standing' ? 'standing' : 'reschedule',
+      kind: r.kind === 'standing' || r.kind === 'single' ? r.kind : 'reschedule',
       weekday: r.kind === 'standing' ? Number(r.weekday) : null,
       startDate: r.startDate ?? null,
     }));

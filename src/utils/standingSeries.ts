@@ -57,6 +57,29 @@ export function seriesOccurrences(
     });
 }
 
+/**
+ * Losse afspraken: komende lessen waar het lid voor staat (geboekt of wachtlijst) die niet bij een
+ * actieve vaste les horen, zoals een losse PT-afspraak, een verzette les of één groepsles.
+ */
+export function singleAppointments(
+  standing: StandingBooking[],
+  classes: StudioClass[],
+  bookings: Booking[],
+  fromDate: string
+): { cls: StudioClass; booking: Booking }[] {
+  const byId = new Map(classes.map((c) => [c.id, c]));
+  const active = standing.filter((s) => s.active);
+  return bookings
+    .filter((b) => b.status === 'booked' || b.status === 'waitlist')
+    .flatMap((booking) => {
+      const cls = byId.get(booking.classId);
+      if (!cls || cls.date < fromDate || (cls.cancelledAt && !cls.autoCancelled)) return [];
+      if (active.some((s) => inSeries(cls, s))) return [];
+      return [{ cls, booking }];
+    })
+    .sort((a, b) => `${a.cls.date}${a.cls.startTime}`.localeCompare(`${b.cls.date}${b.cls.startTime}`));
+}
+
 /** Korte samenvatting van wat de server deed, voor de melding. */
 export function describeStandingResult(r: {
   booked?: number;
