@@ -47,7 +47,8 @@ function toPlan(data: Record<string, unknown>, id: string): Plan {
 }
 
 function toMembership(data: Record<string, unknown>, id: string): Membership {
-  const status = data.status === 'cancelled' || data.status === 'expired' ? data.status : 'active';
+  const status =
+    data.status === 'cancelled' || data.status === 'expired' || data.status === 'scheduled' || data.status === 'starting' ? data.status : 'active';
   return {
     id,
     orgId: str(data.orgId) ?? '',
@@ -61,6 +62,7 @@ function toMembership(data: Record<string, unknown>, id: string): Membership {
     lastRenewedAt: str(data.lastRenewedAt),
     groupId: str(data.groupId),
     billToUserId: str(data.billToUserId),
+    startsOn: str(data.startsOn),
   };
 }
 
@@ -116,6 +118,18 @@ export async function getActiveMembershipsForOrg(): Promise<Record<string, Membe
   return out;
 }
 
+/** Geplande abonnementen (ingangsdatum later) van de studio, per userId (voor Beheer). */
+export async function getScheduledMembershipsForOrg(): Promise<Record<string, Membership>> {
+  if (!isFirebaseConfigured() || !db) return {};
+  const snap = await getDocs(query(collection(db, MEMBERSHIPS), where('orgId', '==', requireOrgId()), where('status', '==', 'scheduled')));
+  const out: Record<string, Membership> = {};
+  for (const d of snap.docs) {
+    const m = toMembership(d.data(), d.id);
+    out[m.userId] = m;
+  }
+  return out;
+}
+
 /** Eigen actieve lidmaatschap in de actieve studio, of null (voor Profiel). */
 export async function getMyMembership(userId: string): Promise<Membership | null> {
   if (!isFirebaseConfigured() || !db) return null;
@@ -128,8 +142,21 @@ export async function getMyMembership(userId: string): Promise<Membership | null
 
 // --- Via de server -----------------------------------------------------------------
 
-export function assignPlan(userId: string, planId: string): Promise<{ membershipId: string; balance: number }> {
-  return callBooking({ action: 'assign', userId, planId });
+/**
+ * Abonnement toewijzen. Met een ingangsdatum in de toekomst wordt het alleen gepland: op die dag
+ * pas de eerste factuur en de credits (de server start het dan zelf).
+ */
+export function assignPlan(
+  userId: string,
+  planId: string,
+  startDate?: string
+): Promise<{ membershipId: string; balance: number | null; scheduled?: boolean; startsOn?: string }> {
+  return callBooking({ action: 'assign', userId, planId, ...(startDate ? { startDate } : {}) });
+}
+
+/** Een gepland abonnement (nog niet ingegaan) annuleren; een lopend abonnement blijft. */
+export function cancelScheduledPlan(userId: string): Promise<{ stopped: boolean }> {
+  return callBooking({ action: 'unassign', userId, scheduledOnly: true });
 }
 
 export function unassignPlan(userId: string): Promise<{ stopped: boolean }> {

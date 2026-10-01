@@ -710,6 +710,52 @@ describe('facturen', () => {
     expect(res2.body.first).toBeNull();
   });
 
+  it('ingangsdatum later: eerst niets gefactureerd, op die dag pas de eerste factuur en de credits', async () => {
+    seedPlan();
+    store['plans/pl4'] = { orgId: 'vanas', name: '2x per week', period: 'fourWeeks', price: 80, credits: 8, rollover: 'expire' };
+    // Lopend abonnement blijft tot de ingangsdatum gewoon staan.
+    await post({ action: 'assign', userId: 'sporter1', planId: 'pl1' }, 'trainer1');
+    const chargesBefore = Object.keys(store).filter((k) => k.startsWith('charges/')).length;
+    const balanceBefore = store['creditAccounts/vanas__sporter1'].balance;
+    const later = amsterdamDate(new Date(), 10);
+    const res = await post({ action: 'assign', userId: 'sporter1', planId: 'pl4', startDate: later }, 'trainer1');
+    expect(res.body).toMatchObject({ scheduled: true, startsOn: later });
+    const scheduledKey = `memberships/${res.body.membershipId}`;
+    expect(store[scheduledKey]).toMatchObject({ status: 'scheduled', planId: 'pl4', startsOn: later });
+    expect(Object.keys(store).filter((k) => k.startsWith('charges/')).length).toBe(chargesBefore);
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(balanceBefore);
+    // Beheer openen vóór de ingangsdatum verandert niets.
+    await post({ action: 'renewDue', orgId: 'vanas' }, 'trainer1');
+    expect(store[scheduledKey].status).toBe('scheduled');
+    const old = Object.entries(store).find(([k, v]) => k.startsWith('memberships/') && v.planId === 'pl1')[1];
+    expect(old.status).toBe('active');
+
+    // De ingangsdatum is bereikt: bij boeken start het abonnement (oude stopt, factuur en credits erbij).
+    store[scheduledKey].startsOn = amsterdamDate(new Date());
+    store['orgs/vanas'].billing = { period: 'fourWeeks', anchorDate: amsterdamDate(new Date(), -14) };
+    await post({ action: 'book', classId: 'c1' });
+    expect(store[scheduledKey]).toMatchObject({ status: 'active', planId: 'pl4', startsOn: amsterdamDate(new Date()) });
+    expect(Object.entries(store).find(([k, v]) => k.startsWith('memberships/') && v.planId === 'pl1')[1].status).toBe('cancelled');
+    const charge = Object.entries(store).find(([k, v]) => k.startsWith('charges/') && v.membershipId === res.body.membershipId)[1];
+    expect(charge).toMatchObject({ amount: 40, status: 'open' });
+    // +4 credits (helft van de periode), min 1 voor de les.
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(balanceBefore + 4 - 1);
+    // Nog een keer starten doet niets dubbel.
+    await post({ action: 'renewDue', orgId: 'vanas' }, 'trainer1');
+    expect(Object.entries(store).filter(([k, v]) => k.startsWith('charges/') && v.membershipId === res.body.membershipId)).toHaveLength(1);
+  });
+
+  it('een geplande start kun je annuleren; een nieuwe keuze vervangt de planning', async () => {
+    seedPlan();
+    const later = amsterdamDate(new Date(), 10);
+    const a = await post({ action: 'assign', userId: 'sporter1', planId: 'pl1', startDate: later }, 'trainer1');
+    const b = await post({ action: 'assign', userId: 'sporter1', planId: 'pl1', startDate: amsterdamDate(new Date(), 20) }, 'trainer1');
+    expect(store[`memberships/${a.body.membershipId}`].status).toBe('cancelled');
+    expect(store[`memberships/${b.body.membershipId}`].status).toBe('scheduled');
+    await post({ action: 'unassign', userId: 'sporter1', scheduledOnly: true }, 'trainer1');
+    expect(store[`memberships/${b.body.membershipId}`].status).toBe('cancelled');
+  });
+
   it('een lid haalt zijn eigen factuur op, een ander lid niet; een oude post krijgt alsnog een nummer', async () => {
     store['charges/ch1'] = { orgId: 'vanas', userId: 'sporter1', planName: 'Maand 8', description: 'Maand 8 · 2026-09', amount: 139, period: '2026-09', status: 'open', issuedAt: '2026-09-01T00:00:00.000Z', dueAt: '2026-09-01T00:00:00.000Z' };
     const ander = await post({ action: 'invoice', chargeId: 'ch1' }, 'sporter2');

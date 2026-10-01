@@ -169,6 +169,17 @@ Beheer → Instellingen → **Factuurritme**, alleen de eigenaar (Firestore-rege
 - Het ledenscherm toont vooraf wat Opslaan doet ("eerste factuur € 40 (14 van de 28 dagen, tot de
   factuurdatum 2 november)").
 
+### Ingangsdatum van een abonnement
+
+Bij het toewijzen (Beheer → lid → Abonnement) staat **Gaat in op**. Vandaag = meteen, zoals altijd.
+Een latere datum plant het abonnement alleen (`memberships` met `status: 'scheduled'`,
+`startsOn`): tot die dag geen factuur en geen credits uit dit abonnement, en een lopend
+abonnement loopt door. Op de ingangsdatum start de server het (`startScheduledMemberships`, bij
+boeken, bij het openen van Beheer en in de avondronde): het oude abonnement stopt, de eerste
+factuur (volgens het factuurritme, naar rato vanaf de ingangsdatum) en de credits komen erbij.
+Het ledenscherm toont "Gepland: … gaat in op …" met **Annuleren**; een nieuwe keuze vervangt de
+planning. Wil je vóór de ingangsdatum al inplannen, geef dan zelf credits (geen factuur).
+
 ### Betalen via Mollie: betaallink en automatisch afschrijven
 
 Advies aan studio's: laat alles via Mollie lopen. Credits toekennen en zelf factureren (overmaken,
