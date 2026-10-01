@@ -126,21 +126,32 @@ De annuleertermijn staat als `FREE_CANCEL_HOURS` in `api/booking.mjs`.
 Elk abonnement heeft "Geldt voor" (personal training, groepslessen of alle lessen) en "Keer per week"
 (Beheer → Abonnementen; staat het er niet op, dan leidt de app het af uit naam en credits, zie
 `api/_lib/planCoverage.mjs`). Bij een lid staat één knop **Moment inplannen** (Profiel →
-Abonnement voor de sporter, Beheer → lid voor staf):
+Abonnement voor de sporter, Beheer → lid voor staf). Het werkt zoals een afspraak in Google Agenda:
+**Datum · Tijd · Herhaling**, waarbij Herhaling "Niet herhaald" (één losse afspraak) of
+"Elke week op …" (vast moment) is. Is het abonnement vol of is er geen abonnement, dan staat het
+standaard op "Niet herhaald".
 
-- **PT**: vrije weekmomenten bij de trainer, binnen zijn beschikbaarheid en zonder botsing met zijn
-  andere vaste lessen; aansluitende momenten eerst. Geen lessoort meer kiezen: het wordt
-  "Personal Training", 1-op-1, 1 credit. Staf zet het meteen vast; een sporter vraagt aan en de
+- **PT**: alleen vrije tijden bij de trainer, binnen zijn beschikbaarheid en zonder botsing met zijn
+  andere lessen; "sluit aan" = direct voor of na een andere les. Geen lessoort kiezen: het wordt
+  "Personal Training", 1-op-1, 1 credit. Staf plant meteen in; een sporter vraagt aan en de
   trainer keurt goed in Beheer → Leden (zelfde lijst als verzetten).
-- **Groepslessen**: de weekmomenten van de groepslessen op het rooster; meteen vast.
-- Een sporter plant niet meer in dan zijn abonnement toestaat (soort en keer per week; de server
-  controleert dat). Staf krijgt een waarschuwing en beslist zelf.
+  - Niet herhaald: een losse afspraak tot vier weken vooruit (`singlePtOptions`, `bookSinglePt`;
+    verzoek met `kind: 'single'`). De credit gaat eraf zodra hij vaststaat.
+  - Elke week: een vast PT-moment vanaf de gekozen datum.
+- **Groepsles**: een les uit het rooster op die dag. Niet herhaald = gewoon inschrijven (of
+  wachtlijst als hij vol zit); elke week = vaste groepsles op dat weekmoment.
+- Op een dag zonder plek toont de app de eerstvolgende dagen waarop het wel kan.
+- Onder de vaste lessen staan de **losse afspraken** van het lid (ook verzette lessen en losse
+  groepslessen), met Afmelden en voor staf Verzetten.
+- Een sporter plant niet meer vaste momenten in dan zijn abonnement toestaat (soort en keer per
+  week; de server controleert dat). Een losse afspraak kan altijd; die kost een credit. Staf krijgt
+  een waarschuwing en beslist zelf.
 - Abonnement toewijzen: na Opslaan komen de credits van de eerste periode er meteen bij, met de
   eerste factuur. Het ledenscherm zegt dat vooraf.
 
 ### Afspraken wijzigen (staf)
 
-- **Eén afspraak verzetten**: bij een vast PT-moment (Beheer → lid → Vaste lessen) of in Lessen →
+- **Eén afspraak verzetten**: bij een vast PT-moment (Beheer → lid → Afspraken) of in Lessen →
   Deelnemers. Kies een vrij moment bij de trainer; de oude afspraak gaat eraf met de credit terug
   (ook binnen de afmeldtermijn) en het nieuwe moment staat meteen vast (`moveOccurrence`).
 - **Hele reeks wijzigen**: ⋮ bij een vast PT-moment → andere dag, tijd of trainer vanaf een datum.

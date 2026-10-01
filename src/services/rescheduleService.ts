@@ -32,16 +32,16 @@ export interface RescheduleRequest {
   trainerId: string;
   trainerName: string | null;
   title: string;
-  fromClassId: string;
-  fromDate: string;
-  fromStartTime: string;
+  fromClassId: string | null;
+  fromDate: string | null;
+  fromStartTime: string | null;
   date: string;
   startTime: string;
   endTime: string;
   status: RescheduleStatus;
   classId: string | null;
-  /** 'standing': een aangevraagd vast PT-moment (elke week), geen verzette les. */
-  kind?: 'reschedule' | 'standing';
+  /** 'standing': een aangevraagd vast PT-moment (elke week); 'single': één losse PT-afspraak. */
+  kind?: 'reschedule' | 'standing' | 'single';
   weekday?: number | null;
   startDate?: string | null;
 }

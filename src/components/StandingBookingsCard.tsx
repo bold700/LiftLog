@@ -52,7 +52,7 @@ import {
 import { getClassTypes } from '../services/classTypeService';
 import { designTokens } from '../theme/designTokens';
 import { todayIso } from '../utils/format';
-import { describeStandingResult, seriesOccurrences, type SeriesStatus } from '../utils/standingSeries';
+import { describeStandingResult, seriesOccurrences, singleAppointments, type SeriesStatus } from '../utils/standingSeries';
 import type { ClassType, StandingBooking } from '../types';
 
 const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
@@ -179,11 +179,14 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
       a.startTime.localeCompare(b.startTime)
   );
 
+  const singles = singleAppointments(standing, classes, bookings, today);
+  const skipIsSingle = !!skip && singles.some((x) => x.cls.id === skip.cls.id);
+
   return (
     <Box sx={embedded ? {} : { p: 2, mb: 3, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackground }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
         <Typography component="h2" sx={{ fontSize: 14, fontWeight: 500, lineHeight: '20px' }}>
-          Vaste lessen
+          Afspraken
         </Typography>
         {/* Eén knop: wat er kan hangt af van het abonnement (PT-momenten, groepslessen of allebei). */}
         <Button size="small" startIcon={<AddRoundedIcon />} onClick={() => setPlanOpen(true)} disabled={busy} sx={{ textTransform: 'none' }}>
@@ -191,11 +194,11 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
         </Button>
       </Box>
 
-      {sorted.length === 0 && (
+      {sorted.length === 0 && singles.length === 0 && (
         <Typography variant="body2" color="text.secondary">
           {asStaff
-            ? 'Nog geen vaste momenten. Plan vaste PT-momenten of groepslessen in, passend bij het abonnement; de lessen worden dan elke week automatisch geboekt.'
-            : 'Nog geen vaste momenten. Plan ze in volgens je abonnement; je wordt dan elke week automatisch ingeschreven.'}
+            ? 'Nog geen afspraken. Plan een losse afspraak of een vast moment (elke week) in; vaste lessen worden elke week automatisch geboekt.'
+            : 'Nog geen afspraken. Plan een losse afspraak of een vast moment in; bij een vast moment word je elke week automatisch ingeschreven.'}
         </Typography>
       )}
 
@@ -282,6 +285,39 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
         );
       })}
 
+      {singles.length > 0 && (
+        <Box sx={{ pt: 1.25, borderTop: `1px solid ${designTokens.cardBackgroundHigh}` }}>
+          <Typography variant="body2" fontWeight={600}>
+            Losse afspraken
+          </Typography>
+          <Box sx={{ mt: 0.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            {singles.map(({ cls, booking }) => (
+              <Box key={cls.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: 32 }}>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" noWrap>
+                    {shortDate(cls.date)} {cls.startTime}
+                    {cls.endTime ? `–${cls.endTime}` : ''} · {cls.title}
+                  </Typography>
+                  {(booking.status === 'waitlist' || (cls.privateFor && trainerName(cls.trainerId))) && (
+                    <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                      {booking.status === 'waitlist' ? 'Wachtlijst' : `bij ${trainerName(cls.trainerId)}`}
+                    </Typography>
+                  )}
+                </Box>
+                {asStaff && cls.privateFor && booking.status === 'booked' && (
+                  <Button size="small" onClick={() => setMoveOne({ classId: cls.id, bookingId: booking.id })} disabled={busy} sx={{ textTransform: 'none', minWidth: 0 }}>
+                    Verzetten
+                  </Button>
+                )}
+                <Button size="small" onClick={() => setSkip({ booking, cls })} disabled={busy} sx={{ textTransform: 'none', minWidth: 0 }}>
+                  Afmelden
+                </Button>
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      )}
+
       <Menu anchorEl={menu?.anchor} open={!!menu} onClose={() => setMenu(null)}>
         {asStaff && menu?.s.active && typeById.get(menu.s.classTypeId)?.privateFor && (
           <MenuItem
@@ -357,6 +393,7 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
         userId={userId}
         asStaff={asStaff}
         types={publicTypes}
+        classes={classes}
         trainers={trainers}
         defaultTrainerId={defaultTrainerId}
         onClose={() => setPlanOpen(false)}
@@ -405,11 +442,11 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
       />
 
       <Dialog open={!!skip} onClose={() => setSkip(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Deze keer niet?</DialogTitle>
+        <DialogTitle>{skipIsSingle ? 'Afmelden?' : 'Deze keer niet?'}</DialogTitle>
         <DialogContent>
           <DialogContentText>
             {skip && `${skip.cls.title} op ${shortDate(skip.cls.date)} om ${skip.cls.startTime} afmelden. `}
-            Binnen de afmeldtermijn krijg je de credit terug, daarna niet. De vaste les blijft gewoon staan voor de andere weken.
+            Binnen de afmeldtermijn krijg je de credit terug, daarna niet.{skipIsSingle ? '' : ' De vaste les blijft gewoon staan voor de andere weken.'}
           </DialogContentText>
         </DialogContent>
         <DialogActions>

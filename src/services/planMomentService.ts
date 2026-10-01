@@ -37,3 +37,30 @@ export function getWeeklyPtOptions(input: { userId?: string; trainerId?: string;
 export function requestStandingPt(input: { weekday: number; startTime: string; endTime: string; startDate: string }): Promise<{ requestId: string; status: 'pending' }> {
   return callBooking({ action: 'requestStandingPt', ...input });
 }
+
+export interface DayTime {
+  date: string;
+  startTime: string;
+  endTime: string;
+  adjacent: boolean;
+}
+
+/** Vrije momenten voor één losse PT-afspraak (de komende vier weken), per dag. */
+export function getSinglePtOptions(input: { userId?: string; trainerId?: string; duration: number }): Promise<{
+  trainerId: string;
+  duration: number;
+  days: { date: string; times: DayTime[] }[];
+}> {
+  return callBooking({ action: 'singlePtOptions', ...input });
+}
+
+/** Losse PT-afspraak: staf plant meteen in ('approved'), een sporter vraagt aan ('pending'). */
+export function bookSinglePt(input: {
+  userId?: string;
+  trainerId?: string;
+  duration: number;
+  date: string;
+  startTime: string;
+}): Promise<{ requestId: string; status: 'pending' | 'approved'; classId?: string }> {
+  return callBooking({ action: 'bookSinglePt', ...input });
+}

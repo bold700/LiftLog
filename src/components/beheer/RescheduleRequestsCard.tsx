@@ -61,7 +61,9 @@ export function RescheduleRequestsCard({ onChanged }: { onChanged?: () => void }
                 <Typography variant="caption" color="text.secondary">
                   {r.kind === 'standing'
                     ? `Vast PT-moment${r.startDate ? `, vanaf ${rescheduleDayLabelSafe(r.startDate)}` : ''}`
-                    : `${r.title || 'PT-moment'} · verzet, in plaats van ${rescheduleDayLabelSafe(r.fromDate)} ${r.fromStartTime}`}
+                    : r.kind === 'single' || !r.fromDate
+                      ? `${r.title || 'PT-moment'} · losse afspraak`
+                      : `${r.title || 'PT-moment'} · verzet, in plaats van ${rescheduleDayLabelSafe(r.fromDate)} ${r.fromStartTime}`}
                   {r.trainerId !== myId && r.trainerName ? ` · trainer ${r.trainerName}` : ''}
                 </Typography>
               </Box>

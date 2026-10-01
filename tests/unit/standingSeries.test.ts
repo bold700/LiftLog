@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { describeStandingResult, seriesOccurrences } from '../../src/utils/standingSeries';
+import { describeStandingResult, seriesOccurrences, singleAppointments } from '../../src/utils/standingSeries';
 import type { Booking, StudioClass } from '../../src/services/classService';
 import type { StandingBooking } from '../../src/types';
 
@@ -41,6 +41,20 @@ describe('seriesOccurrences', () => {
     const pt = [cls('p', '2026-10-03', { privateFor: 'u', cancelledAt: '2026-09-30', autoCancelled: true })];
     expect(seriesOccurrences(sb(), pt, [], '2026-10-01')[0].status).toBe('optedOut');
     expect(seriesOccurrences(sb({ pausedFrom: '2026-10-01' }), pt, [], '2026-10-01')[0].status).toBe('paused');
+  });
+});
+
+describe('singleAppointments', () => {
+  it('alleen komende boekingen die niet bij een actieve vaste les horen', () => {
+    const extra = [...classes, cls('pt1', '2026-10-08', { classTypeId: null, privateFor: 'u', startTime: '14:00' })];
+    const out = singleAppointments([sb()], extra, [bk('a'), bk('x'), bk('pt1', 'waitlist'), bk('oud'), { ...bk('b'), status: 'cancelled' } as Booking], '2026-10-01');
+    expect(out.map((o) => o.cls.id)).toEqual(['x', 'pt1']);
+  });
+  it('een gestopte vaste les telt niet: die lessen zijn dan los', () => {
+    expect(singleAppointments([sb({ active: false })], classes, [bk('a')], '2026-10-01').map((o) => o.cls.id)).toEqual(['a']);
+  });
+  it('afgelast door de studio valt weg', () => {
+    expect(singleAppointments([], classes, [bk('c')], '2026-10-01')).toEqual([]);
   });
 });
 

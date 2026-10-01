@@ -2324,6 +2324,61 @@ describe('verzetten na afmelden (PT-moment)', () => {
   });
 });
 
+describe('losse PT-afspraak (niet herhaald)', () => {
+  const D = amsterdamDate(new Date(), 3);
+  const LATER = amsterdamDate(new Date(), 20);
+  const allWeek = Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), [{ from: '16:00', to: '21:00' }]]));
+  const idFor = (user, date, time) => `r1_${user}_${date.replaceAll('-', '')}_${time.replace(':', '')}`;
+
+  beforeEach(() => {
+    store['profiles/sporter1'].trainerId = 'trainer1';
+    store['classes/other'] = {
+      orgId: 'vanas', title: 'Small Group', date: D, startTime: '19:00', endTime: '20:00', room: 'Zaal 2',
+      trainerId: 'trainer1', capacity: 6, creditCost: 1, bookedCount: 0, waitlistCount: 0,
+    };
+    store['trainerAvailability/vanas__trainer1'] = { orgId: 'vanas', userId: 'trainer1', days: allWeek };
+  });
+
+  it('opties: vrije tijden bij de eigen trainer, ook verder dan twee weken vooruit', async () => {
+    const res = await post({ action: 'singlePtOptions', duration: 60 });
+    expect(res.statusCode).toBe(200);
+    expect(res.body.trainerId).toBe('trainer1');
+    expect(res.body.days.find((d) => d.date === D).times.map((t) => t.startTime)).toEqual(['16:00', '16:30', '17:00', '17:30', '18:00', '20:00']);
+    expect(res.body.days.some((d) => d.date === LATER)).toBe(true);
+  });
+
+  it('sporter vraagt aan, trainer keurt goed: les aangemaakt, ingeschreven, credit eraf', async () => {
+    const before = store['creditAccounts/vanas__sporter1'].balance;
+    const req = await post({ action: 'bookSinglePt', duration: 60, date: LATER, startTime: '17:00' });
+    expect(req.body).toMatchObject({ requestId: idFor('sporter1', LATER, '17:00'), status: 'pending' });
+    expect(store[`rescheduleRequests/${idFor('sporter1', LATER, '17:00')}`]).toMatchObject({ kind: 'single', userId: 'sporter1', trainerId: 'trainer1', endTime: '18:00' });
+    expect((await post({ action: 'bookSinglePt', duration: 60, date: LATER, startTime: '17:00' })).statusCode).toBe(409);
+    const list = await post({ action: 'rescheduleRequests' }, 'trainer1');
+    expect(list.body.requests.find((r) => r.id === idFor('sporter1', LATER, '17:00')).kind).toBe('single');
+
+    const ok = await post({ action: 'answerReschedule', requestId: idFor('sporter1', LATER, '17:00'), approve: true }, 'trainer1');
+    expect(ok.statusCode).toBe(200);
+    expect(store[`classes/cls_rs_${idFor('sporter1', LATER, '17:00')}`]).toMatchObject({
+      date: LATER, startTime: '17:00', endTime: '18:00', privateFor: 'sporter1', trainerId: 'trainer1', bookedCount: 1, rescheduledFrom: null,
+    });
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(before - 1);
+  });
+
+  it('staf plant meteen in voor een lid, bij de gekozen trainer', async () => {
+    const res = await post({ action: 'bookSinglePt', userId: 'sporter1', trainerId: 'trainer1', duration: 60, date: D, startTime: '20:00' }, 'trainer1');
+    expect(res.body).toMatchObject({ status: 'approved' });
+    expect(store[`classes/${res.body.classId}`]).toMatchObject({ date: D, startTime: '20:00', bookedCount: 1, privateFor: 'sporter1' });
+  });
+
+  it('weigert een bezet moment, een sporter zonder trainer, en boekt nooit voor een ander lid', async () => {
+    expect((await post({ action: 'bookSinglePt', duration: 60, date: D, startTime: '19:00' })).statusCode).toBe(409);
+    const own = await post({ action: 'bookSinglePt', userId: 'sporter2', duration: 60, date: D, startTime: '16:00' });
+    expect(own.body.requestId).toBe(idFor('sporter1', D, '16:00'));
+    delete store['profiles/sporter1'].trainerId;
+    expect((await post({ action: 'bookSinglePt', duration: 60, date: D, startTime: '17:00' })).statusCode).toBe(409);
+  });
+});
+
 describe('abonnement bepaalt wat je vast inplant', () => {
   const allWeek = Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), [{ from: '16:00', to: '21:00' }]]));
   beforeEach(() => {
