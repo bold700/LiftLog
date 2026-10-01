@@ -26,7 +26,7 @@ export function getPlanStatus(userId?: string): Promise<PlanStatus> {
   return callBooking({ action: 'planStatus', ...(userId ? { userId } : {}) });
 }
 
-export function getWeeklyPtOptions(input: { userId?: string; trainerId?: string; duration: number }): Promise<{
+export function getWeeklyPtOptions(input: { userId?: string; trainerId?: string; duration: number; ignoreClassTypeId?: string }): Promise<{
   trainerId: string;
   duration: number;
   days: { weekday: number; times: WeeklySlot[] }[];

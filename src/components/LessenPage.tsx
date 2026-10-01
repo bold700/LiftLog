@@ -26,6 +26,7 @@ import { PageLayout, ContentCard, EmptyState } from './layout';
 import { useProfile } from '../context/ProfileContext';
 import { useNotify } from '../context/NotifyContext';
 import { RescheduleDialog } from './RescheduleDialog';
+import { classLabel } from '../utils/classLabel';
 import { getRescheduleRequests, requestWhen, type RescheduleRequest } from '../services/rescheduleService';
 import {
   getUpcomingClasses,
@@ -213,7 +214,7 @@ export function LessenPage() {
   /** Afmelden binnen het late venster: eerst waarschuwen dat de credit vervalt. */
   const [lateCancel, setLateCancel] = useState<Booking | null>(null);
   /** PT-moment op tijd afgemeld: meteen een ander moment kiezen (sporter vraagt aan, staf plant in). */
-  const [reschedule, setReschedule] = useState<{ classId: string; staff: boolean; memberName?: string } | null>(null);
+  const [reschedule, setReschedule] = useState<{ classId: string; staff: boolean; memberName?: string; moveBookingId?: string } | null>(null);
   /** Eigen verzoeken om te verzetten (sporter): wacht op de trainer, of afgewezen. */
   const [myRequests, setMyRequests] = useState<RescheduleRequest[]>([]);
   const [requestsVersion, setRequestsVersion] = useState(0);
@@ -236,6 +237,15 @@ export function LessenPage() {
    * krijgt de namen van de server, alleen als de studio "naam van de trainer tonen" aan heeft staan.
    */
   const [trainerNames, setTrainerNames] = useState<Record<string, string>>({});
+  // PT-moment in het rooster: wie het is en bij welke trainer ("Emma L" / "PT – Kenny").
+  const labelFor = useCallback(
+    (cls: StudioClass) =>
+      classLabel(cls, {
+        member: isStaff && cls.privateFor ? (profileCtx?.allSporters ?? []).find((p) => p.userId === cls.privateFor)?.displayName ?? null : null,
+        trainer: cls.trainerId ? trainerNames[cls.trainerId] ?? null : null,
+      }),
+    [isStaff, profileCtx?.allSporters, trainerNames]
+  );
 
   /**
    * Vanaf wanneer lessen laden: vandaag, of het begin van de week die je bekijkt als die al voorbij
@@ -564,14 +574,15 @@ export function LessenPage() {
         />
         <Box sx={{ flex: '1 1 auto', minWidth: 0 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-            {cls.title}
+            {labelFor(cls).title}
           </Typography>
           <Typography variant="body2" color="text.secondary">
+            {labelFor(cls).sub ? `${labelFor(cls).sub} · ` : ''}
             {/* Tijd eerst: in de Dag-weergave staat de datum al boven de lijst. */}
             {cls.startTime}
             {cls.endTime ? `–${cls.endTime}` : ''}
             {viewMode === 'day' ? '' : ` · ${dayLabel(cls.date)}`}
-            {trainerNames[cls.trainerId] ? ` · ${trainerNames[cls.trainerId]}` : ''}
+            {!labelFor(cls).sub && trainerNames[cls.trainerId] ? ` · ${trainerNames[cls.trainerId]}` : ''}
             {cls.room ? ` · ${cls.room}` : ''}
           </Typography>
           <Box sx={{ display: 'flex', gap: 0.75, mt: 1, flexWrap: 'wrap' }}>
@@ -947,6 +958,7 @@ export function LessenPage() {
                 classesByDate={classesByDate}
                 bookingByClass={myBookingByClass}
                 trainerNames={trainerNames}
+                labelFor={labelFor}
                 today={today()}
                 onOpenClass={handleBlockClick}
                 onSelectDay={(d) => {
@@ -1011,12 +1023,17 @@ export function LessenPage() {
         onChanged={() => void load()}
         onStart={(cls, plan, ids) => void startClass(cls, plan, ids)}
         onReschedule={(classId, memberName) => setReschedule({ classId, staff: true, memberName })}
+        onMove={(classId, bookingId, memberName) => {
+          setParticipantsClass(null);
+          setReschedule({ classId, staff: true, memberName, moveBookingId: bookingId });
+        }}
       />
 
       <RescheduleDialog
         classId={reschedule?.classId ?? null}
         staff={reschedule?.staff}
         memberName={reschedule?.memberName}
+        moveBookingId={reschedule?.moveBookingId ?? null}
         onClose={() => setReschedule(null)}
         onDone={() => {
           void load();
@@ -1273,6 +1290,7 @@ function ParticipantsDialog({
   onChanged,
   onStart,
   onReschedule,
+  onMove,
 }: {
   cls: StudioClass | null;
   sporters: Profile[];
@@ -1281,6 +1299,8 @@ function ParticipantsDialog({
   onStart: (cls: StudioClass, plan: ClassPlan, bookedUserIds: string[]) => void;
   /** PT-moment afgemeld met credit terug: meteen een ander moment inplannen voor dit lid. */
   onReschedule?: (classId: string, memberName: string) => void;
+  /** PT-afspraak verzetten (staf): credit terug, nieuw moment meteen vast. */
+  onMove?: (classId: string, bookingId: string, memberName: string) => void;
 }) {
   const notify = useNotify();
   const [rows, setRows] = useState<Booking[]>([]);
@@ -1533,6 +1553,12 @@ function ParticipantsDialog({
                   {nameFor(b.userId)}
                 </Typography>
                 <Chip size="small" label={b.status === 'waitlist' ? 'Wachtlijst' : 'Ingeschreven'} />
+                {/* PT-moment: deze afspraak naar een ander moment (credit terug, nieuw moment meteen vast). */}
+                {cls?.privateFor && b.status === 'booked' && onMove && (
+                  <Button size="small" disabled={busyId === b.id} onClick={() => onMove(cls.id, b.id, nameFor(b.userId))}>
+                    Verzetten
+                  </Button>
+                )}
                 <Button size="small" color="error" disabled={busyId === b.id} onClick={() => void remove(b)}>
                   Verwijderen
                 </Button>

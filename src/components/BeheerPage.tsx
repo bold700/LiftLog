@@ -31,7 +31,6 @@ import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import PhoneRoundedIcon from '@mui/icons-material/PhoneRounded';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
-import MailOutlineRoundedIcon from '@mui/icons-material/MailOutlineRounded';
 import { useShowBackButton } from '../context/TopBarBackContext';
 import type { ReactNode } from 'react';
 import { useProfile } from '../context/ProfileContext';
@@ -40,7 +39,7 @@ import { RescheduleRequestsCard } from './beheer/RescheduleRequestsCard';
 import { useI18n } from '../context/I18nContext';
 import { useAuth } from '../context/AuthContext';
 import { assignTrainerToSporter, getAllProfiles, getProfileByEmail, updateProfile } from '../services/profileService';
-import { deleteAccountAsAdmin, inviteMember, setMemberRole } from '../services/adminAccountService';
+import { deleteAccountAsAdmin, inviteMember, setMemberRole, updateMemberCredentials } from '../services/adminAccountService';
 import type { LeaderboardVisibility, Membership, Plan, Profile, ProfileRole, Limitation } from '../types';
 import { PageLayout, ContentCard, HeaderActions } from './layout';
 import { BrandingSettings } from './beheer/BrandingSettings';
@@ -101,6 +100,8 @@ interface EditState {
   restingHr: string;
   weightGoalKg: string;
   phone: string;
+  /** E-mailadres (inloggen); staf wijzigt het hier direct. */
+  email: string;
   street: string;
   zip: string;
   city: string;
@@ -125,6 +126,7 @@ function toEditState(p: Profile, planId = ''): EditState {
     restingHr: p.restingHrBpm != null ? String(p.restingHrBpm) : '',
     weightGoalKg: p.weightGoalKg != null ? String(p.weightGoalKg) : '',
     phone: p.phone ?? '',
+    email: p.email ?? '',
     street: p.address?.street ?? '',
     zip: p.address?.zip ?? '',
     city: p.address?.city ?? '',
@@ -455,6 +457,12 @@ export function BeheerPage() {
     if (!target || !edit) return;
     setSaving(true);
     try {
+      // E-mailadres (inloggen) loopt via de server: account en profiel samen.
+      const newEmail = edit.email.trim().toLowerCase();
+      if (newEmail && newEmail !== (target.email ?? '').toLowerCase()) {
+        if (!auth?.user) throw new Error('Je bent niet ingelogd.');
+        await updateMemberCredentials(auth.user, target.userId, { email: newEmail });
+      }
       const roleChanged = edit.role !== target.role;
       // De rol geldt per studio en loopt via de server.
       if (roleChanged) {
@@ -571,24 +579,13 @@ export function BeheerPage() {
   const memberDetail =
     target && edit ? (
       <Box>
-        {/* Terug naar de ledenlijst: de pijl in de bovenbalk (of het veeggebaar). */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-          <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
-            <Button onClick={() => setEdit(toEditState(target, memberships[target.userId]?.planId ?? ''))} disabled={!editDirty || saving}>
-              Wijzigingen ongedaan
-            </Button>
-            <Button variant="contained" disableElevation onClick={handleSave} disabled={saving || !editDirty}>
-              {saving ? 'Bezig…' : 'Opslaan'}
-            </Button>
-          </Box>
-        </Box>
-
         {message && (
           <Alert severity={message.type} sx={{ mb: 2 }} onClose={() => setMessage(null)}>
             {message.text}
           </Alert>
         )}
 
+        {/* Kop en opslaan op één regel; terug naar de ledenlijst met de pijl in de bovenbalk. */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
           <UserAvatar name={edit.displayName || target.displayName} photoURL={target.photoURL} size={72} />
           <Box sx={{ minWidth: 0, flex: 1 }}>
@@ -610,7 +607,7 @@ export function BeheerPage() {
                   .join(' · ')}
               </Typography>
             </Box>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1.5 }}>
+            <Box sx={{ display: target.phone ? 'flex' : 'none', gap: 1, flexWrap: 'wrap', mt: 1.5 }}>
               {target.phone && (
                 <Chip icon={<PhoneRoundedIcon />} label={target.phone} component="a" href={`tel:${target.phone.replace(/\s/g, '')}`} clickable variant="outlined" />
               )}
@@ -626,10 +623,15 @@ export function BeheerPage() {
                   variant="outlined"
                 />
               )}
-              {target.email && (
-                <Chip icon={<MailOutlineRoundedIcon />} label={target.email} component="a" href={`mailto:${target.email}`} clickable variant="outlined" />
-              )}
             </Box>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1, ml: 'auto', alignSelf: { xs: 'stretch', sm: 'center' }, justifyContent: 'flex-end' }}>
+            <Button onClick={() => setEdit(toEditState(target, memberships[target.userId]?.planId ?? ''))} disabled={!editDirty || saving}>
+              Wijzigingen ongedaan
+            </Button>
+            <Button variant="contained" disableElevation onClick={handleSave} disabled={saving || !editDirty}>
+              {saving ? 'Bezig…' : 'Opslaan'}
+            </Button>
           </Box>
         </Box>
 
@@ -639,7 +641,15 @@ export function BeheerPage() {
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
                 <TextField label="Naam" size="small" fullWidth value={edit.displayName} onChange={(e) => setEdit({ ...edit, displayName: e.target.value })} sx={{ gridColumn: { sm: '1 / -1' } }} />
                 <TextField label="Telefoon" size="small" fullWidth value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} inputProps={{ inputMode: 'tel' }} />
-                <TextField label="E-mail" size="small" fullWidth value={target.email ?? ''} disabled helperText="Wijzigen via Bekijk als → Profiel → Account." />
+                <TextField
+                  label="E-mail"
+                  size="small"
+                  fullWidth
+                  type="email"
+                  value={edit.email}
+                  onChange={(e) => setEdit({ ...edit, email: e.target.value })}
+                  helperText={edit.email.trim().toLowerCase() !== (target.email ?? '').toLowerCase() ? 'Hiermee logt het lid voortaan in.' : ' '}
+                />
                 <TextField label="Adres" size="small" fullWidth value={edit.street} onChange={(e) => setEdit({ ...edit, street: e.target.value })} sx={{ gridColumn: { sm: '1 / -1' } }} />
                 <TextField label="Postcode" size="small" fullWidth value={edit.zip} onChange={(e) => setEdit({ ...edit, zip: e.target.value })} />
                 <TextField label="Plaats" size="small" fullWidth value={edit.city} onChange={(e) => setEdit({ ...edit, city: e.target.value })} />

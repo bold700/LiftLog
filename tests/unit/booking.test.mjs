@@ -2384,3 +2384,56 @@ describe('abonnement bepaalt wat je vast inplant', () => {
     expect(store['classTypes/ctp_sporter1_4_1900']).toMatchObject({ name: 'Personal Training', creditCost: 1, baseClassTypeId: null });
   });
 });
+
+describe('afspraken wijzigen: één afspraak of de hele reeks (staf)', () => {
+  const D = amsterdamDate(new Date(), 3);
+  const allWeek = Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), [{ from: '06:00', to: '21:00' }]]));
+  beforeEach(() => {
+    store['trainerAvailability/vanas__trainer1'] = { orgId: 'vanas', userId: 'trainer1', days: allWeek };
+  });
+
+  it('één afspraak verzetten: credit terug (ook binnen de afmeldtermijn), nieuw moment meteen geboekt', async () => {
+    // Les over drie uur: gewoon afmelden zou de credit kosten.
+    const soon = new Date(Date.now() + 3 * 3_600_000);
+    const [date, time] = soon.toLocaleString('sv-SE', { timeZone: 'Europe/Amsterdam' }).split(' ');
+    store['classes/ptx'] = {
+      orgId: 'vanas', title: 'Personal Training', date, startTime: time.slice(0, 5), endTime: `${String((Number(time.slice(0, 2)) + 1) % 24).padStart(2, '0')}:${time.slice(3, 5)}`,
+      trainerId: 'trainer1', capacity: 1, creditCost: 1, bookedCount: 0, waitlistCount: 0, privateFor: 'sporter1',
+    };
+    const booked = await post({ action: 'book', classId: 'ptx' });
+    store[`bookings/${booked.body.bookingId}`].createdAt = new Date(Date.now() - 2 * 3_600_000).toISOString();
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(2);
+    // Een sporter mag dit niet direct.
+    expect((await post({ action: 'moveOccurrence', bookingId: booked.body.bookingId, date: D, startTime: '10:00' })).statusCode).toBe(403);
+
+    const r = await post({ action: 'moveOccurrence', bookingId: booked.body.bookingId, date: D, startTime: '10:00' }, 'trainer1');
+    expect(r.statusCode).toBe(200);
+    expect(store[`bookings/${booked.body.bookingId}`]).toMatchObject({ status: 'cancelled', refunded: true });
+    expect(store['classes/cls_rs_rr_ptx']).toMatchObject({ date: D, startTime: '10:00', privateFor: 'sporter1', bookedCount: 1 });
+    // Netto één credit: terug voor de oude, eraf voor de nieuwe.
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(2);
+  });
+
+  it('hele reeks wijzigen: nieuw weekmoment vanaf een datum, de oude reeks verdwijnt', async () => {
+    const add = await post({ action: 'addPersonalSlot', userId: 'sporter1', weekday: 1, startTime: '19:00', endTime: '20:00', trainerId: 'trainer1' }, 'trainer1');
+    expect(add.statusCode).toBe(200);
+    const oldSb = add.body.standingBookingId;
+    // Een half uur later op dezelfde dag botst met het oude moment, maar dat telt niet mee.
+    const r = await post(
+      { action: 'moveStandingPt', standingBookingId: oldSb, weekday: 1, startTime: '19:30', endTime: '20:30', trainerId: 'trainer1', fromDate: amsterdamDate(new Date(), 0) },
+      'trainer1'
+    );
+    expect(r.statusCode).toBe(200);
+    expect(store['classTypes/ctp_sporter1_1_1930']).toMatchObject({ privateFor: 'sporter1', schedule: [{ weekday: 1, startTime: '19:30', endTime: '20:30' }] });
+    expect(store['classTypes/ctp_sporter1_1_1900']).toBeUndefined();
+    expect(store[`standingBookings/${oldSb}`]).toBeUndefined();
+    // Alles wat van de oude reeks geboekt stond, is afgemeld met de credit terug.
+    const oldBookings = Object.entries(store)
+      .filter(([k, v]) => k.startsWith('bookings/') && v.userId === 'sporter1' && String(v.classId).startsWith('cls_gen_ctp_sporter1_1_1900'))
+      .map(([, v]) => v);
+    expect(oldBookings.length).toBeGreaterThan(0);
+    expect(oldBookings.every((b) => b.status === 'cancelled' && (b.creditsSpent === 0 || b.refunded === true))).toBe(true);
+    // Een sporter kan geen reeks wijzigen.
+    expect((await post({ action: 'moveStandingPt', standingBookingId: 'x', weekday: 1, startTime: '10:00', endTime: '11:00' })).statusCode).toBe(403);
+  });
+});

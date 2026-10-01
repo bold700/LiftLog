@@ -20,6 +20,11 @@ import { applyCors } from './_lib/cors.mjs';
  *   { action: 'requestReschedule', classId, date, startTime }  nieuw moment aanvragen (sporter; de trainer keurt
  *                                                     goed) of meteen inplannen (staf)
  *   { action: 'rescheduleRequests' }                  openstaande verzoeken (staf) of je eigen verzoeken (sporter)
+ *   { action: 'moveStandingPt', standingBookingId, weekday, startTime, endTime, trainerId?, fromDate }
+ *                                                     vast PT-moment (reeks) naar een andere dag/tijd/trainer, vanaf
+ *                                                     een datum; afspraken vanaf die datum met credit terug (staf)
+ *   { action: 'moveOccurrence', bookingId, date, startTime }  één PT-afspraak verzetten: credit terug, nieuw moment
+ *                                                     meteen vast (staf)
  *   { action: 'planStatus', userId? }                 abonnement van het lid: waarvoor, hoe vaak per week, hoeveel
  *                                                     vaste momenten er al staan (Moment inplannen)
  *   { action: 'weeklyPtOptions', userId?, trainerId?, duration? }  vrije weekmomenten voor een vast PT-moment
@@ -288,6 +293,12 @@ export default async function handler(req, res) {
         return await setStandingBooking(res, db, uid, myOrgs, isStaff, String(body.standingBookingId ?? '').trim(), body.active === true);
       case 'addStandingBooking':
         return await addStandingBooking(res, db, uid, myOrgs, isStaff, body);
+      case 'moveStandingPt':
+        if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan een reeks wijzigen.', build: BUILD });
+        return await moveStandingPt(res, db, uid, myOrgs, body);
+      case 'moveOccurrence':
+        if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder kan een afspraak direct verzetten.', build: BUILD });
+        return await moveOccurrence(res, db, uid, actOrg, myOrgs, body);
       case 'pauseStandingBooking':
         return await pauseStandingBooking(res, db, uid, myOrgs, isStaff, body);
       case 'addPersonalSlot':
@@ -905,7 +916,8 @@ function applyFreeSpot(tx, db, { choice, classRef, orgId, classId, nowIso, start
 }
 
 /** Het eigenlijke afmelden, ook gebruikt bij het stoppen of pauzeren van een vaste les. */
-async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
+/** `forceRefund`: de studio verzet de afspraak; de credit komt dan altijd terug, ook binnen de afmeldtermijn. */
+async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId, { forceRefund = false } = {}) {
   const pre = await db.collection('bookings').doc(bookingId).get();
   const costs = pre.exists ? await waitlistCosts(db, String(pre.data().classId)) : {};
   return db.runTransaction(async (tx) => {
@@ -946,7 +958,7 @@ async function cancelBookingCore(db, uid, myOrgs, isStaff, bookingId) {
       byStudio: isStaff && String(booking.userId) !== uid,
       studioCancelRefund: orgSnap.data()?.studioCancelRefund === true,
     };
-    const refund = refundOnCancel({ spent, ...refundRule });
+    const refund = forceRefund && isStaff ? spent > 0 : refundOnCancel({ spent, ...refundRule });
     // Groepsles: op tijd afgemeld maakt de les goedkoper voor de groep. Een afgelaste les rekent
     // cancelWholeClass in één keer af.
     const group = cls?.privateForGroup && booking.status === 'booked' && !cls.cancelledAt ? await readGroupLesson(tx, db, cls, orgId) : null;
@@ -1172,7 +1184,7 @@ async function bookExistingForStanding(db, standing) {
  * Geboekte lessen van een vaste les afmelden (stoppen, of een pauze). Gewoon afmelden: binnen de
  * termijn credit terug, daarbuiten niet — zelfde regel als losse lessen.
  */
-async function cancelSeriesBookings(db, uid, myOrgs, isStaff, standing, inRange) {
+async function cancelSeriesBookings(db, uid, myOrgs, isStaff, standing, inRange, { forceRefund = false, silent = false } = {}) {
   const classIds = new Set((await futureSeriesClasses(db, standing)).filter((c) => inRange(c.date)).map((c) => c.id));
   if (classIds.size === 0) return { cancelled: 0, refunded: 0 };
   const snap = await db.collection('bookings').where('userId', '==', standing.userId).get();
@@ -1181,9 +1193,9 @@ async function cancelSeriesBookings(db, uid, myOrgs, isStaff, standing, inRange)
   for (const d of snap.docs) {
     const b = d.data();
     if (!classIds.has(String(b.classId)) || !['booked', 'waitlist'].includes(String(b.status))) continue;
-    const r = await cancelBookingCore(db, uid, myOrgs, isStaff, d.id).catch(() => null);
+    const r = await cancelBookingCore(db, uid, myOrgs, isStaff, d.id, { forceRefund }).catch(() => null);
     if (r) {
-      await notifyAfterCancel(db, uid, r.notice, r);
+      if (!silent) await notifyAfterCancel(db, uid, r.notice, r);
       cancelled++;
       if (r.refunded) refunded++;
     }
@@ -1388,14 +1400,15 @@ async function planStatus(res, db, uid, orgId, isStaff, userId) {
 }
 
 /** Vrije weekmomenten bij een trainer (sporter: zijn eigen trainer; staf: de gekozen trainer). */
-async function freeWeeklySlots(db, orgId, trainerId, duration) {
+async function freeWeeklySlots(db, orgId, trainerId, duration, ignoreClassTypeId = null) {
   const [sched, availability, pendingSnap] = await Promise.all([
     scheduleContext(db, orgId),
     availabilityOf(db, orgId, trainerId),
     db.collection('rescheduleRequests').where('trainerId', '==', trainerId).where('status', '==', 'pending').get(),
   ]);
   const extraBusy = pendingSnap.docs.map((d) => d.data()).filter((r) => r.kind === 'standing');
-  return weeklyFreeSlots({ trainerId, classTypes: sched.types, availability, hours: sched.hours, duration, extraBusy });
+  const classTypes = ignoreClassTypeId ? sched.types.filter((t) => t.id !== ignoreClassTypeId) : sched.types;
+  return weeklyFreeSlots({ trainerId, classTypes, availability, hours: sched.hours, duration, extraBusy });
 }
 
 const cleanDuration = (v) => {
@@ -1414,7 +1427,9 @@ async function weeklyPtOptions(res, db, uid, orgId, isStaff, body) {
   }
   if (!trainerId) return json(res, 409, { error: 'Er is nog geen vaste trainer gekozen.', build: BUILD });
   const duration = cleanDuration(body?.duration);
-  return json(res, 200, { trainerId, duration, days: await freeWeeklySlots(db, orgId, trainerId, duration), build: BUILD });
+  // Reeks wijzigen (staf): het huidige moment van dit lid telt niet als bezet.
+  const ignore = isStaff ? String(body?.ignoreClassTypeId ?? '').trim() || null : null;
+  return json(res, 200, { trainerId, duration, days: await freeWeeklySlots(db, orgId, trainerId, duration, ignore), build: BUILD });
 }
 
 /**
@@ -1495,6 +1510,106 @@ async function approveStandingRequest(db, approverUid, orgId, request) {
   }
   return { classTypeId: out.body?.classTypeId ?? null };
 }
+
+// --- Afspraken wijzigen: één afspraak of de hele reeks (staf) ---------------------------------
+
+const WEEKDAY_NAMES = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
+
+/**
+ * Hele reeks wijzigen: het vaste PT-moment gaat vanaf `fromDate` naar een andere dag, tijd of
+ * trainer. Eerst het nieuwe moment vastzetten (met botsingscontrole, het oude telt niet mee); lukt
+ * dat, dan de afspraken van de oude reeks vanaf die datum afmelden met de credit terug en de oude
+ * reeks weghalen. Afspraken vóór die datum blijven gewoon staan.
+ */
+async function moveStandingPt(res, db, uid, myOrgs, body) {
+  const standing = await loadStandingForActor(db, uid, myOrgs, true, String(body?.standingBookingId ?? '').trim());
+  const ctSnap = await db.collection('classTypes').doc(String(standing.classTypeId)).get();
+  const ct = ctSnap.exists ? ctSnap.data() : null;
+  if (!ct?.privateFor) return json(res, 400, { error: 'Alleen een vast PT-moment kun je zo wijzigen.', build: BUILD });
+  const fromDate = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.fromDate ?? '')) ? String(body.fromDate) : todayIso();
+  if (fromDate < todayIso()) return json(res, 400, { error: 'Kies een datum vanaf vandaag.', build: BUILD });
+
+  const out = captureRes();
+  await addPersonalSlot(out, db, uid, myOrgs, true, {
+    userId: standing.userId,
+    baseClassTypeId: ct.baseClassTypeId || '',
+    weekday: body?.weekday,
+    startTime: body?.startTime,
+    endTime: body?.endTime,
+    trainerId: String(body?.trainerId ?? '').trim() || ct.defaultTrainerId || '',
+    startDate: fromDate,
+    ignoreClassTypeId: standing.classTypeId,
+  });
+  if (out.statusCode !== 200) return json(res, out.statusCode, { ...out.body, build: BUILD });
+
+  // Zelfde weekmoment (alleen trainer of eindtijd anders): de reeks is ter plekke bijgewerkt.
+  let cancelled = 0;
+  let refunded = 0;
+  if (out.body.classTypeId !== standing.classTypeId) {
+    const r = await cancelSeriesBookings(db, uid, myOrgs, true, standing, (date) => date >= fromDate, { forceRefund: true, silent: true });
+    cancelled = r.cancelled;
+    refunded = r.refunded;
+    const future = await futureClassesOfType(db, String(standing.classTypeId), fromDate, [orgIdOf(standing.orgId)]);
+    await deleteClasses(db, future.filter((c) => !(Number(c.bookedCount) > 0) && !(Number(c.waitlistCount) > 0)));
+    await db.collection('classTypes').doc(String(standing.classTypeId)).delete();
+    await db.collection('standingBookings').doc(String(standing.id)).delete();
+  }
+  if (standing.userId !== uid) {
+    try {
+      await sendPushToUser(db, standing.userId, {
+        title: 'Vast PT-moment gewijzigd',
+        body: `Vanaf ${fromDate.split('-').reverse().join('-')}: elke ${WEEKDAY_NAMES[Number(body?.weekday)] ?? 'week'} om ${String(body?.startTime ?? '')}.`,
+        data: { kind: 'standingChanged' },
+      });
+    } catch (e) {
+      console.warn('[booking] melding reeks gewijzigd mislukt:', e?.message ?? e);
+    }
+  }
+  return json(res, 200, { ...out.body, cancelled, refunded, build: BUILD });
+}
+
+/**
+ * Eén PT-afspraak verzetten (staf): het nieuwe moment moet vrij zijn bij de trainer; dan de oude
+ * afspraak afmelden met de credit terug en het nieuwe moment meteen vastzetten en boeken.
+ */
+async function moveOccurrence(res, db, uid, orgId, myOrgs, body) {
+  const bookingId = String(body?.bookingId ?? '').trim();
+  const snap = bookingId ? await db.collection('bookings').doc(bookingId).get() : null;
+  if (!snap?.exists) return json(res, 404, { error: 'Deze afspraak bestaat niet (meer).', build: BUILD });
+  const booking = snap.data();
+  if (orgIdOf(booking.orgId) !== orgId) return json(res, 403, { error: 'Deze afspraak hoort niet bij jouw studio.', build: BUILD });
+  if (booking.status !== 'booked') return json(res, 409, { error: 'Deze afspraak staat niet (meer) geboekt.', build: BUILD });
+  const cls = await rescheduleSource(db, uid, orgId, true, String(booking.classId));
+  const date = String(body?.date ?? '').trim();
+  const startTime = String(body?.startTime ?? '').trim();
+  const options = await optionsFor(db, orgId, slotOf(cls));
+  if (!isOffered(options, date, startTime)) return json(res, 409, { error: 'Dit moment is niet (meer) vrij. Kies een ander moment.', build: BUILD });
+
+  await cancelBookingCore(db, uid, myOrgs, true, bookingId, { forceRefund: true });
+  const out = captureRes();
+  await requestReschedule(out, db, uid, orgId, true, { classId: cls.id, date, startTime });
+  if (out.statusCode !== 200) {
+    return json(res, out.statusCode, { error: `${out.body?.error || 'Verzetten mislukt.'} De oude afspraak is afgemeld en de credit staat terug.`, build: BUILD });
+  }
+  if (booking.userId !== uid) {
+    try {
+      const old = `${dayLabelNl(cls.date)} ${cls.startTime}`;
+      await sendPushToUser(db, String(booking.userId), {
+        title: 'PT-moment verzet',
+        body: `Je afspraak van ${old} is verzet naar ${dayLabelNl(date)} ${startTime}.`,
+        data: { kind: 'rescheduleAnswered' },
+      });
+    } catch (e) {
+      console.warn('[booking] melding verzet mislukt:', e?.message ?? e);
+    }
+  }
+  return json(res, 200, { ...out.body, build: BUILD });
+}
+
+const dayLabelNl = (date) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(String(date))
+    ? new Intl.DateTimeFormat('nl-NL', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`)).replace(/\./g, '')
+    : String(date);
 
 // --- Verzetten na afmelden (api/_lib/reschedule.mjs) ------------------------------------------
 
@@ -1912,13 +2027,16 @@ async function addPersonalSlot(res, db, uid, myOrgs, isStaff, body) {
   };
   // Dubbel plannen: zelfde trainer of ruimte op een overlappend moment kan niet (als de studio dat blokkeert).
   const sched = await scheduleContext(db, orgId);
+  // Reeks wijzigen: het oude PT-moment van hetzelfde lid telt niet als botsing (dat gaat weg).
+  const ignoreId = String(body?.ignoreClassTypeId ?? '').trim();
+  const types = ignoreId ? sched.types.filter((t) => !(t.id === ignoreId && t.privateFor && t.privateFor === userId)) : sched.types;
   if (sched.block) {
-    const conflicts = findConflicts(ct, sched.types);
+    const conflicts = findConflicts(ct, types);
     if (conflicts.length) {
       return json(res, 409, {
         error: conflictMessage(conflicts[0]),
         conflicts,
-        suggestions: suggestionsFor(ct, conflicts[0].slot, sched.types, sched.rooms, sched.hours, await availabilityOf(db, orgId, trainerId)),
+        suggestions: suggestionsFor(ct, conflicts[0].slot, types, sched.rooms, sched.hours, await availabilityOf(db, orgId, trainerId)),
         build: BUILD,
       });
     }

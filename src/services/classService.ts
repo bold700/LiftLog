@@ -532,6 +532,26 @@ export function addPersonalSlot(input: {
   return callBooking({ action: 'addPersonalSlot', ...input });
 }
 
+/**
+ * Hele reeks van een vast PT-moment wijzigen (andere dag, tijd of trainer) vanaf een datum. Afspraken
+ * van de oude reeks vanaf die datum worden afgemeld met de credit terug (alleen staf).
+ */
+export function moveStandingPt(input: {
+  standingBookingId: string;
+  weekday: number;
+  startTime: string;
+  endTime: string;
+  trainerId: string | null;
+  fromDate: string;
+}): Promise<StandingResult & { classTypeId: string; cancelled?: number; refunded?: number }> {
+  return callBooking({ action: 'moveStandingPt', ...input });
+}
+
+/** Eén PT-afspraak verzetten: credit terug, het nieuwe moment staat meteen vast (alleen staf). */
+export function moveOccurrence(bookingId: string, date: string, startTime: string): Promise<{ requestId: string; status: string; classId?: string }> {
+  return callBooking({ action: 'moveOccurrence', bookingId, date, startTime });
+}
+
 /** Pauze (vakantie) instellen van t/m, of opheffen met `from: null`. */
 export function pauseStandingBooking(standingBookingId: string, from: string | null, until: string | null): Promise<StandingResult> {
   return callBooking({ action: 'pauseStandingBooking', standingBookingId, from, until });
