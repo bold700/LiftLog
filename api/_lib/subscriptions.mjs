@@ -75,8 +75,11 @@ export function planRenewals(membership, plan, balance, nowIso) {
   return { steps, balance: saldo, membership: next };
 }
 
-/** Nieuw lidmaatschap voor een plan, vanaf vandaag. */
-export function newMembership({ id, orgId, userId, plan, nowIso, byUserId }) {
+/**
+ * Nieuw lidmaatschap voor een plan, vanaf vandaag. `first` (zie billingCycle.mjs: firstPeriod):
+ * de eerste periode loopt tot de factuurdatum van de studio in plaats van een hele periode.
+ */
+export function newMembership({ id, orgId, userId, plan, nowIso, byUserId, first = null }) {
   const once = plan.period === 'once';
   const months = Number(plan.validityMonths) || 0;
   return {
@@ -87,7 +90,7 @@ export function newMembership({ id, orgId, userId, plan, nowIso, byUserId }) {
     planName: plan.name,
     status: 'active',
     startedAt: nowIso,
-    nextRenewalAt: once ? null : addPeriod(nowIso, plan.period),
+    nextRenewalAt: once ? null : first?.nextRenewalAt ?? addPeriod(nowIso, plan.period),
     expiresAt: once && months > 0 ? addMonths(nowIso, months) : null,
     lastRenewedAt: nowIso,
     byUserId,
@@ -95,6 +98,9 @@ export function newMembership({ id, orgId, userId, plan, nowIso, byUserId }) {
     updatedAt: nowIso,
   };
 }
+
+/** De dag vóór een datum ("YYYY-MM-DD"): de laatste dag van een periode die tot `until` loopt. */
+const dayBefore = (date) => new Date(Date.parse(`${date}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
 
 /** Maandlabel voor een post: "2026-09". */
 export function periodOf(iso) {
@@ -107,7 +113,7 @@ export function periodOf(iso) {
  * komt van `reserveInvoiceNumber` in dezelfde transactie; het btw-tarief van het plan reist mee,
  * zodat een latere tariefwijziging oude facturen niet verandert.
  */
-export function newCharge({ id, orgId, userId, plan, membershipId, periodStartIso, nowIso, invoiceNumber = null }) {
+export function newCharge({ id, orgId, userId, plan, membershipId, periodStartIso, nowIso, invoiceNumber = null, first = null }) {
   const monthly = plan.period === 'month';
   const period = monthly ? periodOf(periodStartIso) : null;
   // Per week/4 weken herhaalt dezelfde omschrijving zich anders elke keer; de startdatum van de
@@ -120,8 +126,17 @@ export function newCharge({ id, orgId, userId, plan, membershipId, periodStartIs
     membershipId,
     planId: plan.id,
     planName: plan.name,
-    description: monthly ? `${plan.name} · ${period}` : recurringDate ? `${plan.name} · ${recurringDate}` : plan.name,
-    amount: Number(plan.price) || 0,
+    // Eerste periode op maat: tot de factuurdatum van de studio, naar rato van de dagen.
+    description:
+      first && !first.full
+        ? `${plan.name} · ${first.from} t/m ${dayBefore(first.until)} (${first.days} van ${first.totalDays} dagen)`
+        : monthly
+          ? `${plan.name} · ${period}`
+          : recurringDate
+            ? `${plan.name} · ${recurringDate}`
+            : plan.name,
+    amount: first ? first.amount : Number(plan.price) || 0,
+    ...(first && !first.full ? { prorated: { from: first.from, until: first.until, days: first.days, totalDays: first.totalDays } } : {}),
     period,
     issuedAt: nowIso,
     dueAt: periodStartIso,

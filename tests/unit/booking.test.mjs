@@ -688,6 +688,28 @@ describe('facturen', () => {
     expect(store['orgs/vanas'].business.nextInvoiceNumber).toBe(143);
   });
 
+  it('vast factuurritme van de studio: eerste factuur en credits naar rato tot de factuurdatum', async () => {
+    seedPlan();
+    store['plans/pl4'] = { orgId: 'vanas', name: '2x per week', period: 'fourWeeks', price: 80, credits: 8, rollover: 'expire' };
+    // Begonnen 14 dagen geleden: vandaag zit je halverwege de periode van 28 dagen.
+    const anchor = amsterdamDate(new Date(), -14);
+    const until = amsterdamDate(new Date(), 14);
+    store['orgs/vanas'].billing = { period: 'fourWeeks', anchorDate: anchor };
+    const before = store['creditAccounts/vanas__sporter1'].balance;
+    const res = await post({ action: 'assign', userId: 'sporter1', planId: 'pl4' }, 'trainer1');
+    expect(res.statusCode).toBe(200);
+    expect(res.body.first).toMatchObject({ days: 14, totalDays: 28, amount: 40, credits: 4, until });
+    const charge = Object.entries(store).find(([k]) => k.startsWith('charges/'))[1];
+    expect(charge).toMatchObject({ amount: 40, prorated: { days: 14, totalDays: 28, until } });
+    expect(store['creditAccounts/vanas__sporter1'].balance).toBe(before + 4);
+    const membership = Object.entries(store).find(([k, v]) => k.startsWith('memberships/') && v.planId === 'pl4')[1];
+    expect(membership.nextRenewalAt).toBe(`${until}T00:00:00.000Z`);
+
+    // Een abonnement met een andere periode volgt het ritme niet: hele maand, hele prijs.
+    const res2 = await post({ action: 'assign', userId: 'sporter2', planId: 'pl1' }, 'trainer1');
+    expect(res2.body.first).toBeNull();
+  });
+
   it('een lid haalt zijn eigen factuur op, een ander lid niet; een oude post krijgt alsnog een nummer', async () => {
     store['charges/ch1'] = { orgId: 'vanas', userId: 'sporter1', planName: 'Maand 8', description: 'Maand 8 · 2026-09', amount: 139, period: '2026-09', status: 'open', issuedAt: '2026-09-01T00:00:00.000Z', dueAt: '2026-09-01T00:00:00.000Z' };
     const ander = await post({ action: 'invoice', chargeId: 'ch1' }, 'sporter2');

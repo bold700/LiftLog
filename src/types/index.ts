@@ -292,6 +292,12 @@ export interface NutritionGoal {
  * elk document draagt een `orgId` en de Firestore-regels dwingen af dat je alleen je eigen studio ziet.
  */
 /** Instelling "inactieve accounts verwijderen" van een studio. */
+/** Factuurritme: elke 4 weken of elke maand, vanaf een startdatum ("YYYY-MM-DD"). */
+export interface OrgBilling {
+  period: 'fourWeeks' | 'month';
+  anchorDate: string;
+}
+
 export interface OrgAccountRetention {
   enabled: boolean;
   /** Na zoveel maanden zonder inloggen (3 tot 120). */
@@ -328,6 +334,12 @@ export interface Org {
    * eigenaar zet dit aan; de dagelijkse ronde op de server doet de rest (api/_lib/accountRetention.mjs).
    */
   accountRetention?: OrgAccountRetention | null;
+  /**
+   * Factuurritme van de studio (Beheer → Instellingen, alleen de eigenaar): iedereen op hetzelfde
+   * ritme, eerste factuur op maat (api/_lib/billingCycle.mjs). Ontbreekt dit, dan loopt de periode
+   * vanaf de dag dat een lid begint.
+   */
+  billing?: OrgBilling | null;
   /**
    * Mag een trainer binnen deze studio de workouts/schema's van andermans cliënten zien, niet
    * alleen de eigen? Standaard uit: elke trainer ziet dan alleen zijn eigen cliënten. Nodig voor

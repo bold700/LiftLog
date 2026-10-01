@@ -99,6 +99,7 @@ import { actingOrg, isAdminIn, isInactiveIn, isStaffAnywhere, isStaffIn, orgsOf,
 import { randomBytes } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { activeMembership, newCharge, newMembership, settleMembership } from './_lib/subscriptions.mjs';
+import { billingOf, firstPeriod } from './_lib/billingCycle.mjs';
 import { cleanGroupInput, euros, groupChargeOnBook, groupHolderId, groupPricingOf, groupRefundOnCancel, MAX_GROUP_ADJUST } from './_lib/groups.mjs';
 import { businessOf, dueDateOf, reserveInvoiceNumber, vatRateOf } from './_lib/invoice.mjs';
 import { buildInvoicePdf, invoiceFileName } from './_lib/invoicePdf.mjs';
@@ -2466,9 +2467,12 @@ async function assign(res, db, uid, myOrgs, body) {
 
   const nowIso = new Date().toISOString();
   const current = await activeMembership(db, orgId, targetUserId);
-  const membership = { ...newMembership({ id: newId('mb'), orgId, userId: targetUserId, plan, nowIso, byUserId: uid }), ...(group ? { billToUserId: billTo, groupId: group.id } : {}) };
+  // Factureert de studio op een vast ritme (eigenaar, Beheer → Instellingen), dan is de eerste
+  // periode op maat: tot de eerstvolgende factuurdatum, prijs en credits naar rato.
+  const first = group ? null : await firstPeriodFor(db, orgId, plan);
+  const membership = { ...newMembership({ id: newId('mb'), orgId, userId: targetUserId, plan, nowIso, byUserId: uid, first }), ...(group ? { billToUserId: billTo, groupId: group.id } : {}) };
   // Groep: de prijs van het abonnement komt als tegoed in euro's op de groep (zie groups.mjs).
-  const credits = group ? euros(plan.price) : plan.credits == null ? 0 : Number(plan.credits) || 0;
+  const credits = group ? euros(plan.price) : first && first.credits != null ? first.credits : plan.credits == null ? 0 : Number(plan.credits) || 0;
 
   const balance = await db.runTransaction(async (tx) => {
     const accountRef = db.collection('creditAccounts').doc(accountId(orgId, targetUserId));
@@ -2479,9 +2483,9 @@ async function assign(res, db, uid, myOrgs, body) {
     if (current) tx.set(db.collection('memberships').doc(current.id), { status: 'cancelled', cancelledAt: nowIso, updatedAt: nowIso }, { merge: true });
     tx.set(db.collection('memberships').doc(membership.id), membership);
     // Eerste post: de eerste periode (maand of de kaart zelf), tenzij het plan gratis is. Met factuurnummer.
-    if ((Number(plan.price) || 0) > 0) {
+    if ((first ? first.amount : Number(plan.price) || 0) > 0) {
       const invoiceNumber = reserveInvoiceNumber(tx, orgRef, orgSnap, nowIso);
-      const charge = newCharge({ id: newId('ch'), orgId, userId: billTo, plan, membershipId: membership.id, periodStartIso: nowIso, nowIso, invoiceNumber });
+      const charge = newCharge({ id: newId('ch'), orgId, userId: billTo, plan, membershipId: membership.id, periodStartIso: nowIso, nowIso, invoiceNumber, first });
       tx.set(db.collection('charges').doc(charge.id), { ...charge, ...groupFields });
     }
     if (credits > 0) {
@@ -2501,7 +2505,13 @@ async function assign(res, db, uid, myOrgs, body) {
     return group ? euros(saldo + credits) : saldo + credits;
   });
 
-  return json(res, 200, { membershipId: membership.id, balance, build: BUILD });
+  return json(res, 200, { membershipId: membership.id, balance, first, build: BUILD });
+}
+
+/** De eerste periode volgens het factuurritme van de studio, of null (zie api/_lib/billingCycle.mjs). */
+async function firstPeriodFor(db, orgId, plan) {
+  const orgSnap = await db.collection('orgs').doc(orgId).get();
+  return firstPeriod(plan, billingOf(orgSnap.exists ? orgSnap.data() : null), amsterdamDate(new Date()));
 }
 
 /** Lidmaatschap stoppen; credits die er staan blijven staan. */
@@ -2549,6 +2559,8 @@ async function purchasePlan(req, res, db, uid, myOrgs, body) {
 
   const mollie = await getOrgMollieKey(db, orgId);
   if (!mollie) return json(res, 409, { error: 'Deze studio heeft nog geen betalingen ingesteld.', build: BUILD });
+  // Vast factuurritme van de studio: de eerste periode (en dus deze betaling) is op maat.
+  const first = await firstPeriodFor(db, orgId, plan);
 
   const orgSnap = await db.collection('orgs').doc(orgId).get();
   const orgName = orgSnap.exists ? String(orgSnap.data()?.name || orgId) : orgId;
@@ -2558,7 +2570,7 @@ async function purchasePlan(req, res, db, uid, myOrgs, body) {
   try {
     payment = await createMolliePayment({
       apiKey: mollie.apiKey,
-      amount: price,
+      amount: first ? first.amount : price,
       description: `${plan.name} — ${orgName}`,
       redirectUrl: `${origin}/?aankoop=${encodeURIComponent(planId)}#profiel`,
       webhookUrl: `${origin}/mollie-webhook/${orgId}`,
@@ -2575,6 +2587,8 @@ async function purchasePlan(req, res, db, uid, myOrgs, body) {
     planId,
     mode: mollie.mode,
     status: 'pending',
+    // Wat er betaald wordt voor de eerste periode; bij verwerken geldt precies dit.
+    first: first ?? null,
     createdAt: nowIso,
     updatedAt: nowIso,
   });
@@ -2594,8 +2608,10 @@ async function settlePurchase(db, checkout, paymentId) {
   const plan = { id: planSnap.id, ...planSnap.data() };
   const nowIso = new Date().toISOString();
   const current = await activeMembership(db, orgId, userId);
-  const membership = newMembership({ id: newId('mb'), orgId, userId, plan, nowIso, byUserId: userId });
-  const credits = plan.credits == null ? 0 : Number(plan.credits) || 0;
+  // Was de betaling voor een eerste periode op maat, dan geldt die (zie purchasePlan).
+  const first = checkout.first ?? null;
+  const membership = newMembership({ id: newId('mb'), orgId, userId, plan, nowIso, byUserId: userId, first });
+  const credits = first && first.credits != null ? first.credits : plan.credits == null ? 0 : Number(plan.credits) || 0;
 
   const chargeId = await db.runTransaction(async (tx) => {
     // Eerste lezing, en meteen de bewaking tegen dubbel verwerken: Mollie (of een trage tweede
@@ -2616,7 +2632,7 @@ async function settlePurchase(db, checkout, paymentId) {
     tx.set(db.collection('memberships').doc(membership.id), membership);
 
     const invoiceNumber = reserveInvoiceNumber(tx, orgRef, orgSnap, nowIso);
-    const charge = newCharge({ id: newId('ch'), orgId, userId, plan, membershipId: membership.id, periodStartIso: nowIso, nowIso, invoiceNumber });
+    const charge = newCharge({ id: newId('ch'), orgId, userId, plan, membershipId: membership.id, periodStartIso: nowIso, nowIso, invoiceNumber, first });
     tx.set(db.collection('charges').doc(charge.id), { ...charge, status: 'paid', paidAt: nowIso, paidBy: 'mollie', molliePaymentId: paymentId });
 
     if (credits > 0) {

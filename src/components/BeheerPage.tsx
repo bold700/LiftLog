@@ -40,7 +40,7 @@ import { useI18n } from '../context/I18nContext';
 import { useAuth } from '../context/AuthContext';
 import { assignTrainerToSporter, getAllProfiles, getProfileByEmail, updateProfile } from '../services/profileService';
 import { deleteAccountAsAdmin, inviteMember, setMemberRole, updateMemberCredentials } from '../services/adminAccountService';
-import type { LeaderboardVisibility, Membership, Plan, Profile, ProfileRole, Limitation } from '../types';
+import type { LeaderboardVisibility, Membership, OrgBilling, Plan, Profile, ProfileRole, Limitation } from '../types';
 import { PageLayout, ContentCard, HeaderActions } from './layout';
 import { BrandingSettings } from './beheer/BrandingSettings';
 import { StudioSettings } from './beheer/StudioSettings';
@@ -51,6 +51,7 @@ import { heartRateZones } from '../utils/heartRate';
 import { HeartRateZonesTable } from './HeartRateZonesTable';
 import { LimitationsEditor } from './LimitationsEditor';
 import { todayIso } from '../utils/format';
+import { firstPeriod } from '../utils/billingCycle';
 import { RequestsBanner } from './beheer/RequestsBanner';
 import { ProcessorAgreementCard } from './beheer/ProcessorAgreementCard';
 import { InactiveChip, MembersList, RoleChip } from './beheer/MembersList';
@@ -246,13 +247,17 @@ export function BeheerPage() {
   const [importOpen, setImportOpen] = useState(false);
   // Eigenaar van de studio, voor het label "Eigenaar" in de ledenlijst.
   const [ownerId, setOwnerId] = useState<string | null>(null);
+  /** Factuurritme van de studio: de eerste factuur bij een nieuw abonnement is dan op maat. */
+  const [billing, setBilling] = useState<OrgBilling | null>(null);
   const activeOrgId = profileCtx?.activeOrgId ?? null;
   useEffect(() => {
     if (!activeOrgId) return;
     let cancelled = false;
     getOrg(activeOrgId).then(
       (org) => {
-        if (!cancelled) setOwnerId(org?.ownerId ?? null);
+        if (cancelled) return;
+        setOwnerId(org?.ownerId ?? null);
+        setBilling(org?.billing ?? null);
       },
       () => undefined
     );
@@ -768,13 +773,19 @@ export function BeheerPage() {
                 // Zeg vooraf wat Opslaan doet: credits van de eerste periode erbij en de eerste factuur.
                 const chosen = edit.planId && edit.planId !== (memberships[target.userId]?.planId ?? '') ? plans.find((pl) => pl.id === edit.planId) : null;
                 if (!chosen) return null;
+                // Factureert de studio op een vast ritme, dan is de eerste periode op maat (tot de factuurdatum).
+                const first = firstPeriod(chosen, billing, todayIso());
+                const credits = first ? first.credits : chosen.credits;
+                const amount = first ? first.amount : chosen.price;
                 const parts = [
-                  chosen.credits == null ? 'onbeperkt boeken' : `+${chosen.credits} credits`,
-                  chosen.price > 0 ? `eerste factuur € ${chosen.price.toLocaleString('nl-NL')}` : null,
+                  credits == null ? 'onbeperkt boeken' : `+${credits} credits`,
+                  amount > 0 ? `eerste factuur € ${amount.toLocaleString('nl-NL', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}` : null,
                 ].filter(Boolean);
+                const until = first && !first.full ? new Date(`${first.until}T12:00:00`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' }) : null;
                 return (
                   <Alert severity="info" sx={{ mb: 1 }}>
-                    Na Opslaan: {parts.join(' en ')}. {coverageLabel(chosen)}.
+                    Na Opslaan: {parts.join(' en ')}
+                    {first && until ? ` (${first.days} van de ${first.totalDays} dagen, tot de factuurdatum ${until})` : ''}. {coverageLabel(chosen)}.
                   </Alert>
                 );
               })()}
