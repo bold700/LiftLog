@@ -3,13 +3,16 @@ import { Dialog, DialogTitle, DialogContent, DialogActions, Button, IconButton, 
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import type { Measurement } from '../../services/measurementService';
 import { BodyScanReport } from './BodyScanReport';
+import { BodyChangeCard } from './BodyChangeCard';
 
 interface BodyScanDialogProps {
   measurement: Measurement | null;
+  /** Alle metingen van deze sporter: om met een eerdere scan te vergelijken. */
+  items?: Measurement[];
   onClose: () => void;
 }
 
-export function BodyScanDialog({ measurement, onClose }: BodyScanDialogProps) {
+export function BodyScanDialog({ measurement, items = [], onClose }: BodyScanDialogProps) {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const scan = measurement?.bodyScan ?? null;
@@ -21,7 +24,14 @@ export function BodyScanDialog({ measurement, onClose }: BodyScanDialogProps) {
           <CloseRoundedIcon />
         </IconButton>
       </DialogTitle>
-      <DialogContent dividers>{scan && measurement && <BodyScanReport scan={scan} date={measurement.date} />}</DialogContent>
+      <DialogContent dividers>
+        {scan && measurement && (
+          <>
+            <BodyChangeCard key={measurement.id} items={items} to={measurement} plain />
+            <BodyScanReport scan={scan} date={measurement.date} />
+          </>
+        )}
+      </DialogContent>
       <DialogActions>
         <Button variant="text" onClick={onClose} sx={{ textTransform: 'none' }}>
           Sluiten

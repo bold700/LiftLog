@@ -57,6 +57,7 @@ import { WeightGoalDialog } from './metingen/WeightGoalDialog';
 import { CompositionCard, HistoryRows, LatestWeightCard, ScanBanner } from './metingen/BodySummary';
 import { BodyScanSection } from './metingen/BodyScanSection';
 import { BodyScanDialog } from './metingen/BodyScanDialog';
+import { BodyChangeCard } from './metingen/BodyChangeCard';
 import {
   bodyScanFromDraft,
   draftFromBodyScan,
@@ -483,6 +484,7 @@ export function MetingenPage({ openFormRequested, onConsumeOpenForm }: MetingenP
             <PhotoProgressPanel items={items} />
           </Box>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+            <BodyChangeCard items={items} />
             <CompositionCard items={items} heightCm={targetProfile?.heightCm} onViewScan={setViewScan} />
             <HistoryRows loading={loading} items={items} onEdit={handleEdit} onDelete={handleDelete} onViewScan={setViewScan} />
           </Box>
@@ -678,7 +680,7 @@ export function MetingenPage({ openFormRequested, onConsumeOpenForm }: MetingenP
       </Dialog>
 
       <WeightGoalDialog open={goalOpen} value={goalInput} onChange={setGoalInput} onClose={() => setGoalOpen(false)} onSave={handleSaveGoal} />
-      <BodyScanDialog measurement={viewScan} onClose={() => setViewScan(null)} />
+      <BodyScanDialog measurement={viewScan} items={items} onClose={() => setViewScan(null)} />
       {!isTrainer && profileCtx?.profile && (
         <WeeklyCheckinDialog
           open={weeklyOpen}
