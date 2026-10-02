@@ -435,11 +435,37 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
     <PageLayout maxWidth="none">
       {/* Geen kaart om het formulier: de dagkaarten en oefeningen hebben dan de volle breedte. */}
       <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-            <Typography variant="h5" sx={{ fontWeight: 600 }}>
-              {showFormule7AiWizard ? 'Workout met AI (Formule 7)' : 'Workout bewerken'}
-            </Typography>
-          </Box>
+        {/* Titel met Annuleren en Opslaan; blijft bovenaan staan tijdens scrollen, zodat je niet
+            helemaal naar beneden hoeft om op te slaan. */}
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            mb: 3,
+            position: 'sticky',
+            top: 0,
+            zIndex: 5,
+            bgcolor: 'background.default',
+            py: 1,
+          }}
+        >
+          <Typography variant="h5" sx={{ fontWeight: 600, flex: 1, minWidth: 0, fontSize: { xs: 18, sm: undefined } }} noWrap>
+            {showFormule7AiWizard ? 'Workout met AI (Formule 7)' : 'Workout bewerken'}
+          </Typography>
+          {/* @ts-ignore */}
+          <md-text-button ref={cancelButtonRef}>Annuleren</md-text-button>
+          {/* @ts-ignore */}
+          <md-filled-button ref={saveButtonRef}>
+            <md-icon slot="start">{saving ? 'sync' : 'save'}</md-icon>
+            {saving ? 'Opslaan…' : 'Opslaan'}
+          </md-filled-button>
+        </Box>
+        {saveError ? (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {saveError}
+          </Alert>
+        ) : null}
 
           <TextField
             label="Naam workout"
@@ -586,21 +612,6 @@ export const SchemaEditView = ({ schema, onSave, onCancel, sporters = [], catego
 
           {!isF7 && schemaDaysBlock}
 
-          {saveError ? (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {saveError}
-            </Alert>
-          ) : null}
-
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', mt: 2 }}>
-            {/* @ts-ignore */}
-            <md-text-button ref={cancelButtonRef}>Annuleren</md-text-button>
-            {/* @ts-ignore */}
-            <md-filled-button ref={saveButtonRef}>
-              <md-icon slot="start">{saving ? 'sync' : 'save'}</md-icon>
-              {saving ? 'Opslaan…' : 'Opslaan'}
-            </md-filled-button>
-          </Box>
       </Box>
     </PageLayout>
   );
