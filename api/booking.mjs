@@ -1659,13 +1659,20 @@ function planRefusal(status, sessionKind, standingId = null, cost = 1) {
 
 async function planStatus(res, db, uid, orgId, isStaff, userId) {
   if (userId !== uid && !isStaff) return json(res, 403, { error: 'Alleen je eigen abonnement.', build: BUILD });
-  const [status, profileSnap] = await Promise.all([planUsage(db, orgId, userId), db.collection('profiles').doc(userId).get()]);
+  const [status, profileSnap, accountSnap] = await Promise.all([
+    planUsage(db, orgId, userId),
+    db.collection('profiles').doc(userId).get(),
+    db.collection('creditAccounts').doc(accountId(orgId, userId)).get(),
+  ]);
   if (!profileSnap.exists || !orgsOf(profileSnap.data()).includes(orgId)) return json(res, 404, { error: 'Dit lid hoort niet bij jouw studio.', build: BUILD });
   const { plan } = status;
   return json(res, 200, {
     plan: plan ? { id: plan.id, name: String(plan.name ?? ''), covers: coversOf(plan), perWeek: perWeekOf(plan) } : null,
     used: status.used,
     pending: status.pending,
+    // Saldo, zodat de app vooraf zegt dat vaste afspraken zonder credits niet geboekt worden.
+    // null bij een abonnement zonder creditlimiet (dan kost een les niets).
+    credits: plan && plan.credits == null ? null : Number(accountSnap.exists ? accountSnap.data()?.balance : 0) || 0,
     trainerId: profileSnap.exists ? profileSnap.data()?.trainerId ?? null : null,
     build: BUILD,
   });

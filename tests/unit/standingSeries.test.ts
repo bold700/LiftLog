@@ -37,9 +37,12 @@ describe('seriesOccurrences', () => {
     const cancelled = { ...bk('a'), status: 'cancelled' } as Booking;
     expect(seriesOccurrences(sb(), classes, [cancelled], '2026-10-01', 2).map((o) => o.status)).toEqual(['optedOut', 'skipped']);
   });
-  it('een PT-moment dat van het rooster ging omdat het lid niet kwam, is afgemeld en niet afgelast', () => {
+  it('een PT-moment dat van het rooster ging: afgemeld als het lid afmeldde, anders niet geboekt (geen credits)', () => {
     const pt = [cls('p', '2026-10-03', { privateFor: 'u', cancelledAt: '2026-09-30', autoCancelled: true })];
-    expect(seriesOccurrences(sb(), pt, [], '2026-10-01')[0].status).toBe('optedOut');
+    const own = { ...bk('p'), status: 'cancelled' } as Booking;
+    expect(seriesOccurrences(sb(), pt, [own], '2026-10-01')[0].status).toBe('optedOut');
+    expect(seriesOccurrences(sb(), pt, [], '2026-10-01')[0].status).toBe('skipped');
+    expect(seriesOccurrences(sb({ lastOutcome: 'skippedNoCredits' }), pt, [], '2026-10-01')[0].status).toBe('noCredits');
     expect(seriesOccurrences(sb({ pausedFrom: '2026-10-01' }), pt, [], '2026-10-01')[0].status).toBe('paused');
   });
 });

@@ -8,9 +8,10 @@ import { onPatternWeek } from './weekPattern';
 
 /**
  * `optedOut`: het lid meldde zich die week af ("deze keer niet"); `cancelledClass`: de studio
- * gelastte de les af; `skipped`: niet geboekt (vol of geen credits).
+ * gelastte de les af; `noCredits`: niet geboekt omdat er geen credits waren; `skipped`: niet
+ * geboekt (vol of een andere reden).
  */
-export type SeriesStatus = 'booked' | 'waitlist' | 'paused' | 'cancelledClass' | 'optedOut' | 'skipped' | 'notStarted';
+export type SeriesStatus = 'booked' | 'waitlist' | 'paused' | 'cancelledClass' | 'optedOut' | 'noCredits' | 'skipped' | 'notStarted';
 
 export interface SeriesOccurrence {
   cls: StudioClass;
@@ -55,7 +56,10 @@ export function seriesOccurrences(
       else if (booking) status = booking.status === 'waitlist' ? 'waitlist' : 'booked';
       else if (s.startDate && cls.date < s.startDate) status = 'notStarted';
       else if (isPausedOn(s, cls.date)) status = 'paused';
-      else if (cls.autoCancelled || cancelledByMember.has(cls.id)) status = 'optedOut';
+      // Zelf afgemeld is iets anders dan "niet geboekt": een vaste PT-les zonder boeking (bijv. geen
+      // credits) gaat ook dicht (autoCancelled), maar het lid heeft niets afgemeld.
+      else if (cancelledByMember.has(cls.id)) status = 'optedOut';
+      else if (s.lastOutcome === 'skippedNoCredits') status = 'noCredits';
       else status = 'skipped';
       return { cls, booking, status };
     });

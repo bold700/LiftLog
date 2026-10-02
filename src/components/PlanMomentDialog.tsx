@@ -470,6 +470,14 @@ export function PlanMomentDialog({
                 <ToggleButton value="group">Groepsles</ToggleButton>
               </ToggleButtonGroup>
             )}
+            {/* Zonder credits wordt er niets geboekt: de reeks staat wel, maar die weken blijven leeg. */}
+            {!moveSeries && status.credits === 0 && (
+              <Alert severity="warning">
+                {asStaff
+                  ? `${picked?.name || 'Dit lid'} heeft 0 credits. Afspraken worden pas geboekt als er credits zijn: ken ze eerst toe bij Abonnement en credits.`
+                  : 'Je hebt 0 credits. Koop eerst credits, anders wordt de afspraak niet geboekt.'}
+              </Alert>
+            )}
             {!moveSeries && asStaff && plan && recurring && !allowed(kind) && (
               <Alert severity="warning">Dit valt niet onder het abonnement ({COVERS_LABEL[plan.covers].toLowerCase()}). Je kunt het toch inplannen.</Alert>
             )}
