@@ -315,6 +315,26 @@ export function createStore(db, auth, orgId = null) {
       return { userId: user.uid, email: normalized, password };
     },
 
+    /** Lessen op een dag (YYYY-MM-DD), alleen van de eigen studio. */
+    async getClassesOn(date) {
+      const snap = await db.collection('classes').where('date', '==', String(date)).get();
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id })).filter((c) => orgIdOf(c.orgId) === requireOrg());
+    },
+
+    /** Voorbereiding van een les (Lessen → Deelnemers → Voorbereiding), of null. Alleen de eigen studio. */
+    async getClassPlan(classId) {
+      const snap = await db.collection('classPlans').doc(String(classId)).get();
+      if (!snap.exists || orgIdOf(snap.data()?.orgId) !== requireOrg()) return null;
+      return snap.data();
+    },
+
+    /** Voorbereiding opslaan; de studio wordt hier gestempeld, niet door de aanroeper. */
+    async saveClassPlan(plan) {
+      const doc = { ...plan, orgId: requireOrg(), updatedAt: new Date().toISOString() };
+      await db.collection('classPlans').doc(String(plan.classId)).set(doc);
+      return doc;
+    },
+
     /** Wijst een bestaand schema toe aan een sporter (of maakt het los). Raakt de oefeningen niet aan. */
     async assignSchema(schemaId, clientId) {
       // De Admin SDK kent geen regels: eerst zelf controleren dat het schema in de eigen studio staat.

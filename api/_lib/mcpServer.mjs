@@ -5,6 +5,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { todayNl, scheduleWeekFor, weekdayIndex } from './liftlogData.mjs';
+import { classLine, cleanPlanExercises, matchClasses } from './classPlanInput.mjs';
 import { ageOnDate, toSkinfoldSex, bodyFatDurninWomersley, DW_MIN_AGE } from './bodyFat.mjs';
 
 const ROLE_LABEL = { sporter: 'sporter', trainer: 'trainer', admin: 'beheerder' };
@@ -868,6 +869,94 @@ export function buildServer(ctx, store) {
       }
     }
   );
+
+  if (isStaff) {
+    server.registerTool(
+      'plan_class',
+      {
+        title: 'Training in een les zetten',
+        description:
+          'Zet een training in een ingeplande les in VORM, als voorbereiding voor de trainer (Lessen → les → Voorbereiding). Gebruik dit als de gebruiker vraagt om een training "in de les van woensdagavond te zetten" of iets vergelijkbaars. Geef de oefeningen gestructureerd mee (naam, sets, herhalingen, aanwijzing) en zet warming-up, cooling-down, rondes, rust en aanpassingen per deelnemer in de notitie. Vind je geen of meerdere lessen, laat de gebruiker dan kiezen uit de lijst die je terugkrijgt. Staat er al een voorbereiding in de les, vraag dan eerst of die vervangen mag en roep het daarna opnieuw aan met replace: true.',
+        inputSchema: {
+          date: z.string().describe('YYYY-MM-DD, of "vandaag" / "morgen" / een weekdag zoals "woensdag" (de eerstvolgende).'),
+          time: z.string().optional().describe('Begintijd ("19:00") of dagdeel ("ochtend", "middag", "avond"). Weglaten = elke les die dag.'),
+          lesson: z.string().optional().describe('(Deel van) de naam van de les, bijv. "bootcamp". Weglaten = elke groepsles.'),
+          title: z.string().optional().describe('Naam van de training, bijv. "Full body circuit".'),
+          exercises: z
+            .array(
+              z.object({
+                name: z.string().min(1).describe('Naam van de oefening, bijv. "Goblet squat".'),
+                sets: z.number().optional().describe('Aantal sets of rondes.'),
+                reps: z.number().optional().describe('Herhalingen per set; weglaten bij tijd (zet die in notes).'),
+                notes: z.string().optional().describe('Aanwijzing, tijd of gewicht, bijv. "40 sec, 20 sec rust".'),
+              })
+            )
+            .min(1),
+          note: z.string().optional().describe('Notitie voor de trainer: warming-up, cooling-down, rondes en rust, aanpassingen per persoon.'),
+          replace: z.boolean().optional().describe('Alleen na toestemming: een bestaande voorbereiding vervangen.'),
+        },
+      },
+      async (args) => {
+        try {
+          const date = resolveDate(args.date);
+          const all = await store.getClassesOn(date);
+          const hits = matchClasses(all, { time: args.time ?? '', lesson: args.lesson ?? '' });
+          const options = matchClasses(all, {}).map((c) => ({ when: classLine(c), time: c.startTime, lesson: c.title }));
+          if (hits.length === 0) {
+            return text({
+              ok: false,
+              message: options.length
+                ? `Geen les gevonden die past op ${date}. Laat de gebruiker kiezen uit deze lessen en geef time of lesson mee.`
+                : `Er staan geen lessen op ${date}. Vraag de gebruiker welke dag bedoeld wordt.`,
+              classesThatDay: options,
+            });
+          }
+          if (hits.length > 1) {
+            return text({
+              ok: false,
+              message: 'Meerdere lessen passen. Vraag de gebruiker welke bedoeld wordt en geef time of lesson mee.',
+              matches: hits.map((c) => ({ when: classLine(c), time: c.startTime, lesson: c.title })),
+            });
+          }
+          const cls = hits[0];
+          const exercises = cleanPlanExercises(args.exercises);
+          if (exercises.length === 0) return fail('Geef minstens één oefening met een naam.');
+          const existing = await store.getClassPlan(cls.id);
+          if (existing && !args.replace) {
+            return text({
+              ok: false,
+              needsConfirmation: true,
+              message: `Er staat al een voorbereiding in ${classLine(cls)}. Vraag de gebruiker of die vervangen mag en roep dan opnieuw aan met replace: true.`,
+              existing: {
+                workout: existing.schemaName ?? null,
+                exercises: (existing.exercises ?? []).map((e) => e.name),
+                note: existing.note || null,
+              },
+            });
+          }
+          await store.saveClassPlan({
+            classId: cls.id,
+            date: cls.date,
+            schemaId: null,
+            schemaName: String(args.title ?? '').trim().slice(0, 80) || 'Training uit chat',
+            dayIndex: null,
+            dayLabel: null,
+            exercises,
+            note: String(args.note ?? '').trim().slice(0, 4000),
+            updatedBy: me.userId,
+          });
+          return text({
+            ok: true,
+            class: classLine(cls),
+            exercises: exercises.length,
+            message: `Staat in VORM bij ${classLine(cls)} (Lessen → les openen → Voorbereiding). Daar kan de trainer het nog aanpassen.`,
+          });
+        } catch (e) {
+          return fail(e instanceof Error ? e.message : 'Training in de les zetten mislukt.');
+        }
+      }
+    );
+  }
 
   if (isStaff) {
     server.registerTool(

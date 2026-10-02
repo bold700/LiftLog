@@ -273,6 +273,20 @@ Profiel → **Afwezigheid** (trainer zelf, of een beheerder voor een trainer):
   `originalTrainerId` (en `substituteVia` als het via een afwezigheid ging). Rekenregels in
   `api/_lib/absence.mjs`.
 
+### Training uit ChatGPT in een les zetten
+
+Met de AI-koppeling (Profiel → Koppel met AI-chat) kan een trainer in ChatGPT of Claude zeggen:
+*"Zet deze training in de groepsles van woensdagavond. Sara doet niets boven het hoofd."* De
+koppeling (functie `plan_class` in `api/_lib/mcpServer.mjs`) zoekt de les op dag, tijd of dagdeel en
+naam, en zet de oefeningen en de notitie als voorbereiding in die les (`classPlans/{classId}`, net als
+Lessen → les → Voorbereiding).
+
+- Geen of meerdere lessen gevonden: de chat krijgt de lessen van die dag terug en vraagt welke.
+- Staat er al een voorbereiding, dan vraagt de chat eerst of die vervangen mag.
+- In de app staat de training bij de les ("uit de chat"); de trainer kan hem aanpassen, een workout
+  kiezen in plaats daarvan, of meteen Start les doen.
+- Rekenregels (welke les, oefeningen opschonen): `api/_lib/classPlanInput.mjs`.
+
 ## 3b. Veilig uitproberen: de Testruimte
 
 Er is één Firebase-project. De previewomgeving van Vercel schrijft dus in dezelfde database als

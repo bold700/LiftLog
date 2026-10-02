@@ -103,7 +103,9 @@ export function ClassPlanDialog({
   const selectedOption = options.find((o) => o.schema.id === schemaId) ?? null;
   // Een workout die deze trainer niet (meer) kan openen: toon de bewaarde momentopname.
   const unreadable = !!schemaId && !selected;
-  const exercises = selected ? exercisesOfDay(selected, dayIndex) : unreadable && plan ? plan.exercises : [];
+  // Training uit een AI-chat (ChatGPT): losse oefeningen zonder workout. Die blijven staan tot je een workout kiest.
+  const fromChat = !schemaId && !!plan && !plan.schemaId && plan.exercises.length > 0;
+  const exercises = selected ? exercisesOfDay(selected, dayIndex) : (unreadable || fromChat) && plan ? plan.exercises : [];
 
   if (!cls) return null;
 
@@ -114,7 +116,7 @@ export function ClassPlanDialog({
         classId: cls.id,
         date: cls.date,
         schemaId,
-        schemaName: selected?.name ?? (unreadable ? (plan?.schemaName ?? null) : null),
+        schemaName: selected?.name ?? (unreadable || fromChat ? (plan?.schemaName ?? null) : null),
         dayIndex: selected ? dayIndex : unreadable ? (plan?.dayIndex ?? null) : null,
         dayLabel: selected
           ? selected.days.length > 1
@@ -168,7 +170,7 @@ export function ClassPlanDialog({
           getOptionLabel={(o) => o.schema.name}
           isOptionEqualToValue={(a, b) => a.schema.id === b.schema.id}
           renderInput={(params) => (
-            <TextField {...params} label="Workout" placeholder={unreadable ? (plan?.schemaName ?? '') : 'Kies een workout'} />
+            <TextField {...params} label="Workout" placeholder={unreadable || fromChat ? (plan?.schemaName ?? '') : 'Kies een workout'} />
           )}
           noOptionsText="Geen workouts gevonden"
         />
@@ -201,7 +203,11 @@ export function ClassPlanDialog({
         {exercises.length > 0 && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-              {unreadable ? `${plan?.schemaName ?? 'Workout'} (bewaard bij het plannen)` : 'Oefeningen'}
+              {unreadable
+                ? `${plan?.schemaName ?? 'Workout'} (bewaard bij het plannen)`
+                : fromChat
+                  ? `${plan?.schemaName ?? 'Training'} · uit de chat. Kies een workout om te vervangen.`
+                  : 'Oefeningen'}
             </Typography>
             <ExerciseLines exercises={exercises} />
           </Box>
@@ -227,7 +233,7 @@ export function ClassPlanDialog({
         <Button onClick={onClose} disabled={busy}>
           Annuleren
         </Button>
-        <Button variant="contained" disableElevation onClick={() => void save()} disabled={busy || (!schemaId && !note.trim())}>
+        <Button variant="contained" disableElevation onClick={() => void save()} disabled={busy || (!schemaId && !fromChat && !note.trim())}>
           Opslaan
         </Button>
       </DialogActions>
