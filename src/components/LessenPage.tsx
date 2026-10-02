@@ -150,7 +150,13 @@ function spotsLabel(cls: StudioClass, mine?: Pick<Booking, 'id'> | null): string
   return `${free} ${free === 1 ? 'plek' : 'plekken'} vrij`;
 }
 
-export function LessenPage() {
+interface LessenPageProps {
+  /** Uit het +-menu (staf): meteen "Nieuwe afspraak" openen. */
+  initialNewAppointment?: boolean;
+  onConsumeInitialNewAppointment?: () => void;
+}
+
+export function LessenPage({ initialNewAppointment = false, onConsumeInitialNewAppointment }: LessenPageProps = {}) {
   const profileCtx = useProfile();
   const notify = useNotify();
   const me = profileCtx?.profile ?? null;
@@ -276,6 +282,13 @@ export function LessenPage() {
     () => Object.entries(trainerNames).map(([userId, name]) => ({ userId, name })).sort((a, b) => a.name.localeCompare(b.name)),
     [trainerNames]
   );
+  // Uit het +-menu: de afspraak op de gekozen dag (of vandaag als die al voorbij is).
+  useEffect(() => {
+    if (!initialNewAppointment || !isStaff) return;
+    setCreateAt({ date: selectedDate >= today() ? selectedDate : today(), time: '' });
+    onConsumeInitialNewAppointment?.();
+  }, [initialNewAppointment, isStaff, selectedDate, onConsumeInitialNewAppointment]);
+
   useEffect(() => {
     if (!createAt || publicTypes.length) return;
     getClassTypes()
