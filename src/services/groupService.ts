@@ -6,7 +6,8 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase/config';
 import { requireOrgId } from './orgContext';
 import { callBooking } from './classService';
-import type { Group, GroupKind } from '../types';
+import { groupPricingOf } from '../utils/groupPricing';
+import type { Group, GroupKind, OrgGroupPricing } from '../types';
 
 const GROUPS = 'groups';
 const KINDS: GroupKind[] = ['bedrijf', 'gezin', 'vrienden'];
@@ -20,6 +21,7 @@ function toGroup(data: Record<string, unknown>, id: string): Group {
     kind: KINDS.includes(data.kind as GroupKind) ? (data.kind as GroupKind) : 'vrienden',
     memberIds,
     payerId: typeof data.payerId === 'string' ? data.payerId : memberIds[0] ?? '',
+    pricing: data.pricing && typeof data.pricing === 'object' ? groupPricingOf(data.pricing) : null,
     createdAt: String(data.createdAt ?? ''),
     updatedAt: String(data.updatedAt ?? ''),
   };
@@ -38,6 +40,8 @@ export interface GroupInput {
   kind: GroupKind;
   memberIds: string[];
   payerId: string;
+  /** Eigen tarief; null = dat van de studio. */
+  pricing: OrgGroupPricing | null;
 }
 
 export async function saveGroup(input: GroupInput): Promise<Group> {

@@ -101,7 +101,7 @@ import { randomBytes } from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { activeMembership, newCharge, newMembership, settleMembership } from './_lib/subscriptions.mjs';
 import { billingOf, firstPeriod } from './_lib/billingCycle.mjs';
-import { cleanGroupInput, euros, groupChargeOnBook, groupHolderId, groupPricingOf, groupRefundOnCancel, MAX_GROUP_ADJUST } from './_lib/groups.mjs';
+import { cleanGroupInput, cleanGroupPricing, euros, groupChargeOnBook, groupHolderId, groupPricingOf, groupRefundOnCancel, MAX_GROUP_ADJUST } from './_lib/groups.mjs';
 import { businessOf, dueDateOf, reserveInvoiceNumber, vatRateOf } from './_lib/invoice.mjs';
 import { buildInvoicePdf, invoiceFileName } from './_lib/invoicePdf.mjs';
 import { logoToDataUrl } from './_lib/invoiceLogo.mjs';
@@ -2746,7 +2746,7 @@ async function readGroupLesson(tx, db, cls, orgId) {
   return {
     groupId,
     memberIds: gSnap.exists ? (gSnap.data().memberIds ?? []).map(String) : [],
-    pricing: groupPricingOf(orgSnap.exists ? orgSnap.data() : {}),
+    pricing: groupPricingOf(orgSnap.exists ? orgSnap.data() : {}, gSnap.exists ? gSnap.data() : null),
     accountRef,
     balance: euros(aSnap.exists ? aSnap.data().balance : 0),
   };
@@ -2791,6 +2791,8 @@ async function refundGroupLesson(db, classRef, classId, orgId, byUserId) {
 async function saveGroup(res, db, uid, myOrgs, body) {
   const input = cleanGroupInput(body);
   if (input.error) return json(res, 400, { error: input.error, build: BUILD });
+  const pricing = cleanGroupPricing(body?.pricing);
+  if (pricing.error) return json(res, 400, { error: pricing.error, build: BUILD });
   const orgId = myOrgs[0];
   for (const memberId of input.value.memberIds) await requireMemberOfMyOrgs(db, myOrgs, memberId);
 
@@ -2804,6 +2806,8 @@ async function saveGroup(res, db, uid, myOrgs, body) {
     id: groupId,
     orgId,
     ...input.value,
+    // Eigen tarief van de groep; null = dat van de studio. Een oudere app stuurt het niet mee: dan blijft het staan.
+    pricing: body && 'pricing' in body ? pricing.value : prev.pricing ?? null,
     createdAt: prev.createdAt ?? now,
     createdBy: prev.createdBy ?? uid,
     updatedAt: now,
@@ -3033,9 +3037,13 @@ async function unassign(res, db, uid, myOrgs, body) {
   // Een gepland abonnement (ingangsdatum later) vervalt altijd mee; `scheduledOnly`: alleen dat.
   await cancelScheduled(db, orgId, targetUserId, nowIso);
   if (body?.scheduledOnly === true) return json(res, 200, { stopped: false, build: BUILD });
-  const current = await activeMembership(db, orgId, targetUserId);
-  if (!current) return json(res, 200, { stopped: false, build: BUILD });
-  await db.collection('memberships').doc(current.id).set({ status: 'cancelled', cancelledAt: nowIso, byUserId: uid, updatedAt: nowIso }, { merge: true });
+  // Alle lopende abonnementen van dit lid of deze groep: staat er (door een oude fout) meer dan één
+  // open, dan stopt "geen abonnement" ze allemaal in plaats van dat er een blijft hangen.
+  const active = await db.collection('memberships').where('orgId', '==', orgId).where('userId', '==', targetUserId).where('status', '==', 'active').get();
+  if (active.empty) return json(res, 200, { stopped: false, build: BUILD });
+  for (const d of active.docs) {
+    await db.collection('memberships').doc(d.id).set({ status: 'cancelled', cancelledAt: nowIso, byUserId: uid, updatedAt: nowIso }, { merge: true });
+  }
   return json(res, 200, { stopped: true, build: BUILD });
 }
 

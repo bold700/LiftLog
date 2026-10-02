@@ -44,8 +44,31 @@ export function cleanGroupInput(body) {
   return { value: { name, kind, memberIds, payerId } };
 }
 
-/** Prijsinstelling van de studio (Beheer → Instellingen), met de standaard als die ontbreekt. */
-export function groupPricingOf(orgData) {
+/** Hoogste tarief per les dat je kunt instellen, in euro's (tegen tikfouten). */
+export const MAX_GROUP_RATE = 10000;
+
+/**
+ * Eigen tarief van één groep (Beheer → Groepen → groep): basistarief plus per extra persoon.
+ * Geeft `{ value }` met het tarief of null (geen eigen tarief: dan geldt dat van de studio), of `{ error }`.
+ */
+export function cleanGroupPricing(raw) {
+  if (raw == null || raw === '') return { value: null };
+  const rate = (v) => (v === '' || v == null ? NaN : Number(v));
+  const base = rate(raw?.base);
+  const perExtra = rate(raw?.perExtra);
+  if (![base, perExtra].every((n) => Number.isFinite(n) && n >= 0 && n <= MAX_GROUP_RATE)) {
+    return { error: `Vul een basistarief en een tarief per extra persoon in tussen € 0 en € ${MAX_GROUP_RATE}.` };
+  }
+  return { value: { base: euros(base), perExtra: euros(perExtra) } };
+}
+
+/**
+ * Tarief van een groepsles: het eigen tarief van de groep als die er een heeft, anders dat van de
+ * studio (Beheer → Instellingen), anders de standaard.
+ */
+export function groupPricingOf(orgData, groupData = null) {
+  const own = groupData?.pricing ? cleanGroupPricing(groupData.pricing).value : null;
+  if (own) return own;
   const p = orgData?.groupPricing;
   const num = (v, d) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.round(Number(v) * 100) / 100 : d);
   return { base: num(p?.base, DEFAULT_GROUP_PRICING.base), perExtra: num(p?.perExtra, DEFAULT_GROUP_PRICING.perExtra) };
