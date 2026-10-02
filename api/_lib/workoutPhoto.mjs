@@ -52,7 +52,7 @@ function noteOf(weightText, notes) {
  * Van modelantwoord naar workoutdagen zoals de editor ze kent. `resolve` zoekt een naam op in de
  * oefencatalogus (null als hij er niet in staat).
  */
-export function normalizePhotoWorkout(parsed, resolve) {
+export function normalizePhotoWorkout(parsed, resolve, fallbackName = 'Workout van foto') {
   const daysIn = Array.isArray(parsed?.days) ? parsed.days : [];
   const days = daysIn
     .map((day, i) => {
@@ -78,6 +78,6 @@ export function normalizePhotoWorkout(parsed, resolve) {
     })
     .filter(Boolean)
     .slice(0, 7);
-  const name = clean(parsed?.name, 120) || 'Workout van foto';
+  const name = clean(parsed?.name, 120) || fallbackName;
   return { name, days };
 }

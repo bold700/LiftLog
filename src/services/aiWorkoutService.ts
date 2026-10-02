@@ -133,3 +133,23 @@ export async function readWorkoutPhoto(image: string): Promise<{ name: string; d
   if (!Array.isArray(payload?.days) || !payload.days.length) throw new Error('Op deze foto vond ik geen oefeningen.');
   return { name: typeof payload.name === 'string' ? payload.name : 'Workout van foto', days: payload.days as SchemaDay[] };
 }
+
+/**
+ * Workout inspreken: een opname (data-URL) of gedicteerde/getypte tekst met oefeningen en gewichten.
+ * De server maakt er tekst van en haalt de oefeningen eruit, net als bij een foto.
+ */
+export async function readWorkoutVoice(input: { audio: string } | { text: string }): Promise<{ name: string; days: SchemaDay[]; transcript: string }> {
+  const response = await fetch(apiUrl('/api/generate-workout'), {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ mode: 'voice', ...input }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(typeof payload?.error === 'string' ? payload.error : 'Inspreken verwerken lukte niet. Probeer het opnieuw.');
+  if (!Array.isArray(payload?.days) || !payload.days.length) throw new Error('Ik hoorde geen oefeningen.');
+  return {
+    name: typeof payload.name === 'string' ? payload.name : 'Ingesproken workout',
+    days: payload.days as SchemaDay[],
+    transcript: typeof payload.transcript === 'string' ? payload.transcript : '',
+  };
+}

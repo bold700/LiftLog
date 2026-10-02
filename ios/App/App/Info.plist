@@ -51,6 +51,8 @@
 	<string>VORM kan optioneel een krachttraining-workout opslaan in Apple Gezondheid wanneer je dat aanzet bij het beëindigen van een sessie.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>VORM gebruikt de camera om barcodes van voedingsproducten te scannen en om een foto van je maaltijd te maken voor voedingsherkenning.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>VORM gebruikt de microfoon als je een workout inspreekt: je noemt de oefeningen en gewichten en de app zet ze in een workout.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>VORM gebruikt je fotobibliotheek om een profielfoto te kiezen en om een foto van je maaltijd te selecteren.</string>
 </dict>
