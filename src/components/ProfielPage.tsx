@@ -36,6 +36,9 @@ import { useAuth } from '../context/AuthContext';
 import { updateProfile } from '../services/profileService';
 import { uploadAvatar, deleteAvatar } from '../services/avatarService';
 import { updateMemberCredentials } from '../services/adminAccountService';
+import { getOrg } from '../services/orgService';
+import { credentialsRefusal } from '../utils/credentialRights';
+import { isSupportEmail } from '../utils/support';
 import type { LeaderboardVisibility, Limitation } from '../types';
 import { PageLayout, HeaderActions } from './layout';
 import { designTokens } from '../theme/designTokens';
@@ -166,6 +169,35 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
   const uid = viewed.isOther ? viewed.userId : (auth?.user?.uid ?? p?.userId);
   const isPasswordAccount = viewed.isOther ? true : (auth?.user?.providerData?.some((pr) => pr.providerId === 'password') ?? false);
 
+  // Bekijk als een collega: mag jij diens e-mail en wachtwoord zetten? Hangt af van rol en eigenaar
+  // (utils/credentialRights; de server beslist). Mag het niet, dan bieden we de velden niet aan.
+  const activeOrgId = profile?.activeOrgId ?? null;
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!viewed.isOther || !activeOrgId) return;
+    let cancelled = false;
+    getOrg(activeOrgId).then(
+      (org) => !cancelled && setOwnerId(org?.ownerId ?? null),
+      () => undefined
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [viewed.isOther, activeOrgId]);
+  const credentialsBlocked =
+    viewed.isOther && effectiveRole !== 'sporter'
+      ? credentialsRefusal({
+          callerUid: auth?.user?.uid ?? '',
+          callerRole: p?.role,
+          callerIsSupport: isSupportEmail(auth?.user?.email),
+          ownerId,
+          targetUid: viewed.userId,
+          targetRole: effectiveRole,
+          targetIsSupport: isSupportEmail(effective?.email),
+        })
+      : null;
+  const canEditCredentials = isPasswordAccount && !credentialsBlocked;
+
   const handlePhotoSelected = useCallback(
     async (file: File | null) => {
       if (!file || !uid || !profile) return;
@@ -241,7 +273,7 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
   }, [resetForm]);
 
   const currentEmail = (viewed.isOther ? effective?.email : auth?.user?.email ?? effective?.email) ?? '';
-  const emailChanged = isPasswordAccount && emailInput.trim().toLowerCase() !== currentEmail.toLowerCase();
+  const emailChanged = canEditCredentials && emailInput.trim().toLowerCase() !== currentEmail.toLowerCase();
   /**
    * E-mail of wachtwoord wijzigen vraagt normaal om je huidige wachtwoord (Firebase wil je opnieuw
    * herkennen). Bij "Bekijk als" loopt dit via de server met de rechten van de trainer/beheerder
@@ -603,11 +635,13 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
             type="email"
             value={emailInput}
             onChange={(e) => setEmailInput(e.target.value)}
-            disabled={!isPasswordAccount}
+            disabled={!canEditCredentials}
             helperText={
               !isPasswordAccount
                 ? 'Beheerd via je aanbieder (bijv. Google).'
-                : viewed.isOther
+                : credentialsBlocked
+                  ? credentialsBlocked
+                  : viewed.isOther
                   ? 'Wordt direct gewijzigd, zonder bevestigingsmail.'
                   : 'Na opslaan krijg je een bevestigingslink op het nieuwe adres.'
             }
@@ -615,7 +649,7 @@ export function ProfielPage({ onLogout }: { onLogout?: () => void }) {
             inputProps={{ autoCapitalize: 'none', autoCorrect: 'off' }}
             fullWidth
           />
-          {isPasswordAccount && (
+          {canEditCredentials && (
             <TextField
               label="Nieuw wachtwoord"
               type="password"

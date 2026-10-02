@@ -283,6 +283,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const resetPassword = useCallback(async (email: string) => {
     setError(null);
     if (!auth) throw new Error('Firebase Auth niet geconfigureerd');
+    // De mail in de taal van de app (I18nContext zet die op <html lang>), anders krijgt iedereen Engels.
+    auth.languageCode = document.documentElement.lang || 'nl';
     await sendPasswordResetEmail(auth, email);
   }, []);
 

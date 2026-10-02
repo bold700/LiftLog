@@ -52,9 +52,10 @@ import { applyCors } from './_lib/cors.mjs';
  *    actief meestuurt (`actingOrgId`), mits de beller daar lid van is.
  *  - 'delete' en 'setRole' vereisen beheerder in die studio, en dat het lid bij die studio hoort.
  *    Hoort iemand ook bij een andere studio, dan haalt 'delete' hem alleen uit deze studio.
- *  - 'updateCredentials' vereist trainer of beheerder in die studio, een sporter uit die studio, en
- *    dat die sporter bij geen andere studio hoort (anders zou de ene studio het account van de
- *    andere kunnen overnemen).
+ *  - 'updateCredentials' vereist trainer of beheerder in die studio, iemand uit die studio die de
+ *    beller mag wijzigen (_lib/credentialRights.mjs: sporter door staf, trainer door beheerder,
+ *    beheerder door eigenaar of support, eigenaar alleen door support), en dat die persoon bij geen
+ *    andere studio hoort (anders zou de ene studio het account van de andere kunnen overnemen).
  *
  * Vereist env-var FIREBASE_SERVICE_ACCOUNT: de JSON van een Firebase service-account
  * (als string). Zonder deze var geeft het endpoint een nette foutmelding.
@@ -77,6 +78,7 @@ import { mergeMembers } from './_lib/mergeMembers.mjs';
 import { enforceRateLimit } from './_lib/requireUser.mjs';
 import { actingOrg, isAdminIn, isStaffIn, orgsOf, roleIn } from './_lib/orgRoles.mjs';
 import { canSetOwner, canSignForStudio, isSupportEmail } from './_lib/studioOwner.mjs';
+import { credentialsRefusal } from './_lib/credentialRights.mjs';
 import { FieldValue } from 'firebase-admin/firestore';
 import { sendPushToUser } from './_lib/pushSend.mjs';
 import { randomBytes } from 'node:crypto';
@@ -477,16 +479,16 @@ export default async function handler(req, res) {
     }
   }
 
-  // Inloggegevens van een sporter wijzigen (Profiel → "Bekijk als"): een trainer of beheerder mag
-  // zonder het huidige wachtwoord van de sporter zelf diens e-mailadres en/of wachtwoord zetten,
-  // zolang het om een sporter in de eigen studio gaat. Anders dan de gewone flow (auth.changeEmail/
+  // Inloggegevens van een ander wijzigen (Profiel → "Bekijk als", Beheer → lid): een trainer of
+  // beheerder mag zonder het huidige wachtwoord van die persoon diens e-mailadres en/of wachtwoord
+  // zetten, binnen de eigen studio en volgens de rolregels in _lib/credentialRights.mjs. Anders dan de gewone flow (auth.changeEmail/
   // changePassword) loopt dit via de Admin SDK: de sporter hoeft er niet apart voor in te loggen.
   if (action === 'updateCredentials') {
     const callerSnap = await db.collection('profiles').doc(callerUid).get();
     const callerData = callerSnap.exists ? callerSnap.data() : null;
     const org = callerData ? actingOrg(callerData, body?.actingOrgId) : null;
     if (!callerData || !isStaffIn(callerData, org)) {
-      return json(res, 403, { error: 'Alleen trainers en beheerders mogen accountgegevens van een sporter wijzigen.' });
+      return json(res, 403, { error: 'Alleen trainers en beheerders mogen accountgegevens van een ander wijzigen.' });
     }
     const targetUid = String(body?.targetUid || '').trim();
     if (!targetUid) return json(res, 400, { error: 'Ontbrekende targetUid.' });
@@ -495,12 +497,31 @@ export default async function handler(req, res) {
     const targetSnap = await db.collection('profiles').doc(targetUid).get();
     const target = targetSnap.exists ? targetSnap.data() : null;
     if (!target || !orgsOf(target).includes(org)) {
-      return json(res, 403, { error: 'Deze sporter zit niet in jouw studio.' });
+      return json(res, 403, { error: 'Deze persoon zit niet in jouw studio.' });
     }
-    if (roleIn(target, org) !== 'sporter') return json(res, 404, { error: 'Sporter niet gevonden.' });
-    // Eén login voor meerdere studio's: dan beslist alleen de sporter zelf over e-mail en wachtwoord.
+    // Wie mag wiens inloggegevens zetten: hoe hoger de rol van het doelwit, hoe minder mensen (zie credentialRights).
+    const targetRole = roleIn(target, org);
+    if (targetRole !== 'sporter') {
+      const [orgSnap, callerAuth, targetAuth] = await Promise.all([
+        db.collection('orgs').doc(org).get(),
+        auth.getUser(callerUid).catch(() => null),
+        auth.getUser(targetUid).catch(() => null),
+      ]);
+      const ownerId = orgSnap.exists && typeof orgSnap.data()?.ownerId === 'string' ? orgSnap.data().ownerId || null : null;
+      const refusal = credentialsRefusal({
+        callerUid,
+        callerRole: roleIn(callerData, org),
+        callerIsSupport: isSupportEmail(callerAuth?.email),
+        ownerId,
+        targetUid,
+        targetRole,
+        targetIsSupport: isSupportEmail(targetAuth?.email ?? target.email),
+      });
+      if (refusal) return json(res, 403, { error: refusal });
+    }
+    // Eén login voor meerdere studio's: dan beslist alleen die persoon zelf over e-mail en wachtwoord.
     if (orgsOf(target).length > 1) {
-      return json(res, 403, { error: 'Deze sporter zit ook bij een andere studio. Alleen de sporter zelf kan e-mail of wachtwoord wijzigen.' });
+      return json(res, 403, { error: 'Dit account hoort ook bij een andere studio. Alleen de persoon zelf kan e-mail of wachtwoord wijzigen.' });
     }
 
     const email = typeof body?.email === 'string' ? body.email.trim() : undefined;
