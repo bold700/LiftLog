@@ -9,6 +9,8 @@ const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
 const MODEL = (process.env.OPENAI_MODEL || 'gpt-4.1-mini').trim().split(/\s+/)[0];
 /** Voor foto's: hetzelfde vision-model als bij voeding (food-photo). */
 const VISION_MODEL = (process.env.OPENAI_VISION_MODEL || process.env.OPENAI_MODEL || 'gpt-4.1-mini').trim().split(/\s+/)[0];
+/** Voor inspreken: opname naar tekst. */
+const TRANSCRIBE_MODEL = (process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe').trim().split(/\s+/)[0];
 
 const GOALS = new Set(['G', 'U', 'S', 'GU', 'GS', 'US', 'GUS']);
 const MOVERS = new Set(['Non', 'Low', 'High']);
@@ -22,6 +24,7 @@ const DUR_CAT = new Set(['<30', '30-60', '>60']);
 const EX_COUNTS = new Set([4, 6, 7, 8, 9]);
 
 import { buildPhotoSystem, normalizePhotoWorkout } from './_lib/workoutPhoto.mjs';
+import { audioKind, buildVoiceSystem, MAX_AUDIO_CHARS, MAX_VOICE_TEXT, transcribeAudio } from './_lib/workoutVoice.mjs';
 
 const exerciseCatalog = getExerciseCatalog();
 const resolveExerciseName = (raw) => exerciseCatalog.resolve(raw);
@@ -724,6 +727,33 @@ export default async function handler(req, res) {
       const msg = error instanceof Error ? error.message : String(error);
       console.error('[generate-workout] foto', msg);
       return json(res, msg.startsWith('OpenAI HTTP') ? 502 : 500, { error: 'De foto uitlezen lukte niet. Probeer het opnieuw.' });
+    }
+  }
+
+  // Workout inspreken: een opname (of gedicteerde tekst) met oefeningen en gewichten.
+  if (req.body?.mode === 'voice') {
+    const audio = req.body?.audio;
+    const typed = typeof req.body?.text === 'string' ? req.body.text.trim().slice(0, MAX_VOICE_TEXT) : '';
+    if (audio != null) {
+      if (!audioKind(audio)) return json(res, 400, { error: 'Geen geldige opname.' });
+      if (audio.length > MAX_AUDIO_CHARS) return json(res, 413, { error: 'De opname is te lang. Spreek in delen in, of korter.' });
+    } else if (!typed) {
+      return json(res, 400, { error: 'Spreek of typ eerst de oefeningen in.' });
+    }
+    if (!(await enforceRateLimit(user.db, res, user.uid, 'generate-workout', RATE_LIMIT_PER_DAY, DAY_MS))) return;
+    try {
+      const transcript = audio != null ? await transcribeAudio(audio, { apiKey: process.env.OPENAI_API_KEY, model: TRANSCRIBE_MODEL }) : typed;
+      if (!transcript) return json(res, 422, { error: 'Ik hoorde niets. Spreek wat dichter bij de microfoon en probeer het opnieuw.' });
+      const parsed = await callOpenAI(buildVoiceSystem(EXERCISE_CATALOG_APPEND), `Ingesproken tekst:\n${transcript}`, 2500);
+      const { name, days } = normalizePhotoWorkout(parsed, resolveExerciseName, 'Ingesproken workout');
+      if (!days.length) {
+        return json(res, 422, { error: `Ik hoorde geen oefeningen in: "${transcript.slice(0, 160)}". Noem per oefening de naam, en eventueel sets, herhalingen en gewicht.`, transcript });
+      }
+      return json(res, 200, { name, days, transcript });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('[generate-workout] inspreken', msg);
+      return json(res, msg.startsWith('OpenAI HTTP') ? 502 : 500, { error: 'Inspreken verwerken lukte niet. Probeer het opnieuw.' });
     }
   }
 

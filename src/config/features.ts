@@ -8,3 +8,11 @@
  * api/_lib/leaderboardCleanup.mjs) en publiceert de app niets meer.
  */
 export const LEADERBOARD_ENABLED = false;
+
+/**
+ * Workout inspreken met de microfoon in de iOS/Android-app. De toestemming (Info.plist,
+ * AndroidManifest) zit pas in de volgende app-versie uit de store; een live update kan die niet
+ * toevoegen, en zonder die toestemming sluit iOS de app af. Zet dit aan zodra die versie live staat.
+ * Tot dan dicteer je in de app met de microfoon van het toetsenbord.
+ */
+export const NATIVE_VOICE_RECORDING = false;

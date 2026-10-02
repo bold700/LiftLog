@@ -258,14 +258,18 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
 
   /** Van een foto: de uitgelezen workout als nieuwe workout in de editor (opslaan doet de trainer). */
   const handleNewSchemaFromPhoto = useCallback(
-    (workout: { name: string; days: Schema['days'] }) => {
+    (workout: { name: string; days: Schema['days'] }, source: 'photo' | 'voice' = 'photo') => {
       const schema: Schema = { ...createEmptySchema(workout.name), days: workout.days };
       draftIdRef.current = schema.id;
       setDraft({ schema, mode: 'free' });
       setOpenNewSchemaDialog(false);
       setSelectedSchemaId(schema.id);
       setView('edit');
-      notify.success('Overgenomen van de foto. Controleer de oefeningen; sets en herhalingen die er niet op stonden, staan op 3 × 10.');
+      notify.success(
+        source === 'voice'
+          ? 'Ingesproken workout klaar. Controleer de oefeningen; sets en herhalingen die je niet noemde, staan op 3 × 10.'
+          : 'Overgenomen van de foto. Controleer de oefeningen; sets en herhalingen die er niet op stonden, staan op 3 × 10.'
+      );
     },
     [createEmptySchema, notify]
   );

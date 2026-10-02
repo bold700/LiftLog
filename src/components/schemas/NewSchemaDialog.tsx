@@ -1,6 +1,6 @@
 /**
  * Keuze bij "Workout aanmaken" (+-menu): zelf maken, de 7-stappenroute (Formule 7-routekaart),
- * met AI, of van een foto van een schema. Zo blijft de editor zelf rustig: hij toont alleen wat bij
+ * met AI, van een foto van een schema, of inspreken. Zo blijft de editor zelf rustig: hij toont alleen wat bij
  * de gekozen manier hoort. Het aanmaken zelf gebeurt in SchemasPage.
  */
 import { useRef, useState } from 'react';
@@ -23,6 +23,8 @@ import EditNoteRoundedIcon from '@mui/icons-material/EditNoteRounded';
 import ChecklistRoundedIcon from '@mui/icons-material/ChecklistRounded';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
+import MicRoundedIcon from '@mui/icons-material/MicRounded';
+import { VoiceWorkoutPanel } from './VoiceWorkoutPanel';
 import { readWorkoutPhoto } from '../../services/aiWorkoutService';
 import { fileToDataUrl } from '../../utils/imageDataUrl';
 import type { SchemaDay } from '../../types';
@@ -33,17 +35,23 @@ interface NewSchemaDialogProps {
   open: boolean;
   onClose: () => void;
   onChoose: (mode: NewSchemaMode) => void;
-  /** Van een foto: de uitgelezen workout openen in de editor (nog niet opgeslagen). */
-  onFromPhoto: (workout: { name: string; days: SchemaDay[] }) => void;
+  /** Van een foto of ingesproken: de workout openen in de editor (nog niet opgeslagen). */
+  onFromPhoto: (workout: { name: string; days: SchemaDay[] }, source?: 'photo' | 'voice') => void;
 }
 
-const OPTIONS: { mode: NewSchemaMode | 'photo'; icon: JSX.Element; title: string; text: string }[] = [
+const OPTIONS: { mode: NewSchemaMode | 'photo' | 'voice'; icon: JSX.Element; title: string; text: string }[] = [
   { mode: 'free', icon: <EditNoteRoundedIcon />, title: 'Zelf maken', text: 'Een lege workout: dagen en oefeningen kies je zelf.' },
   {
     mode: 'photo',
     icon: <PhotoCameraRoundedIcon />,
     title: 'Van foto',
     text: 'Maak of kies een foto van een schema (papier, whiteboard, scherm); de oefeningen worden overgenomen en je past het daarna aan.',
+  },
+  {
+    mode: 'voice',
+    icon: <MicRoundedIcon />,
+    title: 'Inspreken',
+    text: 'Noem de oefeningen en gewichten; de workout staat meteen klaar en je past het daarna aan.',
   },
   {
     mode: 'formule7',
@@ -58,10 +66,14 @@ export const NewSchemaDialog = ({ open, onClose, onChoose, onFromPhoto }: NewSch
   const fileRef = useRef<HTMLInputElement>(null);
   const [reading, setReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [voice, setVoice] = useState(false);
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const busy = reading || voiceBusy;
 
   const close = () => {
-    if (reading) return;
+    if (busy) return;
     setError(null);
+    setVoice(false);
     onClose();
   };
 
@@ -83,10 +95,18 @@ export const NewSchemaDialog = ({ open, onClose, onChoose, onFromPhoto }: NewSch
 
   return (
     <Dialog open={open} onClose={close} maxWidth="xs" fullWidth>
-      <DialogTitle>Nieuwe workout</DialogTitle>
+      <DialogTitle>{voice ? 'Workout inspreken' : 'Nieuwe workout'}</DialogTitle>
       <DialogContent sx={{ px: 1.5 }}>
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => void onFile(e.target.files?.[0])} />
-        {reading ? (
+        {voice ? (
+          <VoiceWorkoutPanel
+            onBusyChange={setVoiceBusy}
+            onDone={(w) => {
+              setVoice(false);
+              onFromPhoto(w, 'voice');
+            }}
+          />
+        ) : reading ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, py: 4 }}>
             <CircularProgress size={28} />
             <Typography variant="body2" color="text.secondary">
@@ -104,7 +124,7 @@ export const NewSchemaDialog = ({ open, onClose, onChoose, onFromPhoto }: NewSch
               {OPTIONS.map((o) => (
                 <ListItemButton
                   key={o.mode}
-                  onClick={() => (o.mode === 'photo' ? fileRef.current?.click() : onChoose(o.mode))}
+                  onClick={() => (o.mode === 'photo' ? fileRef.current?.click() : o.mode === 'voice' ? setVoice(true) : onChoose(o.mode))}
                   sx={{ borderRadius: 2, alignItems: 'flex-start', py: 1.25 }}
                 >
                   <ListItemIcon sx={{ minWidth: 40, mt: 0.5, color: 'primary.main' }}>{o.icon}</ListItemIcon>
@@ -116,7 +136,12 @@ export const NewSchemaDialog = ({ open, onClose, onChoose, onFromPhoto }: NewSch
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={close} disabled={reading}>
+        {voice && (
+          <Button onClick={() => setVoice(false)} disabled={busy} sx={{ mr: 'auto' }}>
+            Terug
+          </Button>
+        )}
+        <Button onClick={close} disabled={busy}>
           Annuleren
         </Button>
       </DialogActions>
