@@ -2572,6 +2572,32 @@ describe('losse PT-afspraak (niet herhaald)', () => {
     expect(store[`classes/${res.body.classId}`]).toMatchObject({ date: D, startTime: '20:00', bookedCount: 1, privateFor: 'sporter1' });
   });
 
+  it('staf plant ook vandaag direct aansluitend in; een sporter vraagt minstens 2 uur vooruit aan', async () => {
+    // 08:19 in Amsterdam; Richard heeft PT van 09:00 tot 10:00. De trainer wil Wendy om 10:00 erachter.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-02T06:19:00Z'));
+    try {
+      const today = '2026-10-02';
+      store['trainerAvailability/vanas__trainer1'] = { orgId: 'vanas', userId: 'trainer1', days: Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [String(d), [{ from: '07:00', to: '21:00' }]])) };
+      store['classes/richard'] = {
+        orgId: 'vanas', title: 'PT', date: today, startTime: '09:00', endTime: '10:00', room: null,
+        trainerId: 'trainer1', capacity: 1, creditCost: 1, bookedCount: 1, waitlistCount: 0, sessionKind: '1on1',
+      };
+      const timesToday = (r) => r.body.days.find((d) => d.date === today)?.times.map((t) => t.startTime) ?? [];
+      const staff = await post({ action: 'singlePtOptions', userId: 'sporter1', trainerId: 'trainer1', duration: 60 }, 'trainer1');
+      expect(timesToday(staff)).toContain('10:00');
+      expect(timesToday(staff)).not.toContain('08:00');
+      const member = await post({ action: 'singlePtOptions', duration: 60 });
+      expect(timesToday(member)).not.toContain('10:00');
+      expect(timesToday(member)[0]).toBe('10:30');
+      const booked = await post({ action: 'bookSinglePt', userId: 'sporter1', trainerId: 'trainer1', duration: 60, date: today, startTime: '10:00' }, 'trainer1');
+      expect(booked.body).toMatchObject({ status: 'approved' });
+      expect(store[`classes/${booked.body.classId}`]).toMatchObject({ date: today, startTime: '10:00', endTime: '11:00' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('weigert een bezet moment, een sporter zonder trainer, en boekt nooit voor een ander lid', async () => {
     expect((await post({ action: 'bookSinglePt', duration: 60, date: D, startTime: '19:00' })).statusCode).toBe(409);
     const own = await post({ action: 'bookSinglePt', userId: 'sporter2', duration: 60, date: D, startTime: '16:00' });

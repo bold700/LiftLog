@@ -250,6 +250,9 @@ vrij zijn. Momenten die direct aansluiten op een andere les van de trainer staan
   schrijft de sporter in via de gewone boekingsregels (credit eraf).
 - Afgewezen: de credit staat nog op het saldo en de sporter kiest in Lessen een ander moment.
 - Meldt de trainer het lid af (Deelnemers), dan plant hij meteen zelf een nieuw moment in.
+- De twee uur vooruit geldt alleen als een sporter aanvraagt (dan heeft de trainer tijd om te
+  bevestigen). Plant staf zelf (verzetten, losse afspraak, goedkeuren), dan kan elk moment dat nog
+  niet begonnen is, ook direct aansluitend vandaag.
 - Verzoeken staan in `rescheduleRequests` (alleen via de server); rekenregels in
   `api/_lib/reschedule.mjs`.
 

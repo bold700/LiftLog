@@ -1923,7 +1923,7 @@ async function singlePtParties(db, uid, orgId, isStaff, body) {
 async function singlePtOptions(res, db, uid, orgId, isStaff, body) {
   const { trainerId } = await singlePtParties(db, uid, orgId, isStaff, body);
   const duration = cleanDuration(body?.duration);
-  const options = await optionsFor(db, orgId, { trainerId, room: null, duration, exclude: null }, { days: SINGLE_PT_DAYS });
+  const options = await optionsFor(db, orgId, { trainerId, room: null, duration, exclude: null }, { days: SINGLE_PT_DAYS, leadMinutes: leadFor(isStaff) });
   return json(res, 200, { trainerId, duration, ...options, build: BUILD });
 }
 
@@ -1938,7 +1938,7 @@ async function bookSinglePt(res, db, uid, orgId, isStaff, body) {
   const startTime = String(body?.startTime ?? '').trim();
   const duration = cleanDuration(body?.duration);
   if (!isStaff && isInactiveIn(member, orgId)) return json(res, 403, { error: 'Je lidmaatschap bij deze studio staat op inactief.', build: BUILD });
-  const options = await optionsFor(db, orgId, { trainerId, room: null, duration, exclude: null }, { days: SINGLE_PT_DAYS });
+  const options = await optionsFor(db, orgId, { trainerId, room: null, duration, exclude: null }, { days: SINGLE_PT_DAYS, leadMinutes: leadFor(isStaff) });
   if (!isOffered(options, date, startTime)) return json(res, 409, { error: 'Dit moment is niet (meer) vrij. Kies een ander moment.', build: BUILD });
   const endTime = options.days.find((d) => d.date === date).times.find((t) => t.startTime === startTime).endTime;
 
@@ -2062,7 +2062,7 @@ async function moveOccurrence(res, db, uid, orgId, myOrgs, body) {
   const cls = await rescheduleSource(db, uid, orgId, true, String(booking.classId));
   const date = String(body?.date ?? '').trim();
   const startTime = String(body?.startTime ?? '').trim();
-  const options = await optionsFor(db, orgId, slotOf(cls));
+  const options = await optionsFor(db, orgId, slotOf(cls), { leadMinutes: leadFor(true) });
   if (!isOffered(options, date, startTime)) return json(res, 409, { error: 'Dit moment is niet (meer) vrij. Kies een ander moment.', build: BUILD });
 
   await cancelBookingCore(db, uid, myOrgs, true, bookingId, { forceRefund: true });
@@ -2125,7 +2125,7 @@ async function rescheduleSource(db, uid, orgId, isStaff, classId) {
  * Vrije momenten voor een nieuw PT-moment bij deze trainer (zie rescheduleOptions): zelfde duur,
  * niet op het afgemelde moment zelf (`exclude`).
  */
-async function optionsFor(db, orgId, { trainerId, room, duration, exclude }, { ignoreRequestId = null, days = RESCHEDULE_DAYS } = {}) {
+async function optionsFor(db, orgId, { trainerId, room, duration, exclude }, { ignoreRequestId = null, days = RESCHEDULE_DAYS, leadMinutes = MIN_LEAD_MINUTES } = {}) {
   const now = new Date();
   const dates = Array.from({ length: days }, (_, i) => amsterdamDate(now, i));
   const [orgSnap, availability, classSnap, pendingSnap, absences] = await Promise.all([
@@ -2138,7 +2138,7 @@ async function optionsFor(db, orgId, { trainerId, room, duration, exclude }, { i
   // Openstaande verzoeken bij deze trainer houden dat moment vrij voor wie het vroeg.
   const pending = pendingSnap.docs.filter((d) => d.id !== ignoreRequestId).map((d) => d.data());
   const busy = busyByDate([...classSnap.docs.map((d) => d.data()), ...pending], { trainerId, room });
-  const minStart = now.getTime() + MIN_LEAD_MINUTES * 60 * 1000;
+  const minStart = now.getTime() + leadMinutes * 60 * 1000;
   return rescheduleOptions({
     // Op dagen dat de trainer afwezig is, biedt de app hem niet aan.
     dates: dates.filter((d) => !absenceOn(absences, trainerId, d)),
@@ -2150,6 +2150,12 @@ async function optionsFor(db, orgId, { trainerId, room, duration, exclude }, { i
     exclude,
   });
 }
+
+/**
+ * Hoe ver vooruit een nieuw moment moet liggen. Een sporter vraagt aan, dus de trainer moet tijd
+ * hebben om te bevestigen (MIN_LEAD_MINUTES). Staf plant zelf: elk moment dat nog niet begonnen is.
+ */
+const leadFor = (isStaff) => (isStaff ? 0 : MIN_LEAD_MINUTES);
 
 /** Wat optionsFor nodig heeft van de afgemelde les. */
 const slotOf = (cls) => ({
@@ -2166,7 +2172,7 @@ const toMinutes = (hhmm) => {
 
 async function getRescheduleOptions(res, db, uid, orgId, isStaff, classId) {
   const cls = await rescheduleSource(db, uid, orgId, isStaff, classId);
-  const options = await optionsFor(db, orgId, slotOf(cls));
+  const options = await optionsFor(db, orgId, slotOf(cls), { leadMinutes: leadFor(isStaff) });
   return json(res, 200, { classId, title: cls.title ?? '', trainerId: cls.trainerId, ...options, build: BUILD });
 }
 
@@ -2190,7 +2196,7 @@ async function requestReschedule(res, db, uid, orgId, isStaff, body) {
   if (existing.exists && ['pending', 'approved'].includes(String(existing.data().status))) {
     return json(res, 409, { error: 'Voor deze les loopt al een verzoek.', build: BUILD });
   }
-  const options = await optionsFor(db, orgId, slotOf(cls));
+  const options = await optionsFor(db, orgId, slotOf(cls), { leadMinutes: leadFor(isStaff) });
   if (!isOffered(options, date, startTime)) {
     return json(res, 409, { error: 'Dit moment is niet (meer) vrij. Kies een ander moment.', build: BUILD });
   }
@@ -2251,7 +2257,8 @@ async function approveRequest(db, approverUid, orgId, request) {
     duration: toMinutes(request.endTime) - toMinutes(request.startTime),
     exclude: { date: request.fromDate, startTime: request.fromStartTime },
   };
-  const options = await optionsFor(db, orgId, slot, { ignoreRequestId: request.id, days: request.kind === 'single' ? SINGLE_PT_DAYS : RESCHEDULE_DAYS });
+  // Wie goedkeurt is de trainer: die beslist zelf of het nog lukt, dus alleen niet in het verleden.
+  const options = await optionsFor(db, orgId, slot, { ignoreRequestId: request.id, days: request.kind === 'single' ? SINGLE_PT_DAYS : RESCHEDULE_DAYS, leadMinutes: leadFor(true) });
   if (!isOffered(options, request.date, request.startTime)) {
     return { error: 'Dit moment is inmiddels bezet of ligt te dichtbij. Wijs het verzoek af; de sporter kan een ander moment kiezen.' };
   }
