@@ -7,6 +7,8 @@ import { EXERCISE_ADVICE_SYSTEM, buildExerciseAdvicePrompt, normalizeExerciseAdv
 const OPENAI_API_URL = 'https://api.openai.com/v1/responses';
 // Robuust tegen onbedoelde extra tekst in .env (bijv. "gpt-4.1-mini (optioneel)")
 const MODEL = (process.env.OPENAI_MODEL || 'gpt-4.1-mini').trim().split(/\s+/)[0];
+/** Voor foto's: hetzelfde vision-model als bij voeding (food-photo). */
+const VISION_MODEL = (process.env.OPENAI_VISION_MODEL || process.env.OPENAI_MODEL || 'gpt-4.1-mini').trim().split(/\s+/)[0];
 
 const GOALS = new Set(['G', 'U', 'S', 'GU', 'GS', 'US', 'GUS']);
 const MOVERS = new Set(['Non', 'Low', 'High']);
@@ -18,6 +20,8 @@ const TB_VER = new Set(['A', 'B', 'C']);
 const SPLIT_VAR = new Set(['UPPER_LOWER', 'UPPER_LOWER_AB']);
 const DUR_CAT = new Set(['<30', '30-60', '>60']);
 const EX_COUNTS = new Set([4, 6, 7, 8, 9]);
+
+import { buildPhotoSystem, normalizePhotoWorkout } from './_lib/workoutPhoto.mjs';
 
 const exerciseCatalog = getExerciseCatalog();
 const resolveExerciseName = (raw) => exerciseCatalog.resolve(raw);
@@ -574,6 +578,43 @@ async function callOpenAIRaw(systemInstruction, userPrompt, maxTokens) {
   return raw;
 }
 
+/** Een foto meesturen (vision): voor "Workout van foto". */
+async function callOpenAIImage(systemInstruction, image, maxTokens) {
+  const response = await fetch(OPENAI_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: VISION_MODEL,
+      temperature: 0.1,
+      max_output_tokens: maxTokens,
+      input: [
+        { role: 'system', content: [{ type: 'input_text', text: systemInstruction }] },
+        {
+          role: 'user',
+          content: [
+            { type: 'input_text', text: 'Lees dit trainingsschema uit.' },
+            { type: 'input_image', image_url: image },
+          ],
+        },
+      ],
+    }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`OpenAI HTTP ${response.status}: ${text.slice(0, 400)}`);
+  }
+  const raw = extractText(await response.json());
+  if (!raw) throw new Error('Lege AI-respons');
+  try {
+    return parseJsonLenient(raw);
+  } catch {
+    return repairJson(raw);
+  }
+}
+
 function parseJsonLenient(raw) {
   try {
     return JSON.parse(raw);
@@ -646,6 +687,8 @@ const RATE_LIMIT_PER_DAY = 40;
 /** Voorstellen voor de oefeningenbibliotheek zijn klein; ruimere daglimiet per trainer. */
 const ADVICE_LIMIT_PER_DAY = 150;
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** Foto als data-URL van maximaal ~6 MB (de app verkleint hem eerst). */
+const MAX_IMAGE_CHARS = 6 * 1024 * 1024;
 
 export default async function handler(req, res) {
   if (applyCors(req, res)) return;
@@ -661,6 +704,28 @@ export default async function handler(req, res) {
   // Alleen ingelogde gebruikers, met een daglimiet: het endpoint kost geld per aanroep.
   const user = await requireUser(req, res);
   if (!user) return;
+
+  // Workout van een foto: de oefeningen van een gefotografeerd schema overnemen.
+  if (req.body?.mode === 'photo') {
+    const image = req.body?.image;
+    if (typeof image !== 'string' || !/^data:image\/(jpeg|png|webp|heic|heif);base64,/i.test(image)) {
+      return json(res, 400, { error: 'Geen geldige foto.' });
+    }
+    if (image.length > MAX_IMAGE_CHARS) return json(res, 413, { error: 'De foto is te groot. Probeer een kleinere foto.' });
+    if (!(await enforceRateLimit(user.db, res, user.uid, 'generate-workout', RATE_LIMIT_PER_DAY, DAY_MS))) return;
+    try {
+      const parsed = await callOpenAIImage(buildPhotoSystem(EXERCISE_CATALOG_APPEND), image, 2500);
+      const { name, days } = normalizePhotoWorkout(parsed, resolveExerciseName);
+      if (!days.length) {
+        return json(res, 422, { error: 'Op deze foto vond ik geen oefeningen. Maak een scherpere foto van het schema, of vul de workout zelf in.' });
+      }
+      return json(res, 200, { name, days });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('[generate-workout] foto', msg);
+      return json(res, msg.startsWith('OpenAI HTTP') ? 502 : 500, { error: 'De foto uitlezen lukte niet. Probeer het opnieuw.' });
+    }
+  }
 
   const prompt = cleanText(req.body?.prompt);
   if (!prompt) {

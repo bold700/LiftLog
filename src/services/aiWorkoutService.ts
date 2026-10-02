@@ -117,3 +117,19 @@ export async function generateWorkoutFromPrompt(
         : undefined,
   };
 }
+
+/**
+ * Workout van een foto: een gefotografeerd schema (papier, whiteboard, scherm) uitlezen. Wat op de
+ * foto ontbreekt (sets, herhalingen) staat op 3 × 10; gewicht/materiaal en uitvoering in de notitie.
+ */
+export async function readWorkoutPhoto(image: string): Promise<{ name: string; days: SchemaDay[] }> {
+  const response = await fetch(apiUrl('/api/generate-workout'), {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ mode: 'photo', image }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(typeof payload?.error === 'string' ? payload.error : 'De foto uitlezen lukte niet. Probeer het opnieuw.');
+  if (!Array.isArray(payload?.days) || !payload.days.length) throw new Error('Op deze foto vond ik geen oefeningen.');
+  return { name: typeof payload.name === 'string' ? payload.name : 'Workout van foto', days: payload.days as SchemaDay[] };
+}
