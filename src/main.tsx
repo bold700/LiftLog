@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 import { initLiveUpdates } from './native/liveUpdate'
+import { ErrorBoundary } from './components/layout/ErrorBoundary'
+import { reloadForNewVersion } from './utils/staleChunk'
 
 // Zorg ervoor dat de document title correct is
 if (typeof document !== 'undefined') {
@@ -42,12 +44,22 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   });
 }
 
+// Na een nieuwe versie bestaan oude JS-bestanden niet meer; een open tabblad dat er een opvraagt,
+// herlaadt één keer zodat het de nieuwe versie krijgt (anders bleef het scherm zwart).
+if (typeof window !== 'undefined') {
+  window.addEventListener('vite:preloadError', () => {
+    reloadForNewVersion();
+  });
+}
+
 // iPhone/Android-app: nieuwe web-versies ophalen zonder App Store (doet niets in de browser).
 void initLiveUpdates().catch((e) => console.warn('[live update]', e));
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary fullPage>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 )
 

@@ -138,3 +138,41 @@ export function bodyScanFromCodeValue(list) {
     bodyType: bodyTypeIndex != null ? (BODYANALYSE_BODY_TYPES[bodyTypeIndex] ?? null) : null,
   };
 }
+
+/** Chinese tijd: UTC+8, zonder zomertijd. */
+const CHINA_OFFSET_MS = 8 * 3_600_000;
+/** Speling voor een klok die iets voorloopt. */
+const CLOCK_SLACK_MS = 15 * 60_000;
+
+/**
+ * De server van de weegschaal staat in China en zet de meettijd in Chinese tijd (UTC+8): een scan
+ * van 19:05 in Nederland kwam binnen als 01:05 de volgende dag, en belandde dan op de verkeerde dag.
+ * Hier rekenen we hem om naar Nederlandse tijd ("YYYY-MM-DD HH:MM", zomer- en wintertijd goed).
+ *
+ * Zonder tijd (alleen datum) of als de omgerekende tijd nog in de toekomst ligt (dan was het
+ * kennelijk geen Chinese tijd), blijft de waarde ongewijzigd.
+ */
+export function bodyAnalyseTimeToLocal(raw, now = Date.now(), timeZone = 'Europe/Amsterdam') {
+  if (typeof raw !== 'string') return raw ?? null;
+  const date = raw.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  const time = raw.match(/(?:^|\D)(\d{1,2}):(\d{2})(?::\d{2})?/);
+  if (!date || !time) return raw;
+  const [, y, mo, d] = date.map(Number);
+  const [, h, mi] = time.map(Number);
+  const utc = Date.UTC(y, mo - 1, d, h, mi) - CHINA_OFFSET_MS;
+  if (Number.isNaN(utc) || utc > now + CLOCK_SLACK_MS) return raw;
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(new Date(utc))
+      .map((p) => [p.type, p.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+}

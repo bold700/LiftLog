@@ -1,7 +1,7 @@
 import { applyCors } from './_lib/cors.mjs';
 import { requireUser, enforceRateLimit } from './_lib/requireUser.mjs';
 import { sanitizeBodyScan, BODY_SCAN_KEYS, BODY_SCAN_SEGMENT_KEYS } from './_lib/bodyScan.mjs';
-import { BODYANALYSE_DATA_URL, bodyAnalyseKeyFromInput, bodyScanFromCodeValue, codeValueList } from './_lib/bodyAnalyseQr.mjs';
+import { BODYANALYSE_DATA_URL, bodyAnalyseKeyFromInput, bodyAnalyseTimeToLocal, bodyScanFromCodeValue, codeValueList } from './_lib/bodyAnalyseQr.mjs';
 /**
  * Leest de uitslag van een lichaamsanalyse-weegschaal (BodyAnalyse/VA, InBody, …), op twee
  * manieren:
@@ -128,7 +128,7 @@ async function handleQrScan(req, res, user, key) {
   }
   const scan = sanitizeBodyScan(bodyScanFromCodeValue(list));
   if (!scan) return json(res, 422, { error: 'Geen meetwaarden gevonden achter deze QR-code.' });
-  return json(res, 200, { scan });
+  return json(res, 200, { scan: { ...scan, measuredAt: bodyAnalyseTimeToLocal(scan.measuredAt) } });
 }
 
 export default async function handler(req, res) {
@@ -199,6 +199,8 @@ export default async function handler(req, res) {
     if (!text) return json(res, 502, { error: 'Lege AI-respons.' });
     const scan = sanitizeBodyScan(parseJsonLenient(text));
     if (!scan) return json(res, 200, { scan: null });
+    // Het rapport van de BodyAnalyse-weegschaal toont dezelfde Chinese tijd als de QR-link.
+    if (scan.source === 'bodyanalyse') scan.measuredAt = bodyAnalyseTimeToLocal(scan.measuredAt);
     return json(res, 200, { scan });
   } catch (e) {
     console.error('[bodyscan-photo]', e instanceof Error ? e.message : String(e));

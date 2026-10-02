@@ -20,6 +20,7 @@ import { InzichtenPage } from './components/InzichtenPage';
 import { AddPage } from './components/AddPage';
 import { SchemasPage } from './components/SchemasPage';
 import { LoadingBlock } from './components/layout/LoadingBlock';
+import { ErrorBoundary } from './components/layout/ErrorBoundary';
 import { NotifyProvider } from './context/NotifyContext';
 import { ForegroundPushListener } from './components/ForegroundPushListener';
 import { HealthConsentDialog } from './components/HealthConsentDialog';
@@ -407,7 +408,9 @@ function AppContent() {
               </Alert>
             )}
             <StudioSwitcher />
-            <Suspense fallback={<LoadingBlock />}>{renderPage()}</Suspense>
+            <ErrorBoundary resetKey={activeTab}>
+              <Suspense fallback={<LoadingBlock />}>{renderPage()}</Suspense>
+            </ErrorBoundary>
           </Box>
 
 

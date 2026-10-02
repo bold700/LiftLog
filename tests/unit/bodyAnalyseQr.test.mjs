@@ -4,7 +4,7 @@
  * QR-pagina tekent (dezelfde volgorde als hello.js: createReport).
  */
 import { describe, it, expect } from 'vitest';
-import { bodyAnalyseKeyFromInput, bodyScanFromCodeValue, codeValueList } from '../../api/_lib/bodyAnalyseQr.mjs';
+import { bodyAnalyseKeyFromInput, bodyScanFromCodeValue, codeValueList, bodyAnalyseTimeToLocal } from '../../api/_lib/bodyAnalyseQr.mjs';
 import { sanitizeBodyScan } from '../../api/_lib/bodyScan.mjs';
 
 const SAMPLE = [
@@ -118,5 +118,25 @@ describe('bodyScanFromCodeValue', () => {
   it('geeft null zonder meting', () => {
     expect(bodyScanFromCodeValue([])).toBeNull();
     expect(bodyScanFromCodeValue(Array(56).fill(''))).toBeNull();
+  });
+});
+
+describe('bodyAnalyseTimeToLocal', () => {
+  const at = (iso) => Date.parse(iso);
+
+  it('rekent Chinese tijd om naar Nederlandse zomertijd (6 uur terug, ook over de dag heen)', () => {
+    // Scan om 19:05 in Nederland kwam binnen als 01:05 de volgende dag.
+    expect(bodyAnalyseTimeToLocal('2026-10-03 01:05', at('2026-10-02T17:10:00Z'))).toBe('2026-10-02 19:05');
+    expect(bodyAnalyseTimeToLocal('23:45 2026-09-23', at('2026-09-24T00:00:00Z'))).toBe('2026-09-23 17:45');
+  });
+
+  it('in de wintertijd 7 uur terug', () => {
+    expect(bodyAnalyseTimeToLocal('2026-12-01 09:30', at('2026-12-01T12:00:00Z'))).toBe('2026-12-01 02:30');
+  });
+
+  it('laat alleen een datum, of een tijd die omgerekend in de toekomst ligt, ongemoeid', () => {
+    expect(bodyAnalyseTimeToLocal('2026-10-03', at('2026-10-03T12:00:00Z'))).toBe('2026-10-03');
+    expect(bodyAnalyseTimeToLocal('2026-10-03 21:00', at('2026-10-03T08:00:00Z'))).toBe('2026-10-03 21:00');
+    expect(bodyAnalyseTimeToLocal(null)).toBeNull();
   });
 });
