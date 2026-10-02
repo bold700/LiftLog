@@ -15,7 +15,12 @@ const profiles = {
   sporterA: { orgId: 'vanas', orgIds: ['vanas'], role: 'sporter', displayName: 'Bas', email: 'bas@example.com' },
   sporterB: { orgId: 'studiob', orgIds: ['studiob'], role: 'sporter', displayName: 'Iris', email: 'iris@example.com' },
   collegaA: { orgId: 'vanas', orgIds: ['vanas'], role: 'trainer', displayName: 'Rick' },
+  ownerA: { orgId: 'vanas', orgIds: ['vanas'], role: 'admin', displayName: 'Simone van As' },
+  admin2A: { orgId: 'vanas', orgIds: ['vanas'], role: 'admin', displayName: 'Tweede beheerder' },
+  supportA: { orgId: 'vanas', orgIds: ['vanas'], role: 'admin', displayName: 'Support', email: 'support@bold700.com' },
 };
+const orgs = { vanas: { ownerId: 'ownerA' } };
+const authEmails = { supportA: 'support@bold700.com', ownerA: 'simone@example.com' };
 
 let currentUid = 'trainerA';
 let updatedUsers = [];
@@ -31,12 +36,16 @@ vi.mock('../../api/_lib/firebaseAdmin.mjs', () => ({
         updatedUsers.push({ uid, update });
       },
       deleteUser: async () => {},
+      getUser: async (uid) => ({ uid, email: authEmails[uid] ?? null }),
     },
     db: {
-      collection: () => ({
+      collection: (name) => ({
         doc: (id) => ({
           id,
-          get: async () => ({ exists: profiles[id] !== undefined, data: () => profiles[id] }),
+          get: async () => {
+            const store = name === 'orgs' ? orgs : profiles;
+            return { exists: store[id] !== undefined, data: () => store[id] };
+          },
           update: async (data) => {
             profileUpdates.push({ id, data });
             if (profiles[id]) Object.assign(profiles[id], data);
@@ -105,9 +114,10 @@ describe('inloggegevens van een sporter wijzigen (updateCredentials)', () => {
     expect(updatedUsers).toHaveLength(0);
   });
 
-  it('weigert een collega-trainer als doelwit', async () => {
+  it('weigert een collega-trainer als doelwit voor een trainer', async () => {
     const res = await post({ action: 'updateCredentials', targetUid: 'collegaA', password: 'nieuwPw1' }, { uid: 'trainerA' });
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(403);
+    expect(updatedUsers).toHaveLength(0);
   });
 
   it('weigert een te kort wachtwoord', async () => {
@@ -149,5 +159,38 @@ describe('inloggegevens van een sporter wijzigen (updateCredentials)', () => {
     const res = await post({ action: 'updateCredentials', targetUid: 'sporterA', email: 'bezet@example.com' }, { uid: 'trainerA' });
     expect(res.statusCode).toBe(400);
     expect(res.body.error).toMatch(/al bij een ander account in gebruik/);
+  });
+});
+
+describe('inloggegevens van staf wijzigen: per rol', () => {
+  const pw = (targetUid, uid) => post({ action: 'updateCredentials', targetUid, password: 'nieuwPw1' }, { uid });
+
+  it('een beheerder wijzigt het wachtwoord van een trainer', async () => {
+    expect((await pw('collegaA', 'adminA')).statusCode).toBe(200);
+    expect(updatedUsers).toEqual([{ uid: 'collegaA', update: { password: 'nieuwPw1' } }]);
+  });
+
+  it('een gewone beheerder wijzigt geen andere beheerder of de eigenaar', async () => {
+    const admin = await pw('admin2A', 'adminA');
+    const owner = await pw('ownerA', 'adminA');
+    expect(admin.statusCode).toBe(403);
+    expect(owner.statusCode).toBe(403);
+    expect(owner.body.error).toMatch(/eigenaar/);
+    expect(updatedUsers).toHaveLength(0);
+  });
+
+  it('de eigenaar wijzigt een beheerder', async () => {
+    expect((await pw('admin2A', 'ownerA')).statusCode).toBe(200);
+  });
+
+  it('support van BOLD700 wijzigt de eigenaar (bijv. bij het opzetten van de studio)', async () => {
+    const res = await post({ action: 'updateCredentials', targetUid: 'ownerA', email: 'simone@vanas.nl', password: 'nieuwPw1' }, { uid: 'supportA' });
+    expect(res.statusCode).toBe(200);
+    expect(updatedUsers).toEqual([{ uid: 'ownerA', update: { email: 'simone@vanas.nl', password: 'nieuwPw1' } }]);
+  });
+
+  it('niemand wijzigt via deze weg het account van support', async () => {
+    expect((await pw('supportA', 'ownerA')).statusCode).toBe(403);
+    expect(updatedUsers).toHaveLength(0);
   });
 });
