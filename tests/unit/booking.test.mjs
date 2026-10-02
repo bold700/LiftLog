@@ -2898,3 +2898,30 @@ describe('afwezigheid trainer en invaller', () => {
     expect(after.body.days.some((d) => d.date === D2)).toBe(false);
   });
 });
+
+describe('vast PT-moment zonder credits', () => {
+  const first = amsterdamDate(new Date(), 3);
+  const weekday = new Date(`${first}T12:00:00Z`).getUTCDay();
+  const ctId = `ctp_sporter1_${weekday}_2100`;
+  const activeBookings = () => Object.values(store).filter((v) => v.userId === 'sporter1' && String(v.classId).startsWith(`cls_gen_${ctId}`) && v.status === 'booked');
+
+  it('de reeks staat, maar zonder credits wordt niets geboekt; met credits boekt "opnieuw boeken" alsnog', async () => {
+    store['creditAccounts/vanas__sporter1'].balance = 0;
+    store['plans/plan_pt'] = { orgId: 'vanas', name: 'Personal Training - 2x per week', price: 0, period: 'fourWeeks', credits: 8 };
+    store['memberships/mb_pt'] = { orgId: 'vanas', userId: 'sporter1', planId: 'plan_pt', status: 'active' };
+    expect((await post({ action: 'planStatus', userId: 'sporter1' }, 'trainer1')).body.credits).toBe(0);
+
+    const r = await post({ action: 'addPersonalSlot', userId: 'sporter1', weekday, startTime: '21:00', endTime: '22:00', trainerId: 'trainer1', startDate: first }, 'trainer1');
+    expect(r.statusCode).toBe(200);
+    expect(r.body.booked).toBe(0);
+    expect(r.body.skippedNoCredits).toBeGreaterThan(0);
+    expect(store[`standingBookings/${r.body.standingBookingId}`].lastOutcome).toBe('skippedNoCredits');
+    expect(activeBookings()).toHaveLength(0);
+
+    store['creditAccounts/vanas__sporter1'].balance = 20;
+    const again = await post({ action: 'pauseStandingBooking', standingBookingId: r.body.standingBookingId, from: null }, 'trainer1');
+    expect(again.statusCode).toBe(200);
+    expect(again.body.booked).toBeGreaterThan(0);
+    expect(activeBookings()).toHaveLength(again.body.booked);
+  });
+});

@@ -12,6 +12,8 @@ export interface PlanStatus {
   used: number;
   /** Aangevraagde vaste PT-momenten die nog op de trainer wachten. */
   pending: number;
+  /** Creditsaldo; null bij een abonnement zonder creditlimiet. */
+  credits?: number | null;
   trainerId: string | null;
 }
 

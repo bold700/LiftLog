@@ -68,6 +68,7 @@ const STATUS: Record<SeriesStatus, { label: string; tone: 'ok' | 'muted' | 'warn
   paused: { label: 'Pauze', tone: 'muted' },
   cancelledClass: { label: 'Afgelast', tone: 'muted' },
   optedOut: { label: 'Afgemeld', tone: 'muted' },
+  noCredits: { label: 'Geen credits', tone: 'warn' },
   notStarted: { label: 'Nog niet begonnen', tone: 'muted' },
   skipped: { label: 'Niet geboekt', tone: 'warn' },
 };
@@ -221,6 +222,36 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
                 <MoreVertIcon fontSize="small" />
               </IconButton>
             </Box>
+            {/* Geen credits: de reeks staat, maar die weken zijn niet geboekt. Eerst credits, dan opnieuw boeken. */}
+            {upcoming.some((o) => o.status === 'noCredits') && (
+              <Box
+                sx={{
+                  mt: 1,
+                  p: 1.25,
+                  borderRadius: 2,
+                  bgcolor: designTokens.tertiaryContainer,
+                  color: designTokens.onTertiaryContainer,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <Typography variant="body2" sx={{ flex: 1, minWidth: 200 }}>
+                  {(() => {
+                    const n = upcoming.filter((o) => o.status === 'noCredits').length;
+                    return `${n === 1 ? '1 afspraak is' : `${n} afspraken zijn`} niet geboekt: geen credits. ${
+                      asStaff ? 'Ken credits toe (Abonnement en credits) en boek opnieuw.' : 'Koop credits en boek opnieuw.'
+                    }`;
+                  })()}
+                </Typography>
+                {!s.pausedFrom && (
+                  <Button size="small" variant="contained" disableElevation disabled={busy} onClick={() => void run(() => pauseStandingBooking(s.id, null, null))}>
+                    Opnieuw boeken
+                  </Button>
+                )}
+              </Box>
+            )}
             {upcoming.length > 0 && (
               <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                 {upcoming.map(({ cls, booking, status }) => (
@@ -263,7 +294,7 @@ export function StandingBookingsCard({ userId, asStaff = false, embedded = false
                         Deze keer niet
                       </Button>
                     )}
-                    {status === 'optedOut' && (
+                    {(status === 'optedOut' || status === 'noCredits' || status === 'skipped') && (
                       <Button
                         size="small"
                         onClick={() =>
