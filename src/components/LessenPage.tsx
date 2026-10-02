@@ -23,7 +23,6 @@ import { alpha } from '@mui/material/styles';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
-import GroupRoundedIcon from '@mui/icons-material/GroupRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import { PageLayout, ContentCard, EmptyState } from './layout';
 import { useProfile } from '../context/ProfileContext';
@@ -45,7 +44,6 @@ import {
   createClass,
   deleteClass,
   restoreClass,
-  SESSION_KIND_COLORS,
   type StudioClass,
   type Booking,
   classHasStarted,
@@ -63,6 +61,7 @@ import { setClassTrainer } from '../services/absenceService';
 import { setAttendance, type Attendance } from '../services/attendanceService';
 import { getOrg } from '../services/orgService';
 import { getColleagues } from '../services/profileService';
+import { SessionKindIcon } from './SessionKindIcon';
 import { designTokens } from '../theme/designTokens';
 import { segmentedToggleSx, filterPillSx } from '../theme/segmentedToggle';
 import { FilterGroup, FilterSheet } from './FilterSheet';
@@ -601,16 +600,8 @@ export function LessenPage({ initialNewAppointment = false, onConsumeInitialNewA
           cursor: cls.cancelledAt || (mine && !started && !isStaff) ? 'default' : 'pointer',
         }}
       >
-        <Box
-          sx={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            bgcolor: SESSION_KIND_COLORS[cls.sessionKind],
-            mt: 0.75,
-            flexShrink: 0,
-          }}
-        />
+        {/* Soort les: één persoon (1-op-1), twee (duo) of een groepje (groepsles). */}
+        <SessionKindIcon kind={cls.sessionKind} aria-label={SESSION_KIND_LABELS[cls.sessionKind]} sx={{ fontSize: 20, mt: '1px', flexShrink: 0 }} />
         <Box sx={{ flex: '1 1 auto', minWidth: 0 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
             {labelFor(cls).title}
@@ -687,8 +678,10 @@ export function LessenPage({ initialNewAppointment = false, onConsumeInitialNewA
           sx={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0, alignItems: 'flex-end' }}
           onClick={(e) => e.stopPropagation()}
         >
+          {/* Een PT-moment van één lid: daar schrijft de trainer zich niet zelf voor in. */}
           {!cls.cancelledAt &&
             !started &&
+            !(isStaff && cls.privateFor && !mine) &&
             (mine ? (
               <>
                 {canClaim && (
@@ -706,9 +699,9 @@ export function LessenPage({ initialNewAppointment = false, onConsumeInitialNewA
               </Button>
             ))}
           {isStaff && !cls.cancelledAt && (
-            <IconButton size="small" onClick={() => setParticipantsClass(cls)} disabled={busy} aria-label="Deelnemers">
-              <GroupRoundedIcon fontSize="small" />
-            </IconButton>
+            <Button size="small" onClick={() => setParticipantsClass(cls)} disabled={busy} sx={{ textTransform: 'none' }}>
+              Deelnemers
+            </Button>
           )}
           {/* Een begonnen of voorbije les blijft staan: dat is de geschiedenis (wie was er, wat is er gegeven). */}
           {isStaff && !cls.cancelledAt && !started && (
@@ -735,19 +728,7 @@ export function LessenPage({ initialNewAppointment = false, onConsumeInitialNewA
         label={SESSION_KIND_LABELS[k]}
         aria-pressed={kindFilter === k}
         onClick={() => setKindFilter((cur) => (cur === k ? '' : k))}
-        icon={
-          <Box
-            component="span"
-            sx={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              bgcolor: SESSION_KIND_COLORS[k],
-              ml: '10px !important',
-              flexShrink: 0,
-            }}
-          />
-        }
+        icon={<SessionKindIcon kind={k} sx={{ fontSize: 18, ml: '8px !important' }} />}
         sx={filterPillSx(kindFilter === k)}
       />
     ));
