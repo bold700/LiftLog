@@ -327,6 +327,12 @@ export default async function handler(req, res) {
         }
         return await saveAvailability(res, db, actOrg, uid, target, body.days);
       }
+      case 'setAttendance':
+        if (!isStaff) return json(res, 403, { error: 'Alleen een trainer of beheerder meldt aanwezigheid.', build: BUILD });
+        return await setAttendance(res, db, uid, actOrg, body);
+      case 'lessonReport':
+        if (!isStaff) return json(res, 403, { error: 'Alleen trainers en beheerders.', build: BUILD });
+        return await lessonReport(res, db, uid, actOrg, myRole, body);
       case 'listAbsences':
         if (!isStaff) return json(res, 403, { error: 'Alleen trainers en beheerders.', build: BUILD });
         return await listAbsences(res, db, actOrg, String(body.trainerId ?? '').trim() || null);
@@ -1383,6 +1389,104 @@ async function saveAvailability(res, db, orgId, uid, userId, rawDays) {
     updatedAt: new Date().toISOString(),
   });
   return json(res, 200, { userId, days: cleaned.value, build: BUILD });
+}
+
+// --- Aanwezigheid en gegeven lessen ------------------------------------------------------------
+
+const ATTENDANCE = ['present', 'absent'];
+
+/**
+ * De trainer meldt na (of tijdens) de les wie er was en dat de les is gegeven. Wie geboekt was en
+ * niet kwam staat op "niet gekomen"; de credit blijft gewoon weg (zoals bij te laat afmelden).
+ * De eigenaar ziet dit terug in Beheer → Gegeven lessen.
+ */
+async function setAttendance(res, db, uid, orgId, body) {
+  const classId = String(body?.classId ?? '').trim();
+  const classRef = classId ? db.collection('classes').doc(classId) : null;
+  const snap = classRef ? await classRef.get() : null;
+  if (!snap?.exists || orgIdOf(snap.data().orgId) !== orgId) return json(res, 404, { error: 'Deze les bestaat niet (meer).', build: BUILD });
+  const cls = snap.data();
+  if (cls.cancelledAt) return json(res, 409, { error: 'Deze les is afgelast.', build: BUILD });
+  if (String(cls.date) > todayIso()) return json(res, 409, { error: 'Aanwezigheid meld je op de dag van de les of daarna.', build: BUILD });
+
+  const marks = body?.marks && typeof body.marks === 'object' ? body.marks : {};
+  const bookingsSnap = await db.collection('bookings').where('classId', '==', classId).get();
+  const nowIso = new Date().toISOString();
+  let present = 0;
+  let absent = 0;
+  for (const d of bookingsSnap.docs) {
+    const b = d.data();
+    if (!['booked', 'attended'].includes(String(b.status))) continue;
+    const wanted = Object.prototype.hasOwnProperty.call(marks, d.id) ? marks[d.id] : b.attendance ?? null;
+    const value = ATTENDANCE.includes(wanted) ? wanted : null;
+    if (value !== (b.attendance ?? null)) {
+      await db.collection('bookings').doc(d.id).set({ attendance: value, attendanceBy: uid, attendanceAt: nowIso }, { merge: true });
+    }
+    if (value === 'present') present++;
+    if (value === 'absent') absent++;
+  }
+  const given = body?.given !== false;
+  await classRef.set(
+    {
+      givenAt: given ? cls.givenAt || nowIso : null,
+      givenBy: given ? cls.givenBy || uid : null,
+      presentCount: present,
+      absentCount: absent,
+      updatedAt: nowIso,
+    },
+    { merge: true }
+  );
+  return json(res, 200, { given, present, absent, build: BUILD });
+}
+
+/**
+ * Overzicht voor de eigenaar (en een trainer voor zijn eigen lessen): de lessen in een periode tot
+ * en met vandaag, wie ze gaf, of ze als gegeven zijn gemeld en wie er was en wie niet.
+ */
+async function lessonReport(res, db, uid, orgId, myRole, body) {
+  const isDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v ?? ''));
+  const until = isDate(body?.until) && body.until < todayIso() ? String(body.until) : todayIso();
+  const from = isDate(body?.from) ? String(body.from) : amsterdamDate(new Date(), -27);
+  if (from > until) return json(res, 400, { error: 'De begindatum ligt na de einddatum.', build: BUILD });
+  // Een trainer ziet alleen zijn eigen lessen; de beheerder alles (of één trainer).
+  const trainerFilter = myRole === 'admin' ? String(body?.trainerId ?? '').trim() || null : uid;
+
+  const [classSnap, peopleSnap] = await Promise.all([
+    db.collection('classes').where('date', '>=', from).where('date', '<=', until).get(),
+    db.collection('profiles').where('orgIds', 'array-contains', orgId).get(),
+  ]);
+  const names = Object.fromEntries(peopleSnap.docs.map((d) => [d.id, String(d.data().displayName || d.data().email || 'Lid')]));
+  const now = Date.now();
+  const classes = classSnap.docs
+    .map((d) => ({ ...d.data(), id: d.id }))
+    .filter((c) => orgIdOf(c.orgId) === orgId && !c.cancelledAt && (classStartsAt(c)?.getTime() ?? 0) <= now)
+    .filter((c) => !trainerFilter || c.trainerId === trainerFilter)
+    .sort((a, b) => `${b.date}${b.startTime}`.localeCompare(`${a.date}${a.startTime}`));
+
+  // Boekingen per les, in porties (Firestore "in" kan 30 tegelijk).
+  const byClass = {};
+  for (let i = 0; i < classes.length; i += 30) {
+    const ids = classes.slice(i, i + 30).map((c) => c.id);
+    const snap = await db.collection('bookings').where('classId', 'in', ids).get();
+    for (const d of snap.docs) {
+      const b = d.data();
+      if (!['booked', 'attended'].includes(String(b.status))) continue;
+      (byClass[b.classId] ??= []).push({ bookingId: d.id, userId: b.userId, name: names[b.userId] ?? 'Oud account', attendance: b.attendance ?? null });
+    }
+  }
+  const rows = classes.map((c) => ({
+    classId: c.id,
+    date: c.date,
+    startTime: c.startTime,
+    endTime: c.endTime ?? null,
+    title: String(c.title ?? ''),
+    trainerId: c.trainerId ?? null,
+    trainerName: names[c.trainerId] ?? null,
+    given: !!c.givenAt,
+    givenByName: c.givenBy ? names[c.givenBy] ?? null : null,
+    people: (byClass[c.id] ?? []).sort((a, b) => a.name.localeCompare(b.name)),
+  }));
+  return json(res, 200, { from, until, rows, build: BUILD });
 }
 
 // --- Afwezigheid en invallers (api/_lib/absence.mjs) ------------------------------------------

@@ -46,6 +46,7 @@ export const en: Messages = {
       classPlanning: 'Class planning',
       exercises: 'Exercises',
       waitlists: 'Waitlists',
+      givenLessons: 'Lessons given',
       subscriptions: 'Subscriptions',
       branding: 'Branding',
       settings: 'Settings',

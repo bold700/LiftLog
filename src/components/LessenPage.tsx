@@ -19,6 +19,7 @@ import {
   ToggleButtonGroup,
   Alert,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
@@ -59,6 +60,7 @@ import {
   grantCredits,
 } from '../services/classService';
 import { setClassTrainer } from '../services/absenceService';
+import { setAttendance, type Attendance } from '../services/attendanceService';
 import { getOrg } from '../services/orgService';
 import { getColleagues } from '../services/profileService';
 import { designTokens } from '../theme/designTokens';
@@ -1377,6 +1379,30 @@ function ParticipantsDialog({
   const [planWorkouts, setPlanWorkouts] = useState<Schema[] | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
   const [trainerSaving, setTrainerSaving] = useState(false);
+  // Aanwezigheid: per boeking aanwezig / niet gekomen, na afloop opslaan met "Les gegeven".
+  const [marks, setMarks] = useState<Record<string, Attendance | null>>({});
+  const [givenAt, setGivenAt] = useState<string | null>(null);
+  const [attendanceSaving, setAttendanceSaving] = useState(false);
+  useEffect(() => {
+    setMarks(Object.fromEntries(rows.map((b) => [b.id, b.attendance ?? null])));
+  }, [rows]);
+  useEffect(() => {
+    setGivenAt(cls?.givenAt ?? null);
+  }, [cls]);
+  const saveAttendance = async () => {
+    if (!cls) return;
+    setAttendanceSaving(true);
+    try {
+      const r = await setAttendance(cls.id, marks);
+      setGivenAt(new Date().toISOString());
+      notify?.success(`Les gegeven gemeld · ${r.present} aanwezig${r.absent ? `, ${r.absent} niet gekomen` : ''}.`);
+      onChanged();
+    } catch (e) {
+      notify?.error(e instanceof Error ? e.message : 'Opslaan mislukt');
+    } finally {
+      setAttendanceSaving(false);
+    }
+  };
   const [classTrainer, setClassTrainerState] = useState<{ trainerId: string; originalTrainerId: string | null } | null>(null);
   useEffect(() => {
     setClassTrainerState(cls ? { trainerId: cls.trainerId, originalTrainerId: cls.originalTrainerId ?? null } : null);
@@ -1487,6 +1513,8 @@ function ParticipantsDialog({
   const bookedUserIds = new Set(rows.map((b) => b.userId));
   const addableSporters = sporters.filter((s) => !bookedUserIds.has(s.userId));
   const holdUntilMs = activeHoldUntil(cls);
+  // Aanwezigheid melden kan vanaf het begin van de les (en daarna), niet bij een afgelaste les.
+  const attendanceOpen = !cls.cancelledAt && classHasStarted(cls);
 
   /** De trainer beslist: credit geven en inschrijven, of de plek doorgeven aan de volgende. */
   const grantAndBook = async () => {
@@ -1663,18 +1691,76 @@ function ParticipantsDialog({
                 <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>
                   {nameFor(b.userId)}
                 </Typography>
-                <Chip size="small" label={b.status === 'waitlist' ? 'Wachtlijst' : 'Ingeschreven'} />
+                {attendanceOpen && b.status === 'booked' ? (
+                  <ToggleButtonGroup
+                    size="small"
+                    exclusive
+                    value={marks[b.id] ?? null}
+                    onChange={(_, v: Attendance | null) => setMarks((m) => ({ ...m, [b.id]: v }))}
+                    aria-label={`Aanwezigheid ${nameFor(b.userId)}`}
+                  >
+                    <ToggleButton
+                      value="present"
+                      sx={{
+                        textTransform: 'none',
+                        py: 0.25,
+                        '&.Mui-selected, &.Mui-selected:hover': { bgcolor: designTokens.primaryContainer, color: designTokens.onPrimaryContainer },
+                      }}
+                    >
+                      Aanwezig
+                    </ToggleButton>
+                    <ToggleButton
+                      value="absent"
+                      sx={{
+                        textTransform: 'none',
+                        py: 0.25,
+                        '&.Mui-selected, &.Mui-selected:hover': { bgcolor: (t) => alpha(t.palette.error.main, 0.14), color: 'error.main' },
+                      }}
+                    >
+                      Niet gekomen
+                    </ToggleButton>
+                  </ToggleButtonGroup>
+                ) : (
+                  <Chip size="small" label={b.status === 'waitlist' ? 'Wachtlijst' : 'Ingeschreven'} />
+                )}
                 {/* PT-moment: deze afspraak naar een ander moment (credit terug, nieuw moment meteen vast). */}
-                {cls?.privateFor && b.status === 'booked' && onMove && (
+                {!attendanceOpen && cls?.privateFor && b.status === 'booked' && onMove && (
                   <Button size="small" disabled={busyId === b.id} onClick={() => onMove(cls.id, b.id, nameFor(b.userId))}>
                     Verzetten
                   </Button>
                 )}
-                <Button size="small" color="error" disabled={busyId === b.id} onClick={() => void remove(b)}>
-                  Verwijderen
-                </Button>
+                {!attendanceOpen && (
+                  <Button size="small" color="error" disabled={busyId === b.id} onClick={() => void remove(b)}>
+                    Verwijderen
+                  </Button>
+                )}
               </Box>
             ))}
+          </Box>
+        )}
+
+        {/* Na de les: wie was er, en de les als gegeven melden (de eigenaar ziet dit in Beheer → Gegeven lessen). */}
+        {attendanceOpen && (
+          <Box sx={{ mt: 2, p: 1.5, borderRadius: 2, border: `1px solid ${designTokens.cardBorder}`, display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {givenAt ? 'Les gegeven ✓' : 'Les afronden'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Vink aan wie er was. Wie niet kwam en niet op tijd afmeldde, is de credit kwijt.
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {rows.some((b) => b.status === 'booked') && (
+                <Button
+                  size="small"
+                  onClick={() => setMarks(Object.fromEntries(rows.filter((b) => b.status === 'booked').map((b) => [b.id, 'present' as Attendance])))}
+                >
+                  Iedereen aanwezig
+                </Button>
+              )}
+              <Button size="small" variant="contained" disableElevation disabled={attendanceSaving} onClick={() => void saveAttendance()} sx={{ ml: 'auto' }}>
+                {attendanceSaving ? 'Bezig…' : givenAt ? 'Bijwerken' : 'Les gegeven'}
+              </Button>
+            </Box>
           </Box>
         )}
       </DialogContent>
