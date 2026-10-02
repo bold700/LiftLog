@@ -133,6 +133,13 @@ Abonnement voor de sporter, Beheer → lid voor staf). Het werkt zoals een afspr
 abonnement, dan staat het standaard op "Niet herhaald"; past er nog maar een halve keer in, dan op
 "Om de week".
 
+**Geen credits of geen abonnement (staf).** In Moment inplannen staat dan meteen de keuze
+**Gratis credits** (vanuit de studio, zonder factuur; regel in het creditoverzicht met "Gratis
+toegekend bij inplannen") of **Abonnement koppelen** (gaat vandaag in, zoals in Beheer: credits
+meteen, factuur zoals gewoonlijk). Daarna gaat het inplannen gewoon verder; de gekozen dag en tijd
+blijven staan. Code: `src/components/StaffTopUp.tsx` (gebruikt de bestaande acties `grant` en
+`assign`).
+
 **Om de week** (`everyWeeks: 2`): het moment valt in de even of de oneven weken (`weekParity`),
 geteld vanaf maandag 5 januari 1970; welke van de twee volgt uit de gekozen datum (de eerste keer).
 De app toont "Op do 1 okt, do 15 okt, do 29 okt enzovoort". Rekenkant:

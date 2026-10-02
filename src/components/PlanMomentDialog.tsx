@@ -30,6 +30,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useNotify } from '../context/NotifyContext';
+import { StaffTopUp } from './StaffTopUp';
 import { addPersonalSlot, addStandingBooking, bookClass, moveStandingPt, type StudioClass } from '../services/classService';
 import {
   bookSinglePt,
@@ -186,6 +187,12 @@ export function PlanMomentDialog({
       alive = false;
     };
   }, [open, userId, asStaff, defaultTrainerId, trainers, moveSeries, initialDate, initialTime]);
+
+  // Staf heeft credits toegekend of een abonnement gekoppeld: alleen saldo en abonnement opnieuw, de keuzes blijven staan.
+  const reloadStatus = () => {
+    if (!userId) return;
+    getPlanStatus(asStaff ? userId : undefined).then(setStatus, (e) => setStatusError(e instanceof Error ? e.message : 'Abonnement laden mislukt.'));
+  };
 
   // PT: vrije tijden bij de trainer; per weekdag (elke week of om de week) of per datum (één keer).
   // Om de week hangt af van de week van de gekozen datum (even of oneven): dan opnieuw ophalen.
@@ -393,6 +400,18 @@ export function PlanMomentDialog({
   const otherDates = freeDates.filter((d) => d !== date).slice(0, 5);
   const nothingThisDay = !loading && (kind === 'pt' ? needsTrainer && ptTimes.length === 0 : groupOnDate.length === 0);
 
+  // Staf: geen credits of geen abonnement? Meteen hier regelen in plaats van via Beheer.
+  const topUp = status && userId && (
+    <StaffTopUp
+      userId={userId}
+      name={picked?.name || 'Dit lid'}
+      credits={status.credits ?? null}
+      hasPlan={!!status.plan}
+      suggested={recurring ? 4 : 1}
+      onChanged={reloadStatus}
+    />
+  );
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{moveSeries ? 'Reeks wijzigen' : members ? 'Nieuwe afspraak' : 'Moment inplannen'}</DialogTitle>
@@ -456,12 +475,10 @@ export function PlanMomentDialog({
                   </Typography>
                 )}
               </Alert>
+            ) : asStaff ? (
+              topUp
             ) : (
-              <Alert severity={recurring ? 'warning' : 'info'}>
-                {asStaff
-                  ? 'Dit lid heeft geen abonnement. Een losse afspraak kost een credit; elke week kan ook, kies anders eerst een abonnement.'
-                  : 'Je hebt nog geen abonnement. Een losse afspraak kost een credit; voor elke week kies je eerst een abonnement.'}
-              </Alert>
+              <Alert severity={recurring ? 'warning' : 'info'}>Je hebt nog geen abonnement. Een losse afspraak kost een credit; voor elke week kies je eerst een abonnement.</Alert>
             )}
 
             {!moveSeries && (
@@ -471,13 +488,7 @@ export function PlanMomentDialog({
               </ToggleButtonGroup>
             )}
             {/* Zonder credits wordt er niets geboekt: de reeks staat wel, maar die weken blijven leeg. */}
-            {!moveSeries && status.credits === 0 && (
-              <Alert severity="warning">
-                {asStaff
-                  ? `${picked?.name || 'Dit lid'} heeft 0 credits. Afspraken worden pas geboekt als er credits zijn: ken ze eerst toe bij Abonnement en credits.`
-                  : 'Je hebt 0 credits. Koop eerst credits, anders wordt de afspraak niet geboekt.'}
-              </Alert>
-            )}
+            {!moveSeries && status.credits != null && status.credits <= 0 && (asStaff ? plan && topUp : <Alert severity="warning">Je hebt 0 credits. Koop eerst credits, anders wordt de afspraak niet geboekt.</Alert>)}
             {!moveSeries && asStaff && plan && recurring && !allowed(kind) && (
               <Alert severity="warning">Dit valt niet onder het abonnement ({COVERS_LABEL[plan.covers].toLowerCase()}). Je kunt het toch inplannen.</Alert>
             )}
