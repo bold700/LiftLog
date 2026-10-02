@@ -62,6 +62,9 @@ const seed = {
   'workouts/wA': { id: 'wA', orgId: 'vanas', trainerId: 'adminA', clientId: 'sporterA', name: 'Schema A', days: [] },
   'workouts/wOpenA': { id: 'wOpenA', orgId: 'vanas', trainerId: 'adminA', audience: 'open', name: 'Open A', days: [] },
   'workouts/wB': { id: 'wB', orgId: 'studiob', trainerId: 'adminB', clientId: 'sporterB', name: 'Schema B', days: [] },
+  'classes/clsA': { orgId: 'vanas', date: '2026-10-07', startTime: '19:00', endTime: '20:00', title: 'Bootcamp' },
+  'classes/clsB': { orgId: 'studiob', date: '2026-10-07', startTime: '19:00', endTime: '20:00', title: 'Bootcamp B' },
+  'classPlans/clsB': { classId: 'clsB', orgId: 'studiob', exercises: [], note: 'geheim' },
 };
 
 describe('studio-isolatie in de AI-gegevenslaag', () => {
@@ -167,5 +170,14 @@ describe('studio-isolatie in de AI-gegevenslaag', () => {
     expect(orgIdOf(undefined)).toBe(DEFAULT_ORG_ID);
     expect(orgIdOf('  ')).toBe(DEFAULT_ORG_ID);
     expect(orgIdOf('studiob')).toBe('studiob');
+  });
+
+  it('lessen en lesvoorbereidingen van een andere studio zijn onzichtbaar; opslaan stempelt de eigen studio', async () => {
+    const db = fakeDb(seed);
+    const a = createStore(db, null, 'vanas');
+    expect((await a.getClassesOn('2026-10-07')).map((c) => c.id)).toEqual(['clsA']);
+    expect(await a.getClassPlan('clsB')).toBeNull();
+    await a.saveClassPlan({ classId: 'clsA', orgId: 'studiob', exercises: [], note: 'x' });
+    expect(db._data.get('classPlans/clsA').orgId).toBe('vanas');
   });
 });
