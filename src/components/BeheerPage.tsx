@@ -37,6 +37,7 @@ import { useProfile } from '../context/ProfileContext';
 import { getOrg } from '../services/orgService';
 import { RescheduleRequestsCard } from './beheer/RescheduleRequestsCard';
 import { SubstitutesCard } from './beheer/SubstitutesCard';
+import { MergeMembersDialog } from './beheer/MergeMembersDialog';
 import { useI18n } from '../context/I18nContext';
 import { useAuth } from '../context/AuthContext';
 import { assignTrainerToSporter, getAllProfiles, getProfileByEmail, updateProfile } from '../services/profileService';
@@ -246,6 +247,8 @@ export function BeheerPage() {
   const [creditError, setCreditError] = useState<string | null>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
+  /** Twee accounts van dezelfde persoon samenvoegen (alleen beheerder). */
+  const [mergeTarget, setMergeTarget] = useState<Profile | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -899,6 +902,9 @@ export function BeheerPage() {
                   >
                     {target.inactive ? 'Activeren' : 'Deactiveren'}
                   </Button>
+                  <Button variant="outlined" onClick={() => setMergeTarget(target)} disabled={saving}>
+                    Samenvoegen
+                  </Button>
                   <Button color="error" startIcon={<DeleteOutlineRoundedIcon />} onClick={openDelete} disabled={saving}>
                     Verwijderen
                   </Button>
@@ -1097,6 +1103,19 @@ export function BeheerPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {mergeTarget && (
+        <MergeMembersDialog
+          target={mergeTarget}
+          members={profiles}
+          onClose={() => setMergeTarget(null)}
+          onMerged={() => {
+            setMergeTarget(null);
+            closeEditor();
+            void load();
+          }}
+        />
+      )}
 
       <Dialog open={!!deleteTarget} onClose={closeDelete} maxWidth="xs" fullWidth>
         <DialogTitle>Account verwijderen</DialogTitle>

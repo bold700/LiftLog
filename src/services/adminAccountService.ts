@@ -205,3 +205,44 @@ export async function importMembers(caller: User, members: ImportMemberInput[]):
   if (!res.ok) throw new Error((data as { error?: string })?.error || 'Importeren mislukt.');
   return (data as { results: ImportMemberResult[] }).results;
 }
+
+export interface MergeAccount {
+  uid: string;
+  name: string;
+  email: string;
+  /** Laatst ingelogd (datum-tekst van Firebase), of null als dit account nooit inlogde. */
+  lastSignIn: string | null;
+}
+
+export interface MergeResult {
+  counts: Record<string, number>;
+  warnings: string[];
+  profileFill: string[];
+  keep?: MergeAccount;
+  from?: MergeAccount;
+}
+
+async function mergeCall(caller: User, action: 'mergePreview' | 'mergeMembers', keepUid: string, fromUid: string): Promise<MergeResult> {
+  const token = await caller.getIdToken();
+  const res = await fetch(apiUrl('/api/admin-account'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ actingOrgId: getCurrentOrgId(), action, keepUid, fromUid }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string })?.error || 'Samenvoegen mislukt.');
+  return data as MergeResult;
+}
+
+/** Wat er bij samenvoegen zou overgaan (er verandert niets). */
+export function previewMerge(caller: User, keepUid: string, fromUid: string): Promise<MergeResult> {
+  return mergeCall(caller, 'mergePreview', keepUid, fromUid);
+}
+
+/**
+ * Twee accounts van dezelfde persoon samenvoegen: alles van `fromUid` gaat naar `keepUid`, daarna
+ * verdwijnen het profiel en het login-account van `fromUid`. Niet terug te draaien.
+ */
+export function mergeAccounts(caller: User, keepUid: string, fromUid: string): Promise<MergeResult> {
+  return mergeCall(caller, 'mergeMembers', keepUid, fromUid);
+}

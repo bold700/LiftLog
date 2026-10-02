@@ -287,6 +287,26 @@ Lessen → les → Voorbereiding).
   kiezen in plaats daarvan, of meteen Start les doen.
 - Rekenregels (welke les, oefeningen opschonen): `api/_lib/classPlanInput.mjs`.
 
+### Twee accounts van dezelfde persoon samenvoegen
+
+Beheer → lid → Account → **Samenvoegen** (alleen beheerder). Bijvoorbeeld een account dat de studio
+aanmaakte (richard@studio.nl) en een account waarmee de persoon zelf inlogt.
+
+- Kies het andere account en welk account blijft. Bij elk account staat wanneer het voor het laatst
+  inlogde; het account dat blijft is het account waarmee de persoon inlogt.
+- Eerst een overzicht van wat overgaat, met waarschuwingen (bijv. twee lopende abonnementen). Pas na
+  het vinkje "Dit kan niet terug" wordt er samengevoegd.
+- Alles gaat mee: trainingen, metingen, voeding, check-ins, boekingen, vaste afspraken en
+  PT-momenten, abonnementen, facturen, credits (opgeteld, met een regel in het grootboek),
+  berichten, groepen en workouts. Lege profielvelden worden aangevuld; naam, e-mail, rol en
+  toestemmingen niet. Staan beide accounts in dezelfde les, dan vervalt de dubbele boeking.
+- Daarna verdwijnen het profiel en het login-account dat wegging (en zijn pushtokens en
+  koppelsleutels).
+- Niet mogelijk voor de eigenaar, voor een trainer of beheerder (eerst sporter maken) of als het
+  account dat weggaat ook bij een andere studio hoort.
+- Code: `api/_lib/mergeMembers.mjs` (acties `mergePreview` en `mergeMembers` in
+  `api/admin-account.mjs`).
+
 ## 3b. Veilig uitproberen: de Testruimte
 
 Er is één Firebase-project. De previewomgeving van Vercel schrijft dus in dezelfde database als
