@@ -73,6 +73,7 @@ import { buildProcessorAgreementPdf, formatSignedAt } from './_lib/processorAgre
 import { driveFolderId, uploadPdfToDrive } from './_lib/googleDrive.mjs';
 import { mailConfigured, sendViaResend } from './_lib/invoiceEmail.mjs';
 import { deleteQueryInBatches, deleteUserData, exportUserData } from './_lib/accountData.mjs';
+import { mergeMembers } from './_lib/mergeMembers.mjs';
 import { enforceRateLimit } from './_lib/requireUser.mjs';
 import { actingOrg, isAdminIn, isStaffIn, orgsOf, roleIn } from './_lib/orgRoles.mjs';
 import { canSetOwner, canSignForStudio, isSupportEmail } from './_lib/studioOwner.mjs';
@@ -567,6 +568,43 @@ export default async function handler(req, res) {
   const org = callerData ? actingOrg(callerData, body?.actingOrgId) : null;
   if (!callerData || !isAdminIn(callerData, org)) {
     return json(res, 403, { error: 'Alleen beheerders mogen dit.' });
+  }
+
+  // Twee accounts van dezelfde persoon samenvoegen: eerst een voorbeeld, dan pas echt.
+  if (action === 'mergePreview' || action === 'mergeMembers') {
+    const keepId = String(body?.keepUid || '').trim();
+    const fromId = String(body?.fromUid || '').trim();
+    if (!keepId || !fromId || keepId === fromId) return json(res, 400, { error: 'Kies twee verschillende accounts.' });
+    if (fromId === callerUid) return json(res, 400, { error: 'Je eigen account kan niet opgaan in een ander account.' });
+    const [keepSnap, fromSnap, ownerSnap] = await Promise.all([
+      db.collection('profiles').doc(keepId).get(),
+      db.collection('profiles').doc(fromId).get(),
+      db.collection('orgs').doc(org).get(),
+    ]);
+    const keep = keepSnap.exists ? keepSnap.data() : null;
+    const from = fromSnap.exists ? fromSnap.data() : null;
+    if (!keep || !from || !orgsOf(keep).includes(org) || !orgsOf(from).includes(org)) return json(res, 404, { error: 'Beide accounts moeten bij jouw studio horen.' });
+    if (ownerSnap.exists && ownerSnap.data()?.ownerId === fromId) return json(res, 409, { error: 'Het account van de eigenaar kan niet opgaan in een ander account.' });
+    if (orgsOf(from).length > 1) return json(res, 409, { error: 'Het account dat weggaat hoort ook bij een andere studio. Haal het daar eerst weg.' });
+    if (roleIn(from, org) !== 'sporter') return json(res, 409, { error: 'Het account dat weggaat is een trainer of beheerder. Maak het eerst sporter.' });
+
+    const dryRun = action === 'mergePreview';
+    const result = await mergeMembers(db, { orgId: org, keepId, fromId, keepProfile: keep, fromProfile: from, byUserId: callerUid, dryRun });
+    if (dryRun) {
+      const lastSignIn = async (uid) => (await auth.getUser(uid).catch(() => null))?.metadata?.lastSignInTime ?? null;
+      const who = async (uid, p) => ({ uid, name: String(p.displayName ?? ''), email: String(p.email ?? ''), lastSignIn: await lastSignIn(uid) });
+      return json(res, 200, { ...result, keep: await who(keepId, keep), from: await who(fromId, from) });
+    }
+    // Daarna het profiel en het login-account dat weggaat.
+    await db.collection('profiles').doc(fromId).delete();
+    try {
+      await auth.deleteUser(fromId);
+    } catch (e) {
+      if (e?.code !== 'auth/user-not-found') {
+        return json(res, 500, { error: 'Gegevens zijn samengevoegd, maar het oude login-account verwijderen mislukte. Verwijder het via Firebase.' });
+      }
+    }
+    return json(res, 200, { ok: true, ...result });
   }
 
   const targetUid = String(body?.targetUid || '').trim();
