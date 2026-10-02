@@ -26,6 +26,7 @@ import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import { PageLayout, ContentCard, EmptyState } from './layout';
 import { useProfile } from '../context/ProfileContext';
+import { useViewAs } from '../context/ViewAsContext';
 import { useNotify } from '../context/NotifyContext';
 import { RescheduleDialog } from './RescheduleDialog';
 import { classLabel } from '../utils/classLabel';
@@ -159,7 +160,14 @@ export function LessenPage({ initialNewAppointment = false, onConsumeInitialNewA
   const profileCtx = useProfile();
   const notify = useNotify();
   const me = profileCtx?.profile ?? null;
-  const isStaff = me?.role === 'trainer' || me?.role === 'admin';
+  const staffRole = me?.role === 'trainer' || me?.role === 'admin';
+  // "Bekijk als" een lid: het rooster zoals dat lid het ziet (eigen PT-momenten, open groepslessen),
+  // alleen om te bekijken. Inschrijven of afmelden doe je dan niet hier (dat zou voor jezelf gebeuren).
+  const { viewed } = useViewAs();
+  const readOnly = staffRole && viewed.isOther;
+  const isStaff = staffRole && !readOnly;
+  /** Van wie het rooster is: jezelf, of het lid dat je bekijkt. */
+  const subjectId = readOnly ? viewed.userId : (me?.userId ?? '');
 
   const [classes, setClasses] = useState<StudioClass[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -238,14 +246,15 @@ export function LessenPage({ initialNewAppointment = false, onConsumeInitialNewA
     let alive = true;
     getRescheduleRequests().then(
       (list) => {
-        if (alive) setMyRequests(list.filter((r) => r.status !== 'approved'));
+        // "Bekijk als": staf krijgt alle verzoeken terug; toon alleen die van het bekeken lid.
+        if (alive) setMyRequests(list.filter((r) => r.status !== 'approved' && (!readOnly || r.userId === subjectId)));
       },
       () => undefined
     );
     return () => {
       alive = false;
     };
-  }, [me, isStaff, requestsVersion]);
+  }, [me, isStaff, requestsVersion, readOnly, subjectId]);
   /**
    * Naam per trainerId, voor de trainernaam op de rij en in de reserveer-dialoog (Figma toont
    * "Kenny" onder de lestitel). Een sporter mag geen trainerprofielen lezen (firestore.rules); die
@@ -302,16 +311,16 @@ export function LessenPage({ initialNewAppointment = false, onConsumeInitialNewA
     try {
       const [cls, mine, balance, standing] = await Promise.all([
         getUpcomingClasses(loadFrom),
-        getMyBookings(me.userId),
-        getCreditBalance(me.userId),
-        getMyStandingBookings(me.userId),
+        getMyBookings(subjectId),
+        getCreditBalance(subjectId),
+        getMyStandingBookings(subjectId),
       ]);
       setClasses(cls);
       setBookings(mine);
       setCredits(balance);
       setStandingBookings(standing);
-      setWaitlistPositions(mine.some((b) => b.status === 'waitlist') ? await getWaitlistPositions().catch(() => ({})) : {});
-      if (me.role === 'trainer' || me.role === 'admin') {
+      setWaitlistPositions(!readOnly && mine.some((b) => b.status === 'waitlist') ? await getWaitlistPositions().catch(() => ({})) : {});
+      if (staffRole) {
         const colleagues = await getColleagues(me.userId).catch(() => []);
         const names: Record<string, string> = { [me.userId]: me.displayName?.trim() || me.email || me.userId };
         for (const c of colleagues) names[c.userId] = c.displayName?.trim() || c.email || c.userId;
@@ -326,7 +335,7 @@ export function LessenPage({ initialNewAppointment = false, onConsumeInitialNewA
       loadedOnce.current = true;
       setLoading(false);
     }
-  }, [me, notify, loadFrom]);
+  }, [me, notify, loadFrom, subjectId, readOnly, staffRole]);
 
   useEffect(() => {
     void load();
@@ -366,11 +375,11 @@ export function LessenPage({ initialNewAppointment = false, onConsumeInitialNewA
    */
   const scopedClasses = useMemo(() => {
     // Privé-les (PT van één lid) of groepsles: alleen voor dat lid of de leden van de groep, en staf.
-    const mayBook = (c: StudioClass) => (c.privateFor ? c.privateFor === me?.userId : !!me && (c.groupMemberIds ?? []).includes(me.userId));
+    const mayBook = (c: StudioClass) => (c.privateFor ? c.privateFor === subjectId : !!subjectId && (c.groupMemberIds ?? []).includes(subjectId));
     const visible = classes.filter((c) => !(c.privateFor || c.privateForGroup) || (!c.autoCancelled && (isStaff || mayBook(c))));
     if (!myDayOnly || !me) return visible;
     return isStaff ? visible.filter((c) => c.trainerId === me.userId) : visible.filter((c) => myBookingByClass.has(c.id));
-  }, [classes, myDayOnly, me, isStaff, myBookingByClass]);
+  }, [classes, myDayOnly, me, isStaff, myBookingByClass, subjectId]);
   /**
    * Ruimtes die daadwerkelijk in gebruik zijn, voor het filter. `room` is vrije tekst (geen
    * vaste lijst), dus genormaliseerd op hoofdletters/spaties: anders levert "Boven" naast "boven"
@@ -534,12 +543,12 @@ export function LessenPage({ initialNewAppointment = false, onConsumeInitialNewA
   /** Op de rij zelf klikken doet het voor de hand liggende: sporter gaat inschrijven, staf ziet wie er is ingeschreven. */
   const handleRowClick = useCallback(
     (cls: StudioClass, mine: Booking | undefined) => {
-      if (cls.cancelledAt) return;
+      if (cls.cancelledAt || readOnly) return;
       if (isStaff) setParticipantsClass(cls);
       // Een begonnen of voorbije les opent alleen de lesinformatie (zonder reserveren).
       else if (!mine || classHasStarted(cls) || (mine.status === 'waitlist' && spotOpenFor(cls, mine))) setConfirmClass(cls);
     },
-    [isStaff]
+    [isStaff, readOnly]
   );
 
   /**
@@ -681,6 +690,7 @@ export function LessenPage({ initialNewAppointment = false, onConsumeInitialNewA
           {/* Een PT-moment van één lid: daar schrijft de trainer zich niet zelf voor in. */}
           {!cls.cancelledAt &&
             !started &&
+            !readOnly &&
             !(isStaff && cls.privateFor && !mine) &&
             (mine ? (
               <>
@@ -751,7 +761,13 @@ export function LessenPage({ initialNewAppointment = false, onConsumeInitialNewA
 
   return (
     <PageLayout maxWidth="none">
-      {me?.inactive && (
+      {readOnly && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Je ziet het rooster zoals {viewed.name} het ziet: de groepslessen en de eigen afspraken. Alleen bekijken; inschrijven of afmelden
+          voor {viewed.name} doe je via Deelnemers in je eigen rooster.
+        </Alert>
+      )}
+      {me?.inactive && !readOnly && (
         <Alert severity="info" sx={{ mb: 2 }}>
           Je lidmaatschap bij deze studio staat op inactief. Je kunt het rooster bekijken, maar niet boeken. Neem contact op met de studio
           om weer mee te doen.
