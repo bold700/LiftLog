@@ -625,7 +625,7 @@ export function BeheerPage() {
         {/* Kop en opslaan op één regel; terug naar de ledenlijst met de pijl in de bovenbalk. */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
           <UserAvatar name={edit.displayName || target.displayName} photoURL={target.photoURL} size={72} />
-          <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Box sx={{ minWidth: 160, flex: 1 }}>
             <Typography variant="h5" sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>
               {target.displayName?.trim() || target.email || target.userId}
             </Typography>
@@ -662,7 +662,17 @@ export function BeheerPage() {
               )}
             </Box>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1, ml: 'auto', alignSelf: { xs: 'stretch', sm: 'center' }, justifyContent: 'flex-end' }}>
+          {/* Telefoon: knoppen op een eigen regel, anders wordt de naam letter voor letter afgebroken. */}
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 1,
+              ml: 'auto',
+              alignSelf: { xs: 'stretch', sm: 'center' },
+              justifyContent: 'flex-end',
+              flexBasis: { xs: '100%', sm: 'auto' },
+            }}
+          >
             <Button onClick={() => setEdit(toEditState(target, memberships[target.userId]?.planId ?? ''))} disabled={!editDirty || saving}>
               Wijzigingen ongedaan
             </Button>
