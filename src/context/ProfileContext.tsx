@@ -10,11 +10,12 @@ import { isInactiveInOrg, roleInOrg, trainsAsMemberInOrg } from '../utils/orgRol
 import { useAuth } from './AuthContext';
 import {
   getProfile,
-  getSportersByTrainerId,
+  subscribeAllProfiles,
   getAllProfiles,
   createProfile,
 } from '../services/profileService';
 import type { Profile, ProfileRole } from '../types';
+import { rosterFromProfiles } from '../utils/roster';
 import {
   setCurrentOrgId,
   setMemberOrgIds,
@@ -50,12 +51,6 @@ type ProfileState = {
 };
 
 const ProfileContext = createContext<ProfileState | null>(null);
-
-/** Op naam (of e-mail), hoofdletterongevoelig: dezelfde volgorde als de ledenlijst. */
-function sortByName(list: Profile[]): Profile[] {
-  const label = (p: Profile) => p.displayName || p.email || p.userId;
-  return [...list].sort((a, b) => label(a).localeCompare(label(b), undefined, { sensitivity: 'base' }));
-}
 
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
@@ -106,16 +101,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         // De ledenlijst apart afvangen: mislukt die, dan blijft het profiel (en dus de rol) staan.
         // Anders zag een beheerder de app als sporter zodra alleen de lijst werd geweigerd.
         try {
-          // Eén keer de hele studio ophalen: daaruit komen zowel de sporters als "Bekijk als".
-          const [mySporters, everyone] = await Promise.all([
-            getSportersByTrainerId(auth.user.uid),
-            getAllProfiles(),
-          ]);
-          const others = sortByName(everyone.filter((m) => m.userId !== auth.user?.uid));
-          setSporters(mySporters);
-          // Sporters, plus staf die ook als lid meetraint (die kun je inschrijven en een schema geven).
-          setAllSporters(sortByName(everyone.filter((m) => m.role === 'sporter' || (m.trainsAsMember && m.userId !== auth.user?.uid))));
-          setMembers(others);
+          // Eén keer de hele studio ophalen: daaruit komen zowel de sporters als "Bekijk als". Daarna
+          // houdt de live koppeling hieronder de lijsten bij.
+          const roster = rosterFromProfiles(await getAllProfiles(), auth.user.uid);
+          setSporters(roster.sporters);
+          setAllSporters(roster.allSporters);
+          setMembers(roster.members);
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           setError('Ledenlijst niet kunnen laden. ' + msg);
@@ -146,6 +137,23 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refreshProfile();
   }, [refreshProfile]);
+
+  // Staf: de ledenlijsten live houden. Een lid dat in Beheer wordt toegevoegd of gewijzigd staat dan
+  // meteen in "Bekijk als", bij inplannen en bij workouts toewijzen, zonder opnieuw in te loggen.
+  const isStaffProfile = profile?.role === 'trainer' || profile?.role === 'admin';
+  const myUid = auth?.user?.uid ?? null;
+  useEffect(() => {
+    if (!isStaffProfile || !myUid || !activeOrgId) return;
+    return subscribeAllProfiles(
+      (everyone) => {
+        const roster = rosterFromProfiles(everyone, myUid);
+        setSporters(roster.sporters);
+        setAllSporters(roster.allSporters);
+        setMembers(roster.members);
+      },
+      (e) => console.warn('[profile] ledenlijst live bijhouden mislukt:', e.message)
+    );
+  }, [isStaffProfile, myUid, activeOrgId]);
 
   // Cloud-sync voor logs: zodra het profiel bekend is, spiegelen we schrijven naar de
   // cloud en halen we bestaande cloud-logs (incl. wat de trainer voor je logde) op.

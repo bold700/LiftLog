@@ -13,6 +13,7 @@ import {
   query,
   where,
   getDocs,
+  onSnapshot,
   serverTimestamp,
   type Timestamp,
 } from 'firebase/firestore';
@@ -268,6 +269,21 @@ export async function getAllProfiles(): Promise<Profile[]> {
   const q = query(collection(db, COLLECTION), where('orgIds', 'array-contains', requireOrgId()));
   const snap = await getDocs(q);
   return snap.docs.map((d) => toProfile(d.data(), d.id));
+}
+
+/**
+ * Alle profielen van de actieve studio, live: bij elk nieuw, gewijzigd of verwijderd profiel komt
+ * de hele lijst opnieuw binnen. Zo kennen "Bekijk als" en de ledenlijsten een lid dat net in Beheer
+ * is toegevoegd meteen, zonder opnieuw in te loggen. Geeft de functie terug om te stoppen.
+ */
+export function subscribeAllProfiles(onChange: (profiles: Profile[]) => void, onError?: (e: Error) => void): () => void {
+  if (!isFirebaseConfigured() || !db) return () => undefined;
+  const q = query(collection(db, COLLECTION), where('orgIds', 'array-contains', requireOrgId()));
+  return onSnapshot(
+    q,
+    (snap) => onChange(snap.docs.map((d) => toProfile(d.data(), d.id))),
+    (e) => onError?.(e)
+  );
 }
 
 /** Profielen met openstaande trainer-aanvraag binnen de actieve studio (voor beheerders). */
