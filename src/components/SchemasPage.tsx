@@ -256,6 +256,20 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
     [createEmptySchema]
   );
 
+  /** Van een foto: de uitgelezen workout als nieuwe workout in de editor (opslaan doet de trainer). */
+  const handleNewSchemaFromPhoto = useCallback(
+    (workout: { name: string; days: Schema['days'] }) => {
+      const schema: Schema = { ...createEmptySchema(workout.name), days: workout.days };
+      draftIdRef.current = schema.id;
+      setDraft({ schema, mode: 'free' });
+      setOpenNewSchemaDialog(false);
+      setSelectedSchemaId(schema.id);
+      setView('edit');
+      notify.success('Overgenomen van de foto. Controleer de oefeningen; sets en herhalingen die er niet op stonden, staan op 3 × 10.');
+    },
+    [createEmptySchema, notify]
+  );
+
   // Aanmaken gebeurt via het +-menu (FAB, of "+ Log" op desktop): dat zet deze vlag.
   useEffect(() => {
     if (!initialCreateSchema) return;
@@ -518,7 +532,7 @@ export const SchemasPage = ({ initialCreateSchema = false, onConsumeInitialCreat
   // Staat in elk scherm klaar: het +-menu kan hem ook openen tijdens een workout of het bewerken
   // (dan blijft dat scherm eronder gewoon staan tot je een keuze maakt).
   const newSchemaDialog = (
-    <NewSchemaDialog open={openNewSchemaDialog} onClose={() => setOpenNewSchemaDialog(false)} onChoose={handleChooseNewSchema} />
+    <NewSchemaDialog open={openNewSchemaDialog} onClose={() => setOpenNewSchemaDialog(false)} onChoose={handleChooseNewSchema} onFromPhoto={handleNewSchemaFromPhoto} />
   );
 
   if (view === 'edit' && selectedSchema) {
