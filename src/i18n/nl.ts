@@ -48,6 +48,7 @@ export const nl = {
       classPlanning: 'Lesplanning',
       exercises: 'Oefeningen',
       waitlists: 'Wachtlijsten',
+      givenLessons: 'Gegeven lessen',
       subscriptions: 'Abonnementen',
       branding: 'Huisstijl',
       settings: 'Instellingen',

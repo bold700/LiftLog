@@ -2925,3 +2925,54 @@ describe('vast PT-moment zonder credits', () => {
     expect(activeBookings()).toHaveLength(again.body.booked);
   });
 });
+
+describe('aanwezigheid en gegeven lessen', () => {
+  const yesterday = amsterdamDate(new Date(), -1);
+  const tomorrow = amsterdamDate(new Date(), 1);
+  beforeEach(() => {
+    store['profiles/trainer1'] = { ...store['profiles/trainer1'], displayName: 'Kenny' };
+    store['profiles/trainer2'] = { userId: 'trainer2', orgId: 'vanas', orgIds: ['vanas'], role: 'trainer', displayName: 'Simone' };
+    store['profiles/admin1'] = { userId: 'admin1', orgId: 'vanas', orgIds: ['vanas'], role: 'admin', displayName: 'Eigenaar' };
+    store['profiles/sporter1'] = { ...store['profiles/sporter1'], displayName: 'Bas' };
+    store['profiles/sporter2'] = { ...store['profiles/sporter2'], displayName: 'Elske' };
+    store['classes/g1'] = { orgId: 'vanas', title: 'Bootcamp', date: yesterday, startTime: '18:00', endTime: '19:00', trainerId: 'trainer1', capacity: 8, bookedCount: 2 };
+    store['classes/g2'] = { orgId: 'vanas', title: 'Yoga', date: yesterday, startTime: '09:00', endTime: '10:00', trainerId: 'trainer2', capacity: 8, bookedCount: 1 };
+    store['classes/g3'] = { orgId: 'vanas', title: 'Morgen', date: tomorrow, startTime: '09:00', endTime: '10:00', trainerId: 'trainer1', capacity: 8, bookedCount: 0 };
+    store['bookings/a1'] = { orgId: 'vanas', classId: 'g1', userId: 'sporter1', status: 'booked' };
+    store['bookings/a2'] = { orgId: 'vanas', classId: 'g1', userId: 'sporter2', status: 'booked' };
+    store['bookings/a3'] = { orgId: 'vanas', classId: 'g1', userId: 'sporter3', status: 'cancelled' };
+    store['bookings/a4'] = { orgId: 'vanas', classId: 'g2', userId: 'sporter1', status: 'booked' };
+  });
+
+  it('de trainer meldt wie er was en dat de les gegeven is; niet gekomen houdt de credit kwijt', async () => {
+    const balance = store['creditAccounts/vanas__sporter2'].balance;
+    expect((await post({ action: 'setAttendance', classId: 'g1', marks: { a1: 'present' } })).statusCode).toBe(403);
+    const r = await post({ action: 'setAttendance', classId: 'g1', marks: { a1: 'present', a2: 'absent', a3: 'present' } }, 'trainer1');
+    expect(r.statusCode).toBe(200);
+    expect(r.body).toMatchObject({ given: true, present: 1, absent: 1 });
+    expect(store['bookings/a1']).toMatchObject({ attendance: 'present', attendanceBy: 'trainer1', status: 'booked' });
+    expect(store['bookings/a2']).toMatchObject({ attendance: 'absent', status: 'booked' });
+    expect(store['bookings/a3'].attendance).toBeUndefined();
+    expect(store['classes/g1']).toMatchObject({ givenBy: 'trainer1', presentCount: 1, absentCount: 1 });
+    expect(store['creditAccounts/vanas__sporter2'].balance).toBe(balance);
+    // Een les van morgen kan nog niet.
+    expect((await post({ action: 'setAttendance', classId: 'g3', marks: {} }, 'trainer1')).statusCode).toBe(409);
+  });
+
+  it('overzicht: de eigenaar ziet alle lessen, een trainer alleen de zijne', async () => {
+    await post({ action: 'setAttendance', classId: 'g1', marks: { a1: 'present', a2: 'absent' } }, 'trainer1');
+    const all = await post({ action: 'lessonReport', from: yesterday }, 'admin1');
+    expect(all.statusCode).toBe(200);
+    expect(all.body.rows.map((r) => r.classId).sort()).toEqual(['g1', 'g2']);
+    const g1 = all.body.rows.find((r) => r.classId === 'g1');
+    expect(g1).toMatchObject({ given: true, givenByName: 'Kenny', trainerName: 'Kenny' });
+    expect(g1.people).toEqual([
+      expect.objectContaining({ name: 'Bas', attendance: 'present' }),
+      expect.objectContaining({ name: 'Elske', attendance: 'absent' }),
+    ]);
+    expect(all.body.rows.find((r) => r.classId === 'g2')).toMatchObject({ given: false, trainerName: 'Simone' });
+    const own = await post({ action: 'lessonReport', from: yesterday, trainerId: 'trainer1' }, 'trainer2');
+    expect(own.body.rows.map((r) => r.classId)).toEqual(['g2']);
+    expect((await post({ action: 'lessonReport' })).statusCode).toBe(403);
+  });
+});

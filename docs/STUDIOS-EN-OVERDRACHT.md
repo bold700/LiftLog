@@ -113,8 +113,9 @@ zelf zetten, dan klopt de capaciteit niet meer.
 - Zit een les vol, dan kom je op de wachtlijst. Daar gaat nog geen credit af.
 - Meldt iemand zich af, dan schuift de eerste van de wachtlijst door en betaalt op dat moment.
   Heeft die geen saldo, dan komt de plek gewoon vrij en blijft de wachtlijst staan.
-- Tot **12 uur** voor aanvang afmelden geeft de credit terug; daarna niet. Wordt de les afgelast,
-  dan altijd terug.
+- Tot **12 uur** voor aanvang afmelden geeft de credit terug; daarna niet (ook niet bij niet
+  komen opdagen). De eigenaar zet die termijn per studio in Beheer → Instellingen (bijv. 24 uur).
+  Wordt de les afgelast, dan altijd terug.
 - Een sporter meldt alleen zichzelf af; een trainer mag dat ook voor een ander doen.
 
 De annuleertermijn staat als `FREE_CANCEL_HOURS` in `api/booking.mjs`.
@@ -306,6 +307,21 @@ aanmaakte (richard@studio.nl) en een account waarmee de persoon zelf inlogt.
   account dat weggaat ook bij een andere studio hoort.
 - Code: `api/_lib/mergeMembers.mjs` (acties `mergePreview` en `mergeMembers` in
   `api/admin-account.mjs`).
+
+### Aanwezigheid en gegeven lessen
+
+Na de les meldt de trainer wie er was: Lessen → les → **Deelnemers**. Zodra de les begonnen is staat
+bij elke ingeschreven sporter **Aanwezig** / **Niet gekomen** (of in één keer "Iedereen aanwezig"),
+en met **Les gegeven** is de les afgerond. Later bijwerken kan.
+
+- De credit verandert hierdoor niet: wie niet kwam of te laat afmeldde, had zijn credit al niet terug
+  (zie de afmeldtermijn hierboven). Het is een registratie, geen straf.
+- De eigenaar ziet alles in Beheer → **Gegeven lessen**: per week of maand welke lessen er waren, wie
+  ze gaf, of ze als gegeven zijn gemeld en wie er wel en niet was, met totalen per trainer, filter op
+  trainer en **Exporteren** (CSV voor Excel). Een trainer ziet daar alleen zijn eigen lessen.
+- Velden: op de boeking `attendance` (`present` / `absent`), `attendanceBy`, `attendanceAt`; op de les
+  `givenAt`, `givenBy`, `presentCount`, `absentCount`. Alleen de server schrijft ze (acties
+  `setAttendance` en `lessonReport` in `api/booking.mjs`).
 
 ## 3b. Veilig uitproberen: de Testruimte
 

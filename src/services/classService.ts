@@ -53,6 +53,10 @@ export interface StudioClass {
   trainerId: string;
   /** Invaller: de eigen trainer van deze les (de trainer was afwezig of iemand anders geeft 'm). */
   originalTrainerId?: string | null;
+  /** De trainer meldde de les als gegeven (met aanwezigheid). */
+  givenAt?: string | null;
+  presentCount?: number;
+  absentCount?: number;
   capacity: number;
   /** Wat de les kost. Standaard één credit. */
   creditCost: number;
@@ -102,6 +106,8 @@ export interface Booking {
   promotedAt?: string | null;
   cancelledAt?: string | null;
   refunded?: boolean;
+  /** Door de trainer gemeld: was er ('present') of niet gekomen ('absent'); null = nog niet gemeld. */
+  attendance?: 'present' | 'absent' | null;
 }
 
 const str = (v: unknown, fallback = '') => (typeof v === 'string' ? v : fallback);
@@ -121,6 +127,9 @@ function toClass(data: Record<string, unknown>, id: string): StudioClass {
     endTime: data.endTime ? str(data.endTime) : null,
     trainerId: str(data.trainerId),
     originalTrainerId: typeof data.originalTrainerId === 'string' && data.originalTrainerId ? data.originalTrainerId : null,
+    givenAt: data.givenAt ? str(data.givenAt) : null,
+    presentCount: num(data.presentCount),
+    absentCount: num(data.absentCount),
     capacity: num(data.capacity),
     creditCost: num(data.creditCost, 1),
     bookedCount: num(data.bookedCount),
@@ -159,6 +168,7 @@ function toBooking(data: Record<string, unknown>, id: string): Booking {
     promotedAt: data.promotedAt ? str(data.promotedAt) : null,
     cancelledAt: data.cancelledAt ? str(data.cancelledAt) : null,
     refunded: data.refunded === true,
+    attendance: data.attendance === 'present' || data.attendance === 'absent' ? data.attendance : null,
   };
 }
 

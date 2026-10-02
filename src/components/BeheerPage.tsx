@@ -90,10 +90,11 @@ import { NumberField } from './NumberField';
 import { designTokens } from '../theme/designTokens';
 import { EMAIL_RE, generatePassword } from '../utils/account';
 import { MemberImportDialog } from './beheer/MemberImportDialog';
+import { LessonReportPanel } from './beheer/LessonReportPanel';
 import { LEADERBOARD_ENABLED } from '../config/features';
 import { tabsOverflowHintSx } from '../theme/tabs';
 
-type Section = 'leden' | 'groepen' | 'lessoorten' | 'lesplanning' | 'oefeningen' | 'wachtlijsten' | 'abonnementen' | 'huisstijl' | 'instellingen' | 'facturatie' | 'meldingen';
+type Section = 'leden' | 'groepen' | 'lessoorten' | 'lesplanning' | 'oefeningen' | 'wachtlijsten' | 'gegeven' | 'abonnementen' | 'huisstijl' | 'instellingen' | 'facturatie' | 'meldingen';
 /** Beheer gebruikt de hele breedte van het hoofdvlak, zoals in het ontwerp; de andere pagina's blijven op 800. */
 const ADMIN_MAX_WIDTH = 'none';
 
@@ -995,6 +996,8 @@ export function BeheerPage() {
             <ExerciseLibraryPanel />
           ) : section === 'wachtlijsten' ? (
             <WaitlistsPanel profiles={profiles} credits={credits} memberships={memberships} plans={plans} onChanged={load} />
+          ) : section === 'gegeven' ? (
+            <LessonReportPanel isAdmin={isAdmin} />
           ) : section === 'groepen' ? (
             <GroupsPanel profiles={profiles} plans={plans} memberships={memberships} credits={credits} createSignal={newGroupSignal} onChanged={load} />
           ) : section === 'abonnementen' ? (
@@ -1259,13 +1262,13 @@ export function BeheerPage() {
   );
 }
 
-const SECTIONS: Section[] = ['leden', 'groepen', 'lessoorten', 'lesplanning', 'oefeningen', 'wachtlijsten', 'abonnementen', 'meldingen', 'facturatie', 'huisstijl', 'instellingen'];
-/** Wat een trainer ziet: de leden, de lesplanning, de oefeningen, de wachtlijsten en berichten sturen. De rest is aan de eigenaar. */
-const STAFF_SECTIONS: Section[] = ['leden', 'lesplanning', 'oefeningen', 'wachtlijsten', 'meldingen'];
+const SECTIONS: Section[] = ['leden', 'groepen', 'lessoorten', 'lesplanning', 'oefeningen', 'wachtlijsten', 'gegeven', 'abonnementen', 'meldingen', 'facturatie', 'huisstijl', 'instellingen'];
+/** Wat een trainer ziet: de leden, de lesplanning, de oefeningen, de wachtlijsten, de eigen gegeven lessen en berichten sturen. De rest is aan de eigenaar. */
+const STAFF_SECTIONS: Section[] = ['leden', 'lesplanning', 'oefeningen', 'wachtlijsten', 'gegeven', 'meldingen'];
 const SECTION_STORAGE_KEY = 'vorm.beheer.section';
 const SECTION_KEY: Record<
   Section,
-  'members' | 'groups' | 'classTypes' | 'classPlanning' | 'exercises' | 'waitlists' | 'subscriptions' | 'branding' | 'settings' | 'billing' | 'notifications'
+  'members' | 'groups' | 'classTypes' | 'classPlanning' | 'exercises' | 'waitlists' | 'givenLessons' | 'subscriptions' | 'branding' | 'settings' | 'billing' | 'notifications'
 > = {
   leden: 'members',
   groepen: 'groups',
@@ -1273,6 +1276,7 @@ const SECTION_KEY: Record<
   lesplanning: 'classPlanning',
   oefeningen: 'exercises',
   wachtlijsten: 'waitlists',
+  gegeven: 'givenLessons',
   abonnementen: 'subscriptions',
   huisstijl: 'branding',
   instellingen: 'settings',
@@ -1280,7 +1284,7 @@ const SECTION_KEY: Record<
   meldingen: 'notifications',
 };
 
-/** De tabs uit het ontwerp. De eigenaar ziet ze allemaal; een trainer alleen Leden, Lesplanning, Oefeningen, Wachtlijsten en Meldingen. */
+/** De tabs uit het ontwerp. De eigenaar ziet ze allemaal; een trainer alleen Leden, Lesplanning, Oefeningen, Wachtlijsten, Gegeven lessen en Meldingen. */
 function SectionTabs({ sections, value, onChange }: { sections: Section[]; value: Section; onChange: (v: Section) => void }) {
   const { t } = useI18n();
   const theme = useTheme();
