@@ -684,6 +684,8 @@ export interface Group {
   kind: GroupKind;
   memberIds: string[];
   payerId: string;
+  /** Eigen tarief van deze groep (basis + per extra persoon); null = dat van de studio. */
+  pricing: OrgGroupPricing | null;
   createdAt: string;
   updatedAt: string;
 }

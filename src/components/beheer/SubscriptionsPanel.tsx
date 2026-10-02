@@ -13,12 +13,16 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
+  InputAdornment,
   MenuItem,
   TextField,
+  Tooltip,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useI18n } from '../../context/I18nContext';
 import { FullScreenDialogTitle } from './FullScreenDialogTitle';
 import { useNotify } from '../../context/NotifyContext';
@@ -346,7 +350,18 @@ export function SubscriptionsPanel({ memberships, credits, createSignal, onChang
           fullWidth
           value={draft.perWeek}
           onChange={(v) => setDraft({ ...draft, perWeek: v })}
-          helperText="Zoveel vaste momenten mag het lid inplannen. Leeg = geen limiet."
+          // Uitleg in een info-icoon: een helpertekst onder één veld maakt de rij scheef.
+          InputProps={{
+            endAdornment: (
+              <InputAdornment position="end">
+                <Tooltip title="Zoveel vaste momenten mag het lid inplannen. Leeg = geen limiet." enterTouchDelay={0} leaveTouchDelay={4000}>
+                  <IconButton size="small" edge="end" aria-label="Uitleg keer per week">
+                    <InfoOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </InputAdornment>
+            ),
+          }}
         />
       </Box>
       {draft.period === 'once' && (

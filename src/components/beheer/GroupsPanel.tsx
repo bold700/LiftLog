@@ -16,6 +16,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  InputAdornment,
   MenuItem,
   TextField,
   Typography,
@@ -57,7 +58,13 @@ interface Draft {
   memberIds: string[];
   payerId: string;
   planId: string;
+  /** Eigen tarief, als tekst uit de velden; allebei leeg = het tarief van de studio. */
+  base: string;
+  perExtra: string;
 }
+
+const rateText = (v: number | undefined) => (v == null ? '' : String(v).replace('.', ','));
+const rateNum = (v: string) => Number(v.trim().replace(',', '.'));
 
 const nameOf = (p: Profile | undefined) => p?.displayName?.trim() || p?.email || 'Onbekend lid';
 const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
@@ -81,6 +88,7 @@ export function GroupsPanel({ profiles, plans, memberships, credits, createSigna
   const [types, setTypes] = useState<ClassType[]>([]);
   const [slotOpen, setSlotOpen] = useState(false);
   const [stopSlot, setStopSlot] = useState<ClassType | null>(null);
+  const [confirmStopPlan, setConfirmStopPlan] = useState(false);
 
   const byId = useMemo(() => new Map(profiles.map((p) => [p.userId, p])), [profiles]);
   // Kiesbaar als lid: wie actief is bij deze studio (een inactief lid kan niet trainen).
@@ -121,14 +129,23 @@ export function GroupsPanel({ profiles, plans, memberships, credits, createSigna
     if (createSignal > 0) {
       setError(null);
       setAdjust('');
-      setDraft({ name: '', kind: 'bedrijf', memberIds: [], payerId: '', planId: '' });
+      setDraft({ name: '', kind: 'bedrijf', memberIds: [], payerId: '', planId: '', base: '', perExtra: '' });
     }
   }, [createSignal]);
 
   const open = (g: Group) => {
     setError(null);
     setAdjust('');
-    setDraft({ groupId: g.id, name: g.name, kind: g.kind, memberIds: g.memberIds, payerId: g.payerId, planId: memberships[groupHolderId(g.id)]?.planId ?? '' });
+    setDraft({
+      groupId: g.id,
+      name: g.name,
+      kind: g.kind,
+      memberIds: g.memberIds,
+      payerId: g.payerId,
+      planId: memberships[groupHolderId(g.id)]?.planId ?? '',
+      base: rateText(g.pricing?.base),
+      perExtra: rateText(g.pricing?.perExtra),
+    });
   };
   const close = () => {
     if (saving) return;
@@ -147,7 +164,7 @@ export function GroupsPanel({ profiles, plans, memberships, credits, createSigna
     setError(null);
     try {
       const payerId = draft.memberIds.includes(draft.payerId) ? draft.payerId : draft.memberIds[0] ?? '';
-      const group = await saveGroup({ groupId: draft.groupId, name: draft.name, kind: draft.kind, memberIds: draft.memberIds, payerId });
+      const group = await saveGroup({ groupId: draft.groupId, name: draft.name, kind: draft.kind, memberIds: draft.memberIds, payerId, pricing: ownPricing });
       // Mislukt het abonnement hierna, dan maakt nog eens Opslaan geen tweede groep aan.
       setDraft((d) => (d ? { ...d, groupId: group.id } : d));
       // Abonnement gewijzigd? De prijs komt als tegoed op de groep; de post gaat naar het hoofdprofiel.
@@ -178,6 +195,25 @@ export function GroupsPanel({ profiles, plans, memberships, credits, createSigna
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Tegoed bijstellen mislukt.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Abonnement van de groep meteen stoppen (zonder eerst Opslaan); het tegoed blijft staan. */
+  const doStopPlan = async () => {
+    if (!draft?.groupId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await unassignGroupPlan(draft.groupId);
+      notify.success('Abonnement van de groep gestopt.');
+      setConfirmStopPlan(false);
+      setDraft((d) => (d ? { ...d, planId: '' } : d));
+      await refresh();
+    } catch (e) {
+      setConfirmStopPlan(false);
+      setError(e instanceof Error ? e.message : 'Abonnement stoppen mislukt.');
     } finally {
       setSaving(false);
     }
@@ -235,8 +271,16 @@ export function GroupsPanel({ profiles, plans, memberships, credits, createSigna
     }
   };
 
+  // Eigen tarief van de groep: allebei ingevuld (en geldig), of allebei leeg (= tarief van de studio).
+  const rateEmpty = !draft || (draft.base.trim() === '' && draft.perExtra.trim() === '');
+  const rateValid = (v: string) => v.trim() !== '' && Number.isFinite(rateNum(v)) && rateNum(v) >= 0 && rateNum(v) <= 10000;
+  const rateOk = rateEmpty || (!!draft && rateValid(draft.base) && rateValid(draft.perExtra));
+  const ownPricing: OrgGroupPricing | null = !rateEmpty && rateOk && draft ? { base: rateNum(draft.base), perExtra: rateNum(draft.perExtra) } : null;
+  const draftPricing = ownPricing ?? pricing;
+  const pricingFor = (g: Group) => g.pricing ?? pricing;
   const size = draft?.memberIds.length ?? 0;
-  const lessonPrice = groupSessionPrice(pricing, size);
+  const lessonPrice = groupSessionPrice(draftPricing, size);
+  const currentPlan = draft?.groupId ? memberships[groupHolderId(draft.groupId)] : undefined;
   const balanceOf = (groupId: string) => credits[groupHolderId(groupId)] ?? 0;
   const adjustNum = Number(adjust.replace(',', '.'));
   const adjustValid = adjust.trim() !== '' && Number.isFinite(adjustNum) && adjustNum !== 0;
@@ -246,8 +290,8 @@ export function GroupsPanel({ profiles, plans, memberships, credits, createSigna
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Een bedrijf, gezin of vriendengroep die samen traint. Iedereen heeft een eigen account; het hoofdprofiel krijgt de
         facturen. Een groepsles kost {formatEuro(pricing.base)} plus {formatEuro(pricing.perExtra)} per extra persoon, naar
-        wie er komt: meldt iemand zich op tijd af, dan blijft het verschil op het groepstegoed staan. De prijs stel je in
-        bij Instellingen.
+        wie er komt: meldt iemand zich op tijd af, dan blijft het verschil op het groepstegoed staan. Dat tarief stel je in
+        bij Instellingen; per groep kun je een eigen tarief zetten.
       </Typography>
 
       {loading && groups.length === 0 ? (
@@ -293,7 +337,8 @@ export function GroupsPanel({ profiles, plans, memberships, credits, createSigna
                   {g.memberIds.map((id) => nameOf(byId.get(id)) + (id === g.payerId ? ' (betaalt)' : '')).join(', ')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {plan ? plan.planName : 'Geen abonnement'} · groepsles {formatEuro(groupSessionPrice(pricing, g.memberIds.length))}
+                  {plan ? plan.planName : 'Geen abonnement'} · groepsles {formatEuro(groupSessionPrice(pricingFor(g), g.memberIds.length))}
+                  {g.pricing ? ' (eigen tarief)' : ''}
                   {slotsOf(g.id).length > 0 ? ` · ${slotsOf(g.id).length} vaste ${slotsOf(g.id).length === 1 ? 'les' : 'lessen'}` : ''}
                 </Typography>
               </Box>
@@ -350,17 +395,53 @@ export function GroupsPanel({ profiles, plans, memberships, credits, createSigna
               ))}
             </TextField>
 
-            {size > 0 && (
-              <Box sx={{ p: 1.5, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackgroundHigh }}>
-                <Typography variant="body2">
-                  Groepsles met {size} {size === 1 ? 'persoon' : 'personen'}: <strong>{formatEuro(lessonPrice)}</strong>
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                  Richtprijs per 4 weken bij 1× per week: {formatEuro(lessonPrice * 4)}, bij 2× per week: {formatEuro(lessonPrice * 8)}.
-                  Maak daarvoor een abonnement (op uitnodiging) aan bij Abonnementen.
-                </Typography>
+            <Box sx={{ p: 1.5, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackgroundHigh, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                Tarief per groepsles
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+                <TextField
+                  label="Basistarief (1e persoon)"
+                  size="small"
+                  value={draft.base}
+                  onChange={(e) => setDraft({ ...draft, base: e.target.value })}
+                  placeholder={rateText(pricing.base)}
+                  error={!rateOk && !rateValid(draft.base)}
+                  InputProps={{ startAdornment: <InputAdornment position="start">€</InputAdornment> }}
+                  inputProps={{ inputMode: 'decimal' }}
+                />
+                <TextField
+                  label="Per extra persoon"
+                  size="small"
+                  value={draft.perExtra}
+                  onChange={(e) => setDraft({ ...draft, perExtra: e.target.value })}
+                  placeholder={rateText(pricing.perExtra)}
+                  error={!rateOk && !rateValid(draft.perExtra)}
+                  InputProps={{ startAdornment: <InputAdornment position="start">€</InputAdornment> }}
+                  inputProps={{ inputMode: 'decimal' }}
+                />
               </Box>
-            )}
+              <Typography variant="caption" color={rateOk ? 'text.secondary' : 'error'}>
+                {rateOk
+                  ? rateEmpty
+                    ? `Leeg = het tarief van de studio (${formatEuro(pricing.base)} + ${formatEuro(pricing.perExtra)} per extra persoon, Beheer → Instellingen).`
+                    : 'Eigen tarief voor deze groep. Geldt voor lessen die vanaf nu worden geboekt of afgemeld.'
+                  : 'Vul allebei in (of laat allebei leeg voor het tarief van de studio).'}
+              </Typography>
+              {size > 0 && (
+                <Box>
+                  <Typography variant="body2">
+                    Groepsles met {size} {size === 1 ? 'persoon' : 'personen'}:{' '}
+                    {size > 1 ? `${formatEuro(draftPricing.base)} + ${size - 1} × ${formatEuro(draftPricing.perExtra)} = ` : ''}
+                    <strong>{formatEuro(lessonPrice)}</strong>
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    Richtprijs per 4 weken bij 1× per week: {formatEuro(lessonPrice * 4)}, bij 2× per week: {formatEuro(lessonPrice * 8)}.
+                    Maak daarvoor een abonnement (op uitnodiging) aan bij Abonnementen.
+                  </Typography>
+                </Box>
+              )}
+            </Box>
 
             <TextField
               select
@@ -379,6 +460,16 @@ export function GroupsPanel({ profiles, plans, memberships, credits, createSigna
                   </MenuItem>
                 ))}
             </TextField>
+            {currentPlan && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: -1 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
+                  Loopt nu: {currentPlan.planName}
+                </Typography>
+                <Button size="small" color="error" sx={{ ml: 'auto', flexShrink: 0 }} disabled={saving} onClick={() => setConfirmStopPlan(true)}>
+                  Abonnement stoppen
+                </Button>
+              </Box>
+            )}
 
             {draft.groupId && (
               <Box sx={{ p: 1.5, borderRadius: `${designTokens.cardRadius}px`, bgcolor: designTokens.cardBackgroundHigh, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
@@ -440,7 +531,7 @@ export function GroupsPanel({ profiles, plans, memberships, credits, createSigna
               Annuleren
             </Button>
           )}
-          <Button variant="contained" disableElevation onClick={() => void save()} disabled={saving || !draft?.name.trim() || !draft?.memberIds.length}>
+          <Button variant="contained" disableElevation onClick={() => void save()} disabled={saving || !rateOk || !draft?.name.trim() || !draft?.memberIds.length}>
             {saving ? 'Bezig…' : 'Opslaan'}
           </Button>
         </DialogActions>
@@ -471,6 +562,25 @@ export function GroupsPanel({ profiles, plans, memberships, credits, createSigna
             Annuleren
           </Button>
           <Button color="error" variant="contained" disableElevation onClick={() => void doStopSlot()} disabled={saving}>
+            Stoppen
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={confirmStopPlan} onClose={() => !saving && setConfirmStopPlan(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Abonnement stoppen</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            {currentPlan?.planName ?? 'Het abonnement'} van {draft?.name} stopt nu: er komen geen nieuwe facturen en geen nieuw tegoed meer bij.
+            Het tegoed dat er nu op staat ({draft?.groupId ? formatEuro(balanceOf(draft.groupId)) : ''}) blijft; daar is al voor betaald.
+            Wil je dat ook weghalen, stel het dan bij naar € 0.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setConfirmStopPlan(false)} disabled={saving}>
+            Annuleren
+          </Button>
+          <Button color="error" variant="contained" disableElevation onClick={() => void doStopPlan()} disabled={saving}>
             Stoppen
           </Button>
         </DialogActions>

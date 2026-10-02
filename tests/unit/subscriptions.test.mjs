@@ -91,7 +91,20 @@ describe('abonnementen', () => {
 });
 
 describe('groepsprijs (groups.mjs)', async () => {
-  const { groupSessionPrice, groupPricingOf, cleanGroupInput, groupPlanView } = await import('../../api/_lib/groups.mjs');
+  const { groupSessionPrice, groupPricingOf, cleanGroupInput, cleanGroupPricing, groupPlanView } = await import('../../api/_lib/groups.mjs');
+  it('eigen tarief van een groep gaat voor dat van de studio', () => {
+    const org = { groupPricing: { base: 85, perExtra: 25 } };
+    expect(groupSessionPrice(groupPricingOf(org, { pricing: { base: 70, perExtra: 15.5 } }), 4)).toBe(116.5);
+    expect(groupSessionPrice(groupPricingOf(org, { pricing: null }), 4)).toBe(160);
+    expect(groupSessionPrice(groupPricingOf(org, { pricing: { base: -1, perExtra: 10 } }), 1)).toBe(85);
+  });
+  it('eigen tarief controleren: leeg = studio, allebei nodig, binnen grenzen', () => {
+    expect(cleanGroupPricing(null)).toEqual({ value: null });
+    expect(cleanGroupPricing({ base: '70', perExtra: 15.555 })).toEqual({ value: { base: 70, perExtra: 15.56 } });
+    expect(cleanGroupPricing({ base: 70 }).error).toBeTruthy();
+    expect(cleanGroupPricing({ base: 70, perExtra: 20000 }).error).toBeTruthy();
+    expect(cleanGroupPricing({ base: 'abc', perExtra: 1 }).error).toBeTruthy();
+  });
   it('€85 plus €25 per extra persoon; niemand is niets', () => {
     const p = groupPricingOf(undefined);
     expect([0, 1, 2, 3, 4].map((n) => groupSessionPrice(p, n))).toEqual([0, 85, 110, 135, 160]);
