@@ -10,6 +10,7 @@ import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import RestaurantRoundedIcon from '@mui/icons-material/RestaurantRounded';
 import PostAddRoundedIcon from '@mui/icons-material/PostAddRounded';
+import EventAvailableRoundedIcon from '@mui/icons-material/EventAvailableRounded';
 import MonitorWeightRoundedIcon from '@mui/icons-material/MonitorWeightRounded';
 import { useApplyBaseScheme, useBaseTheme } from './theme';
 import { ColorModeProvider } from './context/ColorModeContext';
@@ -118,6 +119,7 @@ function AppContent() {
   const [requestedOpenSessionLogDialog, setRequestedOpenSessionLogDialog] = useState(false);
   const [requestedOpenMeasurementForm, setRequestedOpenMeasurementForm] = useState(false);
   const [requestedCreateSchema, setRequestedCreateSchema] = useState(false);
+  const [requestedNewAppointment, setRequestedNewAppointment] = useState(false);
   const [fabAnchorEl, setFabAnchorEl] = useState<null | HTMLElement>(null);
   const fabMenuOpen = Boolean(fabAnchorEl);
   const profile = useProfile();
@@ -174,6 +176,14 @@ function AppContent() {
   }, [handleFabMenuClose]);
   const consumeRequestedCreateSchema = useCallback(() => setRequestedCreateSchema(false), []);
 
+  /** Staf: een afspraak inplannen (zelfde scherm als "+ Afspraak" in Lessen). */
+  const handleNewAppointmentFromFab = useCallback(() => {
+    handleFabMenuClose();
+    setActiveTab(TAB_LESSEN);
+    setRequestedNewAppointment(true);
+  }, [handleFabMenuClose]);
+  const consumeRequestedNewAppointment = useCallback(() => setRequestedNewAppointment(false), []);
+
   const handleExerciseAdded = useCallback((opts?: { returnToSchema?: boolean }) => {
     setAddOpen(false);
     if (opts?.returnToSchema) {
@@ -222,7 +232,7 @@ function AppContent() {
       case TAB_ASSISTENT:
         return <AssistentPage />;
       case TAB_LESSEN:
-        return <LessenPage />;
+        return <LessenPage initialNewAppointment={requestedNewAppointment} onConsumeInitialNewAppointment={consumeRequestedNewAppointment} />;
       case TAB_PROFIEL:
         return (
           <ProfielPage onLogout={handleLogout} />
@@ -248,6 +258,13 @@ function AppContent() {
    * Beheer: daar hoort geen persoonlijk logmenu, de acties van elke tab staan boven de tabs.
    */
   const onWorkouts = activeTab === TAB_SCHEMAS;
+  const onLessen = activeTab === TAB_LESSEN;
+  const newAppointmentItem = isTrainer ? (
+    <MenuItem onClick={handleNewAppointmentFromFab}>
+      <EventAvailableRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
+      Afspraak maken
+    </MenuItem>
+  ) : null;
   const newWorkoutItem = isTrainer ? (
     <MenuItem onClick={handleNewWorkoutFromFab}>
       <PostAddRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
@@ -300,6 +317,9 @@ function AppContent() {
             {/* Op Workouts staat "Workout aanmaken" bovenaan: dat is daar het meest logische. */}
             {onWorkouts && newWorkoutItem}
             {onWorkouts && newWorkoutItem && <Divider />}
+            {/* Op Lessen staat "Afspraak maken" bovenaan. */}
+            {onLessen && newAppointmentItem}
+            {onLessen && newAppointmentItem && <Divider />}
             <MenuItem onClick={handleAddExerciseFromFab}>
               <FitnessCenterRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
               Oefening loggen
@@ -316,7 +336,8 @@ function AppContent() {
               <MonitorWeightRoundedIcon sx={{ mr: 1.5 }} fontSize="small" />
               Meting loggen
             </MenuItem>
-            {!onWorkouts && newWorkoutItem && <Divider />}
+            {isTrainer && <Divider />}
+            {!onLessen && newAppointmentItem}
             {!onWorkouts && newWorkoutItem}
           </Menu>
         </>
