@@ -91,6 +91,8 @@ import { designTokens } from '../theme/designTokens';
 import { EMAIL_RE, generatePassword } from '../utils/account';
 import { MemberImportDialog } from './beheer/MemberImportDialog';
 import { LessonReportPanel } from './beheer/LessonReportPanel';
+import { StudioCreditsPanel } from './beheer/StudioCreditsPanel';
+import { CreditHistoryDialog } from './credits/CreditHistoryDialog';
 import { LEADERBOARD_ENABLED } from '../config/features';
 import { tabsOverflowHintSx } from '../theme/tabs';
 
@@ -244,6 +246,7 @@ export function BeheerPage() {
   const [saving, setSaving] = useState(false);
 
   const [creditValue, setCreditValue] = useState('0');
+  const [creditHistoryOpen, setCreditHistoryOpen] = useState(false);
   const [creditBusy, setCreditBusy] = useState(false);
   const [creditError, setCreditError] = useState<string | null>(null);
 
@@ -868,6 +871,15 @@ export function BeheerPage() {
                   <Button size="small" variant="outlined" disabled={creditBusy || Number(creditValue) === (credits[target.userId] ?? 0)} onClick={() => void handleCreditAdjust()}>
                     Credits opslaan
                   </Button>
+                  <Button size="small" onClick={() => setCreditHistoryOpen(true)}>
+                    Geschiedenis
+                  </Button>
+                  <CreditHistoryDialog
+                    open={creditHistoryOpen}
+                    onClose={() => setCreditHistoryOpen(false)}
+                    userId={target.userId}
+                    name={target.displayName || target.email || 'Lid'}
+                  />
                   {creditError && (
                     <Typography variant="caption" color="error.main" sx={{ width: '100%' }}>
                       {creditError}
@@ -1011,7 +1023,12 @@ export function BeheerPage() {
           ) : section === 'groepen' ? (
             <GroupsPanel profiles={profiles} plans={plans} memberships={memberships} credits={credits} createSignal={newGroupSignal} onChanged={load} />
           ) : section === 'abonnementen' ? (
-            <SubscriptionsPanel memberships={memberships} credits={credits} createSignal={newPlanSignal} onChanged={load} />
+            <>
+              <SubscriptionsPanel memberships={memberships} credits={credits} createSignal={newPlanSignal} onChanged={load} />
+              <Box sx={{ mt: 2 }}>
+                <StudioCreditsPanel />
+              </Box>
+            </>
           ) : section === 'meldingen' ? (
             <NotificationsPanel canEditSettings={isAdmin} />
           ) : section === 'facturatie' ? (
