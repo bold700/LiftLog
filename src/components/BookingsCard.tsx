@@ -3,7 +3,7 @@
  * ("elke week") staan in hun eigen kaart eronder (StandingBookingsCard).
  */
 import { useEffect, useState } from 'react';
-import { Box, Chip, Typography } from '@mui/material';
+import { Box, Button, Chip, Typography } from '@mui/material';
 import ConfirmationNumberRoundedIcon from '@mui/icons-material/ConfirmationNumberRounded';
 import {
   getCreditBalance,
@@ -13,12 +13,14 @@ import {
   type StudioClass,
 } from '../services/classService';
 import { designTokens } from '../theme/designTokens';
+import { CreditHistoryDialog } from './credits/CreditHistoryDialog';
 import { todayIso } from '../utils/format';
 
 const dayLabel = (date: string) =>
   new Date(`${date}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
 
 export function BookingsCard({ userId }: { userId: string }) {
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [classes, setClasses] = useState<StudioClass[]>([]);
   const [credits, setCredits] = useState<number | null>(null);
@@ -61,6 +63,7 @@ export function BookingsCard({ userId }: { userId: string }) {
           icon={<ConfirmationNumberRoundedIcon />}
           label={credits === 1 ? '1 credit' : `${credits} credits`}
           color={credits > 0 ? 'default' : 'warning'}
+          onClick={() => setHistoryOpen(true)}
         />
       </Box>
 
@@ -80,6 +83,10 @@ export function BookingsCard({ userId }: { userId: string }) {
         </Box>
       )}
 
+      <Button size="small" onClick={() => setHistoryOpen(true)} sx={{ mt: 1, ml: -1 }}>
+        Waar zijn mijn credits gebleven?
+      </Button>
+      <CreditHistoryDialog open={historyOpen} onClose={() => setHistoryOpen(false)} userId={userId} />
     </Box>
   );
 }

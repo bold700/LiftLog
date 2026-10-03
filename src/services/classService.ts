@@ -400,7 +400,7 @@ export async function callBooking<T>(body: Record<string, unknown>): Promise<T> 
 /** Event na elke boekingsactie; `useCreditSummary` luistert ernaar. */
 export const CREDITS_CHANGED_EVENT = 'liftlog:credits-changed';
 /** Acties die alleen lezen: geen reden om het saldo opnieuw te laden. */
-const READ_ONLY_ACTIONS = new Set(['waitlistPositions', 'mailStatus', 'listBroadcasts']);
+const READ_ONLY_ACTIONS = new Set(['waitlistPositions', 'mailStatus', 'listBroadcasts', 'creditHistory']);
 
 /** Op welke plek sta je op de wachtlijst, per les ({ [classId]: 2 }); zonder namen. */
 /**

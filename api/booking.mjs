@@ -113,6 +113,7 @@ import { allConflicts, blocksDoubleBooking, findConflicts, hoursOf, outsideAvail
 import { coversOf, perWeekOf, planCoversKind } from './_lib/planCoverage.mjs';
 import { availabilityDocId, cleanAvailability } from './_lib/availability.mjs';
 import { amsterdamDate, amsterdamDateTime } from './_lib/classReminders.mjs';
+import { creditHistoryRows, creditTotals } from './_lib/creditHistory.mjs';
 import { busyByDate, canRescheduleClass, isOffered, MIN_LEAD_MINUTES, RESCHEDULE_DAYS, rescheduleOptions, rescheduledClassId, rescheduleRequestId } from './_lib/reschedule.mjs';
 import { sendPushToUser } from './_lib/pushSend.mjs';
 import {
@@ -333,6 +334,13 @@ export default async function handler(req, res) {
       case 'lessonReport':
         if (!isStaff) return json(res, 403, { error: 'Alleen trainers en beheerders.', build: BUILD });
         return await lessonReport(res, db, uid, actOrg, myRole, body);
+      case 'creditHistory':
+        if (body?.scope === 'studio') {
+          if (myRole !== 'admin') return json(res, 403, { error: 'Alleen een beheerder ziet het creditoverzicht van de studio.', build: BUILD });
+        } else if (body?.userId && String(body.userId) !== uid && !isStaff) {
+          return json(res, 403, { error: 'Je kunt alleen je eigen creditgeschiedenis zien.', build: BUILD });
+        }
+        return await creditHistory(res, db, uid, actOrg, body);
       case 'listAbsences':
         if (!isStaff) return json(res, 403, { error: 'Alleen trainers en beheerders.', build: BUILD });
         return await listAbsences(res, db, actOrg, String(body.trainerId ?? '').trim() || null);
@@ -1487,6 +1495,76 @@ async function lessonReport(res, db, uid, orgId, myRole, body) {
     people: (byClass[c.id] ?? []).sort((a, b) => a.name.localeCompare(b.name)),
   }));
   return json(res, 200, { from, until, rows, build: BUILD });
+}
+
+const AMS_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Amsterdam' });
+
+/**
+ * Creditgeschiedenis (api/_lib/creditHistory.mjs). Van één lid (zichzelf, of door staf), of van de
+ * hele studio over een periode (beheerder). Per regel: les, afloop, door wie, saldo daarna.
+ */
+async function creditHistory(res, db, uid, orgId, body) {
+  const studio = body?.scope === 'studio';
+  const isDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v ?? ''));
+  const until = isDate(body?.until) ? String(body.until) : todayIso();
+  const from = isDate(body?.from) ? String(body.from) : studio ? amsterdamDate(new Date(), -30) : null;
+  if (from && from > until) return json(res, 400, { error: 'De begindatum ligt na de einddatum.', build: BUILD });
+  const target = studio ? null : String(body?.userId ?? '').trim() || uid;
+
+  const [ledgerSnap, peopleSnap, accountSnap] = await Promise.all([
+    studio
+      ? db.collection('creditLedger').where('orgId', '==', orgId).get()
+      : db.collection('creditLedger').where('userId', '==', target).get(),
+    db.collection('profiles').where('orgIds', 'array-contains', orgId).get(),
+    studio
+      ? db.collection('creditAccounts').where('orgId', '==', orgId).get()
+      : db.collection('creditAccounts').doc(accountId(orgId, target)).get(),
+  ]);
+  const entries = ledgerSnap.docs
+    .map((d) => ({ ...d.data(), id: d.id }))
+    .filter((e) => orgIdOf(e.orgId) === orgId && !e.groupId && e.unit !== 'eur' && typeof e.createdAt === 'string');
+  const names = Object.fromEntries(peopleSnap.docs.map((d) => [d.id, String(d.data().displayName || d.data().email || 'Lid')]));
+  const balances = {};
+  if (studio) for (const d of accountSnap.docs) balances[d.data().userId] = Number(d.data().balance) || 0;
+  else balances[target] = Number(accountSnap.exists ? accountSnap.data().balance : 0) || 0;
+
+  // Lessen en boekingen bij de regels (in porties: Firestore "in" kan 30 tegelijk).
+  const classIds = [...new Set(entries.map((e) => e.classId).filter(Boolean))];
+  const classes = {};
+  const bookings = [];
+  for (let i = 0; i < classIds.length; i += 30) {
+    const ids = classIds.slice(i, i + 30);
+    const [cSnap, bSnap] = await Promise.all([
+      db.getAll(...ids.map((id) => db.collection('classes').doc(id))),
+      db.collection('bookings').where('classId', 'in', ids).get(),
+    ]);
+    for (const d of cSnap) {
+      if (!d.exists) continue;
+      const c = d.data();
+      classes[d.id] = { title: c.title, date: c.date, startTime: c.startTime, cancelledAt: c.cancelledAt ?? null, startsAt: classStartsAt(c)?.getTime() ?? null };
+    }
+    for (const d of bSnap.docs) {
+      const b = d.data();
+      if (target && b.userId !== target) continue;
+      bookings.push({ userId: b.userId, classId: b.classId, status: String(b.status ?? ''), attendance: b.attendance ?? null });
+    }
+  }
+
+  const { rows, openings } = creditHistoryRows({ entries, balances, classes, bookings, names, now: Date.now() });
+  const inPeriod = (r) => {
+    const day = AMS_DAY.format(new Date(r.at));
+    return (!from || day >= from) && day <= until;
+  };
+  const shown = studio ? rows.filter(inPeriod).slice(0, 3000) : rows;
+  return json(res, 200, {
+    from,
+    until,
+    balance: studio ? null : balances[target],
+    opening: studio ? null : openings[target] ?? 0,
+    rows: shown,
+    totals: creditTotals(shown),
+    build: BUILD,
+  });
 }
 
 // --- Afwezigheid en invallers (api/_lib/absence.mjs) ------------------------------------------
